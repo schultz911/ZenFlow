@@ -1,0 +1,101 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Team member profile in zenFlow",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique user ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name of the team member"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Email address of the team member"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["content", "design"],
+          "description": "Team swimlane role"
+        },
+        "avatarColor": {
+          "type": "string",
+          "description": "Tailwind gradient class for avatar background"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp ISO string"
+        }
+      },
+      "required": ["id", "name", "email", "role", "createdAt"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Kanban task item assigned to a user",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique task ID"
+        },
+        "userId": {
+          "type": "string",
+          "description": "ID of the assigned user"
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the task"
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional detailed task description"
+        },
+        "dueDate": {
+          "type": "string",
+          "description": "Optional due date in YYYY-MM-DD format"
+        },
+        "cognitiveLoad": {
+          "type": "string",
+          "enum": ["low", "medium", "high"],
+          "description": "Cognitive workload level"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["todo", "in_progress", "in_review", "done", "archived"],
+          "description": "Current status in the workflow"
+        },
+        "order": {
+          "type": "number",
+          "description": "Order index within the user status column"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp ISO string"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last updated timestamp ISO string"
+        }
+      },
+      "required": ["id", "userId", "title", "cognitiveLoad", "status", "order", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of team members"
+    },
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Collection of workflow tasks"
+    }
+  }
+}
