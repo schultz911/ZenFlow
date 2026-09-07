@@ -265,7 +265,11 @@ function cleanDocData<T extends Record<string, any>>(obj: T): Partial<T> {
   const clean: any = {};
   for (const [k, v] of Object.entries(obj)) {
     if (v !== undefined) {
-      clean[k] = v;
+      if (v && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date)) {
+        clean[k] = cleanDocData(v);
+      } else {
+        clean[k] = v;
+      }
     }
   }
   return clean;
@@ -475,6 +479,17 @@ function broadcastEvent(type: string, payload: any) {
 
 async function startServer() {
   const app = express();
+
+  // Security & Permissions-Policy middleware
+  // Explicitly set a standards-compliant Permissions-Policy without deprecated/unrecognized directives like 'browsing-topics'
+  app.use((req: Request, res: Response, next) => {
+    res.setHeader(
+      'Permissions-Policy',
+      'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
+    );
+    next();
+  });
+
   app.use(express.json());
 
   // Initialize and load database records from Firestore
@@ -554,12 +569,26 @@ async function startServer() {
       return res.status(400).json({ error: 'Name, email, and role are required' });
     }
 
+    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanName = String(name).trim();
+    const cleanRole = role === 'design' ? 'design' : 'content';
+
+    const existingUser = store.users.find(u => u.email.toLowerCase() === cleanEmail);
+    if (existingUser) {
+      existingUser.name = cleanName;
+      existingUser.role = cleanRole;
+      saveStore(store);
+      dbSaveUser(existingUser).catch(e => console.error('Firestore user update err:', e));
+      broadcastEvent('user_updated', existingUser);
+      return res.json(existingUser);
+    }
+
     const colorIndex = store.users.length % AVATAR_COLORS.length;
     const newUser: User = {
       id: `user-${Date.now()}`,
-      name: String(name).trim(),
-      email: String(email).trim().toLowerCase(),
-      role: role === 'design' ? 'design' : 'content',
+      name: cleanName,
+      email: cleanEmail,
+      role: cleanRole,
       avatarColor: AVATAR_COLORS[colorIndex],
       createdAt: new Date().toISOString(),
     };

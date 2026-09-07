@@ -3,7 +3,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() > 0 && id.size() <= 128;
     }
 
     function incoming() {
@@ -30,11 +30,6 @@ service cloud.firestore {
              data.updatedAt is string && data.updatedAt.size() <= 40 &&
              (!('description' in data) || (data.description is string && data.description.size() <= 3000)) &&
              (!('dueDate' in data) || (data.dueDate is string && data.dueDate.size() <= 30));
-    }
-
-    // Default deny catch-all
-    match /{document=**} {
-      allow read, write: if false;
     }
 
     // Users collection

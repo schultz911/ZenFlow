@@ -36,14 +36,22 @@ export const db = dbInstance;
  * Validates connection to Firestore at app initialization (mandated by firebase-skill).
  */
 export async function testConnection(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/firestore/status');
+    if (res.ok) {
+      const status = await res.json();
+      return !!status.connected;
+    }
+  } catch {
+    // ignore
+  }
+
   if (!db) return false;
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
     return true;
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firestore client is offline. Verify network connection and Firebase config.');
-    }
+  } catch {
+    // Fail silently without dumping unhandled errors to console
     return false;
   }
 }

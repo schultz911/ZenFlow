@@ -163,12 +163,23 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 onChange={e => setUserId(e.target.value)}
                 className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-2.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors"
               >
-                {users.map(u => (
-                  <option key={u.id} value={u.id} className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">
-                    {u.name} ({u.role === 'content' ? 'Content' : 'Design'})
+                {users.length === 0 ? (
+                  <option value="" disabled>
+                    No members yet — please add a member first
                   </option>
-                ))}
+                ) : (
+                  users.map(u => (
+                    <option key={u.id} value={u.id} className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">
+                      {u.name} ({u.role === 'content' ? 'Content' : 'Design'})
+                    </option>
+                  ))
+                )}
               </select>
+              {users.length === 0 && (
+                <p className="mt-1 text-[11px] text-amber-500 dark:text-amber-400">
+                  Please add at least one member before assigning tasks.
+                </p>
+              )}
             </div>
 
             {/* Status */}
@@ -381,7 +392,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               <button
                 type="submit"
                 id="task-submit-button"
-                disabled={isSubmitting || !title.trim()}
+                disabled={isSubmitting || !title.trim() || !userId}
                 className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-blue-900/20 hover:bg-blue-500 transition-colors disabled:opacity-50"
               >
                 {taskToEdit ? 'Save Changes' : 'Create Task'}
