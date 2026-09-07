@@ -84,8 +84,16 @@ export const Swimlane: React.FC<SwimlaneProps> = React.memo(({
   const [dragOverHeader, setDragOverHeader] = useState(false);
   const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
 
-  // Filter tasks belonging strictly to this user
-  const userTasks = useMemo(() => tasks.filter(t => t.userId === user.id), [tasks, user.id]);
+  // Filter tasks belonging strictly to this user with strict key uniqueness
+  const userTasks = useMemo(() => {
+    const map = new Map<string, Task>();
+    for (const t of tasks) {
+      if (t && t.id && t.userId === user.id) {
+        map.set(t.id, t);
+      }
+    }
+    return Array.from(map.values());
+  }, [tasks, user.id]);
   const workload = useMemo(() => calculateUserWorkload(userTasks), [userTasks]);
   const archivedTasks = useMemo(() => userTasks.filter(t => t.status === 'archived'), [userTasks]);
 
@@ -259,6 +267,17 @@ export const Swimlane: React.FC<SwimlaneProps> = React.memo(({
               <span className="rounded-full bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-neutral-500 dark:text-white/40">
                 {user.role === 'content' ? 'Content' : 'Design'}
               </span>
+
+              {/* Cognitive Overload Alert Indicator */}
+              {workload.level === 'overloaded' && (
+                <span
+                  title="Cognitive capacity exceeded (>12 pts). Consider rebalancing tasks."
+                  className="inline-flex items-center gap-1 rounded-full bg-red-500/10 border border-red-500/30 px-2 py-0.5 text-[10px] font-semibold text-red-500 dark:text-red-400 animate-pulse"
+                >
+                  <Activity className="h-2.5 w-2.5" />
+                  <span>Capacity Exceeded</span>
+                </span>
+              )}
 
               {/* Cross-user drag indicator when dragging over header */}
               {isCrossUserDrag && (
@@ -526,7 +545,5 @@ export const Swimlane: React.FC<SwimlaneProps> = React.memo(({
     </motion.div>
   );
 });
-
-Swimlane.displayName = 'Swimlane';
 
 Swimlane.displayName = 'Swimlane';

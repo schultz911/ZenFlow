@@ -68,7 +68,11 @@ const SEED_USERS: User[] = [];
 
 const SEED_TASKS: Task[] = [];
 
-// Persistent state manager
+// Persistent state manager with non-blocking async queue
+let isWriting = false;
+let pendingSave: AppStore | null = null;
+let saveDebounceTimer: NodeJS.Timeout | null = null;
+
 function loadStore(): AppStore {
   try {
     if (!fs.existsSync(DATA_DIR)) {
@@ -108,15 +112,45 @@ function loadStore(): AppStore {
   return initialStore;
 }
 
-function saveStore(store: AppStore) {
-  try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
-    }
-    fs.writeFileSync(DATA_FILE, JSON.stringify(store, null, 2), 'utf-8');
-  } catch (err) {
-    console.error('Failed to persist store:', err);
+// Non-blocking debounced asynchronous persistence to prevent event loop bottlenecks
+function saveStore(storeToSave: AppStore) {
+  pendingSave = storeToSave;
+
+  if (saveDebounceTimer) {
+    clearTimeout(saveDebounceTimer);
   }
+
+  saveDebounceTimer = setTimeout(async () => {
+    if (isWriting || !pendingSave) return;
+    isWriting = true;
+    const dataToWrite = pendingSave;
+    pendingSave = null;
+
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        await fs.promises.mkdir(DATA_DIR, { recursive: true });
+      }
+      const tempPath = `${DATA_FILE}.tmp.${Date.now()}`;
+      await fs.promises.writeFile(tempPath, JSON.stringify(dataToWrite, null, 2), 'utf-8');
+      await fs.promises.rename(tempPath, DATA_FILE);
+    } catch (err) {
+      console.error('Failed to persist store asynchronously:', err);
+    } finally {
+      isWriting = false;
+      if (pendingSave) {
+        saveStore(pendingSave);
+      }
+    }
+  }, 50);
+}
+
+// Input sanitizer to prevent XSS / malicious injection in titles & descriptions
+function sanitizeString(input: unknown): string {
+  if (typeof input !== 'string') return '';
+  return input
+    .trim()
+    .replace(/[<>]/g, '') // Strip basic HTML tags
+    .slice(0, 1000); // Enforce max string length boundary
 }
 
 // In-memory active store
@@ -436,6 +470,7 @@ type SSEClient = {
 
 let clients: SSEClient[] = [];
 let nextClientId = 1;
+const MAX_SSE_CLIENTS = 100;
 
 function broadcastEvent(type: string, payload: any) {
   const eventData = JSON.stringify({
@@ -465,21 +500,25 @@ async function startServer() {
       'Permissions-Policy',
       'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
     );
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     next();
   });
 
-  app.use(express.json());
+  app.use(express.json({ limit: '1mb' }));
 
   // Initialize and load database records from Firestore
   await syncFromFirestore();
 
   // API: Health check
   app.get('/api/health', (req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-store');
     res.json({ status: 'ok', time: new Date().toISOString() });
   });
 
   // API: Get entire state
   app.get('/api/state', (req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     res.json({
       users: store.users,
       tasks: store.tasks,
@@ -494,9 +533,13 @@ async function startServer() {
       return res.status(400).json({ error: 'Name, email, and role are required' });
     }
 
-    const cleanEmail = String(email).trim().toLowerCase();
-    const cleanName = String(name).trim();
+    const cleanEmail = sanitizeString(email).toLowerCase();
+    const cleanName = sanitizeString(name);
     const cleanRole = (role === 'design' ? 'design' : 'content') as 'content' | 'design';
+
+    if (!cleanEmail || !cleanName) {
+      return res.status(400).json({ error: 'Valid name and email are required' });
+    }
 
     let existingUser = store.users.find(u => u.email.toLowerCase() === cleanEmail);
 
@@ -537,6 +580,7 @@ async function startServer() {
 
   // API: Get all users
   app.get('/api/users', (req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     res.json(store.users);
   });
 
@@ -547,9 +591,13 @@ async function startServer() {
       return res.status(400).json({ error: 'Name, email, and role are required' });
     }
 
-    const cleanEmail = String(email).trim().toLowerCase();
-    const cleanName = String(name).trim();
+    const cleanEmail = sanitizeString(email).toLowerCase();
+    const cleanName = sanitizeString(name);
     const cleanRole = role === 'design' ? 'design' : 'content';
+
+    if (!cleanEmail || !cleanName) {
+      return res.status(400).json({ error: 'Valid name and email are required' });
+    }
 
     const existingUser = store.users.find(u => u.email.toLowerCase() === cleanEmail);
     if (existingUser) {
@@ -581,6 +629,7 @@ async function startServer() {
 
   // API: Get all tasks
   app.get('/api/tasks', (req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
     res.json(store.tasks);
   });
 
@@ -588,7 +637,8 @@ async function startServer() {
   app.post('/api/tasks', (req: Request, res: Response) => {
     const { userId, title, description, dueDate, cognitiveLoad, status } = req.body;
 
-    if (!userId || !title) {
+    const cleanTitle = sanitizeString(title);
+    if (!userId || !cleanTitle) {
       return res.status(400).json({ error: 'userId and title are required' });
     }
 
@@ -601,9 +651,9 @@ async function startServer() {
     const newTask: Task = {
       id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       userId,
-      title: String(title).trim(),
-      description: description ? String(description).trim() : undefined,
-      dueDate: dueDate ? String(dueDate).trim() : undefined,
+      title: cleanTitle,
+      description: description ? sanitizeString(description) : undefined,
+      dueDate: dueDate ? sanitizeString(dueDate) : undefined,
       cognitiveLoad: ['low', 'medium', 'high'].includes(cognitiveLoad) ? cognitiveLoad : 'medium',
       status: ['todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : 'todo',
       order: maxOrder + 1,
@@ -633,9 +683,9 @@ async function startServer() {
 
     const updatedTask: Task = {
       ...currentTask,
-      title: title !== undefined ? String(title).trim() : currentTask.title,
-      description: description !== undefined ? (description ? String(description).trim() : undefined) : currentTask.description,
-      dueDate: dueDate !== undefined ? (dueDate ? String(dueDate).trim() : undefined) : currentTask.dueDate,
+      title: title !== undefined ? sanitizeString(title) : currentTask.title,
+      description: description !== undefined ? (description ? sanitizeString(description) : undefined) : currentTask.description,
+      dueDate: dueDate !== undefined ? (dueDate ? sanitizeString(dueDate) : undefined) : currentTask.dueDate,
       cognitiveLoad: cognitiveLoad && ['low', 'medium', 'high'].includes(cognitiveLoad) ? cognitiveLoad : currentTask.cognitiveLoad,
       status: status && ['todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : currentTask.status,
       userId: userId || currentTask.userId,
@@ -775,6 +825,16 @@ async function startServer() {
 
   // API: Server-Sent Events (SSE) for zero-friction real-time sync across all connected browser tabs & devices
   app.get('/api/events', (req: Request, res: Response) => {
+    // Prevent memory leaks: prune oldest clients if limit exceeded
+    if (clients.length >= MAX_SSE_CLIENTS) {
+      const oldest = clients.shift();
+      try {
+        oldest?.res.end();
+      } catch {
+        // ignore
+      }
+    }
+
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');

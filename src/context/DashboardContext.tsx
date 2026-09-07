@@ -150,16 +150,27 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.users) && data.users.length > 0) {
-          setUsers(data.users);
+          const userMap = new Map<string, User>();
+          for (const u of data.users) {
+            if (u && u.id) userMap.set(u.id, u);
+          }
+          const uniqueUsers = Array.from(userMap.values());
+          setUsers(uniqueUsers);
           // If currentUser exists, sync it
           setCurrentUser(prev => {
-            if (!prev) return data.users[0] || null;
-            const matched = data.users.find((u: User) => u.id === prev.id || u.email.toLowerCase() === prev.email.toLowerCase());
+            if (!prev) return uniqueUsers[0] || null;
+            const matched = uniqueUsers.find(
+              (u: User) => u.id === prev.id || u.email.toLowerCase() === prev.email.toLowerCase()
+            );
             return matched || prev;
           });
         }
         if (Array.isArray(data.tasks)) {
-          setTasks(data.tasks);
+          const taskMap = new Map<string, Task>();
+          for (const t of data.tasks) {
+            if (t && t.id) taskMap.set(t.id, t);
+          }
+          setTasks(Array.from(taskMap.values()));
         }
         setSyncStatus('connected');
       }
@@ -200,27 +211,60 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
             if (type === 'user_created') {
               setUsers(prev => {
-                const exists = prev.some(u => u.id === payload.id);
-                return exists ? prev : [...prev, payload];
+                const map = new Map(prev.map(u => [u.id, u]));
+                map.set(payload.id, payload);
+                return Array.from(map.values());
               });
             } else if (type === 'user_updated') {
               setUsers(prev => prev.map(u => (u.id === payload.id ? payload : u)));
               setCurrentUser(prev => (prev?.id === payload.id ? payload : prev));
             } else if (type === 'task_created') {
               setTasks(prev => {
-                const exists = prev.some(t => t.id === payload.id);
-                return exists ? prev : [...prev, payload];
+                const map = new Map<string, Task>();
+                for (const t of prev) {
+                  // If there's an optimistic temp task with matching properties, discard the temp version
+                  if (
+                    t.id.startsWith('temp-') &&
+                    t.userId === payload.userId &&
+                    t.title === payload.title
+                  ) {
+                    continue;
+                  }
+                  map.set(t.id, t);
+                }
+                map.set(payload.id, payload);
+                return Array.from(map.values());
               });
             } else if (type === 'task_updated') {
-              setTasks(prev => prev.map(t => (t.id === payload.id ? payload : t)));
+              setTasks(prev => {
+                const map = new Map(prev.map(t => [t.id, t]));
+                map.set(payload.id, payload);
+                return Array.from(map.values());
+              });
             } else if (type === 'task_deleted') {
               setTasks(prev => prev.filter(t => t.id !== payload.id));
             } else if (type === 'tasks_reordered') {
               const updatedMap = new Map((payload as Task[]).map(t => [t.id, t]));
-              setTasks(prev => prev.map(t => updatedMap.get(t.id) || t));
+              setTasks(prev => {
+                const map = new Map<string, Task>();
+                for (const t of prev) {
+                  const updated = updatedMap.get(t.id) || t;
+                  map.set(t.id, updated);
+                }
+                for (const t of payload as Task[]) {
+                  map.set(t.id, t);
+                }
+                return Array.from(map.values());
+              });
             } else if (type === 'sync_all') {
-              if (payload.users) setUsers(payload.users);
-              if (payload.tasks) setTasks(payload.tasks);
+              if (payload.users) {
+                const userMap = new Map((payload.users as User[]).map(u => [u.id, u]));
+                setUsers(Array.from(userMap.values()));
+              }
+              if (payload.tasks) {
+                const taskMap = new Map((payload.tasks as Task[]).map(t => [t.id, t]));
+                setTasks(Array.from(taskMap.values()));
+              }
             }
           } catch (err) {
             console.error('Error handling SSE update:', err);
@@ -320,9 +364,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     cognitiveLoad: 'low' | 'medium' | 'high';
     status: TaskStatus;
   }): Promise<Task> => {
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     // Optimistic task
     const tempTask: Task = {
-      id: `task-${Date.now()}`,
+      id: tempId,
       userId: data.userId,
       title: data.title.trim(),
       description: data.description ? data.description.trim() : undefined,
@@ -334,7 +379,14 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       updatedAt: new Date().toISOString(),
     };
 
-    setTasks(prev => [...prev, tempTask]);
+    setTasks(prev => {
+      const map = new Map<string, Task>();
+      for (const t of prev) {
+        if (t.id) map.set(t.id, t);
+      }
+      map.set(tempId, tempTask);
+      return Array.from(map.values());
+    });
 
     try {
       const res = await fetch('/api/tasks', {
@@ -344,7 +396,16 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       });
       if (res.ok) {
         const saved: Task = await res.json();
-        setTasks(prev => prev.map(t => (t.id === tempTask.id ? saved : t)));
+        setTasks(prev => {
+          const map = new Map<string, Task>();
+          for (const t of prev) {
+            // Remove the temporary task and any matching id
+            if (t.id === tempId || t.id === saved.id) continue;
+            map.set(t.id, t);
+          }
+          map.set(saved.id, saved);
+          return Array.from(map.values());
+        });
         return saved;
       }
     } catch (err) {
@@ -357,15 +418,18 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   // Task update
   const updateTask = async (id: string, updates: Partial<Task>): Promise<Task> => {
     let updatedTask: Task | undefined;
-    setTasks(prev =>
-      prev.map(t => {
+    setTasks(prev => {
+      const map = new Map<string, Task>();
+      for (const t of prev) {
         if (t.id === id) {
           updatedTask = { ...t, ...updates, updatedAt: new Date().toISOString() };
-          return updatedTask;
+          map.set(t.id, updatedTask);
+        } else {
+          map.set(t.id, t);
         }
-        return t;
-      })
-    );
+      }
+      return Array.from(map.values());
+    });
 
     try {
       const res = await fetch(`/api/tasks/${id}`, {
@@ -375,7 +439,11 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       });
       if (res.ok) {
         const serverTask: Task = await res.json();
-        setTasks(prev => prev.map(t => (t.id === id ? serverTask : t)));
+        setTasks(prev => {
+          const map = new Map(prev.map(t => [t.id, t]));
+          map.set(id, serverTask);
+          return Array.from(map.values());
+        });
         return serverTask;
       }
     } catch (err) {

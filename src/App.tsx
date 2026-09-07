@@ -45,9 +45,11 @@ function DashboardContent() {
     return users.filter(u => u.role === activeRoleTab);
   }, [users, activeRoleTab]);
 
-  // Filter tasks by search query
+  // Filter tasks by search query with deduplication
   const filteredTasks = useMemo(() => {
-    return tasks.filter(task => {
+    const map = new Map<string, Task>();
+    for (const task of tasks) {
+      if (!task || !task.id) continue;
       // Search query filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -55,12 +57,44 @@ function DashboardContent() {
         const matchesDesc = task.description ? task.description.toLowerCase().includes(q) : false;
         const taskUser = users.find(u => u.id === task.userId);
         const matchesUser = taskUser ? taskUser.name.toLowerCase().includes(q) : false;
-        return matchesTitle || matchesDesc || matchesUser;
+        if (!matchesTitle && !matchesDesc && !matchesUser) continue;
+      }
+      map.set(task.id, task);
+    }
+    return Array.from(map.values());
+  }, [tasks, searchQuery, users]);
+
+  // Global keyboard shortcut listeners
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Escape: close all open modals
+      if (e.key === 'Escape') {
+        setLoginModalOpen(false);
+        setTaskModalOpen(false);
+        setWorkloadModalUser(null);
+        setFirestoreModalOpen(false);
       }
 
-      return true;
-    });
-  }, [tasks, searchQuery, users]);
+      // Ctrl+N / Cmd+N: Quick create task
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        handleOpenAddTask();
+      }
+
+      // Ctrl+F / Cmd+F: Focus search input
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        const searchInput = document.getElementById('task-search-input') as HTMLInputElement | null;
+        if (searchInput) {
+          e.preventDefault();
+          searchInput.focus();
+          searchInput.select();
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentUser, users]);
 
   // Task modal handlers
   const handleOpenAddTask = (userId?: string, status?: TaskStatus) => {

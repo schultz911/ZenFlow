@@ -318,3 +318,61 @@ export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
     progressPercent,
   };
 }
+
+/**
+ * Generates and downloads a clean CSV report of all workspace tasks with workload metrics
+ */
+export function exportWorkspaceCSV(tasks: Task[], users: { id: string; name: string; email: string; role: Role }[]) {
+  const userMap = new Map(users.map(u => [u.id, u]));
+  const headers = ['Task ID', 'Title', 'Status', 'Cognitive Load', 'Assignee Name', 'Assignee Email', 'Role', 'Due Date', 'Created At'];
+  
+  const rows = tasks.map(t => {
+    const user = userMap.get(t.userId);
+    return [
+      `"${t.id}"`,
+      `"${(t.title || '').replace(/"/g, '""')}"`,
+      `"${t.status}"`,
+      `"${t.cognitiveLoad}"`,
+      `"${(user?.name || 'Unassigned').replace(/"/g, '""')}"`,
+      `"${user?.email || ''}"`,
+      `"${user?.role || ''}"`,
+      `"${t.dueDate || 'None'}"`,
+      `"${t.createdAt}"`,
+    ].join(',');
+  });
+
+  const csvContent = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `zenflow-workspace-${new Date().toISOString().slice(0, 10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+/**
+ * Generates and downloads a complete JSON audit file
+ */
+export function exportWorkspaceJSON(tasks: Task[], users: { id: string; name: string; email: string; role: Role }[]) {
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    totalUsers: users.length,
+    totalTasks: tasks.length,
+    users,
+    tasks,
+  };
+
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `zenflow-workspace-backup-${new Date().toISOString().slice(0, 10)}.json`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
