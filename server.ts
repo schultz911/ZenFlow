@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
+import compression from 'compression';
 import { createServer as createViteServer } from 'vite';
 import {
   initializeApp as initAdminApp,
@@ -63,10 +64,14 @@ const AVATAR_COLORS = [
   'from-cyan-500 to-blue-600',
 ];
 
-// Initial default seed state (empty for clean project)
-const SEED_USERS: User[] = [];
-
-const SEED_TASKS: Task[] = [];
+// O(1) Fast lookup sets for legacy template filters
+const DUMMY_USER_IDS = new Set(['user-1', 'user-2', 'user-3', 'user-4']);
+const DUMMY_TASK_IDS = new Set([
+  'task-101', 'task-102', 'task-103', 'task-104',
+  'task-201', 'task-202', 'task-203',
+  'task-301', 'task-302', 'task-303', 'task-304',
+  'task-401', 'task-402', 'task-403'
+]);
 
 // Persistent state manager with non-blocking async queue
 let isWriting = false;
@@ -82,20 +87,12 @@ function loadStore(): AppStore {
       const content = fs.readFileSync(DATA_FILE, 'utf-8');
       const parsed = JSON.parse(content);
       if (Array.isArray(parsed.users) && Array.isArray(parsed.tasks)) {
-        // Filter out only initial template dummy placeholders
+        // Filter out initial template dummy placeholders
         const cleanUsers = parsed.users.filter(
-          (u: User) =>
-            !['user-1', 'user-2', 'user-3', 'user-4'].includes(u.id) &&
-            !u.email?.endsWith('@acme.studio')
+          (u: User) => !DUMMY_USER_IDS.has(u.id) && !u.email?.endsWith('@acme.studio')
         );
         const cleanTasks = parsed.tasks.filter(
-          (t: Task) =>
-            ![
-              'task-101', 'task-102', 'task-103', 'task-104',
-              'task-201', 'task-202', 'task-203',
-              'task-301', 'task-302', 'task-303', 'task-304',
-              'task-401', 'task-402', 'task-403'
-            ].includes(t.id)
+          (t: Task) => !DUMMY_TASK_IDS.has(t.id) && !DUMMY_USER_IDS.has(t.userId)
         );
         return { users: cleanUsers, tasks: cleanTasks };
       }
@@ -342,20 +339,25 @@ async function dbBatchSaveTasks(tasks: Task[]) {
   if (tasks.length === 0) return;
   try {
     if (!adminDb && !webDb) initFirestore();
-    if (adminDb) {
-      const batch = adminDb.batch();
-      for (const t of tasks) {
-        batch.set(adminDb.collection('tasks').doc(t.id), cleanDocData(t), { merge: true });
+    // Firestore has a maximum batch limit of 500 operations. Chunk tasks into blocks of 500.
+    const CHUNK_SIZE = 500;
+    for (let i = 0; i < tasks.length; i += CHUNK_SIZE) {
+      const chunk = tasks.slice(i, i + CHUNK_SIZE);
+      if (adminDb) {
+        const batch = adminDb.batch();
+        for (const t of chunk) {
+          batch.set(adminDb.collection('tasks').doc(t.id), cleanDocData(t), { merge: true });
+        }
+        await batch.commit();
+        firestoreLastError = null;
+      } else if (webDb) {
+        const batch = writeBatch(webDb);
+        for (const t of chunk) {
+          batch.set(doc(webDb, 'tasks', t.id), cleanDocData(t), { merge: true });
+        }
+        await batch.commit();
+        firestoreLastError = null;
       }
-      await batch.commit();
-      firestoreLastError = null;
-    } else if (webDb) {
-      const batch = writeBatch(webDb);
-      for (const t of tasks) {
-        batch.set(doc(webDb, 'tasks', t.id), cleanDocData(t), { merge: true });
-      }
-      await batch.commit();
-      firestoreLastError = null;
     }
   } catch (err: any) {
     firestoreLastError = err.message || String(err);
@@ -492,6 +494,19 @@ function broadcastEvent(type: string, payload: any) {
 
 async function startServer() {
   const app = express();
+
+  // HTTP Egress Compression for payloads > 1KB (excluding SSE streams)
+  app.use(
+    compression({
+      filter: (req: Request, res: Response) => {
+        if (req.headers['x-no-compression'] || req.path === '/api/events') {
+          return false;
+        }
+        return compression.filter(req, res);
+      },
+      threshold: 1024,
+    })
+  );
 
   // Security & Permissions-Policy middleware
   // Explicitly set a standards-compliant Permissions-Policy without deprecated/unrecognized directives like 'browsing-topics'
@@ -871,8 +886,20 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    app.use(
+      express.static(distPath, {
+        maxAge: '1d',
+        setHeaders: (res, filePath) => {
+          if (filePath.includes(`${path.sep}assets${path.sep}`) || filePath.includes('/assets/')) {
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          } else {
+            res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+          }
+        },
+      })
+    );
     app.get('*', (req: Request, res: Response) => {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

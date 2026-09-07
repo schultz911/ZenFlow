@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { User, Task, Role, TaskStatus, RealtimeEvent, DragTaskInfo, TaskOrderUpdate } from '../types';
 import { INITIAL_USERS, INITIAL_TASKS } from '../data/initialData';
 
@@ -300,7 +300,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Authentication Login: takes name, role (content or design), official email address
   // When a new account is created, a new swimlane is formed on the respective role tab
-  const login = async (name: string, role: Role, email: string): Promise<User> => {
+  const login = useCallback(async (name: string, role: Role, email: string): Promise<User> => {
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -344,19 +344,19 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     setCurrentUser(existing);
     setActiveRoleTab(existing.role);
     return existing;
-  };
+  }, [users]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     setCurrentUser(null);
-  };
+  }, []);
 
-  const switchUser = (user: User) => {
+  const switchUser = useCallback((user: User) => {
     setCurrentUser(user);
     setActiveRoleTab(user.role);
-  };
+  }, []);
 
   // Task creation
-  const createTask = async (data: {
+  const createTask = useCallback(async (data: {
     userId: string;
     title: string;
     description?: string;
@@ -413,10 +413,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     return tempTask;
-  };
+  }, [tasks]);
 
   // Task update
-  const updateTask = async (id: string, updates: Partial<Task>): Promise<Task> => {
+  const updateTask = useCallback(async (id: string, updates: Partial<Task>): Promise<Task> => {
     let updatedTask: Task | undefined;
     setTasks(prev => {
       const map = new Map<string, Task>();
@@ -451,10 +451,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     return updatedTask || (tasks.find(t => t.id === id) as Task);
-  };
+  }, [tasks]);
 
   // Task delete
-  const deleteTask = async (id: string): Promise<void> => {
+  const deleteTask = useCallback(async (id: string): Promise<void> => {
     setTasks(prev => prev.filter(t => t.id !== id));
 
     try {
@@ -464,10 +464,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     } catch (err) {
       console.warn('Delete task server call failed:', err);
     }
-  };
+  }, []);
 
   // Move task across users and/or statuses with order index normalization
-  const moveTask = async (
+  const moveTask = useCallback(async (
     taskId: string,
     targetUserId: string,
     newStatus: TaskStatus,
@@ -538,17 +538,17 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     } catch (err) {
       console.warn('Move task server call failed:', err);
     }
-  };
+  }, [tasks]);
 
   // Direct task reassignment helper
-  const reassignTask = async (taskId: string, targetUserId: string): Promise<void> => {
+  const reassignTask = useCallback(async (taskId: string, targetUserId: string): Promise<void> => {
     const task = tasks.find(t => t.id === taskId);
     if (!task || task.userId === targetUserId) return;
     await moveTask(taskId, targetUserId, task.status);
-  };
+  }, [tasks, moveTask]);
 
   // Move task status and order (backwards compatible, delegates to moveTask)
-  const moveTaskStatus = async (
+  const moveTaskStatus = useCallback(async (
     taskId: string,
     newStatus: TaskStatus,
     newIndex?: number,
@@ -558,10 +558,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     if (!task) return;
     const destUser = targetUserId || task.userId;
     await moveTask(taskId, destUser, newStatus, newIndex);
-  };
+  }, [tasks, moveTask]);
 
   // Reorder tasks batch
-  const reorderTasks = async (updates: Array<TaskOrderUpdate>): Promise<void> => {
+  const reorderTasks = useCallback(async (updates: Array<TaskOrderUpdate>): Promise<void> => {
     const updateMap = new Map(updates.map(u => [u.id, u]));
     const now = new Date().toISOString();
 
@@ -590,10 +590,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     } catch (err) {
       console.warn('Reorder tasks server call failed:', err);
     }
-  };
+  }, []);
 
   // Trigger full synchronization with Firestore
-  const syncWithFirestore = async (): Promise<{ success: boolean; message: string }> => {
+  const syncWithFirestore = useCallback(async (): Promise<{ success: boolean; message: string }> => {
     try {
       const res = await fetch('/api/firestore/sync', { method: 'POST' });
       const data = await res.json();
@@ -603,10 +603,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     } catch (err: any) {
       return { success: false, message: err.message || 'Sync failed' };
     }
-  };
+  }, [fetchState, refreshFirestoreStatus]);
 
   // Upload or apply Firebase Service Account Key
-  const uploadServiceAccountKey = async (keyContent: string): Promise<{ success: boolean; message: string }> => {
+  const uploadServiceAccountKey = useCallback(async (keyContent: string): Promise<{ success: boolean; message: string }> => {
     try {
       const res = await fetch('/api/firestore/credentials', {
         method: 'POST',
@@ -620,38 +620,64 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     } catch (err: any) {
       return { success: false, message: err.message || 'Key upload failed' };
     }
-  };
+  }, [fetchState, refreshFirestoreStatus]);
+
+  const contextValue = useMemo(
+    () => ({
+      currentUser,
+      users,
+      tasks,
+      activeRoleTab,
+      setActiveRoleTab,
+      darkMode,
+      setDarkMode,
+      syncStatus,
+      isLoading,
+      firestoreStatus,
+      activeDragInfo,
+      setActiveDragInfo,
+      refreshFirestoreStatus,
+      syncWithFirestore,
+      uploadServiceAccountKey,
+      login,
+      logout,
+      switchUser,
+      createTask,
+      updateTask,
+      deleteTask,
+      moveTask,
+      reassignTask,
+      moveTaskStatus,
+      reorderTasks,
+    }),
+    [
+      currentUser,
+      users,
+      tasks,
+      activeRoleTab,
+      darkMode,
+      syncStatus,
+      isLoading,
+      firestoreStatus,
+      activeDragInfo,
+      refreshFirestoreStatus,
+      syncWithFirestore,
+      uploadServiceAccountKey,
+      login,
+      logout,
+      switchUser,
+      createTask,
+      updateTask,
+      deleteTask,
+      moveTask,
+      reassignTask,
+      moveTaskStatus,
+      reorderTasks,
+    ]
+  );
 
   return (
-    <DashboardContext.Provider
-      value={{
-        currentUser,
-        users,
-        tasks,
-        activeRoleTab,
-        setActiveRoleTab,
-        darkMode,
-        setDarkMode,
-        syncStatus,
-        isLoading,
-        firestoreStatus,
-        activeDragInfo,
-        setActiveDragInfo,
-        refreshFirestoreStatus,
-        syncWithFirestore,
-        uploadServiceAccountKey,
-        login,
-        logout,
-        switchUser,
-        createTask,
-        updateTask,
-        deleteTask,
-        moveTask,
-        reassignTask,
-        moveTaskStatus,
-        reorderTasks,
-      }}
-    >
+    <DashboardContext.Provider value={contextValue}>
       {children}
     </DashboardContext.Provider>
   );
