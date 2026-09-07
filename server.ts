@@ -55,212 +55,10 @@ const AVATAR_COLORS = [
   'from-cyan-500 to-blue-600',
 ];
 
-// Initial default seed state
-const SEED_USERS: User[] = [
-  {
-    id: 'user-1',
-    name: 'Elena Rostova',
-    email: 'elena.rostova@acme.studio',
-    role: 'content',
-    avatarColor: 'from-amber-500 to-orange-600',
-    createdAt: '2026-08-15T10:00:00.000Z',
-  },
-  {
-    id: 'user-2',
-    name: 'Marcus Vance',
-    email: 'marcus.vance@acme.studio',
-    role: 'content',
-    avatarColor: 'from-rose-500 to-pink-600',
-    createdAt: '2026-08-20T11:30:00.000Z',
-  },
-  {
-    id: 'user-3',
-    name: 'Aria Chen',
-    email: 'aria.chen@acme.studio',
-    role: 'design',
-    avatarColor: 'from-blue-500 to-indigo-600',
-    createdAt: '2026-08-12T09:15:00.000Z',
-  },
-  {
-    id: 'user-4',
-    name: 'Julian Hayes',
-    email: 'julian.hayes@acme.studio',
-    role: 'design',
-    avatarColor: 'from-emerald-500 to-teal-600',
-    createdAt: '2026-08-18T14:45:00.000Z',
-  },
-];
+// Initial default seed state (empty for clean project)
+const SEED_USERS: User[] = [];
 
-const SEED_TASKS: Task[] = [
-  {
-    id: 'task-101',
-    userId: 'user-1',
-    title: 'Brand Tone of Voice & Messaging Guide 2026',
-    description: 'Synthesize leadership interviews into comprehensive brand narrative pillars.',
-    dueDate: '2026-09-06',
-    cognitiveLoad: 'high',
-    status: 'in_progress',
-    order: 0,
-    createdAt: '2026-09-01T08:00:00.000Z',
-    updatedAt: '2026-09-03T10:00:00.000Z',
-  },
-  {
-    id: 'task-102',
-    userId: 'user-1',
-    title: 'Quarterly Product Announcement Deck',
-    description: 'Outline key customer outcomes and feature highlights for slide narrative.',
-    dueDate: '2026-09-08',
-    cognitiveLoad: 'medium',
-    status: 'todo',
-    order: 0,
-    createdAt: '2026-09-02T09:00:00.000Z',
-    updatedAt: '2026-09-02T09:00:00.000Z',
-  },
-  {
-    id: 'task-103',
-    userId: 'user-1',
-    title: 'Executive Ghostwriting: AI & Design Ethics',
-    description: 'Draft 1,200 word op-ed examining human agency in generative workflows.',
-    dueDate: '2026-09-05',
-    cognitiveLoad: 'high',
-    status: 'in_review',
-    order: 0,
-    createdAt: '2026-09-01T14:00:00.000Z',
-    updatedAt: '2026-09-03T16:00:00.000Z',
-  },
-  {
-    id: 'task-104',
-    userId: 'user-1',
-    title: 'Product Changelog Release Notes (v4.2)',
-    description: 'Proofread engineering change logs into crisp consumer-friendly bullets.',
-    dueDate: '2026-09-04',
-    cognitiveLoad: 'low',
-    status: 'done',
-    order: 0,
-    createdAt: '2026-08-30T10:00:00.000Z',
-    updatedAt: '2026-09-04T08:30:00.000Z',
-  },
-  {
-    id: 'task-201',
-    userId: 'user-2',
-    title: 'Enterprise Onboarding Email Drip Sequence',
-    description: 'Write 5 targeted lifecycle emails guiding CTOs through SSO and team invites.',
-    dueDate: '2026-09-05',
-    cognitiveLoad: 'medium',
-    status: 'in_progress',
-    order: 0,
-    createdAt: '2026-09-02T11:00:00.000Z',
-    updatedAt: '2026-09-03T09:00:00.000Z',
-  },
-  {
-    id: 'task-202',
-    userId: 'user-2',
-    title: 'Landing Page Conversion Copy Experiments',
-    description: 'Produce 3 distinct headline variations focusing on team velocity.',
-    dueDate: '2026-09-09',
-    cognitiveLoad: 'low',
-    status: 'todo',
-    order: 0,
-    createdAt: '2026-09-03T15:00:00.000Z',
-    updatedAt: '2026-09-03T15:00:00.000Z',
-  },
-  {
-    id: 'task-203',
-    userId: 'user-2',
-    title: 'Editorial Style Guide Glossary Update',
-    description: 'Standardize terminology for real-time collaboration terms.',
-    dueDate: undefined,
-    cognitiveLoad: 'low',
-    status: 'todo',
-    order: 1,
-    createdAt: '2026-09-01T12:00:00.000Z',
-    updatedAt: '2026-09-01T12:00:00.000Z',
-  },
-  {
-    id: 'task-301',
-    userId: 'user-3',
-    title: 'Design System Token Architecture (WCAG AAA)',
-    description: 'Rebuild dark mode contrast ratios and semantic surface elevation tokens.',
-    dueDate: '2026-09-05',
-    cognitiveLoad: 'high',
-    status: 'in_progress',
-    order: 0,
-    createdAt: '2026-09-01T10:00:00.000Z',
-    updatedAt: '2026-09-03T11:00:00.000Z',
-  },
-  {
-    id: 'task-302',
-    userId: 'user-3',
-    title: 'Interactive Prototype for Role Swimlanes',
-    description: 'Test touch drag-and-drop mechanics and spring animation physics.',
-    dueDate: '2026-09-07',
-    cognitiveLoad: 'medium',
-    status: 'todo',
-    order: 0,
-    createdAt: '2026-09-02T13:00:00.000Z',
-    updatedAt: '2026-09-02T13:00:00.000Z',
-  },
-  {
-    id: 'task-303',
-    userId: 'user-3',
-    title: 'Mobile Navigation Sheet Specs',
-    description: 'Finalize gesture thresholds and safe-area inset margins for iOS/Android.',
-    dueDate: '2026-09-04',
-    cognitiveLoad: 'medium',
-    status: 'in_review',
-    order: 0,
-    createdAt: '2026-09-01T16:00:00.000Z',
-    updatedAt: '2026-09-04T07:00:00.000Z',
-  },
-  {
-    id: 'task-304',
-    userId: 'user-3',
-    title: 'Team Onboarding Iconography (32px vector)',
-    description: '12 new SVG icons conforming to 2px stroke grid guidelines.',
-    dueDate: '2026-09-03',
-    cognitiveLoad: 'low',
-    status: 'done',
-    order: 0,
-    createdAt: '2026-08-28T10:00:00.000Z',
-    updatedAt: '2026-09-03T17:00:00.000Z',
-  },
-  {
-    id: 'task-401',
-    userId: 'user-4',
-    title: 'Component Library Performance & Layout Shifts',
-    description: 'Audit render bottlenecks and eliminate layout shift in dynamic table rows.',
-    dueDate: '2026-09-06',
-    cognitiveLoad: 'high',
-    status: 'in_progress',
-    order: 0,
-    createdAt: '2026-09-02T10:00:00.000Z',
-    updatedAt: '2026-09-03T14:00:00.000Z',
-  },
-  {
-    id: 'task-402',
-    userId: 'user-4',
-    title: 'Empty State Graphic System',
-    description: 'Craft subtle monochromatic line art for zero-data swimlanes and searches.',
-    dueDate: '2026-09-10',
-    cognitiveLoad: 'medium',
-    status: 'todo',
-    order: 0,
-    createdAt: '2026-09-03T16:30:00.000Z',
-    updatedAt: '2026-09-03T16:30:00.000Z',
-  },
-  {
-    id: 'task-403',
-    userId: 'user-4',
-    title: 'Micro-interaction Sound & Haptics Spec',
-    description: 'Document auditory frequencies for task completion chimes.',
-    dueDate: undefined,
-    cognitiveLoad: 'low',
-    status: 'archived',
-    order: 0,
-    createdAt: '2026-08-25T11:00:00.000Z',
-    updatedAt: '2026-09-01T09:00:00.000Z',
-  },
-];
+const SEED_TASKS: Task[] = [];
 
 // Persistent state manager
 function loadStore(): AppStore {
@@ -272,7 +70,14 @@ function loadStore(): AppStore {
       const content = fs.readFileSync(DATA_FILE, 'utf-8');
       const parsed = JSON.parse(content);
       if (Array.isArray(parsed.users) && Array.isArray(parsed.tasks)) {
-        return parsed;
+        // Filter out any leftover sample users and tasks
+        const cleanUsers = parsed.users.filter(
+          (u: User) => !['user-1', 'user-2', 'user-3', 'user-4'].includes(u.id) && !u.email?.endsWith('@acme.studio')
+        );
+        const cleanTasks = parsed.tasks.filter(
+          (t: Task) => !['task-101', 'task-102', 'task-103', 'task-104', 'task-201', 'task-202', 'task-203', 'task-301', 'task-302', 'task-303', 'task-304', 'task-401', 'task-402', 'task-403'].includes(t.id)
+        );
+        return { users: cleanUsers, tasks: cleanTasks };
       }
     }
   } catch (err) {
@@ -280,8 +85,8 @@ function loadStore(): AppStore {
   }
 
   const initialStore: AppStore = {
-    users: SEED_USERS,
-    tasks: SEED_TASKS,
+    users: [],
+    tasks: [],
   };
   saveStore(initialStore);
   return initialStore;
@@ -303,23 +108,23 @@ let store: AppStore = loadStore();
 
 // Firebase Firestore Configuration
 function getFirebaseConfig() {
+  let fileConfig: any = {};
   try {
     const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
     if (fs.existsSync(configPath)) {
-      const parsed = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      return parsed;
+      fileConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
     }
   } catch (err) {
     // fallback to env vars
   }
   return {
-    apiKey: process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY,
-    projectId: process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || 'zennext-4d040',
-    appId: process.env.FIREBASE_APP_ID || process.env.VITE_FIREBASE_APP_ID,
-    authDomain: process.env.FIREBASE_AUTH_DOMAIN || process.env.VITE_FIREBASE_AUTH_DOMAIN,
-    firestoreDatabaseId: process.env.FIREBASE_DATABASE_ID || process.env.VITE_FIREBASE_DATABASE_ID || 'ai-studio-teammanagementda-9980efc0-ca83-4c76-90fb-bb53a62ccc11',
-    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET,
-    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+    apiKey: process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY || fileConfig.apiKey || '',
+    projectId: process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || fileConfig.projectId || 'zen-flow',
+    appId: process.env.FIREBASE_APP_ID || process.env.VITE_FIREBASE_APP_ID || fileConfig.appId || '',
+    authDomain: process.env.FIREBASE_AUTH_DOMAIN || process.env.VITE_FIREBASE_AUTH_DOMAIN || fileConfig.authDomain || '',
+    firestoreDatabaseId: process.env.FIREBASE_DATABASE_ID || process.env.VITE_FIREBASE_DATABASE_ID || fileConfig.firestoreDatabaseId || undefined,
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || process.env.VITE_FIREBASE_STORAGE_BUCKET || fileConfig.storageBucket || '',
+    messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || fileConfig.messagingSenderId || '',
   };
 }
 
@@ -338,47 +143,80 @@ if (fbConfig && fbConfig.apiKey && fbConfig.projectId) {
   }
 }
 
-// Sync existing users and tasks from Firestore, or seed if empty
+// Sync existing users and tasks from Firestore, purging any legacy sample/demo items
 async function syncFromFirestore() {
   if (!firestoreDb) return;
   try {
     const usersSnap = await getDocs(collection(firestoreDb, 'users'));
     const tasksSnap = await getDocs(collection(firestoreDb, 'tasks'));
 
-    if (usersSnap.empty) {
-      console.log('[Firestore] Database empty. Seeding demo users and tasks into Firestore...');
-      const batch = writeBatch(firestoreDb);
-      for (const u of SEED_USERS) {
-        batch.set(doc(firestoreDb, 'users', u.id), u);
-      }
-      for (const t of SEED_TASKS) {
-        batch.set(doc(firestoreDb, 'tasks', t.id), t);
-      }
-      await batch.commit();
-      console.log('[Firestore] Seed complete.');
-      store.users = [...SEED_USERS];
-      store.tasks = [...SEED_TASKS];
-      saveStore(store);
-      return;
-    }
-
+    const demoUserIds = new Set(['user-1', 'user-2', 'user-3', 'user-4']);
     const firestoreUsers: User[] = [];
+    const firestoreTasks: Task[] = [];
+    const batch = writeBatch(firestoreDb);
+    let hasPurges = false;
+
     usersSnap.forEach(d => {
-      firestoreUsers.push(d.data() as User);
+      const u = d.data() as User;
+      if (demoUserIds.has(u.id) || u.email?.endsWith('@acme.studio')) {
+        batch.delete(d.ref);
+        hasPurges = true;
+      } else {
+        firestoreUsers.push(u);
+      }
     });
 
-    const firestoreTasks: Task[] = [];
     tasksSnap.forEach(d => {
-      firestoreTasks.push(d.data() as Task);
+      const t = d.data() as Task;
+      if (
+        t.id.startsWith('task-10') ||
+        t.id.startsWith('task-20') ||
+        t.id.startsWith('task-30') ||
+        t.id.startsWith('task-40') ||
+        demoUserIds.has(t.userId)
+      ) {
+        batch.delete(d.ref);
+        hasPurges = true;
+      } else {
+        firestoreTasks.push(t);
+      }
     });
+
+    if (hasPurges) {
+      await batch.commit();
+      console.log('[Firestore] Purged all legacy sample documents from Firestore.');
+    }
 
     store.users = firestoreUsers;
     store.tasks = firestoreTasks;
     saveStore(store);
-    console.log(`[Firestore] Loaded ${firestoreUsers.length} users and ${firestoreTasks.length} tasks from Firestore.`);
+    console.log(`[Firestore] Database ready: ${firestoreUsers.length} user(s), ${firestoreTasks.length} task(s).`);
   } catch (err) {
     console.warn('[Firestore] Sync warning, retaining local store:', err);
   }
+}
+
+// Complete purge of all user and task records across Firestore, memory, and disk
+async function clearAllDataFromDb() {
+  store.users = [];
+  store.tasks = [];
+  saveStore(store);
+
+  if (firestoreDb) {
+    try {
+      const usersSnap = await getDocs(collection(firestoreDb, 'users'));
+      const tasksSnap = await getDocs(collection(firestoreDb, 'tasks'));
+      const batch = writeBatch(firestoreDb);
+      usersSnap.forEach(d => batch.delete(d.ref));
+      tasksSnap.forEach(d => batch.delete(d.ref));
+      await batch.commit();
+      console.log('[Firestore] Purged all documents from Firestore collections.');
+    } catch (err) {
+      console.warn('[Firestore] Error purging documents:', err);
+    }
+  }
+
+  broadcastEvent('sync_all', { users: [], tasks: [] });
 }
 
 // Connected clients for Server-Sent Events (SSE) real-time broadcasting
@@ -644,25 +482,15 @@ async function startServer() {
     res.json({ success: true, tasks: modifiedTasks });
   });
 
-  // API: Reset to initial demo seed data
-  app.post('/api/reset', (req: Request, res: Response) => {
-    store = {
-      users: [...SEED_USERS],
-      tasks: [...SEED_TASKS],
-    };
-    saveStore(store);
-    if (firestoreDb) {
-      const batch = writeBatch(firestoreDb);
-      for (const u of SEED_USERS) {
-        batch.set(doc(firestoreDb, 'users', u.id), u);
-      }
-      for (const t of SEED_TASKS) {
-        batch.set(doc(firestoreDb, 'tasks', t.id), t);
-      }
-      batch.commit().catch(e => console.error('Firestore reset err:', e));
-    }
-    broadcastEvent('sync_all', store);
-    res.json({ success: true, message: 'Reset to seed data' });
+  // API: Clear/Reset all workspace data
+  app.post('/api/clear', async (req: Request, res: Response) => {
+    await clearAllDataFromDb();
+    res.json({ success: true, message: 'All workspace data cleared' });
+  });
+
+  app.post('/api/reset', async (req: Request, res: Response) => {
+    await clearAllDataFromDb();
+    res.json({ success: true, message: 'All workspace data cleared' });
   });
 
   // API: Server-Sent Events (SSE) for zero-friction real-time sync across all connected browser tabs & devices

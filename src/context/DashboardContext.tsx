@@ -47,12 +47,18 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
       const saved = localStorage.getItem(USER_SESSION_KEY);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (['user-1', 'user-2', 'user-3', 'user-4'].includes(parsed.id) || parsed.email?.endsWith('@acme.studio')) {
+          localStorage.removeItem(USER_SESSION_KEY);
+          return null;
+        }
+        return parsed;
+      }
     } catch {
       // ignore
     }
-    // Default to the first demo user (Elena Rostova) for immediate exploration, or user can log in/switch
-    return INITIAL_USERS[0] || null;
+    return null;
   });
 
   const [activeRoleTab, setActiveRoleTab] = useState<Role>(() => {
@@ -417,19 +423,17 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
-  // Reset demo data
+  // Clear / reset workspace data
   const resetDemoData = async () => {
     try {
-      const res = await fetch('/api/reset', { method: 'POST' });
-      if (res.ok) {
-        setUsers(INITIAL_USERS);
-        setTasks(INITIAL_TASKS);
-        setCurrentUser(INITIAL_USERS[0]);
-      }
-    } catch {
-      setUsers(INITIAL_USERS);
-      setTasks(INITIAL_TASKS);
-      setCurrentUser(INITIAL_USERS[0]);
+      await fetch('/api/reset', { method: 'POST' });
+    } catch (err) {
+      console.warn('Reset request failed:', err);
+    } finally {
+      setUsers([]);
+      setTasks([]);
+      setCurrentUser(null);
+      localStorage.removeItem(USER_SESSION_KEY);
     }
   };
 

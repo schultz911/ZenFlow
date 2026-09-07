@@ -297,6 +297,17 @@ export const Header: React.FC<HeaderProps> = ({
                     </button>
 
                     <button
+                      onClick={async () => {
+                        setUserDropdownOpen(false);
+                        await resetDemoData();
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-neutral-600 dark:text-white/60 hover:bg-neutral-50 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white transition-colors"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
+                      <span>Clear Workspace Data</span>
+                    </button>
+
+                    <button
                       onClick={() => {
                         setUserDropdownOpen(false);
                         logout();
