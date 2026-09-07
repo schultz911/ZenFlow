@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { User, Task, Role, TaskStatus, RealtimeEvent } from '../types';
+import { User, Task, Role, TaskStatus, RealtimeEvent, DragTaskInfo, TaskOrderUpdate } from '../types';
 import { INITIAL_USERS, INITIAL_TASKS } from '../data/initialData';
 
 export interface FirestoreStatus {
@@ -25,6 +25,8 @@ interface DashboardContextType {
   syncStatus: 'connected' | 'connecting' | 'offline';
   isLoading: boolean;
   firestoreStatus: FirestoreStatus | null;
+  activeDragInfo: DragTaskInfo | null;
+  setActiveDragInfo: (info: DragTaskInfo | null) => void;
   refreshFirestoreStatus: () => Promise<void>;
   syncWithFirestore: () => Promise<{ success: boolean; message: string }>;
   uploadServiceAccountKey: (keyContent: string) => Promise<{ success: boolean; message: string }>;
@@ -41,8 +43,10 @@ interface DashboardContextType {
   }) => Promise<Task>;
   updateTask: (id: string, updates: Partial<Task>) => Promise<Task>;
   deleteTask: (id: string) => Promise<void>;
-  moveTaskStatus: (taskId: string, newStatus: TaskStatus, newIndex?: number) => Promise<void>;
-  reorderTasks: (updates: Array<{ id: string; status: TaskStatus; order: number }>) => Promise<void>;
+  moveTask: (taskId: string, targetUserId: string, newStatus: TaskStatus, newIndex?: number) => Promise<void>;
+  reassignTask: (taskId: string, targetUserId: string) => Promise<void>;
+  moveTaskStatus: (taskId: string, newStatus: TaskStatus, newIndex?: number, targetUserId?: string) => Promise<void>;
+  reorderTasks: (updates: Array<TaskOrderUpdate>) => Promise<void>;
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -58,6 +62,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [tasks, setTasks] = useState<Task[]>(() => {
     return INITIAL_TASKS;
   });
+
+  const [activeDragInfo, setActiveDragInfo] = useState<DragTaskInfo | null>(null);
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
     try {
@@ -392,50 +398,116 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
-  // Move task status and order
-  const moveTaskStatus = async (taskId: string, newStatus: TaskStatus, newIndex?: number): Promise<void> => {
+  // Move task across users and/or statuses with order index normalization
+  const moveTask = async (
+    taskId: string,
+    targetUserId: string,
+    newStatus: TaskStatus,
+    newIndex?: number
+  ): Promise<void> => {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
-    if (task.status === newStatus && newIndex === undefined) return;
+    const isSameUser = task.userId === targetUserId;
+    const isSameStatus = task.status === newStatus;
 
-    const userTasksInStatus = tasks.filter(t => t.userId === task.userId && t.status === newStatus && t.id !== taskId);
-    const targetOrder = newIndex !== undefined ? newIndex : userTasksInStatus.length;
+    if (isSameUser && isSameStatus && newIndex === undefined) return;
+
+    // Get current tasks in target column excluding the moving task
+    const targetUserTasksInStatus = tasks
+      .filter(t => t.userId === targetUserId && t.status === newStatus && t.id !== taskId)
+      .sort((a, b) => a.order - b.order);
+
+    const targetOrder =
+      newIndex !== undefined
+        ? Math.max(0, Math.min(newIndex, targetUserTasksInStatus.length))
+        : targetUserTasksInStatus.length;
+
+    const now = new Date().toISOString();
+
+    // Prepare full batch updates so order numbers are strictly sorted
+    const reorderedTargetTasks = [...targetUserTasksInStatus];
+    const movedTaskUpdated: Task = {
+      ...task,
+      userId: targetUserId,
+      status: newStatus,
+      order: targetOrder,
+      updatedAt: now,
+    };
+    reorderedTargetTasks.splice(targetOrder, 0, movedTaskUpdated);
+
+    const batchUpdates: Array<TaskOrderUpdate> = reorderedTargetTasks.map((t, idx) => ({
+      id: t.id,
+      userId: targetUserId,
+      status: newStatus,
+      order: idx,
+    }));
 
     // Optimistically update
-    const updates: Array<{ id: string; status: TaskStatus; order: number }> = [
-      { id: taskId, status: newStatus, order: targetOrder },
-    ];
-
-    setTasks(prev =>
-      prev.map(t => {
-        if (t.id === taskId) {
-          return { ...t, status: newStatus, order: targetOrder, updatedAt: new Date().toISOString() };
+    setTasks(prev => {
+      const updateMap = new Map(batchUpdates.map(u => [u.id, u]));
+      return prev.map(t => {
+        const u = updateMap.get(t.id);
+        if (u) {
+          return {
+            ...t,
+            userId: u.userId || t.userId,
+            status: u.status,
+            order: u.order,
+            updatedAt: now,
+          };
         }
         return t;
-      })
-    );
+      });
+    });
 
     try {
       await fetch('/api/tasks/reorder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ updates }),
+        body: JSON.stringify({ updates: batchUpdates }),
       });
     } catch (err) {
       console.warn('Move task server call failed:', err);
     }
   };
 
+  // Direct task reassignment helper
+  const reassignTask = async (taskId: string, targetUserId: string): Promise<void> => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task || task.userId === targetUserId) return;
+    await moveTask(taskId, targetUserId, task.status);
+  };
+
+  // Move task status and order (backwards compatible, delegates to moveTask)
+  const moveTaskStatus = async (
+    taskId: string,
+    newStatus: TaskStatus,
+    newIndex?: number,
+    targetUserId?: string
+  ): Promise<void> => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    const destUser = targetUserId || task.userId;
+    await moveTask(taskId, destUser, newStatus, newIndex);
+  };
+
   // Reorder tasks batch
-  const reorderTasks = async (updates: Array<{ id: string; status: TaskStatus; order: number }>): Promise<void> => {
+  const reorderTasks = async (updates: Array<TaskOrderUpdate>): Promise<void> => {
     const updateMap = new Map(updates.map(u => [u.id, u]));
+    const now = new Date().toISOString();
 
     setTasks(prev =>
       prev.map(t => {
         const u = updateMap.get(t.id);
         if (u) {
-          return { ...t, status: u.status, order: u.order, updatedAt: new Date().toISOString() };
+          return {
+            ...t,
+            userId: u.userId || t.userId,
+            status: u.status,
+            order: u.order,
+            updatedAt: now,
+          };
         }
         return t;
       })
@@ -495,6 +567,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         syncStatus,
         isLoading,
         firestoreStatus,
+        activeDragInfo,
+        setActiveDragInfo,
         refreshFirestoreStatus,
         syncWithFirestore,
         uploadServiceAccountKey,
@@ -504,6 +578,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         createTask,
         updateTask,
         deleteTask,
+        moveTask,
+        reassignTask,
         moveTaskStatus,
         reorderTasks,
       }}

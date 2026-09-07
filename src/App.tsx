@@ -23,8 +23,7 @@ function DashboardContent() {
     users,
     tasks,
     activeRoleTab,
-    moveTaskStatus,
-    reorderTasks,
+    moveTask,
     deleteTask,
   } = useDashboard();
 
@@ -139,8 +138,7 @@ function DashboardContent() {
                 onAddTask={(uid, status) => handleOpenAddTask(uid, status)}
                 onEditTask={handleEditTask}
                 onDeleteTask={deleteTask}
-                onMoveTaskStatus={moveTaskStatus}
-                onReorderTasks={reorderTasks}
+                onMoveTask={moveTask}
                 onOpenWorkloadModal={u => setWorkloadModalUser(u)}
                 isCurrentUser={currentUser?.id === user.id}
               />

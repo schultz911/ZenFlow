@@ -58,6 +58,20 @@ export interface WorkloadBreakdown {
   progressPercent: number; // 0 - 100 for capacity visual
 }
 
+export interface DragTaskInfo {
+  taskId: string;
+  sourceUserId: string;
+  sourceStatus: TaskStatus;
+  title: string;
+}
+
+export interface TaskOrderUpdate {
+  id: string;
+  userId?: string;
+  status: TaskStatus;
+  order: number;
+}
+
 export type RealtimeEventType = 
   | 'user_created'
   | 'user_updated'

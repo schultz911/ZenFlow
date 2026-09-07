@@ -78,13 +78,11 @@ function loadStore(): AppStore {
       const content = fs.readFileSync(DATA_FILE, 'utf-8');
       const parsed = JSON.parse(content);
       if (Array.isArray(parsed.users) && Array.isArray(parsed.tasks)) {
-        // Filter out any leftover sample users and tasks
+        // Filter out only initial template dummy placeholders
         const cleanUsers = parsed.users.filter(
           (u: User) =>
             !['user-1', 'user-2', 'user-3', 'user-4'].includes(u.id) &&
-            !u.email?.endsWith('@acme.studio') &&
-            u.email !== 'alex@zenflow.dev' &&
-            u.email !== 'kiran.s@zensciences.com'
+            !u.email?.endsWith('@acme.studio')
         );
         const cleanTasks = parsed.tasks.filter(
           (t: Task) =>
@@ -92,8 +90,7 @@ function loadStore(): AppStore {
               'task-101', 'task-102', 'task-103', 'task-104',
               'task-201', 'task-202', 'task-203',
               'task-301', 'task-302', 'task-303', 'task-304',
-              'task-401', 'task-402', 'task-403',
-              'task-1788797382973-j445', 'task-1788797453911-lciy', 'task-1788798701024-1gme'
+              'task-401', 'task-402', 'task-403'
             ].includes(t.id)
         );
         return { users: cleanUsers, tasks: cleanTasks };
@@ -683,6 +680,9 @@ async function startServer() {
     for (const update of updates) {
       const task = store.tasks.find(t => t.id === update.id);
       if (task) {
+        if (update.userId && typeof update.userId === 'string') {
+          task.userId = update.userId;
+        }
         if (update.status && ['todo', 'in_progress', 'in_review', 'done', 'archived'].includes(update.status)) {
           task.status = update.status;
         }

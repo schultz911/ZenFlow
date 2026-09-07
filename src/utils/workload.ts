@@ -117,14 +117,18 @@ export function formatDateOnly(dueDateStr?: string): string {
 }
 
 /**
- * Provides standardized due/overdue colored pill badge configurations for task cards.
- * Returns concise labels like 'Overdue (2d)', 'Due Today', 'Due Soon', 'Upcoming', 'No Deadline'.
+ * Provides color mappings for the due clock icon:
+ * - Red: Overdue (< 0 days)
+ * - Amber: Due today / tomorrow (0 - 1 days)
+ * - Green: Due in 2-3 days (2 - 3 days)
+ * - Blue: Due this week (4 - 7 days)
+ * - Grey: > 7 days or no deadline
  */
 export function getDuePillInfo(dueDateStr?: string): DuePillInfo {
   if (!dueDateStr) {
     return {
-      label: 'No Deadline',
-      badgeClass: 'bg-neutral-100 text-neutral-500 border-neutral-200 dark:bg-white/5 dark:text-white/40 dark:border-white/5',
+      label: 'No deadline',
+      badgeClass: 'bg-neutral-100 text-neutral-400 border-neutral-200 dark:bg-white/5 dark:text-white/30 dark:border-white/5',
       iconClass: 'text-neutral-400 dark:text-white/30',
       isOverdue: false,
     };
@@ -134,55 +138,70 @@ export function getDuePillInfo(dueDateStr?: string): DuePillInfo {
 
   if (days === null) {
     return {
-      label: 'Upcoming',
-      badgeClass: 'bg-neutral-100 text-neutral-600 border-neutral-200 dark:bg-white/5 dark:text-white/60 dark:border-white/10',
-      iconClass: 'text-neutral-400 dark:text-white/40',
+      label: 'No deadline',
+      badgeClass: 'bg-neutral-100 text-neutral-400 border-neutral-200 dark:bg-white/5 dark:text-white/30 dark:border-white/5',
+      iconClass: 'text-neutral-400 dark:text-white/30',
       isOverdue: false,
     };
   }
 
+  // Red for overdue
   if (days < 0) {
     return {
       label: `Overdue (${Math.abs(days)}d)`,
-      badgeClass: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-500/15 dark:text-red-400 dark:border-red-500/20',
+      badgeClass: 'bg-red-50 text-red-600 border-red-200 dark:bg-red-500/15 dark:text-red-400 dark:border-red-500/20',
       iconClass: 'text-red-500 dark:text-red-400',
       isOverdue: true,
     };
   }
 
-  if (days === 0) {
+  // Amber for due today / tomorrow
+  if (days <= 1) {
     return {
-      label: 'Due Today',
-      badgeClass: 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/20',
-      iconClass: 'text-amber-600 dark:text-amber-400',
+      label: days === 0 ? 'Due Today' : 'Due Tomorrow',
+      badgeClass: 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/20',
+      iconClass: 'text-amber-500 dark:text-amber-400',
       isOverdue: false,
     };
   }
 
+  // Green for due in 2-3 days
   if (days <= 3) {
     return {
-      label: 'Due Soon',
-      badgeClass: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/15 dark:text-blue-400 dark:border-blue-500/20',
-      iconClass: 'text-blue-600 dark:text-blue-400',
+      label: `Due in ${days} days`,
+      badgeClass: 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-emerald-500/20',
+      iconClass: 'text-emerald-500 dark:text-emerald-400',
       isOverdue: false,
     };
   }
 
+  // Blue for due this week (4-7 days)
+  if (days <= 7) {
+    return {
+      label: `Due this week (${days}d)`,
+      badgeClass: 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/15 dark:text-blue-400 dark:border-blue-500/20',
+      iconClass: 'text-blue-500 dark:text-blue-400',
+      isOverdue: false,
+    };
+  }
+
+  // Grey for > 7 days
   return {
-    label: 'Upcoming',
-    badgeClass: 'bg-neutral-100 text-neutral-600 border-neutral-200 dark:bg-white/5 dark:text-white/60 dark:border-white/10',
-    iconClass: 'text-neutral-400 dark:text-white/40',
+    label: `Due in ${days} days`,
+    badgeClass: 'bg-neutral-100 text-neutral-400 border-neutral-200 dark:bg-white/5 dark:text-white/30 dark:border-white/5',
+    iconClass: 'text-neutral-400 dark:text-white/30',
     isOverdue: false,
   };
 }
 
 /**
  * Calculates a detailed workload score and breakdown for a user's task set.
- * Rules requested:
- * - in progress tasks calculated at full value (1.0)
- * - to do tasks calculated at 0.25 of the value if a deadline is set, 0 if no deadline is set
- * - assigned cognitive load (low: 1, med: 2, high: 3)
- * - proximity to the deadline
+ * Status weights:
+ * - in progress: 1.0
+ * - in review: 0.25
+ * - to do with deadline: 1.0
+ * - to do with no deadline: 0.5
+ * - done / archived: 0.0
  */
 export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
   let totalScore = 0;
@@ -212,18 +231,18 @@ export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
 
     let statusWeight = 0;
     if (task.status === 'in_progress') {
-      statusWeight = 1.0; // Full value
+      statusWeight = 1.0; // In progress: 1.0
       inProgressCount++;
     } else if (task.status === 'todo') {
       if (hasDeadline) {
-        statusWeight = 0.25; // 0.25 if deadline is set
+        statusWeight = 1.0; // To do with deadline: 1.0
         todoWithDeadlineCount++;
       } else {
-        statusWeight = 0.0; // 0 if no deadline is set
+        statusWeight = 0.5; // To do with no deadline: 0.5
         todoNoDeadlineCount++;
       }
     } else if (task.status === 'in_review') {
-      statusWeight = 0.5; // Reviewing load
+      statusWeight = 0.25; // In review: 0.25
       inReviewCount++;
     }
 
