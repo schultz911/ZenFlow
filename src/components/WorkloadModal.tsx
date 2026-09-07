@@ -142,7 +142,6 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                     <th className="py-2.5 px-3 font-semibold">Status</th>
                     <th className="py-2.5 px-3 font-semibold">Cognitive Load</th>
                     <th className="py-2.5 px-3 font-semibold">Due Date & Proximity</th>
-                    <th className="py-2.5 px-3 text-right font-semibold">Task Score</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-200 dark:divide-white/5">
@@ -173,9 +172,6 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                           ) : (
                             <span className="text-neutral-400 dark:text-white/30">None</span>
                           )}
-                        </td>
-                        <td className="py-2 px-3 text-right font-bold text-neutral-900 dark:text-white">
-                          +{item.calculatedScore}
                         </td>
                       </tr>
                     );

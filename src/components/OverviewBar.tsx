@@ -1,19 +1,15 @@
 import React from 'react';
 import { useDashboard } from '../context/DashboardContext';
-import { CognitiveLoad, Role } from '../types';
-import { calculateUserWorkload, getCognitiveLoadLabel } from '../utils/workload';
+import { calculateUserWorkload } from '../utils/workload';
 import {
   Search,
   Plus,
   UserPlus,
-  Brain,
 } from 'lucide-react';
 
 interface OverviewBarProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
-  selectedLoadFilter: CognitiveLoad | 'all';
-  onSelectLoadFilter: (filter: CognitiveLoad | 'all') => void;
   onOpenNewTaskModal: () => void;
   onOpenNewUserModal: () => void;
 }
@@ -21,8 +17,6 @@ interface OverviewBarProps {
 export const OverviewBar: React.FC<OverviewBarProps> = ({
   searchQuery,
   onSearchChange,
-  selectedLoadFilter,
-  onSelectLoadFilter,
   onOpenNewTaskModal,
   onOpenNewUserModal,
 }) => {
@@ -117,8 +111,8 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+      {/* Search Bar */}
+      <div className="flex items-center justify-between gap-3">
         {/* Search input */}
         <div className="relative w-full sm:w-80">
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-neutral-400 dark:text-white/30">
@@ -140,61 +134,6 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
               ×
             </button>
           )}
-        </div>
-
-        {/* Cognitive Load quick filter with role-specific nomenclature */}
-        <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
-          <span className="text-[11px] uppercase tracking-wider text-neutral-500 dark:text-white/40 shrink-0 mr-1 flex items-center gap-1">
-            <Brain className="h-3 w-3 text-neutral-400 dark:text-white/40" />
-            <span>Load:</span>
-          </span>
-
-          <button
-            onClick={() => onSelectLoadFilter('all')}
-            className={`rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors shrink-0 ${
-              selectedLoadFilter === 'all'
-                ? 'bg-neutral-900 text-white dark:bg-[#2A2A2A] dark:text-white border border-neutral-800 dark:border-white/20'
-                : 'bg-neutral-100 text-neutral-600 hover:text-neutral-900 dark:bg-[#141414] dark:text-white/40 dark:hover:text-white border border-neutral-200 dark:border-white/5'
-            }`}
-          >
-            All Loads
-          </button>
-
-          <button
-            onClick={() => onSelectLoadFilter('low')}
-            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors shrink-0 border ${
-              selectedLoadFilter === 'low'
-                ? 'bg-green-500/20 text-green-700 dark:text-green-400 border-green-500/40 shadow-xs'
-                : 'bg-green-500/5 text-green-600/70 dark:text-green-400/60 border-green-500/15 hover:text-green-700 dark:hover:text-green-400'
-            }`}
-          >
-            <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-            <span>{getCognitiveLoadLabel('low', activeRoleTab)}</span>
-          </button>
-
-          <button
-            onClick={() => onSelectLoadFilter('medium')}
-            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors shrink-0 border ${
-              selectedLoadFilter === 'medium'
-                ? 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 border-yellow-500/40 shadow-xs'
-                : 'bg-yellow-500/5 text-yellow-600/70 dark:text-yellow-400/60 border-yellow-500/15 hover:text-yellow-700 dark:hover:text-yellow-400'
-            }`}
-          >
-            <span className="h-1.5 w-1.5 rounded-full bg-yellow-500" />
-            <span>{getCognitiveLoadLabel('medium', activeRoleTab)}</span>
-          </button>
-
-          <button
-            onClick={() => onSelectLoadFilter('high')}
-            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-medium transition-colors shrink-0 border ${
-              selectedLoadFilter === 'high'
-                ? 'bg-red-500/20 text-red-700 dark:text-red-400 border-red-500/40 shadow-xs'
-                : 'bg-red-500/5 text-red-600/70 dark:text-red-400/60 border-red-500/15 hover:text-red-700 dark:hover:text-red-400'
-            }`}
-          >
-            <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-            <span>{getCognitiveLoadLabel('high', activeRoleTab)}</span>
-          </button>
         </div>
       </div>
     </div>

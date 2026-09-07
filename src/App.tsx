@@ -6,7 +6,7 @@ import { Swimlane } from './components/Swimlane';
 import { LoginModal } from './components/LoginModal';
 import { TaskModal } from './components/TaskModal';
 import { WorkloadModal } from './components/WorkloadModal';
-import { User, Task, TaskStatus, CognitiveLoad } from './types';
+import { User, Task, TaskStatus } from './types';
 import { UserPlus, Plus, Sparkles, Layers, FileText, Palette } from 'lucide-react';
 import { testConnection } from './lib/firebase';
 
@@ -38,7 +38,6 @@ function DashboardContent() {
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedLoadFilter, setSelectedLoadFilter] = useState<CognitiveLoad | 'all'>('all');
 
   // Filter users by role tab
   const roleFilteredUsers = useMemo(() => {
@@ -46,14 +45,9 @@ function DashboardContent() {
     return users.filter(u => u.role === activeRoleTab);
   }, [users, activeRoleTab]);
 
-  // Filter tasks by search query and cognitive load filter
+  // Filter tasks by search query
   const filteredTasks = useMemo(() => {
     return tasks.filter(task => {
-      // Cognitive load filter
-      if (selectedLoadFilter !== 'all' && task.cognitiveLoad !== selectedLoadFilter) {
-        return false;
-      }
-
       // Search query filter
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -66,7 +60,7 @@ function DashboardContent() {
 
       return true;
     });
-  }, [tasks, selectedLoadFilter, searchQuery, users]);
+  }, [tasks, searchQuery, users]);
 
   // Task modal handlers
   const handleOpenAddTask = (userId?: string, status?: TaskStatus) => {
@@ -103,12 +97,10 @@ function DashboardContent() {
 
       {/* Main Container */}
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        {/* Overview & Quick Filters Bar */}
+        {/* Overview Bar */}
         <OverviewBar
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
-          selectedLoadFilter={selectedLoadFilter}
-          onSelectLoadFilter={setSelectedLoadFilter}
           onOpenNewTaskModal={() => handleOpenAddTask()}
           onOpenNewUserModal={handleOpenNewUser}
         />
