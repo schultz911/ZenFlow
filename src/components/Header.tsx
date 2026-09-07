@@ -1,19 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useDashboard } from '../context/DashboardContext';
-import { Role, User } from '../types';
+import { Role } from '../types';
 import {
   Sun,
   Moon,
-  Users,
-  Plus,
-  Radio,
-  CheckCircle2,
   LogOut,
   ChevronDown,
   UserPlus,
   Palette,
   FileText,
-  Layers,
   Cloud,
 } from 'lucide-react';
 
@@ -21,21 +16,16 @@ interface HeaderProps {
   onOpenLoginModal: () => void;
   onOpenNewUserModal: () => void;
   onOpenFirestoreModal: () => void;
-  searchQuery: string;
-  onSearchChange: (q: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onOpenLoginModal,
   onOpenNewUserModal,
   onOpenFirestoreModal,
-  searchQuery,
-  onSearchChange,
 }) => {
   const {
     currentUser,
     users,
-    tasks,
     activeRoleTab,
     setActiveRoleTab,
     darkMode,

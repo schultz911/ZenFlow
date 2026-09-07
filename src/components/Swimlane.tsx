@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { User, Task, TaskStatus } from '../types';
 import { calculateUserWorkload } from '../utils/workload';
 import { TaskCard } from './TaskCard';
@@ -11,9 +11,7 @@ import {
   Archive,
   ChevronDown,
   ChevronRight,
-  Eye,
   Activity,
-  Layers,
 } from 'lucide-react';
 
 interface SwimlaneProps {
@@ -23,7 +21,7 @@ interface SwimlaneProps {
   onEditTask: (task: Task) => void;
   onDeleteTask: (taskId: string) => void;
   onMoveTaskStatus: (taskId: string, newStatus: TaskStatus, newIndex?: number) => void;
-  onReorderTasks: (updates: Array<{ id: string; status: TaskStatus; order: number }>) => void;
+  onReorderTasks?: (updates: Array<{ id: string; status: TaskStatus; order: number }>) => void;
   onOpenWorkloadModal: (user: User) => void;
   isCurrentUser: boolean;
 }
@@ -67,26 +65,23 @@ const COLUMNS: ColumnConfig[] = [
   },
 ];
 
-export const Swimlane: React.FC<SwimlaneProps> = ({
+export const Swimlane: React.FC<SwimlaneProps> = React.memo(({
   user,
   tasks,
   onAddTask,
   onEditTask,
   onDeleteTask,
   onMoveTaskStatus,
-  onReorderTasks,
   onOpenWorkloadModal,
   isCurrentUser,
 }) => {
   const [showArchived, setShowArchived] = useState(false);
   const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
-  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
 
-  // Filter tasks belonging strictly to this user
-  const userTasks = tasks.filter(t => t.userId === user.id);
-  const workload = calculateUserWorkload(userTasks);
-
-  const archivedTasks = userTasks.filter(t => t.status === 'archived');
+  // Filter tasks belonging strictly to this user with useMemo
+  const userTasks = useMemo(() => tasks.filter(t => t.userId === user.id), [tasks, user.id]);
+  const workload = useMemo(() => calculateUserWorkload(userTasks), [userTasks]);
+  const archivedTasks = useMemo(() => userTasks.filter(t => t.status === 'archived'), [userTasks]);
 
   const handleDragOver = (e: React.DragEvent, status: TaskStatus) => {
     e.preventDefault();
@@ -100,14 +95,12 @@ export const Swimlane: React.FC<SwimlaneProps> = ({
     // Only reset if leaving the column container
     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
       setDragOverColumn(null);
-      setDragOverTaskId(null);
     }
   };
 
   const handleDrop = (e: React.DragEvent, targetStatus: TaskStatus) => {
     e.preventDefault();
     setDragOverColumn(null);
-    setDragOverTaskId(null);
 
     const rawData = e.dataTransfer.getData('application/json');
     if (!rawData) return;
@@ -129,7 +122,6 @@ export const Swimlane: React.FC<SwimlaneProps> = ({
     e.preventDefault();
     e.stopPropagation();
     setDragOverColumn(null);
-    setDragOverTaskId(null);
 
     const rawData = e.dataTransfer.getData('application/json');
     if (!rawData) return;
@@ -344,7 +336,6 @@ export const Swimlane: React.FC<SwimlaneProps> = ({
                         key={task.id}
                         onDragOver={e => {
                           e.preventDefault();
-                          setDragOverTaskId(task.id);
                         }}
                         onDrop={e => handleDropOnTask(e, task, col.status)}
                       >
@@ -409,4 +400,6 @@ export const Swimlane: React.FC<SwimlaneProps> = ({
       </div>
     </div>
   );
-};
+});
+
+Swimlane.displayName = 'Swimlane';

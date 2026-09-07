@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { Task, CognitiveLoad, TaskStatus } from '../types';
-import { getCognitiveLoadLabel } from '../utils/workload';
 import { X, Calendar, Brain, Trash2 } from 'lucide-react';
 
 interface TaskModalProps {

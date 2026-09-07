@@ -7,8 +7,9 @@ import { LoginModal } from './components/LoginModal';
 import { TaskModal } from './components/TaskModal';
 import { WorkloadModal } from './components/WorkloadModal';
 import { FirestoreModal } from './components/FirestoreModal';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { User, Task, TaskStatus } from './types';
-import { UserPlus, Plus, Sparkles, Layers, FileText, Palette } from 'lucide-react';
+import { UserPlus, FileText, Palette } from 'lucide-react';
 import { testConnection } from './lib/firebase';
 
 function DashboardContent() {
@@ -22,7 +23,6 @@ function DashboardContent() {
     users,
     tasks,
     activeRoleTab,
-    setActiveRoleTab,
     moveTaskStatus,
     reorderTasks,
     deleteTask,
@@ -43,7 +43,6 @@ function DashboardContent() {
 
   // Filter users by role tab
   const roleFilteredUsers = useMemo(() => {
-    if (activeRoleTab === 'all') return users;
     return users.filter(u => u.role === activeRoleTab);
   }, [users, activeRoleTab]);
 
@@ -94,8 +93,6 @@ function DashboardContent() {
         onOpenLoginModal={handleOpenLogin}
         onOpenNewUserModal={handleOpenNewUser}
         onOpenFirestoreModal={() => setFirestoreModalOpen(true)}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
       />
 
       {/* Main Container */}
@@ -184,8 +181,10 @@ function DashboardContent() {
 
 export default function App() {
   return (
-    <DashboardProvider>
-      <DashboardContent />
-    </DashboardProvider>
+    <ErrorBoundary>
+      <DashboardProvider>
+        <DashboardContent />
+      </DashboardProvider>
+    </ErrorBoundary>
   );
 }

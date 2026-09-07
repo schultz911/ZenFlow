@@ -22,7 +22,7 @@ interface TaskCardProps {
 
 const STATUS_SEQUENCE: TaskStatus[] = ['todo', 'in_progress', 'in_review', 'done'];
 
-export const TaskCard: React.FC<TaskCardProps> = ({
+export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   task,
   onEdit,
   onDelete,
@@ -161,4 +161,6 @@ export const TaskCard: React.FC<TaskCardProps> = ({
       </div>
     </div>
   );
-};
+});
+
+TaskCard.displayName = 'TaskCard';

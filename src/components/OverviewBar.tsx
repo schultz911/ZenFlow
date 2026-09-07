@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { calculateUserWorkload } from '../utils/workload';
 import {
@@ -23,26 +23,42 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
   const { activeRoleTab, users, tasks } = useDashboard();
 
   // Filter users by active tab
-  const displayedUsers = users.filter(u => u.role === activeRoleTab);
+  const displayedUsers = useMemo(
+    () => users.filter(u => u.role === activeRoleTab),
+    [users, activeRoleTab]
+  );
 
-  const displayedTasks = tasks.filter(t => {
-    const owner = users.find(u => u.id === t.userId);
-    if (!owner) return false;
-    return owner.role === activeRoleTab;
-  });
+  const displayedTasks = useMemo(() => {
+    const userRoleMap = new Map(users.map(u => [u.id, u.role]));
+    return tasks.filter(t => userRoleMap.get(t.userId) === activeRoleTab);
+  }, [users, tasks, activeRoleTab]);
 
-  // Calculate average team workload score
-  const totalScores = displayedUsers.map(u => {
-    const uTasks = tasks.filter(t => t.userId === u.id);
-    return calculateUserWorkload(uTasks).totalScore;
-  });
+  // Calculate average team workload score using pre-grouped tasks (O(U+T) instead of O(U*T))
+  const avgWorkload = useMemo(() => {
+    if (displayedUsers.length === 0) return 0;
+    const tasksByUser = new Map<string, typeof tasks>();
+    for (const t of tasks) {
+      const arr = tasksByUser.get(t.userId);
+      if (arr) arr.push(t);
+      else tasksByUser.set(t.userId, [t]);
+    }
 
-  const avgWorkload = totalScores.length
-    ? Math.round((totalScores.reduce((a, b) => a + b, 0) / totalScores.length) * 10) / 10
-    : 0;
+    const totalScores = displayedUsers.map(u => {
+      const uTasks = tasksByUser.get(u.id) || [];
+      return calculateUserWorkload(uTasks).totalScore;
+    });
 
-  const inProgressCount = displayedTasks.filter(t => t.status === 'in_progress').length;
-  const todoCount = displayedTasks.filter(t => t.status === 'todo').length;
+    return Math.round((totalScores.reduce((a, b) => a + b, 0) / totalScores.length) * 10) / 10;
+  }, [displayedUsers, tasks]);
+
+  const inProgressCount = useMemo(
+    () => displayedTasks.filter(t => t.status === 'in_progress').length,
+    [displayedTasks]
+  );
+  const todoCount = useMemo(
+    () => displayedTasks.filter(t => t.status === 'todo').length,
+    [displayedTasks]
+  );
 
   return (
     <div className="mb-6 space-y-4">
