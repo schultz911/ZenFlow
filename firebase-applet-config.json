@@ -1,12 +1,12 @@
 {
-  "projectId": "zennext-4d040",
+  "projectId": "zen-flow-7173d",
   "appId": "1:1031821216265:web:13f59ec7166b4dc94506d8",
   "apiKey": "AIzaSyB4j_2_5OR-qmaMAG80CNxoY72512JL9UY",
-  "authDomain": "zennext-4d040.firebaseapp.com",
+  "authDomain": "zen-flow-7173d.firebaseapp.com",
   "firestoreDatabaseId": "(default)",
-  "storageBucket": "zennext-4d040.firebasestorage.app",
+  "storageBucket": "zen-flow-7173d.firebasestorage.app",
   "messagingSenderId": "1031821216265",
   "measurementId": "",
-  "oAuthClientId": "1031821216265-ehls2orr7j28r9jskpjlqjs2t4obadfu.apps.googleusercontent.com",
+  "oAuthClientId": "",
   "recaptchaSiteKey": ""
 }

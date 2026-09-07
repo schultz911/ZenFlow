@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { Role, User } from '../types';
-import { FirestoreModal } from './FirestoreModal';
 import {
   Sun,
   Moon,
@@ -21,6 +20,7 @@ import {
 interface HeaderProps {
   onOpenLoginModal: () => void;
   onOpenNewUserModal: () => void;
+  onOpenFirestoreModal: () => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
 }
@@ -28,6 +28,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   onOpenLoginModal,
   onOpenNewUserModal,
+  onOpenFirestoreModal,
   searchQuery,
   onSearchChange,
 }) => {
@@ -45,7 +46,6 @@ export const Header: React.FC<HeaderProps> = ({
   } = useDashboard();
 
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
-  const [firestoreModalOpen, setFirestoreModalOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click
@@ -150,7 +150,7 @@ export const Header: React.FC<HeaderProps> = ({
             {/* Real-time cloud sync icon */}
             <button
               id="firestore-status-button"
-              onClick={() => setFirestoreModalOpen(true)}
+              onClick={onOpenFirestoreModal}
               title={
                 syncStatus === 'connected'
                   ? 'Firestore Storage Status (Click to view)'
@@ -333,11 +333,6 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
       </div>
-
-      <FirestoreModal
-        isOpen={firestoreModalOpen}
-        onClose={() => setFirestoreModalOpen(false)}
-      />
     </header>
   );
 };

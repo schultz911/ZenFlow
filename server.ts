@@ -80,10 +80,21 @@ function loadStore(): AppStore {
       if (Array.isArray(parsed.users) && Array.isArray(parsed.tasks)) {
         // Filter out any leftover sample users and tasks
         const cleanUsers = parsed.users.filter(
-          (u: User) => !['user-1', 'user-2', 'user-3', 'user-4'].includes(u.id) && !u.email?.endsWith('@acme.studio')
+          (u: User) =>
+            !['user-1', 'user-2', 'user-3', 'user-4'].includes(u.id) &&
+            !u.email?.endsWith('@acme.studio') &&
+            u.email !== 'alex@zenflow.dev' &&
+            u.email !== 'kiran.s@zensciences.com'
         );
         const cleanTasks = parsed.tasks.filter(
-          (t: Task) => !['task-101', 'task-102', 'task-103', 'task-104', 'task-201', 'task-202', 'task-203', 'task-301', 'task-302', 'task-303', 'task-304', 'task-401', 'task-402', 'task-403'].includes(t.id)
+          (t: Task) =>
+            ![
+              'task-101', 'task-102', 'task-103', 'task-104',
+              'task-201', 'task-202', 'task-203',
+              'task-301', 'task-302', 'task-303', 'task-304',
+              'task-401', 'task-402', 'task-403',
+              'task-1788797382973-j445', 'task-1788797453911-lciy', 'task-1788798701024-1gme'
+            ].includes(t.id)
         );
         return { users: cleanUsers, tasks: cleanTasks };
       }
@@ -120,73 +131,43 @@ let webDb: any = null;
 let firestoreLastError: string | null = null;
 let firestoreLastSyncTime: string | null = null;
 let firestoreMode: 'admin' | 'web' | 'local' = 'local';
-let firestoreProjectId: string = 'zennext-4d040';
+let firestoreProjectId: string = 'zen-flow-7173d';
 let firestoreDatabaseId: string = '(default)';
 
 function findServiceAccount(): any | null {
-  // 1. Environment variables
+  // Only check FIREBASE_SERVICE_ACCOUNT_KEY (or system GOOGLE_APPLICATION_CREDENTIALS)
   const envKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS;
+
   if (envKey) {
     const trimmed = envKey.trim();
     if (trimmed.startsWith('{')) {
       try {
-        return JSON.parse(trimmed);
+        const parsed = JSON.parse(trimmed);
+        if (parsed.project_id) return parsed;
       } catch (e) {
         console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY from JSON string:', e);
       }
-    } else if (fs.existsSync(trimmed)) {
+    } else if (trimmed.length > 50 && !trimmed.includes('\n')) {
+      // Possible base64-encoded JSON string
       try {
-        return JSON.parse(fs.readFileSync(trimmed, 'utf-8'));
+        const decoded = Buffer.from(trimmed, 'base64').toString('utf-8');
+        if (decoded.trim().startsWith('{')) {
+          const parsed = JSON.parse(decoded);
+          if (parsed.project_id) return parsed;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (fs.existsSync(trimmed)) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(trimmed, 'utf-8'));
+        if (parsed.project_id) return parsed;
       } catch (e) {
         console.error('Failed to read service account key from file path:', trimmed, e);
       }
     }
-  }
-
-  // 2. Well-known local files
-  const candidateFiles = [
-    'serviceAccountKey.json',
-    'service-account.json',
-    'firebase-admin.json',
-    'firebase-service-account.json',
-    'credentials.json',
-  ];
-
-  for (const fileName of candidateFiles) {
-    const filePath = path.join(process.cwd(), fileName);
-    if (fs.existsSync(filePath)) {
-      try {
-        const content = fs.readFileSync(filePath, 'utf-8');
-        const parsed = JSON.parse(content);
-        if (parsed.type === 'service_account' && parsed.project_id) {
-          return parsed;
-        }
-      } catch (e) {
-        // ignore
-      }
-    }
-  }
-
-  // 3. Scan root folder for any .json file with "type": "service_account"
-  try {
-    const rootFiles = fs.readdirSync(process.cwd());
-    for (const f of rootFiles) {
-      if (f.endsWith('.json') && !['package.json', 'tsconfig.json', 'metadata.json', 'firebase-blueprint.json'].includes(f)) {
-        try {
-          const content = fs.readFileSync(path.join(process.cwd(), f), 'utf-8');
-          if (content.includes('"type": "service_account"') || content.includes('"type":"service_account"')) {
-            const parsed = JSON.parse(content);
-            if (parsed.type === 'service_account' && parsed.project_id) {
-              return parsed;
-            }
-          }
-        } catch {
-          // ignore
-        }
-      }
-    }
-  } catch {
-    // ignore
   }
 
   return null;

@@ -6,6 +6,7 @@ import { Swimlane } from './components/Swimlane';
 import { LoginModal } from './components/LoginModal';
 import { TaskModal } from './components/TaskModal';
 import { WorkloadModal } from './components/WorkloadModal';
+import { FirestoreModal } from './components/FirestoreModal';
 import { User, Task, TaskStatus } from './types';
 import { UserPlus, Plus, Sparkles, Layers, FileText, Palette } from 'lucide-react';
 import { testConnection } from './lib/firebase';
@@ -35,6 +36,7 @@ function DashboardContent() {
   const [defaultTaskUserId, setDefaultTaskUserId] = useState<string | undefined>(undefined);
   const [defaultTaskStatus, setDefaultTaskStatus] = useState<TaskStatus | undefined>('todo');
   const [workloadModalUser, setWorkloadModalUser] = useState<User | null>(null);
+  const [firestoreModalOpen, setFirestoreModalOpen] = useState(false);
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -91,6 +93,7 @@ function DashboardContent() {
       <Header
         onOpenLoginModal={handleOpenLogin}
         onOpenNewUserModal={handleOpenNewUser}
+        onOpenFirestoreModal={() => setFirestoreModalOpen(true)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
       />
@@ -169,6 +172,11 @@ function DashboardContent() {
         user={workloadModalUser}
         tasks={tasks}
         onClose={() => setWorkloadModalUser(null)}
+      />
+
+      <FirestoreModal
+        isOpen={firestoreModalOpen}
+        onClose={() => setFirestoreModalOpen(false)}
       />
     </div>
   );
