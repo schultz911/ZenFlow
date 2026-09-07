@@ -1,4 +1,34 @@
 {
-  "users": [],
-  "tasks": []
+  "users": [
+    {
+      "id": "user-1788797376232",
+      "name": "Alex Chen",
+      "email": "alex@zenflow.dev",
+      "role": "content",
+      "avatarColor": "from-blue-500 to-indigo-600",
+      "createdAt": "2026-09-07T16:09:36.232Z"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task-1788797382973-j445",
+      "userId": "user-1788797376232",
+      "title": "Complete Q3 Content Roadmap",
+      "cognitiveLoad": "high",
+      "status": "todo",
+      "order": 0,
+      "createdAt": "2026-09-07T16:09:42.973Z",
+      "updatedAt": "2026-09-07T16:09:42.973Z"
+    },
+    {
+      "id": "task-1788797453911-lciy",
+      "userId": "user-1788797376232",
+      "title": "Verify UI Design Tokens",
+      "cognitiveLoad": "low",
+      "status": "in_progress",
+      "order": 0,
+      "createdAt": "2026-09-07T16:10:53.911Z",
+      "updatedAt": "2026-09-07T16:10:53.911Z"
+    }
+  ]
 }

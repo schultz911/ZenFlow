@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
@@ -116,133 +117,243 @@ let store: AppStore = loadStore();
 // Database drivers: Admin SDK (with Service Account) or Web SDK (with API Keys)
 let adminDb: any = null;
 let webDb: any = null;
+let firestoreLastError: string | null = null;
+let firestoreLastSyncTime: string | null = null;
+let firestoreMode: 'admin' | 'web' | 'local' = 'local';
+let firestoreProjectId: string = 'zennext-4d040';
+let firestoreDatabaseId: string = '(default)';
 
-function initFirestore() {
-  // 1. Check for Service Account Key (JSON string, file path, or ./serviceAccountKey.json)
-  const serviceAccountEnv = process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS;
-  const localKeyPath = path.join(process.cwd(), 'serviceAccountKey.json');
-
-  let serviceAccountObj: any = null;
-  if (serviceAccountEnv) {
-    const trimmed = serviceAccountEnv.trim();
+function findServiceAccount(): any | null {
+  // 1. Environment variables
+  const envKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  if (envKey) {
+    const trimmed = envKey.trim();
     if (trimmed.startsWith('{')) {
       try {
-        serviceAccountObj = JSON.parse(trimmed);
+        return JSON.parse(trimmed);
       } catch (e) {
-        console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY as JSON:', e);
+        console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY from JSON string:', e);
       }
     } else if (fs.existsSync(trimmed)) {
       try {
-        serviceAccountObj = JSON.parse(fs.readFileSync(trimmed, 'utf-8'));
+        return JSON.parse(fs.readFileSync(trimmed, 'utf-8'));
       } catch (e) {
-        console.error('Failed to read service account key from file:', trimmed, e);
+        console.error('Failed to read service account key from file path:', trimmed, e);
       }
     }
-  } else if (fs.existsSync(localKeyPath)) {
-    try {
-      serviceAccountObj = JSON.parse(fs.readFileSync(localKeyPath, 'utf-8'));
-    } catch (e) {
-      console.error('Failed to read ./serviceAccountKey.json:', e);
+  }
+
+  // 2. Well-known local files
+  const candidateFiles = [
+    'serviceAccountKey.json',
+    'service-account.json',
+    'firebase-admin.json',
+    'firebase-service-account.json',
+    'credentials.json',
+  ];
+
+  for (const fileName of candidateFiles) {
+    const filePath = path.join(process.cwd(), fileName);
+    if (fs.existsSync(filePath)) {
+      try {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        const parsed = JSON.parse(content);
+        if (parsed.type === 'service_account' && parsed.project_id) {
+          return parsed;
+        }
+      } catch (e) {
+        // ignore
+      }
     }
   }
 
-  if (serviceAccountObj) {
-    try {
-      const adminApp = getAdminApps().length === 0
-        ? initAdminApp({
-            credential: adminCert(serviceAccountObj),
-            projectId: serviceAccountObj.project_id || 'zen-flow',
-          })
-        : getAdminApp();
-
-      const dbId = process.env.FIREBASE_DATABASE_ID || undefined;
-      adminDb = dbId ? getAdminFirestore(adminApp, dbId) : getAdminFirestore(adminApp);
-      console.log('[Firestore Admin] Initialized with Service Account Key for project:', serviceAccountObj.project_id || 'zen-flow');
-      return;
-    } catch (err) {
-      console.warn('[Firestore Admin] Failed to initialize admin SDK with service account:', err);
+  // 3. Scan root folder for any .json file with "type": "service_account"
+  try {
+    const rootFiles = fs.readdirSync(process.cwd());
+    for (const f of rootFiles) {
+      if (f.endsWith('.json') && !['package.json', 'tsconfig.json', 'metadata.json', 'firebase-blueprint.json'].includes(f)) {
+        try {
+          const content = fs.readFileSync(path.join(process.cwd(), f), 'utf-8');
+          if (content.includes('"type": "service_account"') || content.includes('"type":"service_account"')) {
+            const parsed = JSON.parse(content);
+            if (parsed.type === 'service_account' && parsed.project_id) {
+              return parsed;
+            }
+          }
+        } catch {
+          // ignore
+        }
+      }
     }
+  } catch {
+    // ignore
   }
 
-  // 2. Fallback to Web Client SDK if apiKey + projectId is provided
+  return null;
+}
+
+function initFirestore() {
+  // Read firebase-applet-config.json for fallback IDs
   let fileConfig: any = {};
   try {
     const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
     if (fs.existsSync(configPath)) {
       fileConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+      if (fileConfig.projectId) firestoreProjectId = fileConfig.projectId;
+      if (fileConfig.firestoreDatabaseId) firestoreDatabaseId = fileConfig.firestoreDatabaseId;
     }
-  } catch (err) {
-    // fallback to env vars
+  } catch {
+    // ignore
   }
 
+  // 1. Check for Service Account Key
+  const serviceAccountObj = findServiceAccount();
+
+  if (serviceAccountObj) {
+    try {
+      firestoreProjectId = serviceAccountObj.project_id || firestoreProjectId;
+      const adminApps = getAdminApps();
+      const adminApp = adminApps.length === 0
+        ? initAdminApp({
+            credential: adminCert(serviceAccountObj),
+            projectId: firestoreProjectId,
+          })
+        : getAdminApp();
+
+      adminDb = getAdminFirestore(adminApp);
+      try {
+        adminDb.settings({ ignoreUndefinedProperties: true });
+      } catch {
+        // settings already configured
+      }
+      firestoreMode = 'admin';
+      firestoreLastError = null;
+      console.log('[Firestore Admin] Successfully initialized with Service Account Key for project:', firestoreProjectId);
+      return;
+    } catch (err: any) {
+      firestoreLastError = err.message || String(err);
+      console.warn('[Firestore Admin] Failed to initialize admin SDK with service account:', err);
+    }
+  }
+
+  // 2. Fallback to Web Client SDK if apiKey + projectId is provided
   const fbConfig = {
     apiKey: process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY || fileConfig.apiKey || '',
-    projectId: process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || fileConfig.projectId || 'zen-flow',
+    projectId: process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || fileConfig.projectId || firestoreProjectId,
     appId: process.env.FIREBASE_APP_ID || process.env.VITE_FIREBASE_APP_ID || fileConfig.appId || '',
     authDomain: process.env.FIREBASE_AUTH_DOMAIN || process.env.VITE_FIREBASE_AUTH_DOMAIN || fileConfig.authDomain || '',
-    firestoreDatabaseId: process.env.FIREBASE_DATABASE_ID || process.env.VITE_FIREBASE_DATABASE_ID || fileConfig.firestoreDatabaseId || undefined,
   };
 
   if (fbConfig.apiKey && fbConfig.projectId) {
     try {
       const fbApp = getApps().length === 0 ? initializeApp(fbConfig) : getApp();
-      webDb = fbConfig.firestoreDatabaseId
-        ? getWebFirestore(fbApp, fbConfig.firestoreDatabaseId)
-        : getWebFirestore(fbApp);
+      webDb = getWebFirestore(fbApp);
+      firestoreMode = 'web';
+      firestoreProjectId = fbConfig.projectId;
       console.log('[Firestore Web] Initialized Firestore Web SDK for project:', fbConfig.projectId);
-    } catch (err) {
-      console.warn('[Firestore Web] Initialization warning, using local file store:', err);
+    } catch (err: any) {
+      firestoreLastError = err.message || String(err);
+      console.warn('[Firestore Web] Initialization warning, using local resilient store:', err);
     }
   }
 }
 
 initFirestore();
 
-// Unified DB helper methods
+// Utility to clean undefined values so Firestore never throws unsupported field value error
+function cleanDocData<T extends Record<string, any>>(obj: T): Partial<T> {
+  const clean: any = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) {
+      clean[k] = v;
+    }
+  }
+  return clean;
+}
+
+// Unified DB helper methods with error tracking & auto-recovery
 async function dbSaveUser(user: User) {
-  if (adminDb) {
-    await adminDb.collection('users').doc(user.id).set(user, { merge: true });
-  } else if (webDb) {
-    await setDoc(doc(webDb, 'users', user.id), user, { merge: true });
+  try {
+    if (!adminDb && !webDb) initFirestore();
+    const payload = cleanDocData(user);
+    if (adminDb) {
+      await adminDb.collection('users').doc(user.id).set(payload, { merge: true });
+      firestoreLastError = null;
+    } else if (webDb) {
+      await setDoc(doc(webDb, 'users', user.id), payload, { merge: true });
+      firestoreLastError = null;
+    }
+  } catch (err: any) {
+    firestoreLastError = err.message || String(err);
+    console.error('[Firestore Save User Error]:', firestoreLastError);
   }
 }
 
 async function dbSaveTask(task: Task) {
-  if (adminDb) {
-    await adminDb.collection('tasks').doc(task.id).set(task, { merge: true });
-  } else if (webDb) {
-    await setDoc(doc(webDb, 'tasks', task.id), task, { merge: true });
+  try {
+    if (!adminDb && !webDb) initFirestore();
+    const payload = cleanDocData(task);
+    if (adminDb) {
+      await adminDb.collection('tasks').doc(task.id).set(payload, { merge: true });
+      firestoreLastError = null;
+    } else if (webDb) {
+      await setDoc(doc(webDb, 'tasks', task.id), payload, { merge: true });
+      firestoreLastError = null;
+    }
+  } catch (err: any) {
+    firestoreLastError = err.message || String(err);
+    console.error('[Firestore Save Task Error]:', firestoreLastError);
   }
 }
 
 async function dbDeleteTask(taskId: string) {
-  if (adminDb) {
-    await adminDb.collection('tasks').doc(taskId).delete();
-  } else if (webDb) {
-    await deleteDoc(doc(webDb, 'tasks', taskId));
+  try {
+    if (!adminDb && !webDb) initFirestore();
+    if (adminDb) {
+      await adminDb.collection('tasks').doc(taskId).delete();
+      firestoreLastError = null;
+    } else if (webDb) {
+      await deleteDoc(doc(webDb, 'tasks', taskId));
+      firestoreLastError = null;
+    }
+  } catch (err: any) {
+    firestoreLastError = err.message || String(err);
+    console.error('[Firestore Delete Task Error]:', firestoreLastError);
   }
 }
 
 async function dbBatchSaveTasks(tasks: Task[]) {
   if (tasks.length === 0) return;
-  if (adminDb) {
-    const batch = adminDb.batch();
-    for (const t of tasks) {
-      batch.set(adminDb.collection('tasks').doc(t.id), t, { merge: true });
+  try {
+    if (!adminDb && !webDb) initFirestore();
+    if (adminDb) {
+      const batch = adminDb.batch();
+      for (const t of tasks) {
+        batch.set(adminDb.collection('tasks').doc(t.id), cleanDocData(t), { merge: true });
+      }
+      await batch.commit();
+      firestoreLastError = null;
+    } else if (webDb) {
+      const batch = writeBatch(webDb);
+      for (const t of tasks) {
+        batch.set(doc(webDb, 'tasks', t.id), cleanDocData(t), { merge: true });
+      }
+      await batch.commit();
+      firestoreLastError = null;
     }
-    await batch.commit();
-  } else if (webDb) {
-    const batch = writeBatch(webDb);
-    for (const t of tasks) {
-      batch.set(doc(webDb, 'tasks', t.id), t, { merge: true });
-    }
-    await batch.commit();
+  } catch (err: any) {
+    firestoreLastError = err.message || String(err);
+    console.error('[Firestore Batch Save Tasks Error]:', firestoreLastError);
   }
 }
 
-// Sync existing users and tasks from Firestore, purging any legacy sample/demo items
+// Sync existing users and tasks with Firestore
 async function syncFromFirestore() {
-  if (!adminDb && !webDb) return;
+  if (!adminDb && !webDb) {
+    initFirestore();
+    if (!adminDb && !webDb) return;
+  }
+
   try {
     const demoUserIds = new Set(['user-1', 'user-2', 'user-3', 'user-4']);
     const firestoreUsers: User[] = [];
@@ -251,15 +362,10 @@ async function syncFromFirestore() {
     if (adminDb) {
       const usersSnap = await adminDb.collection('users').get();
       const tasksSnap = await adminDb.collection('tasks').get();
-      const batch = adminDb.batch();
-      let hasPurges = false;
 
       usersSnap.forEach((d: any) => {
         const u = d.data() as User;
-        if (demoUserIds.has(u.id) || u.email?.endsWith('@acme.studio')) {
-          batch.delete(d.ref);
-          hasPurges = true;
-        } else {
+        if (!demoUserIds.has(u.id) && !u.email?.endsWith('@acme.studio')) {
           firestoreUsers.push(u);
         }
       });
@@ -267,35 +373,22 @@ async function syncFromFirestore() {
       tasksSnap.forEach((d: any) => {
         const t = d.data() as Task;
         if (
-          t.id.startsWith('task-10') ||
-          t.id.startsWith('task-20') ||
-          t.id.startsWith('task-30') ||
-          t.id.startsWith('task-40') ||
-          demoUserIds.has(t.userId)
+          !t.id.startsWith('task-10') &&
+          !t.id.startsWith('task-20') &&
+          !t.id.startsWith('task-30') &&
+          !t.id.startsWith('task-40') &&
+          !demoUserIds.has(t.userId)
         ) {
-          batch.delete(d.ref);
-          hasPurges = true;
-        } else {
           firestoreTasks.push(t);
         }
       });
-
-      if (hasPurges) {
-        await batch.commit();
-        console.log('[Firestore Admin] Purged all legacy sample documents from Firestore.');
-      }
     } else if (webDb) {
       const usersSnap = await getDocs(collection(webDb, 'users'));
       const tasksSnap = await getDocs(collection(webDb, 'tasks'));
-      const batch = writeBatch(webDb);
-      let hasPurges = false;
 
       usersSnap.forEach(d => {
         const u = d.data() as User;
-        if (demoUserIds.has(u.id) || u.email?.endsWith('@acme.studio')) {
-          batch.delete(d.ref);
-          hasPurges = true;
-        } else {
+        if (!demoUserIds.has(u.id) && !u.email?.endsWith('@acme.studio')) {
           firestoreUsers.push(u);
         }
       });
@@ -303,67 +396,54 @@ async function syncFromFirestore() {
       tasksSnap.forEach(d => {
         const t = d.data() as Task;
         if (
-          t.id.startsWith('task-10') ||
-          t.id.startsWith('task-20') ||
-          t.id.startsWith('task-30') ||
-          t.id.startsWith('task-40') ||
-          demoUserIds.has(t.userId)
+          !t.id.startsWith('task-10') &&
+          !t.id.startsWith('task-20') &&
+          !t.id.startsWith('task-30') &&
+          !t.id.startsWith('task-40') &&
+          !demoUserIds.has(t.userId)
         ) {
-          batch.delete(d.ref);
-          hasPurges = true;
-        } else {
           firestoreTasks.push(t);
         }
       });
+    }
 
-      if (hasPurges) {
-        await batch.commit();
-        console.log('[Firestore Web] Purged all legacy sample documents from Firestore.');
+    // Merge strategy:
+    // 1. Users: If Firestore has documents, integrate them with store.
+    //    If Firestore is empty but store has users, push store users to Firestore!
+    if (firestoreUsers.length > 0) {
+      const userMap = new Map(store.users.map(u => [u.id, u]));
+      for (const u of firestoreUsers) {
+        userMap.set(u.id, u);
+      }
+      store.users = Array.from(userMap.values());
+    } else if (store.users.length > 0) {
+      for (const u of store.users) {
+        await dbSaveUser(u);
       }
     }
 
-    store.users = firestoreUsers;
-    store.tasks = firestoreTasks;
+    // 2. Tasks: If Firestore has tasks, integrate them.
+    //    If Firestore is empty but store has tasks, push store tasks to Firestore!
+    if (firestoreTasks.length > 0) {
+      const taskMap = new Map(store.tasks.map(t => [t.id, t]));
+      for (const t of firestoreTasks) {
+        taskMap.set(t.id, t);
+      }
+      store.tasks = Array.from(taskMap.values());
+    } else if (store.tasks.length > 0) {
+      for (const t of store.tasks) {
+        await dbSaveTask(t);
+      }
+    }
+
     saveStore(store);
-    console.log(`[Firestore] Database ready: ${firestoreUsers.length} user(s), ${firestoreTasks.length} task(s).`);
-  } catch (err) {
-    console.warn('[Firestore] Sync warning, retaining local store:', err);
+    firestoreLastError = null;
+    firestoreLastSyncTime = new Date().toISOString();
+    console.log(`[Firestore] Sync complete: ${store.users.length} user(s), ${store.tasks.length} task(s).`);
+  } catch (err: any) {
+    firestoreLastError = err.message || String(err);
+    console.warn('[Firestore] Sync warning, retaining local store:', firestoreLastError);
   }
-}
-
-// Complete purge of all user and task records across Firestore, memory, and disk
-async function clearAllDataFromDb() {
-  store.users = [];
-  store.tasks = [];
-  saveStore(store);
-
-  if (adminDb) {
-    try {
-      const usersSnap = await adminDb.collection('users').get();
-      const tasksSnap = await adminDb.collection('tasks').get();
-      const batch = adminDb.batch();
-      usersSnap.forEach((d: any) => batch.delete(d.ref));
-      tasksSnap.forEach((d: any) => batch.delete(d.ref));
-      await batch.commit();
-      console.log('[Firestore Admin] Purged all documents from Firestore collections.');
-    } catch (err) {
-      console.warn('[Firestore Admin] Error purging documents:', err);
-    }
-  } else if (webDb) {
-    try {
-      const usersSnap = await getDocs(collection(webDb, 'users'));
-      const tasksSnap = await getDocs(collection(webDb, 'tasks'));
-      const batch = writeBatch(webDb);
-      usersSnap.forEach(d => batch.delete(d.ref));
-      tasksSnap.forEach(d => batch.delete(d.ref));
-      await batch.commit();
-      console.log('[Firestore Web] Purged all documents from Firestore collections.');
-    } catch (err) {
-      console.warn('[Firestore Web] Error purging documents:', err);
-    }
-  }
-
-  broadcastEvent('sync_all', { users: [], tasks: [] });
 }
 
 // Connected clients for Server-Sent Events (SSE) real-time broadcasting
@@ -613,15 +693,74 @@ async function startServer() {
     res.json({ success: true, tasks: modifiedTasks });
   });
 
-  // API: Clear/Reset all workspace data
-  app.post('/api/clear', async (req: Request, res: Response) => {
-    await clearAllDataFromDb();
-    res.json({ success: true, message: 'All workspace data cleared' });
+  // API: Firestore status & health check
+  app.get('/api/firestore/status', (req: Request, res: Response) => {
+    res.json({
+      connected: !!adminDb || !!webDb,
+      mode: firestoreMode,
+      projectId: firestoreProjectId,
+      databaseId: firestoreDatabaseId,
+      serviceAccountFound: firestoreMode === 'admin',
+      totalUsers: store.users.length,
+      totalTasks: store.tasks.length,
+      lastError: firestoreLastError,
+      lastSyncTime: firestoreLastSyncTime,
+    });
   });
 
-  app.post('/api/reset', async (req: Request, res: Response) => {
-    await clearAllDataFromDb();
-    res.json({ success: true, message: 'All workspace data cleared' });
+  // API: Submit or update Firebase Service Account Key
+  app.post('/api/firestore/credentials', async (req: Request, res: Response) => {
+    try {
+      const { serviceAccountKey } = req.body;
+      if (!serviceAccountKey) {
+        return res.status(400).json({ success: false, message: 'serviceAccountKey is required' });
+      }
+
+      let parsed: any;
+      if (typeof serviceAccountKey === 'string') {
+        parsed = JSON.parse(serviceAccountKey);
+      } else {
+        parsed = serviceAccountKey;
+      }
+
+      if (!parsed.project_id || !parsed.private_key || !parsed.client_email) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid service account JSON: missing project_id, private_key, or client_email',
+        });
+      }
+
+      const keyPath = path.join(process.cwd(), 'serviceAccountKey.json');
+      fs.writeFileSync(keyPath, JSON.stringify(parsed, null, 2), 'utf-8');
+
+      initFirestore();
+      await syncFromFirestore();
+
+      res.json({
+        success: true,
+        message: `Successfully connected to Firestore (Project: ${parsed.project_id}) and saved all workspace data.`,
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message || 'Failed to process credentials' });
+    }
+  });
+
+  // API: Force manual synchronization with Firestore
+  app.post('/api/firestore/sync', async (req: Request, res: Response) => {
+    try {
+      await syncFromFirestore();
+      broadcastEvent('sync_all', { users: store.users, tasks: store.tasks });
+      res.json({
+        success: !firestoreLastError,
+        message: firestoreLastError
+          ? `Sync completed with warning: ${firestoreLastError}`
+          : 'All workspace data is synced with Firestore.',
+        usersCount: store.users.length,
+        tasksCount: store.tasks.length,
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message || 'Sync failed' });
+    }
   });
 
   // API: Server-Sent Events (SSE) for zero-friction real-time sync across all connected browser tabs & devices

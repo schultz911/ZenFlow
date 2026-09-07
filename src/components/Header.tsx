@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { Role, User } from '../types';
+import { FirestoreModal } from './FirestoreModal';
 import {
   Sun,
   Moon,
@@ -14,7 +15,6 @@ import {
   Palette,
   FileText,
   Layers,
-  RotateCcw,
   Cloud,
 } from 'lucide-react';
 
@@ -42,10 +42,10 @@ export const Header: React.FC<HeaderProps> = ({
     syncStatus,
     switchUser,
     logout,
-    resetDemoData,
   } = useDashboard();
 
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [firestoreModalOpen, setFirestoreModalOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click
@@ -148,13 +148,15 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-2">
             
             {/* Real-time cloud sync icon */}
-            <div
+            <button
+              id="firestore-status-button"
+              onClick={() => setFirestoreModalOpen(true)}
               title={
                 syncStatus === 'connected'
-                  ? 'Cloud Synced'
-                  : 'Syncing...'
+                  ? 'Firestore Storage Status (Click to view)'
+                  : 'Syncing Firestore...'
               }
-              className="flex items-center justify-center p-2 rounded-full text-neutral-500 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white transition-colors"
+              className="flex items-center justify-center p-2 rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white transition-colors cursor-pointer"
             >
               <Cloud
                 className={`h-4 w-4 ${
@@ -165,7 +167,7 @@ export const Header: React.FC<HeaderProps> = ({
                     : 'text-neutral-400 dark:text-white/20'
                 }`}
               />
-            </div>
+            </button>
 
             {/* Dark Mode Toggle */}
             <button
@@ -175,16 +177,6 @@ export const Header: React.FC<HeaderProps> = ({
               className="rounded-full p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white transition-colors"
             >
               {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
-
-            {/* Quick Demo Reset */}
-            <button
-              id="reset-demo-btn"
-              onClick={resetDemoData}
-              title="Reset to default seed data"
-              className="hidden sm:inline-flex rounded-full p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-800 dark:text-white/30 dark:hover:bg-white/5 dark:hover:text-white/80 transition-colors"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
             </button>
 
             {/* User Dropdown / Auth status */}
@@ -297,17 +289,6 @@ export const Header: React.FC<HeaderProps> = ({
                     </button>
 
                     <button
-                      onClick={async () => {
-                        setUserDropdownOpen(false);
-                        await resetDemoData();
-                      }}
-                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-neutral-600 dark:text-white/60 hover:bg-neutral-50 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white transition-colors"
-                    >
-                      <RotateCcw className="h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
-                      <span>Clear Workspace Data</span>
-                    </button>
-
-                    <button
                       onClick={() => {
                         setUserDropdownOpen(false);
                         logout();
@@ -352,6 +333,11 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
       </div>
+
+      <FirestoreModal
+        isOpen={firestoreModalOpen}
+        onClose={() => setFirestoreModalOpen(false)}
+      />
     </header>
   );
 };

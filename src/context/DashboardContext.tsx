@@ -2,6 +2,18 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { User, Task, Role, TaskStatus, RealtimeEvent } from '../types';
 import { INITIAL_USERS, INITIAL_TASKS } from '../data/initialData';
 
+export interface FirestoreStatus {
+  connected: boolean;
+  mode: 'admin' | 'web' | 'local';
+  projectId: string;
+  databaseId: string;
+  serviceAccountFound: boolean;
+  totalUsers: number;
+  totalTasks: number;
+  lastError: string | null;
+  lastSyncTime?: string;
+}
+
 interface DashboardContextType {
   currentUser: User | null;
   users: User[];
@@ -12,6 +24,10 @@ interface DashboardContextType {
   setDarkMode: (val: boolean | ((prev: boolean) => boolean)) => void;
   syncStatus: 'connected' | 'connecting' | 'offline';
   isLoading: boolean;
+  firestoreStatus: FirestoreStatus | null;
+  refreshFirestoreStatus: () => Promise<void>;
+  syncWithFirestore: () => Promise<{ success: boolean; message: string }>;
+  uploadServiceAccountKey: (keyContent: string) => Promise<{ success: boolean; message: string }>;
   login: (name: string, role: Role, email: string) => Promise<User>;
   logout: () => void;
   switchUser: (user: User) => void;
@@ -27,7 +43,6 @@ interface DashboardContextType {
   deleteTask: (id: string) => Promise<void>;
   moveTaskStatus: (taskId: string, newStatus: TaskStatus, newIndex?: number) => Promise<void>;
   reorderTasks: (updates: Array<{ id: string; status: TaskStatus; order: number }>) => Promise<void>;
-  resetDemoData: () => Promise<void>;
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -78,6 +93,19 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const [syncStatus, setSyncStatus] = useState<'connected' | 'connecting' | 'offline'>('connecting');
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [firestoreStatus, setFirestoreStatus] = useState<FirestoreStatus | null>(null);
+
+  const refreshFirestoreStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/firestore/status');
+      if (res.ok) {
+        const data = await res.json();
+        setFirestoreStatus(data);
+      }
+    } catch (err) {
+      // ignore
+    }
+  }, []);
 
   // Apply dark mode class to root document & body
   useEffect(() => {
@@ -139,7 +167,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   useEffect(() => {
     fetchState();
-  }, [fetchState]);
+    refreshFirestoreStatus();
+  }, [fetchState, refreshFirestoreStatus]);
 
   // Server-Sent Events (SSE) Realtime Listener
   useEffect(() => {
@@ -423,17 +452,33 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
-  // Clear / reset workspace data
-  const resetDemoData = async () => {
+  // Trigger full synchronization with Firestore
+  const syncWithFirestore = async (): Promise<{ success: boolean; message: string }> => {
     try {
-      await fetch('/api/reset', { method: 'POST' });
-    } catch (err) {
-      console.warn('Reset request failed:', err);
-    } finally {
-      setUsers([]);
-      setTasks([]);
-      setCurrentUser(null);
-      localStorage.removeItem(USER_SESSION_KEY);
+      const res = await fetch('/api/firestore/sync', { method: 'POST' });
+      const data = await res.json();
+      await fetchState();
+      await refreshFirestoreStatus();
+      return data;
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Sync failed' };
+    }
+  };
+
+  // Upload or apply Firebase Service Account Key
+  const uploadServiceAccountKey = async (keyContent: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const res = await fetch('/api/firestore/credentials', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ serviceAccountKey: keyContent }),
+      });
+      const data = await res.json();
+      await fetchState();
+      await refreshFirestoreStatus();
+      return data;
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Key upload failed' };
     }
   };
 
@@ -449,6 +494,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         setDarkMode,
         syncStatus,
         isLoading,
+        firestoreStatus,
+        refreshFirestoreStatus,
+        syncWithFirestore,
+        uploadServiceAccountKey,
         login,
         logout,
         switchUser,
@@ -457,7 +506,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         deleteTask,
         moveTaskStatus,
         reorderTasks,
-        resetDemoData,
       }}
     >
       {children}

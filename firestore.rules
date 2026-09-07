@@ -39,7 +39,8 @@ service cloud.firestore {
 
     // Users collection
     match /users/{userId} {
-      allow read: if isValidId(userId);
+      allow get: if isValidId(userId);
+      allow list: if true;
       allow create: if isValidId(userId) && isValidUser(incoming()) && incoming().id == userId;
       allow update: if isValidId(userId) && isValidUser(incoming());
       allow delete: if isValidId(userId);
@@ -47,7 +48,8 @@ service cloud.firestore {
 
     // Tasks collection
     match /tasks/{taskId} {
-      allow read: if isValidId(taskId);
+      allow get: if isValidId(taskId);
+      allow list: if true;
       allow create: if isValidId(taskId) && isValidTask(incoming()) && incoming().id == taskId;
       allow update: if isValidId(taskId) && isValidTask(incoming());
       allow delete: if isValidId(taskId);

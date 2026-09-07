@@ -3,7 +3,7 @@
   "appId": "1:1031821216265:web:13f59ec7166b4dc94506d8",
   "apiKey": "AIzaSyB4j_2_5OR-qmaMAG80CNxoY72512JL9UY",
   "authDomain": "zennext-4d040.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-teammanagementda-9980efc0-ca83-4c76-90fb-bb53a62ccc11",
+  "firestoreDatabaseId": "(default)",
   "storageBucket": "zennext-4d040.firebasestorage.app",
   "messagingSenderId": "1031821216265",
   "measurementId": "",
