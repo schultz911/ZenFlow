@@ -10,5 +10,9 @@ cmds = ["npm ci --include=dev || npm install --include=dev"]
 [phases.build]
 cmds = ["npm run build"]
 
+[variables]
+NODE_ENV = "production"
+
 [start]
 cmd = "node dist/server.cjs"
+

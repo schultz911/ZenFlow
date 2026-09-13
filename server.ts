@@ -3,7 +3,7 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import compression from 'compression';
-import { createServer as createViteServer } from 'vite';
+
 import {
   initializeApp as initAdminApp,
   cert as adminCert,
@@ -53,6 +53,11 @@ interface AppStore {
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DATA_FILE = path.join(DATA_DIR, 'store.json');
+
+// Auto-detect production mode if running compiled dist artifact or in container environments
+if (!process.env.NODE_ENV && (__filename.includes('dist') || !__filename.endsWith('.ts'))) {
+  process.env.NODE_ENV = 'production';
+}
 
 // Color palette options for user avatars
 const AVATAR_COLORS = [
@@ -998,14 +1003,7 @@ async function startServer() {
     });
   });
 
-  // Vite middleware in dev mode / Static serving in production
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
-  } else {
+  const serveStaticFiles = () => {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(
       express.static(distPath, {
@@ -1023,6 +1021,23 @@ async function startServer() {
       res.setHeader('Cache-Control', 'no-cache, must-revalidate');
       res.sendFile(path.join(distPath, 'index.html'));
     });
+  };
+
+  // Vite middleware in dev mode / Static serving in production
+  if (process.env.NODE_ENV !== 'production') {
+    try {
+      const { createServer: createViteServer } = await import('vite');
+      const vite = await createViteServer({
+        server: { middlewareMode: true },
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+    } catch (err) {
+      console.warn('[Server] Vite dev server unavailable, falling back to static asset serving:', err);
+      serveStaticFiles();
+    }
+  } else {
+    serveStaticFiles();
   }
 
   // Global production error handling middleware (masks raw stack traces, prevents CWE-209 info leak)

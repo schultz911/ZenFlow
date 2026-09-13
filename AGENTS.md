@@ -6,6 +6,9 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ### 1. Discovered Optimizations
 
+### Sweep 4: 2026-09-13 (Production Cloud Runtime Hardening & Railway Deployment Fix)
+- **BUG-01 (Production Crash on Cloud Ingress - Static Vite Import in Compiled Server Bundle):** In `server.ts` line 6, static top-level `import { createServer as createViteServer } from 'vite'` compiled via esbuild into `var import_vite = require("vite")` in `dist/server.cjs`. In container cloud hosting (Railway Nixpacks, Docker) running `npm install --omit=dev`, devDependencies like `vite` are omitted, causing Node to crash immediately on container boot with `Error: Cannot find module 'vite'`.
+
 ### Sweep 3: 2026-09-13 (Micro-Latency & Enterprise Readiness Optimization)
 - **OPT-05 (Server Resource Leak - SSE Heartbeat Interval on Abrupt Socket Termination):** In `server.ts` line 983, `/api/events` maintains an unmonitored `setInterval` heartbeat firing every 20 seconds. When client sockets abruptly terminate without sending a TCP FIN packet (e.g., cellular network switch, closed laptop), `res.destroyed` becomes true before `req.on('close')` fires, leaking interval timers and emitting uncaught socket write errors.
 - **PERF-07 (Frontend CPU & Frame Drops - Inline Function Allocation Neutralizing React.memo):** In `Swimlane.tsx` (lines 502 & 558), inline anonymous callbacks `onMoveStatus={(tId, newStat) => onMoveTask(tId, user.id, newStat)}` are passed to `TaskCard`. In `App.tsx` (lines 172-176), fresh closure instances (`onAddTask`, `handleEditTask`, `onOpenWorkloadModal`) are recreated on every render pass. Because of unstable memory references, `React.memo` on both `Swimlane` and `TaskCard` fails 100% of prop equality checks, triggering full-tree card re-renders on every drag hover or search keystroke.
@@ -78,6 +81,9 @@ This document records the complete lifecycle of architectural sweeps, discovered
 ---
 
 ## 3. Approved and Implemented
+
+### Sweep 4: Production Cloud Runtime Hardening (Executed: 2026-09-13)
+- **BUG-01 (Executed):** Converted `vite` import in [server.ts](file:///c:/ZenFlow/server.ts) to a dynamic import encapsulated in the development branch with `try / catch` fallback to static asset serving. Added auto-detection of production mode when running compiled artifacts, and declared `NODE_ENV="production"` in [nixpacks.toml](file:///c:/ZenFlow/nixpacks.toml). Eliminates top-level `require("vite")` in `dist/server.cjs` and guarantees 100% successful container boot across Railway, Nixpacks, and Docker.
 
 ### Sweep 3: Phase 3 — Client Bundle Optimization (Executed: 2026-09-13)
 - **PERF-06 (Executed - Option A Approved):** Converted [firebase.ts](file:///c:/ZenFlow/src/lib/firebase.ts) to dynamically import the Firebase Web SDK only when direct client fallback is invoked, and configured chunk segregation in [vite.config.ts](file:///c:/ZenFlow/vite.config.ts). Dropped the initial client-side JavaScript transfer payload from 988.52 kB to 459.86 kB (a **528.66 kB / -53.5% payload reduction**), fully removing the Firebase SDK from the critical rendering path and eliminating Rollup's 500 kB chunk threshold warnings.
