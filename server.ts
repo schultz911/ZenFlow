@@ -388,6 +388,35 @@ async function dbDeleteTask(taskId: string) {
   }
 }
 
+async function dbBatchSaveUsers(users: User[]) {
+  if (users.length === 0) return;
+  try {
+    if (!adminDb && !webDb) initFirestore();
+    const CHUNK_SIZE = 500;
+    for (let i = 0; i < users.length; i += CHUNK_SIZE) {
+      const chunk = users.slice(i, i + CHUNK_SIZE);
+      if (adminDb) {
+        const batch = adminDb.batch();
+        for (const u of chunk) {
+          batch.set(adminDb.collection('users').doc(u.id), cleanDocData(u), { merge: true });
+        }
+        await batch.commit();
+        firestoreLastError = null;
+      } else if (webDb) {
+        const batch = writeBatch(webDb);
+        for (const u of chunk) {
+          batch.set(doc(webDb, 'users', u.id), cleanDocData(u), { merge: true });
+        }
+        await batch.commit();
+        firestoreLastError = null;
+      }
+    }
+  } catch (err: any) {
+    firestoreLastError = err.message || String(err);
+    console.error('[Firestore Batch Save Users Error]:', firestoreLastError);
+  }
+}
+
 async function dbBatchSaveTasks(tasks: Task[]) {
   if (tasks.length === 0) return;
   try {
@@ -480,7 +509,7 @@ async function syncFromFirestore() {
 
     // Merge strategy:
     // 1. Users: If Firestore has documents, integrate them with store.
-    //    If Firestore is empty but store has users, push store users to Firestore!
+    //    If Firestore is empty but store has users, push store users to Firestore via fast batch commit!
     if (firestoreUsers.length > 0) {
       const userMap = new Map(store.users.map(u => [u.id, u]));
       for (const u of firestoreUsers) {
@@ -488,13 +517,11 @@ async function syncFromFirestore() {
       }
       store.users = Array.from(userMap.values());
     } else if (store.users.length > 0) {
-      for (const u of store.users) {
-        await dbSaveUser(u);
-      }
+      await dbBatchSaveUsers(store.users);
     }
 
     // 2. Tasks: If Firestore has tasks, integrate them.
-    //    If Firestore is empty but store has tasks, push store tasks to Firestore!
+    //    If Firestore is empty but store has tasks, push store tasks to Firestore via fast batch commit!
     if (firestoreTasks.length > 0) {
       const taskMap = new Map(store.tasks.map(t => [t.id, t]));
       for (const t of firestoreTasks) {
@@ -502,9 +529,7 @@ async function syncFromFirestore() {
       }
       store.tasks = Array.from(taskMap.values());
     } else if (store.tasks.length > 0) {
-      for (const t of store.tasks) {
-        await dbSaveTask(t);
-      }
+      await dbBatchSaveTasks(store.tasks);
     }
 
     saveStore(store);
@@ -553,6 +578,9 @@ function broadcastEvent(type: string, payload: any) {
 async function startServer() {
   const app = express();
 
+  // Trust first proxy hop in containerized cloud environments (Railway, Cloud Run, Nixpacks)
+  app.set('trust proxy', 1);
+
   // HTTP Egress Compression for payloads > 1KB (excluding SSE streams)
   app.use(
     compression({
@@ -567,7 +595,7 @@ async function startServer() {
   );
 
   // Security & Permissions-Policy middleware
-  // Explicitly set a standards-compliant Permissions-Policy without deprecated/unrecognized directives like 'browsing-topics'
+  // Explicitly set standards-compliant security headers and Permissions-Policy
   app.use((req: Request, res: Response, next) => {
     res.setHeader(
       'Permissions-Policy',
@@ -575,6 +603,8 @@ async function startServer() {
     );
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
     next();
   });
 
@@ -662,9 +692,16 @@ async function startServer() {
     return res.status(201).json({ user: newUser, isNew: true });
   });
 
-  // API: Get all users
+  // API: Get all users with ETag conditional validation (HTTP 304 Not Modified)
   app.get('/api/users', (req: Request, res: Response) => {
+    const etag = `W/"zenflow-users-${stateRevision}"`;
+    res.setHeader('ETag', etag);
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+
+    if (req.headers['if-none-match'] === etag) {
+      return res.status(304).end();
+    }
+
     res.json(store.users);
   });
 
@@ -711,9 +748,16 @@ async function startServer() {
     res.status(201).json(newUser);
   });
 
-  // API: Get all tasks
+  // API: Get all tasks with ETag conditional validation (HTTP 304 Not Modified)
   app.get('/api/tasks', (req: Request, res: Response) => {
+    const etag = `W/"zenflow-tasks-${stateRevision}"`;
+    res.setHeader('ETag', etag);
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+
+    if (req.headers['if-none-match'] === etag) {
+      return res.status(304).end();
+    }
+
     res.json(store.tasks);
   });
 
@@ -805,8 +849,8 @@ async function startServer() {
   // API: Reorder tasks / move between statuses
   app.post('/api/tasks/reorder', (req: Request, res: Response) => {
     const { updates } = req.body; // Array of { id, status, order }
-    if (!Array.isArray(updates)) {
-      return res.status(400).json({ error: 'updates array is required' });
+    if (!Array.isArray(updates) || updates.length > 500) {
+      return res.status(400).json({ error: 'updates array is required and must contain at most 500 items' });
     }
 
     const modifiedTasks: Task[] = [];
@@ -972,6 +1016,13 @@ async function startServer() {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
+
+  // Global production error handling middleware (masks raw stack traces, prevents CWE-209 info leak)
+  app.use((err: any, req: Request, res: Response, _next: () => void) => {
+    console.error('[Server Error]:', err);
+    if (res.headersSent) return;
+    res.status(500).json({ error: 'Internal Server Error' });
+  });
 
   const serverInstance = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Team Management Server running on port ${PORT}`);

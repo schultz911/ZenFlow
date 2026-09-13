@@ -94,8 +94,29 @@ export const Swimlane: React.FC<SwimlaneProps> = React.memo(({
     }
     return Array.from(map.values());
   }, [tasks, user.id]);
+
+  // Pre-index grouped columns in a single O(N) pass to avoid redundant filter+sort calls in the render loop
+  const tasksByColumn = useMemo(() => {
+    const grouped: Record<TaskStatus, Task[]> = {
+      todo: [],
+      in_progress: [],
+      in_review: [],
+      done: [],
+      archived: [],
+    };
+    for (const t of userTasks) {
+      if (grouped[t.status]) {
+        grouped[t.status].push(t);
+      }
+    }
+    for (const status in grouped) {
+      grouped[status as TaskStatus].sort((a, b) => a.order - b.order);
+    }
+    return grouped;
+  }, [userTasks]);
+
   const workload = useMemo(() => calculateUserWorkload(userTasks), [userTasks]);
-  const archivedTasks = useMemo(() => userTasks.filter(t => t.status === 'archived'), [userTasks]);
+  const archivedTasks = useMemo(() => tasksByColumn.archived, [tasksByColumn]);
 
   const isCrossUserDrag = Boolean(activeDragInfo && activeDragInfo.sourceUserId !== user.id);
 
@@ -372,9 +393,7 @@ export const Swimlane: React.FC<SwimlaneProps> = React.memo(({
           }`}
         >
           {COLUMNS.map(col => {
-            const columnTasks = userTasks
-              .filter(t => t.status === col.status)
-              .sort((a, b) => a.order - b.order);
+            const columnTasks = tasksByColumn[col.status] || [];
 
             const isDropActive = dragOverColumn === col.status;
 
@@ -456,7 +475,9 @@ export const Swimlane: React.FC<SwimlaneProps> = React.memo(({
                             onDragOver={e => {
                               e.preventDefault();
                               e.stopPropagation();
-                              setDragOverTaskId(task.id);
+                              if (dragOverTaskId !== task.id) {
+                                setDragOverTaskId(task.id);
+                              }
                             }}
                             onDragLeave={e => {
                               if (!e.currentTarget.contains(e.relatedTarget as Node)) {
