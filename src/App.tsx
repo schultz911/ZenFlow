@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { DashboardProvider, useDashboard } from './context/DashboardContext';
 import { Header } from './components/Header';
 import { OverviewBar } from './components/OverviewBar';
@@ -97,27 +97,31 @@ function DashboardContent() {
   }, [currentUser, users]);
 
   // Task modal handlers
-  const handleOpenAddTask = (userId?: string, status?: TaskStatus) => {
+  const handleOpenAddTask = useCallback((userId?: string, status?: TaskStatus) => {
     setTaskToEdit(null);
     setDefaultTaskUserId(userId || currentUser?.id || users[0]?.id);
     setDefaultTaskStatus(status || 'todo');
     setTaskModalOpen(true);
-  };
+  }, [currentUser?.id, users]);
 
-  const handleEditTask = (task: Task) => {
+  const handleEditTask = useCallback((task: Task) => {
     setTaskToEdit(task);
     setTaskModalOpen(true);
-  };
+  }, []);
 
-  const handleOpenLogin = () => {
+  const handleOpenLogin = useCallback(() => {
     setIsNewAccountModal(false);
     setLoginModalOpen(true);
-  };
+  }, []);
 
-  const handleOpenNewUser = () => {
+  const handleOpenNewUser = useCallback(() => {
     setIsNewAccountModal(true);
     setLoginModalOpen(true);
-  };
+  }, []);
+
+  const handleOpenWorkloadModal = useCallback((u: User) => {
+    setWorkloadModalUser(u);
+  }, []);
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-[#0A0A0A] text-neutral-900 dark:text-[#E5E5E5] font-sans antialiased selection:bg-blue-500/30 selection:text-white transition-colors">
@@ -169,11 +173,11 @@ function DashboardContent() {
                 key={user.id}
                 user={user}
                 tasks={filteredTasks}
-                onAddTask={(uid, status) => handleOpenAddTask(uid, status)}
+                onAddTask={handleOpenAddTask}
                 onEditTask={handleEditTask}
                 onDeleteTask={deleteTask}
                 onMoveTask={moveTask}
-                onOpenWorkloadModal={u => setWorkloadModalUser(u)}
+                onOpenWorkloadModal={handleOpenWorkloadModal}
                 isCurrentUser={currentUser?.id === user.id}
               />
             ))}

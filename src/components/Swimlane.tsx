@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task, TaskStatus } from '../types';
 import { calculateUserWorkload } from '../utils/workload';
@@ -227,6 +227,13 @@ export const Swimlane: React.FC<SwimlaneProps> = React.memo(({
 
     onMoveTask(taskId, user.id, targetStatus, newIndex);
   };
+
+  const handleMoveStatus = useCallback(
+    (taskId: string, newStatus: TaskStatus) => {
+      onMoveTask(taskId, user.id, newStatus);
+    },
+    [onMoveTask, user.id]
+  );
 
   return (
     <motion.div
@@ -499,7 +506,7 @@ export const Swimlane: React.FC<SwimlaneProps> = React.memo(({
                               userRole={user.role}
                               onEdit={onEditTask}
                               onDelete={onDeleteTask}
-                              onMoveStatus={(tId, newStat) => onMoveTask(tId, user.id, newStat)}
+                              onMoveStatus={handleMoveStatus}
                             />
                           </div>
                         );
@@ -555,7 +562,7 @@ export const Swimlane: React.FC<SwimlaneProps> = React.memo(({
                         userRole={user.role}
                         onEdit={onEditTask}
                         onDelete={onDeleteTask}
-                        onMoveStatus={(tId, newStat) => onMoveTask(tId, user.id, newStat)}
+                        onMoveStatus={handleMoveStatus}
                       />
                     ))
                   )}

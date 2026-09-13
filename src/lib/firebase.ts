@@ -1,5 +1,5 @@
-import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getFirestore, Firestore, doc, getDocFromServer } from 'firebase/firestore';
+import type { FirebaseApp } from 'firebase/app';
+import type { Firestore } from 'firebase/firestore';
 import appletConfig from '../../firebase-applet-config.json';
 
 // Default config loaded from firebase-applet-config.json or Vite environment variables
@@ -18,15 +18,22 @@ export const firebaseConfig = {
 let appInstance: FirebaseApp | null = null;
 let dbInstance: Firestore | null = null;
 
-if (firebaseConfig.apiKey && firebaseConfig.projectId) {
-  try {
-    appInstance = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-    dbInstance = firebaseConfig.firestoreDatabaseId
-      ? getFirestore(appInstance, firebaseConfig.firestoreDatabaseId)
-      : getFirestore(appInstance);
-  } catch (err) {
-    console.warn('Firebase client initialization warning:', err);
+export async function getClientDb(): Promise<Firestore | null> {
+  if (dbInstance) return dbInstance;
+  if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+    try {
+      const { initializeApp, getApps, getApp } = await import('firebase/app');
+      const { getFirestore } = await import('firebase/firestore');
+      appInstance = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+      dbInstance = firebaseConfig.firestoreDatabaseId
+        ? getFirestore(appInstance, firebaseConfig.firestoreDatabaseId)
+        : getFirestore(appInstance);
+      return dbInstance;
+    } catch (err) {
+      console.warn('Firebase client initialization warning:', err);
+    }
   }
+  return null;
 }
 
 export const app = appInstance;
@@ -34,6 +41,7 @@ export const db = dbInstance;
 
 /**
  * Validates connection to Firestore at app initialization (mandated by firebase-skill).
+ * Uses server-side API verification first, falling back to on-demand dynamic client SDK only if needed.
  */
 export async function testConnection(): Promise<boolean> {
   try {
@@ -46,9 +54,11 @@ export async function testConnection(): Promise<boolean> {
     // ignore
   }
 
-  if (!db) return false;
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    const clientDb = await getClientDb();
+    if (!clientDb) return false;
+    const { doc, getDocFromServer } = await import('firebase/firestore');
+    await getDocFromServer(doc(clientDb, 'test', 'connection'));
     return true;
   } catch {
     // Fail silently without dumping unhandled errors to console

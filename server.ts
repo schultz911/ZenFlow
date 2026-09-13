@@ -981,7 +981,15 @@ async function startServer() {
 
     // Periodic heartbeat to keep connections open across network proxies
     const heartbeatInterval = setInterval(() => {
-      res.write(': heartbeat\n\n');
+      if (res.destroyed || res.writableEnded) {
+        clearInterval(heartbeatInterval);
+        return;
+      }
+      try {
+        res.write(': heartbeat\n\n');
+      } catch {
+        clearInterval(heartbeatInterval);
+      }
     }, 20000);
 
     req.on('close', () => {
