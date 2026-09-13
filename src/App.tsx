@@ -12,6 +12,8 @@ import { User, Task, TaskStatus } from './types';
 import { UserPlus, FileText, Palette } from 'lucide-react';
 import { testConnection } from './lib/firebase';
 
+const EMPTY_TASKS: Task[] = [];
+
 function DashboardContent() {
   useEffect(() => {
     // Validate Firestore connection on boot (as mandated by firebase-skill)
@@ -45,24 +47,50 @@ function DashboardContent() {
     return users.filter(u => u.role === activeRoleTab);
   }, [users, activeRoleTab]);
 
-  // Filter tasks by search query with deduplication
+  // Fast O(1) lookup map of user names for search queries
+  const userNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const u of users) {
+      map.set(u.id, u.name.toLowerCase());
+    }
+    return map;
+  }, [users]);
+
+  // Filter tasks by search query with deduplication - O(T + U) single pass
   const filteredTasks = useMemo(() => {
     const map = new Map<string, Task>();
+    const trimmed = searchQuery.trim().toLowerCase();
+
     for (const task of tasks) {
       if (!task || !task.id) continue;
-      // Search query filter
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase().trim();
-        const matchesTitle = task.title.toLowerCase().includes(q);
-        const matchesDesc = task.description ? task.description.toLowerCase().includes(q) : false;
-        const taskUser = users.find(u => u.id === task.userId);
-        const matchesUser = taskUser ? taskUser.name.toLowerCase().includes(q) : false;
+      if (trimmed) {
+        const matchesTitle = task.title.toLowerCase().includes(trimmed);
+        const matchesDesc = task.description ? task.description.toLowerCase().includes(trimmed) : false;
+        const userName = userNameMap.get(task.userId);
+        const matchesUser = userName ? userName.includes(trimmed) : false;
         if (!matchesTitle && !matchesDesc && !matchesUser) continue;
       }
       map.set(task.id, task);
     }
     return Array.from(map.values());
-  }, [tasks, searchQuery, users]);
+  }, [tasks, searchQuery, userNameMap]);
+
+  // Partition tasks by userId with stable array references to prevent global Swimlane re-render cascades
+  const tasksByUserId = useMemo(() => {
+    const partitioned = new Map<string, Task[]>();
+    for (const u of users) {
+      partitioned.set(u.id, []);
+    }
+    for (const task of filteredTasks) {
+      const userList = partitioned.get(task.userId);
+      if (userList) {
+        userList.push(task);
+      } else {
+        partitioned.set(task.userId, [task]);
+      }
+    }
+    return partitioned;
+  }, [users, filteredTasks]);
 
   // Global keyboard shortcut listeners
   useEffect(() => {
@@ -172,7 +200,7 @@ function DashboardContent() {
               <Swimlane
                 key={user.id}
                 user={user}
-                tasks={filteredTasks}
+                tasks={tasksByUserId.get(user.id) || EMPTY_TASKS}
                 onAddTask={handleOpenAddTask}
                 onEditTask={handleEditTask}
                 onDeleteTask={deleteTask}

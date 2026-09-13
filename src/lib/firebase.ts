@@ -36,9 +36,6 @@ export async function getClientDb(): Promise<Firestore | null> {
   return null;
 }
 
-export const app = appInstance;
-export const db = dbInstance;
-
 /**
  * Validates connection to Firestore at app initialization (mandated by firebase-skill).
  * Uses server-side API verification first, falling back to on-demand dynamic client SDK only if needed.

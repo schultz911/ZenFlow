@@ -78,11 +78,27 @@ export const Swimlane: React.FC<SwimlaneProps> = React.memo(({
   onOpenWorkloadModal,
   isCurrentUser,
 }) => {
-  const { activeDragInfo } = useDashboard();
+  const { activeDragInfo, setActiveDragInfo } = useDashboard();
   const [showArchived, setShowArchived] = useState(false);
   const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
   const [dragOverHeader, setDragOverHeader] = useState(false);
   const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
+
+  const handleTaskDragStart = useCallback(
+    (draggedTask: Task) => {
+      setActiveDragInfo({
+        taskId: draggedTask.id,
+        sourceUserId: draggedTask.userId,
+        sourceStatus: draggedTask.status,
+        title: draggedTask.title,
+      });
+    },
+    [setActiveDragInfo]
+  );
+
+  const handleTaskDragEnd = useCallback(() => {
+    setActiveDragInfo(null);
+  }, [setActiveDragInfo]);
 
   // Filter tasks belonging strictly to this user with strict key uniqueness
   const userTasks = useMemo(() => {
@@ -507,6 +523,8 @@ export const Swimlane: React.FC<SwimlaneProps> = React.memo(({
                               onEdit={onEditTask}
                               onDelete={onDeleteTask}
                               onMoveStatus={handleMoveStatus}
+                              onDragStart={handleTaskDragStart}
+                              onDragEnd={handleTaskDragEnd}
                             />
                           </div>
                         );
@@ -563,6 +581,8 @@ export const Swimlane: React.FC<SwimlaneProps> = React.memo(({
                         onEdit={onEditTask}
                         onDelete={onDeleteTask}
                         onMoveStatus={handleMoveStatus}
+                        onDragStart={handleTaskDragStart}
+                        onDragEnd={handleTaskDragEnd}
                       />
                     ))
                   )}

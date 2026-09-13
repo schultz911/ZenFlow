@@ -1,5 +1,5 @@
-# Node.js 20 LTS Base
-FROM node:20-slim AS builder
+# Node.js 22 LTS Base (Engine requirement for Firebase Admin 14+ / @google-cloud/firestore)
+FROM node:22-slim AS builder
 
 WORKDIR /app
 
@@ -9,7 +9,7 @@ RUN npm install
 COPY . .
 RUN npm run build
 
-FROM node:20-slim AS runner
+FROM node:22-slim AS runner
 
 WORKDIR /app
 
