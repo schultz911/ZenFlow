@@ -4,13 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import compression from 'compression';
 
-import {
-  initializeApp as initAdminApp,
-  cert as adminCert,
-  getApps as getAdminApps,
-  getApp as getAdminApp,
-} from 'firebase-admin/app';
-import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore';
+
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
   getFirestore as getWebFirestore,
@@ -259,73 +253,91 @@ function findServiceAccount(): any | null {
   return null;
 }
 
-function initFirestore() {
-  // Read firebase-applet-config.json for fallback IDs
-  let fileConfig: any = {};
-  try {
-    const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-    if (fs.existsSync(configPath)) {
-      fileConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-      if (fileConfig.projectId) firestoreProjectId = fileConfig.projectId;
-      if (fileConfig.firestoreDatabaseId) firestoreDatabaseId = fileConfig.firestoreDatabaseId;
-    }
-  } catch {
-    // ignore
-  }
+let initPromise: Promise<void> | null = null;
 
-  // 1. Check for Service Account Key
-  const serviceAccountObj = findServiceAccount();
-
-  if (serviceAccountObj) {
-    try {
-      firestoreProjectId = serviceAccountObj.project_id || firestoreProjectId;
-      const adminApps = getAdminApps();
-      const adminApp = adminApps.length === 0
-        ? initAdminApp({
-            credential: adminCert(serviceAccountObj),
-            projectId: firestoreProjectId,
-          })
-        : getAdminApp();
-
-      adminDb = getAdminFirestore(adminApp);
+async function initFirestore() {
+  if (adminDb || webDb) return;
+  if (!initPromise) {
+    initPromise = (async () => {
+      // Read firebase-applet-config.json for fallback IDs
+      let fileConfig: any = {};
       try {
-        adminDb.settings({ ignoreUndefinedProperties: true });
+        const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+        if (fs.existsSync(configPath)) {
+          fileConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+          if (fileConfig.projectId) firestoreProjectId = fileConfig.projectId;
+          if (fileConfig.firestoreDatabaseId) firestoreDatabaseId = fileConfig.firestoreDatabaseId;
+        }
       } catch {
-        // settings already configured
+        // ignore
       }
-      firestoreMode = 'admin';
-      firestoreLastError = null;
-      console.log('[Firestore Admin] Successfully initialized with Service Account Key for project:', firestoreProjectId);
-      return;
-    } catch (err: any) {
-      firestoreLastError = err.message || String(err);
-      console.warn('[Firestore Admin] Failed to initialize admin SDK with service account:', err);
-    }
-  }
 
-  // 2. Fallback to Web Client SDK if apiKey + projectId is provided
-  const fbConfig = {
-    apiKey: process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY || fileConfig.apiKey || '',
-    projectId: process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || fileConfig.projectId || firestoreProjectId,
-    appId: process.env.FIREBASE_APP_ID || process.env.VITE_FIREBASE_APP_ID || fileConfig.appId || '',
-    authDomain: process.env.FIREBASE_AUTH_DOMAIN || process.env.VITE_FIREBASE_AUTH_DOMAIN || fileConfig.authDomain || '',
-  };
+      // 1. Check for Service Account Key
+      const serviceAccountObj = findServiceAccount();
 
-  if (fbConfig.apiKey && fbConfig.projectId) {
-    try {
-      const fbApp = getApps().length === 0 ? initializeApp(fbConfig) : getApp();
-      webDb = getWebFirestore(fbApp);
-      firestoreMode = 'web';
-      firestoreProjectId = fbConfig.projectId;
-      console.log('[Firestore Web] Initialized Firestore Web SDK for project:', fbConfig.projectId);
-    } catch (err: any) {
-      firestoreLastError = err.message || String(err);
-      console.warn('[Firestore Web] Initialization warning, using local resilient store:', err);
-    }
+      if (serviceAccountObj) {
+        try {
+          firestoreProjectId = serviceAccountObj.project_id || firestoreProjectId;
+          const adminAppModule = await import('firebase-admin/app');
+          let adminFirestoreModule: any = null;
+          try {
+            adminFirestoreModule = await import('firebase-admin/firestore');
+          } catch (fErr: any) {
+            console.warn('[Firestore Admin] firebase-admin/firestore or @google-cloud/firestore unavailable:', fErr?.message || fErr);
+          }
+
+          if (!adminAppModule || !adminFirestoreModule) {
+            throw new Error('Firebase Admin SDK or @google-cloud/firestore is not available in the current runtime environment.');
+          }
+
+          const adminApps = adminAppModule.getApps();
+          const adminApp = adminApps.length === 0
+            ? adminAppModule.initializeApp({
+                credential: adminAppModule.cert(serviceAccountObj),
+                projectId: firestoreProjectId,
+              })
+            : adminAppModule.getApp();
+
+          adminDb = adminFirestoreModule.getFirestore(adminApp);
+          try {
+            adminDb.settings({ ignoreUndefinedProperties: true });
+          } catch {
+            // settings already configured
+          }
+          firestoreMode = 'admin';
+          firestoreLastError = null;
+          console.log('[Firestore Admin] Successfully initialized with Service Account Key for project:', firestoreProjectId);
+          return;
+        } catch (err: any) {
+          firestoreLastError = err.message || String(err);
+          console.warn('[Firestore Admin] Failed to initialize admin SDK with service account:', err);
+        }
+      }
+
+      // 2. Fallback to Web Client SDK if apiKey + projectId is provided
+      const fbConfig = {
+        apiKey: process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY || fileConfig.apiKey || '',
+        projectId: process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || fileConfig.projectId || firestoreProjectId,
+        appId: process.env.FIREBASE_APP_ID || process.env.VITE_FIREBASE_APP_ID || fileConfig.appId || '',
+        authDomain: process.env.FIREBASE_AUTH_DOMAIN || process.env.VITE_FIREBASE_AUTH_DOMAIN || fileConfig.authDomain || '',
+      };
+
+      if (fbConfig.apiKey && fbConfig.projectId) {
+        try {
+          const fbApp = getApps().length === 0 ? initializeApp(fbConfig) : getApp();
+          webDb = getWebFirestore(fbApp);
+          firestoreMode = 'web';
+          firestoreProjectId = fbConfig.projectId;
+          console.log('[Firestore Web] Initialized Firestore Web SDK for project:', fbConfig.projectId);
+        } catch (err: any) {
+          firestoreLastError = err.message || String(err);
+          console.warn('[Firestore Web] Initialization warning, using local resilient store:', err);
+        }
+      }
+    })();
   }
+  await initPromise;
 }
-
-initFirestore();
 
 // Utility to clean undefined values so Firestore never throws unsupported field value error
 function cleanDocData<T extends Record<string, any>>(obj: T): Partial<T> {
@@ -345,7 +357,7 @@ function cleanDocData<T extends Record<string, any>>(obj: T): Partial<T> {
 // Unified DB helper methods with error tracking & auto-recovery
 async function dbSaveUser(user: User) {
   try {
-    if (!adminDb && !webDb) initFirestore();
+    if (!adminDb && !webDb) await initFirestore();
     const payload = cleanDocData(user);
     if (adminDb) {
       await adminDb.collection('users').doc(user.id).set(payload, { merge: true });
@@ -362,7 +374,7 @@ async function dbSaveUser(user: User) {
 
 async function dbSaveTask(task: Task) {
   try {
-    if (!adminDb && !webDb) initFirestore();
+    if (!adminDb && !webDb) await initFirestore();
     const payload = cleanDocData(task);
     if (adminDb) {
       await adminDb.collection('tasks').doc(task.id).set(payload, { merge: true });
@@ -379,7 +391,7 @@ async function dbSaveTask(task: Task) {
 
 async function dbDeleteTask(taskId: string) {
   try {
-    if (!adminDb && !webDb) initFirestore();
+    if (!adminDb && !webDb) await initFirestore();
     if (adminDb) {
       await adminDb.collection('tasks').doc(taskId).delete();
       firestoreLastError = null;
@@ -396,7 +408,7 @@ async function dbDeleteTask(taskId: string) {
 async function dbBatchSaveUsers(users: User[]) {
   if (users.length === 0) return;
   try {
-    if (!adminDb && !webDb) initFirestore();
+    if (!adminDb && !webDb) await initFirestore();
     const CHUNK_SIZE = 500;
     for (let i = 0; i < users.length; i += CHUNK_SIZE) {
       const chunk = users.slice(i, i + CHUNK_SIZE);
@@ -425,7 +437,7 @@ async function dbBatchSaveUsers(users: User[]) {
 async function dbBatchSaveTasks(tasks: Task[]) {
   if (tasks.length === 0) return;
   try {
-    if (!adminDb && !webDb) initFirestore();
+    if (!adminDb && !webDb) await initFirestore();
     // Firestore has a maximum batch limit of 500 operations. Chunk tasks into blocks of 500.
     const CHUNK_SIZE = 500;
     for (let i = 0; i < tasks.length; i += CHUNK_SIZE) {
@@ -455,7 +467,7 @@ async function dbBatchSaveTasks(tasks: Task[]) {
 // Sync existing users and tasks with Firestore
 async function syncFromFirestore() {
   if (!adminDb && !webDb) {
-    initFirestore();
+    await initFirestore();
     if (!adminDb && !webDb) return;
   }
 
@@ -582,6 +594,9 @@ function broadcastEvent(type: string, payload: any) {
 
 async function startServer() {
   const app = express();
+
+  // Initialize Firestore if credentials are provided, or fall back safely
+  await initFirestore();
 
   // Trust first proxy hop in containerized cloud environments (Railway, Cloud Run, Nixpacks)
   app.set('trust proxy', 1);
@@ -926,7 +941,10 @@ async function startServer() {
       const keyPath = path.join(process.cwd(), 'serviceAccountKey.json');
       fs.writeFileSync(keyPath, JSON.stringify(parsed, null, 2), 'utf-8');
 
-      initFirestore();
+      initPromise = null;
+      adminDb = null;
+      webDb = null;
+      await initFirestore();
       await syncFromFirestore();
 
       res.json({

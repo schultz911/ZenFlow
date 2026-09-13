@@ -1,8 +1,8 @@
 # Railway Nixpacks Configuration
-# Forces modern LTS Node.js 20 package (Node 18 is EOL and removed in upstream nixpkgs)
+# Modern LTS Node.js 22 (Active LTS required by modern Firebase Admin SDK 14+)
 
 [phases.setup]
-nixPkgs = ["nodejs_20"]
+nixPkgs = ["nodejs_22"]
 
 [phases.install]
 cmds = ["npm ci --include=dev || npm install --include=dev"]

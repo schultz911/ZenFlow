@@ -6,6 +6,9 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ### 1. Discovered Optimizations
 
+### Sweep 5: 2026-09-13 (Production Cloud Runtime Hardening - Missing @google-cloud/firestore Crash)
+- **BUG-02 (Production Crash on Cloud Container Boot - Missing Optional Dependency in Firebase Admin SDK):** `firebase-admin` v14 declared `@google-cloud/firestore` as an `optionalDependency` requiring `node >= 22`. When Railway provisioned `nodejs_20` via `nixpacks.toml`, npm skipped optional dependencies whose engine constraints failed. In `server.ts`, static top-level `import { getFirestore as getAdminFirestore } from 'firebase-admin/firestore'` compiled to a static top-level `require("firebase-admin/firestore")` in `dist/server.cjs`, causing Node to crash immediately on container boot with `Error: Cannot find module '@google-cloud/firestore'`.
+
 ### Sweep 4: 2026-09-13 (Production Cloud Runtime Hardening & Railway Deployment Fix)
 - **BUG-01 (Production Crash on Cloud Ingress - Static Vite Import in Compiled Server Bundle):** In `server.ts` line 6, static top-level `import { createServer as createViteServer } from 'vite'` compiled via esbuild into `var import_vite = require("vite")` in `dist/server.cjs`. In container cloud hosting (Railway Nixpacks, Docker) running `npm install --omit=dev`, devDependencies like `vite` are omitted, causing Node to crash immediately on container boot with `Error: Cannot find module 'vite'`.
 
@@ -81,6 +84,12 @@ This document records the complete lifecycle of architectural sweeps, discovered
 ---
 
 ## 3. Approved and Implemented
+
+### Sweep 5: Production Cloud Runtime Hardening — @google-cloud/firestore Fix (Executed: 2026-09-13)
+- **BUG-02 (Executed):**
+  1. Converted `firebase-admin/app` and `firebase-admin/firestore` in [server.ts](file:///c:/ZenFlow/server.ts) from top-level static imports to on-demand, dynamic runtime imports encapsulated inside `initFirestore()` with structured `try / catch` fallback. This completely removes `firebase-admin/firestore` from top-level module evaluation in `dist/server.cjs`, preventing boot crashes.
+  2. Promoted `@google-cloud/firestore` to explicit production `dependencies` in [package.json](file:///c:/ZenFlow/package.json) so package managers in container build stages never skip it as an optional dependency.
+  3. Upgraded Node.js to `nodejs_22` (Active LTS) in [nixpacks.toml](file:///c:/ZenFlow/nixpacks.toml), ensuring complete engine compatibility (`>=22`) for modern Firebase Admin SDK 14+.
 
 ### Sweep 4: Production Cloud Runtime Hardening (Executed: 2026-09-13)
 - **BUG-01 (Executed):** Converted `vite` import in [server.ts](file:///c:/ZenFlow/server.ts) to a dynamic import encapsulated in the development branch with `try / catch` fallback to static asset serving. Added auto-detection of production mode when running compiled artifacts, and declared `NODE_ENV="production"` in [nixpacks.toml](file:///c:/ZenFlow/nixpacks.toml). Eliminates top-level `require("vite")` in `dist/server.cjs` and guarantees 100% successful container boot across Railway, Nixpacks, and Docker.
