@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import { User, Task, Role, TaskStatus, RealtimeEvent, DragTaskInfo, TaskOrderUpdate } from '../types';
 import { INITIAL_USERS, INITIAL_TASKS } from '../data/initialData';
 
@@ -62,6 +62,11 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [tasks, setTasks] = useState<Task[]>(() => {
     return INITIAL_TASKS;
   });
+
+  const tasksRef = useRef<Task[]>(tasks);
+  useEffect(() => {
+    tasksRef.current = tasks;
+  }, [tasks]);
 
   const [activeDragInfo, setActiveDragInfo] = useState<DragTaskInfo | null>(null);
 
@@ -191,20 +196,23 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   useEffect(() => {
     let eventSource: EventSource | null = null;
     let reconnectTimeout: any = null;
+    let isMounted = true;
 
     function connectSSE() {
+      if (!isMounted) return;
       try {
         eventSource = new EventSource('/api/events');
 
         eventSource.onopen = () => {
-          setSyncStatus('connected');
+          if (isMounted) setSyncStatus('connected');
         };
 
         eventSource.addEventListener('init', () => {
-          setSyncStatus('connected');
+          if (isMounted) setSyncStatus('connected');
         });
 
         eventSource.addEventListener('update', (e: MessageEvent) => {
+          if (!isMounted) return;
           try {
             const event: RealtimeEvent = JSON.parse(e.data);
             const { type, payload } = event;
@@ -272,6 +280,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         });
 
         eventSource.onerror = () => {
+          if (!isMounted) return;
           setSyncStatus('connecting');
           if (eventSource) {
             eventSource.close();
@@ -281,6 +290,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
           reconnectTimeout = setTimeout(connectSSE, 3000);
         };
       } catch (e) {
+        if (!isMounted) return;
         setSyncStatus('offline');
         reconnectTimeout = setTimeout(connectSSE, 5000);
       }
@@ -289,6 +299,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     connectSSE();
 
     return () => {
+      isMounted = false;
       if (eventSource) {
         eventSource.close();
       }
@@ -365,6 +376,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     status: TaskStatus;
   }): Promise<Task> => {
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const currentTasks = tasksRef.current;
     // Optimistic task
     const tempTask: Task = {
       id: tempId,
@@ -374,7 +386,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       dueDate: data.dueDate,
       cognitiveLoad: data.cognitiveLoad,
       status: data.status,
-      order: tasks.filter(t => t.userId === data.userId && t.status === data.status).length,
+      order: currentTasks.filter(t => t.userId === data.userId && t.status === data.status).length,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -413,7 +425,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     return tempTask;
-  }, [tasks]);
+  }, []);
 
   // Task update
   const updateTask = useCallback(async (id: string, updates: Partial<Task>): Promise<Task> => {
@@ -450,8 +462,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       console.warn('Update task server call failed:', err);
     }
 
-    return updatedTask || (tasks.find(t => t.id === id) as Task);
-  }, [tasks]);
+    return updatedTask || (tasksRef.current.find(t => t.id === id) as Task);
+  }, []);
 
   // Task delete
   const deleteTask = useCallback(async (id: string): Promise<void> => {
@@ -473,7 +485,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     newStatus: TaskStatus,
     newIndex?: number
   ): Promise<void> => {
-    const task = tasks.find(t => t.id === taskId);
+    const currentTasks = tasksRef.current;
+    const task = currentTasks.find(t => t.id === taskId);
     if (!task) return;
 
     const isSameUser = task.userId === targetUserId;
@@ -482,7 +495,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     if (isSameUser && isSameStatus && newIndex === undefined) return;
 
     // Get current tasks in target column excluding the moving task
-    const targetUserTasksInStatus = tasks
+    const targetUserTasksInStatus = currentTasks
       .filter(t => t.userId === targetUserId && t.status === newStatus && t.id !== taskId)
       .sort((a, b) => a.order - b.order);
 
@@ -538,14 +551,14 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     } catch (err) {
       console.warn('Move task server call failed:', err);
     }
-  }, [tasks]);
+  }, []);
 
   // Direct task reassignment helper
   const reassignTask = useCallback(async (taskId: string, targetUserId: string): Promise<void> => {
-    const task = tasks.find(t => t.id === taskId);
+    const task = tasksRef.current.find(t => t.id === taskId);
     if (!task || task.userId === targetUserId) return;
     await moveTask(taskId, targetUserId, task.status);
-  }, [tasks, moveTask]);
+  }, [moveTask]);
 
   // Move task status and order (backwards compatible, delegates to moveTask)
   const moveTaskStatus = useCallback(async (
@@ -554,11 +567,11 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     newIndex?: number,
     targetUserId?: string
   ): Promise<void> => {
-    const task = tasks.find(t => t.id === taskId);
+    const task = tasksRef.current.find(t => t.id === taskId);
     if (!task) return;
     const destUser = targetUserId || task.userId;
     await moveTask(taskId, destUser, newStatus, newIndex);
-  }, [tasks, moveTask]);
+  }, [moveTask]);
 
   // Reorder tasks batch
   const reorderTasks = useCallback(async (updates: Array<TaskOrderUpdate>): Promise<void> => {

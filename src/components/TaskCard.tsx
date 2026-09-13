@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Task, TaskStatus } from '../types';
+import { Task, TaskStatus, Role } from '../types';
 import { getDuePillInfo, formatDateOnly, getCognitiveLoadLabel } from '../utils/workload';
 import { useDashboard } from '../context/DashboardContext';
 import {
@@ -16,6 +16,7 @@ import {
 
 interface TaskCardProps {
   task: Task;
+  userRole?: Role;
   onEdit: (task: Task) => void;
   onDelete: (taskId: string) => void;
   onMoveStatus: (taskId: string, newStatus: TaskStatus) => void;
@@ -26,6 +27,7 @@ const STATUS_SEQUENCE: TaskStatus[] = ['todo', 'in_progress', 'in_review', 'done
 
 export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   task,
+  userRole,
   onEdit,
   onDelete,
   onMoveStatus,
@@ -34,9 +36,9 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   const { setActiveDragInfo, users } = useDashboard();
   const [isDragging, setIsDragging] = useState(false);
 
-  const assignedUser = users.find(u => u.id === task.userId);
+  const resolvedRole = userRole || users.find(u => u.id === task.userId)?.role || 'content';
   const pillInfo = getDuePillInfo(task.dueDate);
-  const cognitiveLabel = getCognitiveLoadLabel(task.cognitiveLoad, assignedUser?.role || 'content');
+  const cognitiveLabel = getCognitiveLoadLabel(task.cognitiveLoad, resolvedRole);
 
   // Next and Prev status for single-click progression
   const currentIdx = STATUS_SEQUENCE.indexOf(task.status);

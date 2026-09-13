@@ -475,6 +475,7 @@ export const Swimlane: React.FC<SwimlaneProps> = React.memo(({
                             )}
                             <TaskCard
                               task={task}
+                              userRole={user.role}
                               onEdit={onEditTask}
                               onDelete={onDeleteTask}
                               onMoveStatus={(tId, newStat) => onMoveTask(tId, user.id, newStat)}
@@ -530,6 +531,7 @@ export const Swimlane: React.FC<SwimlaneProps> = React.memo(({
                       <TaskCard
                         key={task.id}
                         task={task}
+                        userRole={user.role}
                         onEdit={onEditTask}
                         onDelete={onDeleteTask}
                         onMoveStatus={(tId, newStat) => onMoveTask(tId, user.id, newStat)}

@@ -77,6 +77,26 @@ const DUMMY_TASK_IDS = new Set([
 let isWriting = false;
 let pendingSave: AppStore | null = null;
 let saveDebounceTimer: NodeJS.Timeout | null = null;
+let stateRevision = Date.now(); // Global revision identifier for ETag HTTP 304 validation
+
+function flushStoreSync() {
+  if (saveDebounceTimer) {
+    clearTimeout(saveDebounceTimer);
+    saveDebounceTimer = null;
+  }
+  if (pendingSave) {
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
+      fs.writeFileSync(DATA_FILE, JSON.stringify(pendingSave, null, 2), 'utf-8');
+      console.log('[Server Shutdown] In-flight store data flushed synchronously.');
+      pendingSave = null;
+    } catch (err) {
+      console.error('[Server Shutdown] Failed to flush store synchronously:', err);
+    }
+  }
+}
 
 function loadStore(): AppStore {
   try {
@@ -112,6 +132,7 @@ function loadStore(): AppStore {
 // Non-blocking debounced asynchronous persistence to prevent event loop bottlenecks
 function saveStore(storeToSave: AppStore) {
   pendingSave = storeToSave;
+  stateRevision = Date.now();
 
   if (saveDebounceTimer) {
     clearTimeout(saveDebounceTimer);
@@ -148,6 +169,38 @@ function sanitizeString(input: unknown): string {
     .trim()
     .replace(/[<>]/g, '') // Strip basic HTML tags
     .slice(0, 1000); // Enforce max string length boundary
+}
+
+// In-memory sliding-window rate limiter for sensitive mutation endpoints
+function createRateLimiter(maxRequests: number, windowMs: number) {
+  const records = new Map<string, number[]>();
+  return (req: Request, res: Response, next: () => void) => {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    const now = Date.now();
+    const timestamps = records.get(ip) || [];
+    const validTimestamps = timestamps.filter(t => now - t < windowMs);
+
+    if (validTimestamps.length >= maxRequests) {
+      res.setHeader('Retry-After', Math.ceil(windowMs / 1000));
+      return res.status(429).json({
+        error: 'Too many requests. Please wait a moment before trying again.',
+      });
+    }
+
+    validTimestamps.push(now);
+    records.set(ip, validTimestamps);
+
+    // Prune stale IP entries periodically
+    if (records.size > 500) {
+      for (const [key, list] of records.entries()) {
+        if (list.every(t => now - t >= windowMs)) {
+          records.delete(key);
+        }
+      }
+    }
+
+    next();
+  };
 }
 
 // In-memory active store
@@ -483,11 +536,16 @@ function broadcastEvent(type: string, payload: any) {
 
   const message = `event: update\ndata: ${eventData}\n\n`;
 
-  clients.forEach(client => {
+  // Actively prune dead or closed SSE sockets to eliminate memory leaks
+  clients = clients.filter(client => {
     try {
+      if (client.res.writableEnded || client.res.destroyed) {
+        return false;
+      }
       client.res.write(message);
+      return true;
     } catch {
-      // client disconnected
+      return false;
     }
   });
 }
@@ -522,6 +580,10 @@ async function startServer() {
 
   app.use(express.json({ limit: '1mb' }));
 
+  // Sliding-window rate limiters for sensitive endpoints (prevent DoS and quota depletion)
+  const authLimiter = createRateLimiter(20, 60 * 1000); // 20 login attempts per minute per IP
+  const firestoreLimiter = createRateLimiter(10, 60 * 1000); // 10 sync/credential submissions per minute per IP
+
   // Initialize and load database records from Firestore
   await syncFromFirestore();
 
@@ -531,9 +593,16 @@ async function startServer() {
     res.json({ status: 'ok', time: new Date().toISOString() });
   });
 
-  // API: Get entire state
+  // API: Get entire state with ETag conditional validation (HTTP 304 Not Modified)
   app.get('/api/state', (req: Request, res: Response) => {
+    const etag = `W/"zenflow-rev-${stateRevision}"`;
+    res.setHeader('ETag', etag);
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+
+    if (req.headers['if-none-match'] === etag) {
+      return res.status(304).end();
+    }
+
     res.json({
       users: store.users,
       tasks: store.tasks,
@@ -541,7 +610,7 @@ async function startServer() {
   });
 
   // API: Simple Login / Register with Name, Role, Email
-  app.post('/api/auth/login', (req: Request, res: Response) => {
+  app.post('/api/auth/login', authLimiter, (req: Request, res: Response) => {
     const { name, email, role } = req.body;
 
     if (!name || !email || !role) {
@@ -784,7 +853,7 @@ async function startServer() {
   });
 
   // API: Submit or update Firebase Service Account Key
-  app.post('/api/firestore/credentials', async (req: Request, res: Response) => {
+  app.post('/api/firestore/credentials', firestoreLimiter, async (req: Request, res: Response) => {
     try {
       const { serviceAccountKey } = req.body;
       if (!serviceAccountKey) {
@@ -821,7 +890,7 @@ async function startServer() {
   });
 
   // API: Force manual synchronization with Firestore
-  app.post('/api/firestore/sync', async (req: Request, res: Response) => {
+  app.post('/api/firestore/sync', firestoreLimiter, async (req: Request, res: Response) => {
     try {
       await syncFromFirestore();
       broadcastEvent('sync_all', { users: store.users, tasks: store.tasks });
@@ -904,9 +973,40 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const serverInstance = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Team Management Server running on port ${PORT}`);
   });
+
+  // Graceful shutdown traps for cloud containers (Railway, Cloud Run, Nixpacks)
+  const handleShutdown = (signal: string) => {
+    console.log(`[Process] Received ${signal}. Executing zero-loss graceful shutdown...`);
+    flushStoreSync();
+
+    // Cleanly close real-time SSE streams
+    clients.forEach(c => {
+      try {
+        c.res.write('event: shutdown\ndata: {"reason":"server_shutdown"}\n\n');
+        c.res.end();
+      } catch {
+        // ignore
+      }
+    });
+    clients = [];
+
+    serverInstance.close(() => {
+      console.log('[Process] HTTP server terminated cleanly.');
+      process.exit(0);
+    });
+
+    // Hard exit safeguard after 5s
+    setTimeout(() => {
+      console.warn('[Process] Forced exit after timeout.');
+      process.exit(0);
+    }, 5000);
+  };
+
+  process.on('SIGTERM', () => handleShutdown('SIGTERM'));
+  process.on('SIGINT', () => handleShutdown('SIGINT'));
 }
 
 startServer();

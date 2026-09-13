@@ -4,3 +4,5 @@ dist
 .env
 .env.local
 npm-debug.log*
+serviceAccountKey*.json
+data
