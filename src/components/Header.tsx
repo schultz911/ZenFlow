@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useDashboard } from '../context/DashboardContext';
-import { Role } from '../types';
 import {
   Sun,
   Moon,

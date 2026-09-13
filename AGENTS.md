@@ -6,6 +6,10 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ### 1. Discovered Optimizations
 
+### Sweep 7: 2026-09-13 (Definitive Codebase Sweep & Enterprise MVP Certification)
+- **SAN-05 (Dead Symbol Pruning):** Residual unconsumed declarations remained in client components: `isAdminConnected` in `src/components/FirestoreModal.tsx`, `Role` type import in `src/components/Header.tsx`, and `HelpCircle` icon import in `src/components/WorkloadModal.tsx`.
+- **SAN-06 (Engine Version Alignment):** In `package.json`, `engines.node` retained `">=20.0.0"` while `.node-version`, `.nvmrc`, `nixpacks.toml`, and `Dockerfile` pinned Node 22. Aligning `package.json` eliminates any potential engine ambiguity on PaaS platforms.
+
 ### Sweep 6: 2026-09-13 (Enterprise Virtual DOM & Container Engine Optimization)
 - **BUG-03 (High Availability Risk - Docker & NVM Engine Discrepancy):** In `Dockerfile`, `node:20-slim` was hardcoded for both builder and runner stages, and `.nvmrc`/`.node-version` retained `20`. Because `firebase-admin` 14 (`@google-cloud/firestore`) requires `node >= 22`, container images built via Docker, Google Cloud Run, or AWS ECS risked runtime boot crashes.
 - **PERF-08 (Frontend CPU & Frame-Rate - Context Subscription in TaskCard Neutralizing React.memo):** In `TaskCard.tsx`, `useDashboard()` was invoked across all cards solely for `setActiveDragInfo` and an unused `users` fallback. Because `tasks` is in the context dependency array, any task mutation in the workspace forced all 50+ cards to re-render, bypassing `React.memo(TaskCard)`.
@@ -50,6 +54,11 @@ This document records the complete lifecycle of architectural sweeps, discovered
 ---
 
 ## 2. Previously Suggested
+
+### Sweep 7: 2026-09-13 (Master Implementation Plan - Final Micro-Hygiene Sweep)
+- **Phase 1: Repository Micro-Hygiene & Dead Symbol Pruning**
+  - SAN-05: Remove unconsumed declarations (`isAdminConnected` in [FirestoreModal.tsx](file:///c:/ZenFlow/src/components/FirestoreModal.tsx), `Role` in [Header.tsx](file:///c:/ZenFlow/src/components/Header.tsx), `HelpCircle` in [WorkloadModal.tsx](file:///c:/ZenFlow/src/components/WorkloadModal.tsx)).
+  - SAN-06: Align `engines.node` in [package.json](file:///c:/ZenFlow/package.json) to `">=22.0.0"` to match container runtime specifications.
 
 ### Sweep 6: 2026-09-13 (Phase-Wise Master Implementation Plan)
 - **Phase 1: Production Cloud Runtime Hardening (Docker & NVM Engine Alignment)**
@@ -104,6 +113,10 @@ This document records the complete lifecycle of architectural sweeps, discovered
 ---
 
 ## 3. Approved and Implemented
+
+### Sweep 7: Definitive Codebase Sweep & Enterprise MVP Certification (Executed: 2026-09-13)
+- **SAN-05 (Executed):** Pruned unconsumed `isAdminConnected` from [FirestoreModal.tsx](file:///c:/ZenFlow/src/components/FirestoreModal.tsx), dead `Role` type import from [Header.tsx](file:///c:/ZenFlow/src/components/Header.tsx), and unused `HelpCircle` icon from [WorkloadModal.tsx](file:///c:/ZenFlow/src/components/WorkloadModal.tsx). Main application code chunk verified down to 91.12 kB (20.99 kB gzipped).
+- **SAN-06 (Executed):** Updated `engines.node` in [package.json](file:///c:/ZenFlow/package.json) to `">=22.0.0"`. Completely aligns package configuration with `.node-version` (22), `.nvmrc` (22), `nixpacks.toml` (`nodejs_22`), and `Dockerfile` (`node:22-slim`).
 
 ### Sweep 6: Enterprise Virtual DOM & Container Engine Optimization (Executed: 2026-09-13)
 - **BUG-03 (Executed):** Upgraded `Dockerfile` base image from `node:20-slim` to `node:22-slim` for both `builder` and `runner` stages, and pinned `.node-version` and `.nvmrc` to `22`. Completely aligns Docker, Cloud Run, Nixpacks, and developer environments with Node 22 (Active LTS) required by Firebase Admin SDK 14+.

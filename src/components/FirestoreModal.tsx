@@ -78,7 +78,6 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
   };
 
   const isConnected = firestoreStatus?.connected;
-  const isAdminConnected = isConnected && firestoreStatus?.mode === 'admin';
   const displayProject = firestoreStatus?.projectId || 'zen-flow-7173d';
 
   const modalContent = (

@@ -1,7 +1,7 @@
 import React from 'react';
 import { User, Task } from '../types';
 import { calculateUserWorkload, formatDueDate, getCognitiveLoadLabel } from '../utils/workload';
-import { X, HelpCircle } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface WorkloadModalProps {
   user: User | null;
