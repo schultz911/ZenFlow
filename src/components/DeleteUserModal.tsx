@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { User, Task } from '../types';
 import { AlertTriangle, Trash2, X, Loader2 } from 'lucide-react';
 
@@ -30,14 +30,28 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, isDeleting, onClose]);
 
+  const { userTasks, counts } = useMemo(() => {
+    if (!user) return { userTasks: [], counts: { todo: 0, in_progress: 0, in_review: 0, done: 0, archived: 0 } };
+    const list: Task[] = [];
+    const c = { todo: 0, in_progress: 0, in_review: 0, done: 0, archived: 0 };
+    for (const t of tasks) {
+      if (t.userId === user.id) {
+        list.push(t);
+        if (t.status in c) {
+          c[t.status as keyof typeof c]++;
+        }
+      }
+    }
+    return { userTasks: list, counts: c };
+  }, [tasks, user]);
+
   if (!isOpen || !user) return null;
 
-  const userTasks = tasks.filter(t => t.userId === user.id);
-  const todoCount = userTasks.filter(t => t.status === 'todo').length;
-  const inProgressCount = userTasks.filter(t => t.status === 'in_progress').length;
-  const inReviewCount = userTasks.filter(t => t.status === 'in_review').length;
-  const doneCount = userTasks.filter(t => t.status === 'done').length;
-  const archivedCount = userTasks.filter(t => t.status === 'archived').length;
+  const todoCount = counts.todo;
+  const inProgressCount = counts.in_progress;
+  const inReviewCount = counts.in_review;
+  const doneCount = counts.done;
+  const archivedCount = counts.archived;
 
   const handleDelete = async () => {
     try {

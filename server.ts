@@ -259,6 +259,19 @@ function findServiceAccount(): any | null {
     }
   }
 
+  // Check local service account file if uploaded via /api/firestore/credentials or present on disk
+  const localKeyPath = path.join(process.cwd(), 'serviceAccountKey.json');
+  if (fs.existsSync(localKeyPath)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(localKeyPath, 'utf-8'));
+      if (parsed.project_id && parsed.private_key && parsed.client_email) {
+        return parsed;
+      }
+    } catch (e) {
+      console.error('Failed to read service account key from serviceAccountKey.json:', e);
+    }
+  }
+
   return null;
 }
 
@@ -921,6 +934,11 @@ async function startServer() {
       return res.status(400).json({ error: 'userId and title are required' });
     }
 
+    const userExists = store.users.some(u => u.id === userId);
+    if (!userExists) {
+      return res.status(400).json({ error: 'User does not exist in workspace' });
+    }
+
     // Determine order: place at end of that status for this user
     const existingInStatus = store.tasks.filter(
       t => t.userId === userId && t.status === (status || 'todo')
@@ -963,6 +981,20 @@ async function startServer() {
 
     const currentTask = store.tasks[taskIndex];
     const { title, description, dueDate, cognitiveLoad, status, userId, order, completedAt: reqCompletedAt } = req.body;
+
+    if (title !== undefined) {
+      const cleanTitle = sanitizeString(title);
+      if (!cleanTitle) {
+        return res.status(400).json({ error: 'Task title cannot be empty' });
+      }
+    }
+
+    if (userId !== undefined && userId !== currentTask.userId) {
+      const userExists = store.users.some(u => u.id === userId);
+      if (!userExists) {
+        return res.status(400).json({ error: 'Target user does not exist in workspace' });
+      }
+    }
 
     let completedAt = reqCompletedAt !== undefined ? (reqCompletedAt ? sanitizeString(reqCompletedAt) : undefined) : currentTask.completedAt;
     if (status !== undefined) {
@@ -1018,12 +1050,18 @@ async function startServer() {
       return res.status(400).json({ error: 'updates array is required and must contain at most 500 items' });
     }
 
+    const taskMap = new Map<string, Task>();
+    for (const t of store.tasks) {
+      taskMap.set(t.id, t);
+    }
+
     const modifiedTasks: Task[] = [];
 
     for (const update of updates) {
-      const task = store.tasks.find(t => t.id === update.id);
+      if (!update || typeof update !== 'object' || !update.id) continue;
+      const task = taskMap.get(update.id);
       if (task) {
-        if (update.userId && typeof update.userId === 'string') {
+        if (update.userId && typeof update.userId === 'string' && store.users.some(u => u.id === update.userId)) {
           task.userId = update.userId;
         }
         if (update.status && ['todo', 'in_progress', 'in_review', 'done', 'archived'].includes(update.status)) {

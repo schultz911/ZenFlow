@@ -219,13 +219,22 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               {(() => {
                 const doneTimestamp = new Date(task.completedAt || task.updatedAt || task.createdAt).getTime();
                 const daysInDone = isNaN(doneTimestamp) ? 0 : Math.floor((Date.now() - doneTimestamp) / (1000 * 60 * 60 * 24));
-                const daysRemaining = Math.max(1, 7 - daysInDone);
+                const daysRemaining = 7 - daysInDone;
+                const isImminent = daysRemaining <= 0;
                 return (
                   <span
-                    title={`Auto-archives after 7 days (${daysRemaining} day${daysRemaining === 1 ? '' : 's'} left)`}
-                    className="text-[9px] text-green-600 dark:text-green-400/80 font-medium"
+                    title={
+                      isImminent
+                        ? 'Completed >= 7 days ago. Scheduled for immediate auto-archival.'
+                        : `Auto-archives after 7 days (${daysRemaining} day${daysRemaining === 1 ? '' : 's'} left)`
+                    }
+                    className={`text-[9px] font-medium ${
+                      isImminent
+                        ? 'text-amber-600 dark:text-amber-400 font-semibold animate-pulse'
+                        : 'text-green-600 dark:text-green-400/80'
+                    }`}
                   >
-                    Archive in {daysRemaining}d
+                    {isImminent ? 'Archiving soon' : `Archive in ${daysRemaining}d`}
                   </span>
                 );
               })()}

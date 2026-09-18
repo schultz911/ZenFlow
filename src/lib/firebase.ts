@@ -36,29 +36,42 @@ export async function getClientDb(): Promise<Firestore | null> {
   return null;
 }
 
+let inFlightStatusPromise: Promise<boolean> | null = null;
+
 /**
  * Validates connection to Firestore at app initialization (mandated by firebase-skill).
  * Uses server-side API verification first, falling back to on-demand dynamic client SDK only if needed.
+ * Deduplicates in-flight status requests to prevent redundant network egress on boot.
  */
 export async function testConnection(): Promise<boolean> {
-  try {
-    const res = await fetch('/api/firestore/status');
-    if (res.ok) {
-      const status = await res.json();
-      return !!status.connected;
-    }
-  } catch {
-    // ignore
-  }
+  if (inFlightStatusPromise) return inFlightStatusPromise;
 
-  try {
-    const clientDb = await getClientDb();
-    if (!clientDb) return false;
-    const { doc, getDocFromServer } = await import('firebase/firestore');
-    await getDocFromServer(doc(clientDb, 'test', 'connection'));
-    return true;
-  } catch {
-    // Fail silently without dumping unhandled errors to console
-    return false;
-  }
+  inFlightStatusPromise = (async () => {
+    try {
+      const res = await fetch('/api/firestore/status');
+      if (res.ok) {
+        const status = await res.json();
+        return !!status.connected;
+      }
+    } catch {
+      // ignore
+    }
+
+    try {
+      const clientDb = await getClientDb();
+      if (!clientDb) return false;
+      const { doc, getDocFromServer } = await import('firebase/firestore');
+      await getDocFromServer(doc(clientDb, 'test', 'connection'));
+      return true;
+    } catch {
+      // Fail silently without dumping unhandled errors to console
+      return false;
+    } finally {
+      setTimeout(() => {
+        inFlightStatusPromise = null;
+      }, 5000);
+    }
+  })();
+
+  return inFlightStatusPromise;
 }

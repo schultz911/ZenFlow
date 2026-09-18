@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { DashboardProvider, useDashboard } from './context/DashboardContext';
 import { Header } from './components/Header';
 import { OverviewBar } from './components/OverviewBar';
@@ -26,6 +26,8 @@ function DashboardContent() {
     users,
     tasks,
     activeRoleTab,
+    activeDragInfo,
+    setActiveDragInfo,
     moveTask,
     deleteTask,
     deleteUser,
@@ -61,22 +63,23 @@ function DashboardContent() {
 
   // Filter tasks by search query with deduplication - O(T + U) single pass
   const filteredTasks = useMemo(() => {
-    const map = new Map<string, Task>();
     const trimmed = searchQuery.trim().toLowerCase();
+    if (!trimmed) return tasks;
 
+    const map = new Map<string, Task>();
     for (const task of tasks) {
       if (!task || !task.id) continue;
-      if (trimmed) {
-        const matchesTitle = task.title.toLowerCase().includes(trimmed);
-        const matchesDesc = task.description ? task.description.toLowerCase().includes(trimmed) : false;
-        const userName = userNameMap.get(task.userId);
-        const matchesUser = userName ? userName.includes(trimmed) : false;
-        if (!matchesTitle && !matchesDesc && !matchesUser) continue;
-      }
+      const matchesTitle = task.title.toLowerCase().includes(trimmed);
+      const matchesDesc = task.description ? task.description.toLowerCase().includes(trimmed) : false;
+      const userName = userNameMap.get(task.userId);
+      const matchesUser = userName ? userName.includes(trimmed) : false;
+      if (!matchesTitle && !matchesDesc && !matchesUser) continue;
       map.set(task.id, task);
     }
     return Array.from(map.values());
   }, [tasks, searchQuery, userNameMap]);
+
+  const prevTasksByUserIdRef = useRef<Map<string, Task[]>>(new Map());
 
   // Partition tasks by userId with stable array references to prevent global Swimlane re-render cascades
   const tasksByUserId = useMemo(() => {
@@ -92,7 +95,25 @@ function DashboardContent() {
         partitioned.set(task.userId, [task]);
       }
     }
-    return partitioned;
+
+    const prevMap = prevTasksByUserIdRef.current;
+    const stablePartitioned = new Map<string, Task[]>();
+
+    for (const [uId, newList] of partitioned.entries()) {
+      const prevList = prevMap.get(uId);
+      if (
+        prevList &&
+        prevList.length === newList.length &&
+        prevList.every((t, i) => t === newList[i])
+      ) {
+        stablePartitioned.set(uId, prevList);
+      } else {
+        stablePartitioned.set(uId, newList);
+      }
+    }
+
+    prevTasksByUserIdRef.current = stablePartitioned;
+    return stablePartitioned;
   }, [users, filteredTasks]);
 
   // Global keyboard shortcut listeners
@@ -159,6 +180,22 @@ function DashboardContent() {
     setUserToDelete(u);
   }, []);
 
+  const handleDragTaskStart = useCallback(
+    (draggedTask: Task) => {
+      setActiveDragInfo({
+        taskId: draggedTask.id,
+        sourceUserId: draggedTask.userId,
+        sourceStatus: draggedTask.status,
+        title: draggedTask.title,
+      });
+    },
+    [setActiveDragInfo]
+  );
+
+  const handleDragTaskEnd = useCallback(() => {
+    setActiveDragInfo(null);
+  }, [setActiveDragInfo]);
+
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-[#0A0A0A] text-neutral-900 dark:text-[#E5E5E5] font-sans antialiased selection:bg-blue-500/30 selection:text-white transition-colors">
       {/* Sticky Top Header */}
@@ -209,6 +246,9 @@ function DashboardContent() {
                 key={user.id}
                 user={user}
                 tasks={tasksByUserId.get(user.id) || EMPTY_TASKS}
+                activeDragInfo={activeDragInfo}
+                onDragTaskStart={handleDragTaskStart}
+                onDragTaskEnd={handleDragTaskEnd}
                 onAddTask={handleOpenAddTask}
                 onEditTask={handleEditTask}
                 onDeleteTask={deleteTask}
