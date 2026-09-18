@@ -22,6 +22,7 @@ export interface Task {
   cognitiveLoad: CognitiveLoad;
   status: TaskStatus;
   order: number;
+  completedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -75,6 +76,7 @@ export interface TaskOrderUpdate {
 export type RealtimeEventType = 
   | 'user_created'
   | 'user_updated'
+  | 'user_deleted'
   | 'task_created'
   | 'task_updated'
   | 'task_deleted'

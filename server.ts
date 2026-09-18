@@ -34,6 +34,7 @@ interface Task {
   cognitiveLoad: 'low' | 'medium' | 'high';
   status: 'todo' | 'in_progress' | 'in_review' | 'done' | 'archived';
   order: number;
+  completedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -49,7 +50,15 @@ const DATA_DIR = path.join(process.cwd(), 'data');
 const DATA_FILE = path.join(DATA_DIR, 'store.json');
 
 // Auto-detect production mode if running compiled dist artifact or in container environments
-if (!process.env.NODE_ENV && (__filename.includes('dist') || !__filename.endsWith('.ts'))) {
+let currentFile = '';
+try {
+  if (typeof __filename !== 'undefined') {
+    currentFile = __filename;
+  }
+} catch {
+  // ESM fallback
+}
+if (!process.env.NODE_ENV && (currentFile.includes('dist') || (!currentFile.endsWith('.ts') && !currentFile.includes('server.ts')))) {
   process.env.NODE_ENV = 'production';
 }
 
@@ -405,6 +414,51 @@ async function dbDeleteTask(taskId: string) {
   }
 }
 
+async function dbDeleteUser(userId: string) {
+  try {
+    if (!adminDb && !webDb) await initFirestore();
+    if (adminDb) {
+      await adminDb.collection('users').doc(userId).delete();
+      firestoreLastError = null;
+    } else if (webDb) {
+      await deleteDoc(doc(webDb, 'users', userId));
+      firestoreLastError = null;
+    }
+  } catch (err: any) {
+    firestoreLastError = err.message || String(err);
+    console.error('[Firestore Delete User Error]:', firestoreLastError);
+  }
+}
+
+async function dbBatchDeleteTasks(taskIds: string[]) {
+  if (taskIds.length === 0) return;
+  try {
+    if (!adminDb && !webDb) await initFirestore();
+    const CHUNK_SIZE = 500;
+    for (let i = 0; i < taskIds.length; i += CHUNK_SIZE) {
+      const chunk = taskIds.slice(i, i + CHUNK_SIZE);
+      if (adminDb) {
+        const batch = adminDb.batch();
+        for (const id of chunk) {
+          batch.delete(adminDb.collection('tasks').doc(id));
+        }
+        await batch.commit();
+        firestoreLastError = null;
+      } else if (webDb) {
+        const batch = writeBatch(webDb);
+        for (const id of chunk) {
+          batch.delete(doc(webDb, 'tasks', id));
+        }
+        await batch.commit();
+        firestoreLastError = null;
+      }
+    }
+  } catch (err: any) {
+    firestoreLastError = err.message || String(err);
+    console.error('[Firestore Batch Delete Tasks Error]:', firestoreLastError);
+  }
+}
+
 async function dbBatchSaveUsers(users: User[]) {
   if (users.length === 0) return;
   try {
@@ -592,6 +646,43 @@ function broadcastEvent(type: string, payload: any) {
   });
 }
 
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+
+function autoArchiveDoneTasks(): boolean {
+  const now = Date.now();
+  let changed = false;
+  const newlyArchived: Task[] = [];
+
+  for (const task of store.tasks) {
+    if (task.status === 'done') {
+      const completionTime = task.completedAt
+        ? new Date(task.completedAt).getTime()
+        : new Date(task.updatedAt || task.createdAt).getTime();
+
+      if (!isNaN(completionTime) && now - completionTime >= SEVEN_DAYS_MS) {
+        task.status = 'archived';
+        task.updatedAt = new Date().toISOString();
+        changed = true;
+        newlyArchived.push(task);
+      }
+    }
+  }
+
+  if (changed) {
+    saveStore(store);
+    dbBatchSaveTasks(newlyArchived).catch(e =>
+      console.error('[Auto-Archive] Firestore batch save error:', e)
+    );
+    broadcastEvent('tasks_reordered', newlyArchived);
+    console.log(`[Auto-Archive] Automatically archived ${newlyArchived.length} completed task(s) older than 7 days.`);
+  }
+
+  return changed;
+}
+
+// Background sweep running every hour
+setInterval(autoArchiveDoneTasks, 60 * 60 * 1000).unref();
+
 async function startServer() {
   const app = express();
 
@@ -636,6 +727,7 @@ async function startServer() {
 
   // Initialize and load database records from Firestore
   await syncFromFirestore();
+  autoArchiveDoneTasks();
 
   // API: Health check
   app.get('/api/health', (req: Request, res: Response) => {
@@ -645,6 +737,7 @@ async function startServer() {
 
   // API: Get entire state with ETag conditional validation (HTTP 304 Not Modified)
   app.get('/api/state', (req: Request, res: Response) => {
+    autoArchiveDoneTasks();
     const etag = `W/"zenflow-rev-${stateRevision}"`;
     res.setHeader('ETag', etag);
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
@@ -768,8 +861,46 @@ async function startServer() {
     res.status(201).json(newUser);
   });
 
+  // API: Delete a user and all tasks associated with them
+  app.delete('/api/users/:id', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const userIndex = store.users.findIndex(u => u.id === id);
+
+    if (userIndex === -1) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const removedUser = store.users.splice(userIndex, 1)[0];
+
+    // Collect and remove all tasks belonging to this user
+    const deletedTaskIds: string[] = [];
+    store.tasks = store.tasks.filter(t => {
+      if (t.userId === id) {
+        deletedTaskIds.push(t.id);
+        return false;
+      }
+      return true;
+    });
+
+    saveStore(store);
+
+    // Asynchronously delete user and tasks from Firestore if connected
+    dbDeleteUser(removedUser.id).catch(e => console.error('Firestore user delete err:', e));
+    if (deletedTaskIds.length > 0) {
+      dbBatchDeleteTasks(deletedTaskIds).catch(e => console.error('Firestore batch delete tasks err:', e));
+    }
+
+    broadcastEvent('user_deleted', { id: removedUser.id, taskIds: deletedTaskIds });
+    res.json({
+      success: true,
+      deletedUser: removedUser,
+      deletedTaskCount: deletedTaskIds.length,
+    });
+  });
+
   // API: Get all tasks with ETag conditional validation (HTTP 304 Not Modified)
   app.get('/api/tasks', (req: Request, res: Response) => {
+    autoArchiveDoneTasks();
     const etag = `W/"zenflow-tasks-${stateRevision}"`;
     res.setHeader('ETag', etag);
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
@@ -796,6 +927,9 @@ async function startServer() {
     );
     const maxOrder = existingInStatus.reduce((max, t) => Math.max(max, t.order ?? 0), -1);
 
+    const cleanStatus = ['todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : 'todo';
+    const isDone = cleanStatus === 'done';
+
     const newTask: Task = {
       id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       userId,
@@ -803,8 +937,9 @@ async function startServer() {
       description: description ? sanitizeString(description) : undefined,
       dueDate: dueDate ? sanitizeString(dueDate) : undefined,
       cognitiveLoad: ['low', 'medium', 'high'].includes(cognitiveLoad) ? cognitiveLoad : 'medium',
-      status: ['todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : 'todo',
+      status: cleanStatus,
       order: maxOrder + 1,
+      completedAt: isDone ? new Date().toISOString() : undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -827,7 +962,16 @@ async function startServer() {
     }
 
     const currentTask = store.tasks[taskIndex];
-    const { title, description, dueDate, cognitiveLoad, status, userId, order } = req.body;
+    const { title, description, dueDate, cognitiveLoad, status, userId, order, completedAt: reqCompletedAt } = req.body;
+
+    let completedAt = reqCompletedAt !== undefined ? (reqCompletedAt ? sanitizeString(reqCompletedAt) : undefined) : currentTask.completedAt;
+    if (status !== undefined) {
+      if (status === 'done' && currentTask.status !== 'done' && !reqCompletedAt) {
+        completedAt = new Date().toISOString();
+      } else if (status !== 'done') {
+        completedAt = undefined;
+      }
+    }
 
     const updatedTask: Task = {
       ...currentTask,
@@ -838,6 +982,7 @@ async function startServer() {
       status: status && ['todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : currentTask.status,
       userId: userId || currentTask.userId,
       order: typeof order === 'number' ? order : currentTask.order,
+      completedAt,
       updatedAt: new Date().toISOString(),
     };
 
@@ -882,6 +1027,11 @@ async function startServer() {
           task.userId = update.userId;
         }
         if (update.status && ['todo', 'in_progress', 'in_review', 'done', 'archived'].includes(update.status)) {
+          if (update.status === 'done' && task.status !== 'done') {
+            task.completedAt = new Date().toISOString();
+          } else if (update.status !== 'done') {
+            task.completedAt = undefined;
+          }
           task.status = update.status;
         }
         if (typeof update.order === 'number') {

@@ -7,6 +7,7 @@ import { LoginModal } from './components/LoginModal';
 import { TaskModal } from './components/TaskModal';
 import { WorkloadModal } from './components/WorkloadModal';
 import { FirestoreModal } from './components/FirestoreModal';
+import { DeleteUserModal } from './components/DeleteUserModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { User, Task, TaskStatus } from './types';
 import { UserPlus, FileText, Palette } from 'lucide-react';
@@ -27,6 +28,7 @@ function DashboardContent() {
     activeRoleTab,
     moveTask,
     deleteTask,
+    deleteUser,
   } = useDashboard();
 
   // Modals state
@@ -38,6 +40,7 @@ function DashboardContent() {
   const [defaultTaskStatus, setDefaultTaskStatus] = useState<TaskStatus | undefined>('todo');
   const [workloadModalUser, setWorkloadModalUser] = useState<User | null>(null);
   const [firestoreModalOpen, setFirestoreModalOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -101,6 +104,7 @@ function DashboardContent() {
         setTaskModalOpen(false);
         setWorkloadModalUser(null);
         setFirestoreModalOpen(false);
+        setUserToDelete(null);
       }
 
       // Ctrl+N / Cmd+N: Quick create task
@@ -149,6 +153,10 @@ function DashboardContent() {
 
   const handleOpenWorkloadModal = useCallback((u: User) => {
     setWorkloadModalUser(u);
+  }, []);
+
+  const handleOpenDeleteUser = useCallback((u: User) => {
+    setUserToDelete(u);
   }, []);
 
   return (
@@ -204,6 +212,7 @@ function DashboardContent() {
                 onAddTask={handleOpenAddTask}
                 onEditTask={handleEditTask}
                 onDeleteTask={deleteTask}
+                onDeleteUser={handleOpenDeleteUser}
                 onMoveTask={moveTask}
                 onOpenWorkloadModal={handleOpenWorkloadModal}
                 isCurrentUser={currentUser?.id === user.id}
@@ -233,6 +242,14 @@ function DashboardContent() {
         user={workloadModalUser}
         tasks={tasks}
         onClose={() => setWorkloadModalUser(null)}
+      />
+
+      <DeleteUserModal
+        isOpen={Boolean(userToDelete)}
+        user={userToDelete}
+        tasks={tasks}
+        onClose={() => setUserToDelete(null)}
+        onConfirmDelete={deleteUser}
       />
 
       <FirestoreModal

@@ -43,6 +43,7 @@ interface DashboardContextType {
   }) => Promise<Task>;
   updateTask: (id: string, updates: Partial<Task>) => Promise<Task>;
   deleteTask: (id: string) => Promise<void>;
+  deleteUser: (userId: string) => Promise<void>;
   moveTask: (taskId: string, targetUserId: string, newStatus: TaskStatus, newIndex?: number) => Promise<void>;
   reassignTask: (taskId: string, targetUserId: string) => Promise<void>;
   moveTaskStatus: (taskId: string, newStatus: TaskStatus, newIndex?: number, targetUserId?: string) => Promise<void>;
@@ -171,9 +172,22 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
           });
         }
         if (Array.isArray(data.tasks)) {
+          const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
+          const now = Date.now();
           const taskMap = new Map<string, Task>();
           for (const t of data.tasks) {
-            if (t && t.id) taskMap.set(t.id, t);
+            if (t && t.id) {
+              if (t.status === 'done') {
+                const doneTime = t.completedAt
+                  ? new Date(t.completedAt).getTime()
+                  : new Date(t.updatedAt || t.createdAt).getTime();
+                if (!isNaN(doneTime) && now - doneTime >= SEVEN_DAYS) {
+                  t.status = 'archived';
+                  t.updatedAt = new Date().toISOString();
+                }
+              }
+              taskMap.set(t.id, t);
+            }
           }
           setTasks(Array.from(taskMap.values()));
         }
@@ -226,6 +240,11 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
             } else if (type === 'user_updated') {
               setUsers(prev => prev.map(u => (u.id === payload.id ? payload : u)));
               setCurrentUser(prev => (prev?.id === payload.id ? payload : prev));
+            } else if (type === 'user_deleted') {
+              const deletedUserId = payload.id;
+              setUsers(prev => prev.filter(u => u.id !== deletedUserId));
+              setTasks(prev => prev.filter(t => t.userId !== deletedUserId));
+              setCurrentUser(prev => (prev?.id === deletedUserId ? null : prev));
             } else if (type === 'task_created') {
               setTasks(prev => {
                 const map = new Map<string, Task>();
@@ -377,6 +396,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   }): Promise<Task> => {
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const currentTasks = tasksRef.current;
+    const isCompleted = data.status === 'done';
+    const now = new Date().toISOString();
     // Optimistic task
     const tempTask: Task = {
       id: tempId,
@@ -387,8 +408,9 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       cognitiveLoad: data.cognitiveLoad,
       status: data.status,
       order: currentTasks.filter(t => t.userId === data.userId && t.status === data.status).length,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      completedAt: isCompleted ? now : undefined,
+      createdAt: now,
+      updatedAt: now,
     };
 
     setTasks(prev => {
@@ -434,7 +456,15 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       const map = new Map<string, Task>();
       for (const t of prev) {
         if (t.id === id) {
-          updatedTask = { ...t, ...updates, updatedAt: new Date().toISOString() };
+          let completedAt = t.completedAt;
+          if (updates.status !== undefined) {
+            if (updates.status === 'done' && t.status !== 'done') {
+              completedAt = new Date().toISOString();
+            } else if (updates.status !== 'done') {
+              completedAt = undefined;
+            }
+          }
+          updatedTask = { ...t, ...updates, completedAt, updatedAt: new Date().toISOString() };
           map.set(t.id, updatedTask);
         } else {
           map.set(t.id, t);
@@ -478,6 +508,27 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, []);
 
+  // User delete (cascade delete user and all their tasks)
+  const deleteUser = useCallback(async (userId: string): Promise<void> => {
+    // Optimistically remove user and their tasks
+    setUsers(prev => prev.filter(u => u.id !== userId));
+    setTasks(prev => prev.filter(t => t.userId !== userId));
+    setCurrentUser(prev => {
+      if (prev?.id === userId) {
+        return null;
+      }
+      return prev;
+    });
+
+    try {
+      await fetch(`/api/users/${userId}`, {
+        method: 'DELETE',
+      });
+    } catch (err) {
+      console.warn('Delete user server call failed:', err);
+    }
+  }, []);
+
   // Move task across users and/or statuses with order index normalization
   const moveTask = useCallback(async (
     taskId: string,
@@ -505,6 +556,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         : targetUserTasksInStatus.length;
 
     const now = new Date().toISOString();
+    const isCompleted = newStatus === 'done';
+    const completedAt = isCompleted
+      ? task.completedAt || now
+      : undefined;
 
     // Prepare full batch updates so order numbers are strictly sorted
     const reorderedTargetTasks = [...targetUserTasksInStatus];
@@ -513,6 +568,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       userId: targetUserId,
       status: newStatus,
       order: targetOrder,
+      completedAt,
       updatedAt: now,
     };
     reorderedTargetTasks.splice(targetOrder, 0, movedTaskUpdated);
@@ -535,6 +591,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
             userId: u.userId || t.userId,
             status: u.status,
             order: u.order,
+            completedAt,
             updatedAt: now,
           };
         }
@@ -582,11 +639,14 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       prev.map(t => {
         const u = updateMap.get(t.id);
         if (u) {
+          const isDone = u.status === 'done';
+          const completedAt = isDone ? t.completedAt || now : undefined;
           return {
             ...t,
             userId: u.userId || t.userId,
             status: u.status,
             order: u.order,
+            completedAt,
             updatedAt: now,
           };
         }
@@ -658,6 +718,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       createTask,
       updateTask,
       deleteTask,
+      deleteUser,
       moveTask,
       reassignTask,
       moveTaskStatus,
@@ -682,6 +743,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       createTask,
       updateTask,
       deleteTask,
+      deleteUser,
       moveTask,
       reassignTask,
       moveTaskStatus,

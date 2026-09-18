@@ -16,6 +16,7 @@ import {
   Activity,
   UserCheck,
   ArrowDownToLine,
+  Trash2,
 } from 'lucide-react';
 
 interface SwimlaneProps {
@@ -24,6 +25,7 @@ interface SwimlaneProps {
   onAddTask: (userId: string, status?: TaskStatus) => void;
   onEditTask: (task: Task) => void;
   onDeleteTask: (taskId: string) => void;
+  onDeleteUser?: (user: User) => void;
   onMoveTask: (taskId: string, targetUserId: string, newStatus: TaskStatus, newIndex?: number) => void;
   onOpenWorkloadModal: (user: User) => void;
   isCurrentUser: boolean;
@@ -74,6 +76,7 @@ export const Swimlane: React.FC<SwimlaneProps> = React.memo(({
   onAddTask,
   onEditTask,
   onDeleteTask,
+  onDeleteUser,
   onMoveTask,
   onOpenWorkloadModal,
   isCurrentUser,
@@ -390,6 +393,18 @@ export const Swimlane: React.FC<SwimlaneProps> = React.memo(({
             <span>Add Task</span>
           </button>
 
+          {/* Delete User Button */}
+          {onDeleteUser && (
+            <button
+              id={`delete-user-btn-${user.id}`}
+              onClick={() => onDeleteUser(user)}
+              title={`Delete ${user.name} and all associated tasks`}
+              className="flex items-center justify-center rounded-xl p-2 text-neutral-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 border border-neutral-200/60 dark:border-white/5 hover:border-red-500/20 transition-all cursor-pointer"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+
           {/* Archived Toggle button if archived tasks exist */}
           {archivedTasks.length > 0 && (
             <button
@@ -465,8 +480,8 @@ export const Swimlane: React.FC<SwimlaneProps> = React.memo(({
                   </motion.div>
                 )}
 
-                {/* Tasks List */}
-                <div className="flex-1 space-y-2.5">
+                {/* Tasks List (displays top 3 tasks comfortably, scrolls beyond 3 without expanding swimlane board) */}
+                <div className="flex-1 space-y-2.5 max-h-[385px] overflow-y-auto pr-1">
                   <AnimatePresence mode="popLayout">
                     {columnTasks.length === 0 ? (
                       <motion.div
@@ -560,7 +575,8 @@ export const Swimlane: React.FC<SwimlaneProps> = React.memo(({
                 </div>
               </div>
 
-              <div className="flex-1 space-y-2.5">
+              {/* Archived Tasks List (aligned with 3-task max height) */}
+              <div className="flex-1 space-y-2.5 max-h-[385px] overflow-y-auto pr-1">
                 <AnimatePresence mode="popLayout">
                   {archivedTasks.length === 0 ? (
                     <motion.div

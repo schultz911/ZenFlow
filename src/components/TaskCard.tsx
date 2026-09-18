@@ -215,17 +215,32 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               <ChevronRight className="h-2.5 w-2.5" />
             </button>
           ) : task.status === 'done' ? (
-            <button
-              onClick={e => {
-                e.stopPropagation();
-                onMoveStatus(task.id, 'archived');
-              }}
-              title="Archive this completed task"
-              className="inline-flex items-center gap-1 rounded-md bg-neutral-100 dark:bg-white/5 hover:bg-neutral-200 dark:hover:bg-white/10 border border-neutral-200 dark:border-white/10 px-1.5 py-0.5 text-[10px] text-neutral-500 dark:text-white/40 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
-            >
-              <Archive className="h-2.5 w-2.5" />
-              <span>Archive</span>
-            </button>
+            <div className="flex items-center gap-1.5">
+              {(() => {
+                const doneTimestamp = new Date(task.completedAt || task.updatedAt || task.createdAt).getTime();
+                const daysInDone = isNaN(doneTimestamp) ? 0 : Math.floor((Date.now() - doneTimestamp) / (1000 * 60 * 60 * 24));
+                const daysRemaining = Math.max(1, 7 - daysInDone);
+                return (
+                  <span
+                    title={`Auto-archives after 7 days (${daysRemaining} day${daysRemaining === 1 ? '' : 's'} left)`}
+                    className="text-[9px] text-green-600 dark:text-green-400/80 font-medium"
+                  >
+                    Archive in {daysRemaining}d
+                  </span>
+                );
+              })()}
+              <button
+                onClick={e => {
+                  e.stopPropagation();
+                  onMoveStatus(task.id, 'archived');
+                }}
+                title="Archive now"
+                className="inline-flex items-center gap-1 rounded-md bg-neutral-100 dark:bg-white/5 hover:bg-neutral-200 dark:hover:bg-white/10 border border-neutral-200 dark:border-white/10 px-1.5 py-0.5 text-[10px] text-neutral-500 dark:text-white/40 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+              >
+                <Archive className="h-2.5 w-2.5" />
+                <span>Archive</span>
+              </button>
+            </div>
           ) : null}
         </div>
       </div>

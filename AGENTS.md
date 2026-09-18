@@ -6,6 +6,11 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ### 1. Discovered Optimizations
 
+### Sweep 8: 2026-09-19 (User Cascade Deletion, 7-Day Done Auto-Archive, & Swimlane Dimension Capping)
+- **FEAT-01 (User & Task Cascade Deletion):** Implemented `DELETE /api/users/:id` endpoint with Firestore batch deletion, SSE real-time broadcast (`user_deleted`), and interactive safety confirmation modal `DeleteUserModal.tsx` in the frontend UI.
+- **FEAT-02 (Done 7-Day Auto-Archive Lifecycle):** Introduced `completedAt` timestamp tracking on tasks entering `'done'` status, backed by an automated server sweep `autoArchiveDoneTasks()` running on startup, hourly intervals, and `/api/state` requests, with an informative UI countdown indicator on completed cards.
+- **FEAT-03 (Swimlane 3-Task Height Cap with Internal Scrolling):** Constrained column tasks lists to `max-h-[385px] overflow-y-auto` across all status columns (including Archived), displaying up to 3 cards comfortably before enabling smooth internal scrolling without vertically enlarging the swimlane board.
+
 ### Sweep 7: 2026-09-13 (Definitive Codebase Sweep & Enterprise MVP Certification)
 - **SAN-05 (Dead Symbol Pruning):** Residual unconsumed declarations remained in client components: `isAdminConnected` in `src/components/FirestoreModal.tsx`, `Role` type import in `src/components/Header.tsx`, and `HelpCircle` icon import in `src/components/WorkloadModal.tsx`.
 - **SAN-06 (Engine Version Alignment):** In `package.json`, `engines.node` retained `">=20.0.0"` while `.node-version`, `.nvmrc`, `nixpacks.toml`, and `Dockerfile` pinned Node 22. Aligning `package.json` eliminates any potential engine ambiguity on PaaS platforms.
@@ -113,6 +118,11 @@ This document records the complete lifecycle of architectural sweeps, discovered
 ---
 
 ## 3. Approved and Implemented
+
+### Sweep 8: User Cascade Deletion, 7-Day Done Auto-Archive, & Swimlane Height Capping (Executed: 2026-09-19)
+- **FEAT-01 (Executed):** Created `DELETE /api/users/:id` in `server.ts` with atomic local store prune, Firestore `dbDeleteUser` and `dbBatchDeleteTasks` execution, and `user_deleted` SSE broadcast. Added `DeleteUserModal.tsx` and trash trigger in `Swimlane.tsx`.
+- **FEAT-02 (Executed):** Added `completedAt?: string` to `Task` across backend and frontend. Implemented `autoArchiveDoneTasks()` in `server.ts` with 7-day threshold ($604,800,000$ ms), and added auto-archive remaining days indicator pill in `TaskCard.tsx`.
+- **FEAT-03 (Executed):** Styled `Swimlane.tsx` columns with `max-h-[385px] overflow-y-auto pr-1` and refined custom sleek scrollbars in `src/index.css`, preventing board enlargement when more than 3 tasks exist in any column.
 
 ### Sweep 7: Definitive Codebase Sweep & Enterprise MVP Certification (Executed: 2026-09-13)
 - **SAN-05 (Executed):** Pruned unconsumed `isAdminConnected` from [FirestoreModal.tsx](file:///c:/ZenFlow/src/components/FirestoreModal.tsx), dead `Role` type import from [Header.tsx](file:///c:/ZenFlow/src/components/Header.tsx), and unused `HelpCircle` icon from [WorkloadModal.tsx](file:///c:/ZenFlow/src/components/WorkloadModal.tsx). Main application code chunk verified down to 91.12 kB (20.99 kB gzipped).
