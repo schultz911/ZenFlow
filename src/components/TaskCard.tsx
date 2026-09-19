@@ -329,7 +329,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         </p>
       )}
 
-      {/* Bottom Row: Due date (with proximity color chip & snooze flyout) & quick status stepper */}
+      {/* Bottom Row: Due date (clean text without chip & snooze flyout) & quick status stepper */}
       <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-neutral-100 dark:border-white/5 pt-2">
         <div className="relative" ref={snoozeRef}>
           <button
@@ -338,10 +338,10 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               e.stopPropagation();
               setShowSnoozeFlyout(prev => !prev);
             }}
-            title={`${pillInfo.label} — Click to quick-reschedule`}
-            className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-0.5 text-[10px] font-medium border transition-all cursor-pointer ${pillInfo.badgeClass}`}
+            title="Click to adjust deadline"
+            className="inline-flex items-center gap-1.5 text-[10px] font-medium text-neutral-500 dark:text-white/40 hover:text-neutral-800 dark:hover:text-white/90 transition-colors cursor-pointer py-0.5"
           >
-            <Calendar className={`h-3 w-3 ${pillInfo.iconClass} shrink-0`} />
+            <Calendar className="h-3 w-3 text-neutral-400 dark:text-white/30 shrink-0" />
             <span>{formatDateOnly(task.dueDate)}</span>
           </button>
 

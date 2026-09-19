@@ -10,6 +10,7 @@ import { FirestoreModal } from './components/FirestoreModal';
 import { DeleteUserModal } from './components/DeleteUserModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MarqueeRibbon } from './components/MarqueeRibbon';
+import { UnscheduledTasksRibbon } from './components/UnscheduledTasksRibbon';
 import { User, Task, TaskStatus } from './types';
 import { UserPlus, FileText, Palette } from 'lucide-react';
 import { testConnection } from './lib/firebase';
@@ -235,6 +236,15 @@ function DashboardContent() {
         tasks={tasks}
         users={users}
         onTaskClick={handleEditTask}
+      />
+
+      {/* Unscheduled Tasks Prompt Ribbon (Prompts ONLY the logged in user) */}
+      <UnscheduledTasksRibbon
+        currentUser={currentUser}
+        tasks={tasks}
+        users={users}
+        onTaskClick={handleEditTask}
+        onReschedule={handleRescheduleTask}
       />
 
       {/* Main Container */}

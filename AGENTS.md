@@ -6,6 +6,10 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ### 1. Discovered Optimizations
 
+### Sweep 13: 2026-09-19 (Task Due Date Visual Simplification & Logged-In User Unscheduled Tasks Ribbon)
+- **VIS-06 (Visual Redundancy - Dual Color Chips for Task Due Dates):** `TaskCard.tsx` featured both a circular deadline badge (Clock icon with proximity urgency coloring) at the top of the card and a second bordered, color-filled chip at the bottom. This produced unnecessary chromatic clutter. The bottom date was converted to clean, minimal text with a calendar icon, retaining the click-to-reschedule popover while preserving the top circular badge as the single authoritative urgency indicator.
+- **FEAT-07 (Proactive Deadline Management - Logged-In User Unscheduled Tasks Ribbon):** Added `UnscheduledTasksRibbon.tsx` mounted directly below `MarqueeRibbon.tsx` in `App.tsx`. Gated strictly to authenticated sessions (`if (!currentUser) return null;`), this ribbon proactively alerts the logged-in user to tasks lacking deadlines, provides a smooth-scrolling ticker with pause-on-hover, direct "+ Set" datepicker popovers, and seamless scope toggling between personal and workspace-wide unscheduled tasks.
+
 ### Sweep 12: 2026-09-19 (Card Animation De-jittering & Scrollport Clipping Remediation)
 - **VIS-05 (Visual Defect - Topmost Card Upper Border Clipped on Hover):** In `Swimlane.tsx`, the column task list containers declared `overflow-y-auto pr-1` with 0px top padding. Combined with Framer Motion's `whileHover={{ y: -1 }}` on `TaskCard.tsx`, hovering over the topmost card translated its upper border 1px into the negative overflow boundary, causing the top border and box shadow to be clipped by the browser.
 - **PERF-16 (Motion Jitter & Stutter - Layout Projection Conflict & Uncoordinated List Exit):** `TaskCard.tsx` declared both `layout` and redundant `layoutId={`task-${task.id}`}` alongside `whileHover={{ y: -1 }}` and high-stiffness spring transitions. Motion's layout projection engine detected fractional translateY movements and computed inverted correction deltas on every frame, generating high-frequency visual stutter and mouse-boundary fluttering. In addition, task items in `Swimlane.tsx` were wrapped in static `<div>` containers within `<AnimatePresence mode="popLayout">`, breaking smooth exit transitions and causing reordering cards to snap abruptly.
@@ -88,6 +92,12 @@ This document records the complete lifecycle of architectural sweeps, discovered
 ---
 
 ## 2. Previously Suggested
+
+### Sweep 13: 2026-09-19 (Task Due Date Visual Simplification & Logged-In User Unscheduled Tasks Ribbon)
+- **Phase 1: Date Chip Styling De-duplication**
+  - VIS-06: Updated bottom date in [TaskCard.tsx](file:///c:/ZenFlow/src/components/TaskCard.tsx) to remove border, background, and proximity tier colors, presenting clean date typography while retaining portal flyout interactions.
+- **Phase 2: Logged-In User Unscheduled Tasks Prompt Ribbon**
+  - FEAT-07: Implemented [UnscheduledTasksRibbon.tsx](file:///c:/ZenFlow/src/components/UnscheduledTasksRibbon.tsx) and mounted in [App.tsx](file:///c:/ZenFlow/src/App.tsx) with personal greeting, dynamic marquee overflow detection, and portal-based inline deadline assignment.
 
 ### Sweep 12: 2026-09-19 (Card Animation De-jittering & Scrollport Clipping Remediation)
 - **Phase 1: Scrollport Boundary Protection & Anti-Clipping Clearance**
