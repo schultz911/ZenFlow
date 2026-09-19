@@ -24,35 +24,13 @@ export const UnscheduledTasksRibbon: React.FC<UnscheduledTasksRibbonProps> = Rea
   const contentRef = useRef<HTMLDivElement>(null);
   const [shouldScroll, setShouldScroll] = useState(false);
 
-  // Active unscheduled tasks (excluding done/archived)
-  const allUnscheduledTasks = useMemo(() => {
-    return tasks.filter(t => !t.dueDate && t.status !== 'done' && t.status !== 'archived');
-  }, [tasks]);
-
+  // Active unscheduled tasks ONLY for the active user (excluding done/archived)
   const myUnscheduledTasks = useMemo(() => {
     if (!currentUser) return [];
-    return allUnscheduledTasks.filter(t => t.userId === currentUser.id);
-  }, [allUnscheduledTasks, currentUser]);
+    return tasks.filter(t => t.userId === currentUser.id && !t.dueDate && t.status !== 'done' && t.status !== 'archived');
+  }, [tasks, currentUser]);
 
-  const otherUnscheduledTasks = useMemo(() => {
-    if (!currentUser) return allUnscheduledTasks;
-    return allUnscheduledTasks.filter(t => t.userId !== currentUser.id);
-  }, [allUnscheduledTasks, currentUser]);
-
-  // Tab filter: 'my' or 'all'
-  const [activeTab, setActiveTab] = useState<'my' | 'all'>('my');
-
-  // If currentUser has no unscheduled tasks, but there are others, fall back to 'all'
-  useEffect(() => {
-    if (myUnscheduledTasks.length === 0 && otherUnscheduledTasks.length > 0) {
-      setActiveTab('all');
-    } else if (myUnscheduledTasks.length > 0 && activeTab === 'all' && otherUnscheduledTasks.length === 0) {
-      setActiveTab('my');
-    }
-  }, [myUnscheduledTasks.length, otherUnscheduledTasks.length, activeTab]);
-
-  // Active list based on selected tab
-  const activeTaskList = activeTab === 'my' && myUnscheduledTasks.length > 0 ? myUnscheduledTasks : allUnscheduledTasks;
+  const activeTaskList = myUnscheduledTasks;
 
   // Quick Reschedule Flyout State for the ribbon items
   const [activeFlyoutTaskId, setActiveFlyoutTaskId] = useState<string | null>(null);
@@ -142,8 +120,8 @@ export const UnscheduledTasksRibbon: React.FC<UnscheduledTasksRibbonProps> = Rea
   // Duplicate tasks for seamless marquee ONLY if tasks exceed viewport width
   const displayList = shouldScroll ? [...activeTaskList, ...activeTaskList] : activeTaskList;
 
-  // Gate: Render nothing if no user is logged in or no unscheduled tasks exist
-  if (!currentUser || allUnscheduledTasks.length === 0) {
+  // Gate: Render nothing if no user is logged in or active user has no unscheduled tasks
+  if (!currentUser || myUnscheduledTasks.length === 0) {
     return null;
   }
 
@@ -162,48 +140,14 @@ export const UnscheduledTasksRibbon: React.FC<UnscheduledTasksRibbonProps> = Rea
         </div>
 
         {/* Personalized prompt directed strictly to the logged in user */}
-        <div className="hidden lg:flex items-center gap-1.5 text-[11px] text-neutral-600 dark:text-white/70">
+        <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-neutral-600 dark:text-white/70">
           <span>
             Hi <strong className="font-semibold text-neutral-900 dark:text-white">{currentUser.name}</strong>,
           </span>
-          {activeTab === 'my' && myUnscheduledTasks.length > 0 ? (
-            <span>
-              you have <strong className="font-bold text-amber-600 dark:text-amber-400">{myUnscheduledTasks.length}</strong> unscheduled {myUnscheduledTasks.length === 1 ? 'task' : 'tasks'}:
-            </span>
-          ) : (
-            <span>
-              <strong className="font-bold text-amber-600 dark:text-amber-400">{allUnscheduledTasks.length}</strong> tasks need deadlines:
-            </span>
-          )}
+          <span>
+            you have <strong className="font-bold text-amber-600 dark:text-amber-400">{myUnscheduledTasks.length}</strong> unscheduled {myUnscheduledTasks.length === 1 ? 'task' : 'tasks'}:
+          </span>
         </div>
-
-        {/* Scope toggle pill tabs (only shown when both my tasks and team tasks exist) */}
-        {myUnscheduledTasks.length > 0 && otherUnscheduledTasks.length > 0 && (
-          <div className="flex items-center rounded-lg bg-neutral-200/70 dark:bg-white/10 p-0.5 text-[10px]">
-            <button
-              type="button"
-              onClick={() => setActiveTab('my')}
-              className={`rounded-md px-2 py-0.5 font-medium transition-all cursor-pointer ${
-                activeTab === 'my'
-                  ? 'bg-white dark:bg-[#1A1A1A] text-neutral-900 dark:text-white shadow-xs'
-                  : 'text-neutral-500 dark:text-white/50 hover:text-neutral-900 dark:hover:text-white'
-              }`}
-            >
-              My Tasks ({myUnscheduledTasks.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('all')}
-              className={`rounded-md px-2 py-0.5 font-medium transition-all cursor-pointer ${
-                activeTab === 'all'
-                  ? 'bg-white dark:bg-[#1A1A1A] text-neutral-900 dark:text-white shadow-xs'
-                  : 'text-neutral-500 dark:text-white/50 hover:text-neutral-900 dark:hover:text-white'
-              }`}
-            >
-              All Team ({allUnscheduledTasks.length})
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Marquee Ticker (animates only when tasks exceed viewport) */}
