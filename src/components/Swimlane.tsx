@@ -16,6 +16,7 @@ import {
   UserCheck,
   ArrowDownToLine,
   Trash2,
+  Layers,
 } from 'lucide-react';
 
 interface SwimlaneProps {
@@ -42,6 +43,7 @@ interface ColumnConfig {
   icon: React.ReactNode;
   headerColor: string;
   dotColor: string;
+  wipLimit?: number;
 }
 
 const COLUMNS: ColumnConfig[] = [
@@ -58,6 +60,7 @@ const COLUMNS: ColumnConfig[] = [
     icon: <Clock className="h-3 w-3 text-blue-600 dark:text-blue-400" />,
     headerColor: 'text-blue-600 dark:text-blue-400',
     dotColor: 'bg-blue-600 dark:bg-blue-400',
+    wipLimit: 2,
   },
   {
     status: 'in_review',
@@ -65,6 +68,7 @@ const COLUMNS: ColumnConfig[] = [
     icon: <Activity className="h-3 w-3 text-amber-600 dark:text-yellow-400" />,
     headerColor: 'text-amber-600 dark:text-yellow-400',
     dotColor: 'bg-amber-600 dark:bg-yellow-400',
+    wipLimit: 3,
   },
   {
     status: 'done',
@@ -459,6 +463,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
             const columnTasks = tasksByColumn[col.status] || [];
 
             const isDropActive = dragOverColumn === col.status;
+            const isWipExceeded = Boolean(col.wipLimit && columnTasks.length > col.wipLimit);
 
             return (
               <div
@@ -469,19 +474,37 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 className={`flex flex-col rounded-xl border p-2.5 transition-all duration-200 min-h-[220px] ${
                   isDropActive
                     ? 'border-blue-500 bg-blue-50/70 dark:bg-[#1C1F2E] ring-2 ring-blue-500/30 shadow-md'
+                    : isWipExceeded
+                    ? 'border-amber-400/40 dark:border-amber-500/20 bg-amber-50/30 dark:bg-amber-950/10'
                     : 'border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414]'
                 }`}
               >
                 {/* Status Column Header */}
                 <div className="flex items-center justify-between pb-2.5 mb-2 border-b border-neutral-200 dark:border-white/5 px-1">
-                  <div className="flex items-center gap-1.5 min-w-0">
+                  <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                     {col.icon}
                     <h4 className={`text-[11px] uppercase tracking-wider font-semibold truncate ${col.headerColor}`}>
                       {col.title}
                     </h4>
-                    <span className="rounded-full bg-neutral-200 dark:bg-white/5 px-1.5 py-0.2 text-[10px] text-neutral-600 dark:text-white/40 border border-neutral-300 dark:border-white/5 shrink-0">
-                      {columnTasks.length}
+                    <span
+                      title={col.wipLimit ? `Active tasks: ${columnTasks.length}, recommended limit: ${col.wipLimit}` : undefined}
+                      className={`rounded-full px-1.5 py-0.2 text-[10px] border shrink-0 transition-colors ${
+                        isWipExceeded
+                          ? 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-500/20 dark:text-amber-300 dark:border-amber-500/30 font-semibold'
+                          : 'bg-neutral-200 dark:bg-white/5 text-neutral-600 dark:text-white/40 border-neutral-300 dark:border-white/5'
+                      }`}
+                    >
+                      {columnTasks.length}{col.wipLimit ? `/${col.wipLimit}` : ''}
                     </span>
+                    {isWipExceeded && (
+                      <span
+                        title={`Multitasking Warning: ${columnTasks.length} active tasks in ${col.title} (recommended limit: ${col.wipLimit}). Working on too many active tasks simultaneously increases context-switching overhead.`}
+                        className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 border border-amber-500/30 px-1.5 py-0.2 text-[9px] font-semibold text-amber-600 dark:text-amber-400 shrink-0"
+                      >
+                        <Layers className="h-2.5 w-2.5" />
+                        <span>+{columnTasks.length - col.wipLimit!} WIP</span>
+                      </span>
+                    )}
                   </div>
 
                   <button
@@ -505,15 +528,24 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                   </button>
                 </div>
 
-                {/* Drop indicator banner when dragging from another user */}
-                {isDropActive && isCrossUserDrag && (
+                {/* Drop indicator banner when dragging from another user or exceeding WIP */}
+                {isDropActive && (isCrossUserDrag || isWipExceeded) && (
                   <motion.div
                     initial={{ opacity: 0, y: -4 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="mb-2 rounded-lg bg-blue-600/10 border border-blue-500/30 p-2 text-center text-[10px] font-medium text-blue-600 dark:text-blue-400 flex items-center justify-center gap-1.5"
+                    className={`mb-2 rounded-lg p-2 text-center text-[10px] font-medium flex items-center justify-center gap-1.5 border ${
+                      isWipExceeded
+                        ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400'
+                        : 'bg-blue-600/10 border-blue-500/30 text-blue-600 dark:text-blue-400'
+                    }`}
                   >
                     <ArrowDownToLine className="h-3 w-3" />
-                    <span>Assign to {user.name.split(' ')[0]} ({col.title})</span>
+                    <span>
+                      {isCrossUserDrag
+                        ? `Assign to ${user.name.split(' ')[0]} (${col.title})`
+                        : `Move to ${col.title}`}
+                      {isWipExceeded ? ` · Note: exceeds WIP limit (${columnTasks.length}/${col.wipLimit})` : ''}
+                    </span>
                   </motion.div>
                 )}
 

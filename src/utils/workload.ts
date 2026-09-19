@@ -381,3 +381,161 @@ export function exportWorkspaceJSON(tasks: Task[], users: { id: string; name: st
   URL.revokeObjectURL(url);
 }
 
+export interface DailyThroughput {
+  dateStr: string;
+  dayLabel: string;
+  displayDate: string;
+  completedCount: number;
+  completedPoints: number;
+  isToday: boolean;
+}
+
+export interface WeeklyVelocityMetrics {
+  days: DailyThroughput[];
+  totalCompleted7d: number;
+  totalPointsCleared7d: number;
+  avgLeadTimeStr: string | null;
+  peakDayLabel: string | null;
+  maxDayCount: number;
+  hasData: boolean;
+}
+
+export function formatLeadDuration(ms: number): string {
+  if (ms <= 0) return '< 1h';
+  const hours = Math.floor(ms / (1000 * 60 * 60));
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  if (days > 0) return `${days}d ${remHours}h`;
+  if (hours > 0) return `${hours}h`;
+  const minutes = Math.floor(ms / (1000 * 60));
+  return `${Math.max(1, minutes)}m`;
+}
+
+/**
+ * Calculates 7-day throughput velocity, completed task counts, and cleared cognitive load points.
+ */
+export function calculateWeeklyVelocity(userTasks: Task[]): WeeklyVelocityMetrics {
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  const now = new Date();
+  const days: DailyThroughput[] = [];
+
+  // Construct trailing 7 calendar days (from 6 days ago up to today)
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(now.getDate() - i);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const dateStr = `${yyyy}-${mm}-${dd}`;
+    const dayLabel = i === 0 ? 'Today' : dayNames[d.getDay()];
+    const displayDate = `${monthNames[d.getMonth()]} ${d.getDate()}`;
+
+    days.push({
+      dateStr,
+      dayLabel,
+      displayDate,
+      completedCount: 0,
+      completedPoints: 0,
+      isToday: i === 0,
+    });
+  }
+
+  const daysMap = new Map<string, DailyThroughput>();
+  for (const day of days) {
+    daysMap.set(day.dateStr, day);
+  }
+
+  let totalCompleted7d = 0;
+  let totalPointsCleared7d = 0;
+  let totalLeadTimeMs = 0;
+  let leadTimeCount = 0;
+
+  for (const task of userTasks) {
+    if (task.status !== 'done' && task.status !== 'archived') continue;
+
+    let completionDateStr: string | null = null;
+    let completedTimestampMs: number | null = null;
+
+    if (task.completedAt) {
+      const d = new Date(task.completedAt);
+      if (!isNaN(d.getTime())) {
+        completedTimestampMs = d.getTime();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        completionDateStr = `${yyyy}-${mm}-${dd}`;
+      }
+    }
+
+    if (!completionDateStr && task.activityLog && task.activityLog.length > 0) {
+      const doneAct = task.activityLog.find(
+        a => (a.action === 'status_change' && a.to === 'done') || (a.action === 'created' && task.status === 'done')
+      );
+      if (doneAct) {
+        const d = new Date(doneAct.timestamp);
+        if (!isNaN(d.getTime())) {
+          completedTimestampMs = d.getTime();
+          const yyyy = d.getFullYear();
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          completionDateStr = `${yyyy}-${mm}-${dd}`;
+        }
+      }
+    }
+
+    if (!completionDateStr && task.status === 'done' && task.updatedAt) {
+      const d = new Date(task.updatedAt);
+      if (!isNaN(d.getTime())) {
+        completedTimestampMs = d.getTime();
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        completionDateStr = `${yyyy}-${mm}-${dd}`;
+      }
+    }
+
+    if (completionDateStr && daysMap.has(completionDateStr)) {
+      const dayEntry = daysMap.get(completionDateStr)!;
+      dayEntry.completedCount++;
+      const points = COGNITIVE_LOAD_WEIGHTS[task.cognitiveLoad] || 1.0;
+      dayEntry.completedPoints += points;
+
+      totalCompleted7d++;
+      totalPointsCleared7d += points;
+
+      if (task.createdAt && completedTimestampMs) {
+        const createMs = new Date(task.createdAt).getTime();
+        if (!isNaN(createMs) && completedTimestampMs >= createMs) {
+          totalLeadTimeMs += (completedTimestampMs - createMs);
+          leadTimeCount++;
+        }
+      }
+    }
+  }
+
+  let peakDayLabel: string | null = null;
+  let maxDayCount = 0;
+  for (const day of days) {
+    if (day.completedCount > maxDayCount) {
+      maxDayCount = day.completedCount;
+      peakDayLabel = day.displayDate;
+    }
+  }
+
+  const avgLeadTimeStr = leadTimeCount > 0
+    ? formatLeadDuration(Math.round(totalLeadTimeMs / leadTimeCount))
+    : null;
+
+  return {
+    days,
+    totalCompleted7d,
+    totalPointsCleared7d: Math.round(totalPointsCleared7d * 10) / 10,
+    avgLeadTimeStr,
+    peakDayLabel,
+    maxDayCount,
+    hasData: totalCompleted7d > 0,
+  };
+}
+

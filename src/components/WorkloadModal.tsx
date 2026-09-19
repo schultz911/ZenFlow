@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { User, Task } from '../types';
-import { calculateUserWorkload, formatDueDate, getCognitiveLoadLabel } from '../utils/workload';
-import { X } from 'lucide-react';
+import { calculateUserWorkload, formatDueDate, getCognitiveLoadLabel, calculateWeeklyVelocity } from '../utils/workload';
+import { X, TrendingUp, Clock, CheckCircle2 } from 'lucide-react';
 
 interface WorkloadModalProps {
   user: User | null;
@@ -16,10 +16,26 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
   isOpen,
   onClose,
 }) => {
+  const [hoveredDate, setHoveredDate] = useState<string | null>(null);
+
+  const userTasks = useMemo(() => {
+    if (!user) return [];
+    return tasks.filter(t => t.userId === user.id);
+  }, [tasks, user]);
+
+  const workload = useMemo(() => {
+    return calculateUserWorkload(userTasks);
+  }, [userTasks]);
+
+  const velocity = useMemo(() => {
+    return calculateWeeklyVelocity(userTasks);
+  }, [userTasks]);
+
   if (!isOpen || !user) return null;
 
-  const userTasks = tasks.filter(t => t.userId === user.id);
-  const workload = calculateUserWorkload(userTasks);
+  const maxBarHeight = 65;
+  const maxCountScale = Math.max(3, velocity.maxDayCount);
+  const activeHoverDay = velocity.days.find(d => d.dateStr === hoveredDate);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 backdrop-blur-sm p-4">
@@ -120,6 +136,175 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                 }`}
                 style={{ width: `${Math.min(100, (workload.totalScore / 16) * 100)}%` }}
               />
+            </div>
+          </div>
+        </div>
+
+        {/* 7-Day Velocity & Throughput Micro-Sparkline */}
+        <div className="mt-4 rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414] p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-neutral-200/60 dark:border-white/5">
+            <div className="flex items-center gap-2">
+              <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                <TrendingUp className="h-3.5 w-3.5" />
+              </div>
+              <h3 className="text-xs uppercase tracking-wider font-semibold text-neutral-900 dark:text-white">
+                7-Day Throughput Velocity
+              </h3>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                <CheckCircle2 className="h-3 w-3" />
+                <span>{velocity.totalCompleted7d} {velocity.totalCompleted7d === 1 ? 'task' : 'tasks'} cleared</span>
+                <span className="text-[10px] opacity-75">({velocity.totalPointsCleared7d} pts)</span>
+              </span>
+              {velocity.avgLeadTimeStr && (
+                <span
+                  title="Average lead time from task creation to completion"
+                  className="inline-flex items-center gap-1 rounded-full bg-neutral-200/70 dark:bg-white/5 border border-neutral-300 dark:border-white/10 px-2.5 py-0.5 text-[11px] font-medium text-neutral-700 dark:text-white/70"
+                >
+                  <Clock className="h-3 w-3 text-neutral-400 dark:text-white/40" />
+                  <span>Avg Lead Time: {velocity.avgLeadTimeStr}</span>
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* SVG Vector Sparkline Bar Chart */}
+          <div className="mt-4 relative">
+            <svg viewBox="0 0 560 135" className="w-full h-auto max-h-[160px] overflow-visible">
+              <defs>
+                <linearGradient id="emeraldBarGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" />
+                  <stop offset="100%" stopColor="#059669" />
+                </linearGradient>
+                <linearGradient id="todayBarGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#3b82f6" />
+                  <stop offset="100%" stopColor="#2563eb" />
+                </linearGradient>
+              </defs>
+
+              {/* Grid Baseline */}
+              <line x1="8" y1="96" x2="552" y2="96" stroke="currentColor" className="text-neutral-200 dark:text-white/10" strokeWidth="1" strokeDasharray="3 3" />
+
+              {velocity.days.map((day, i) => {
+                const colWidth = 56;
+                const slotGap = 22;
+                const slotX = 12 + i * (colWidth + slotGap);
+                const barWidth = 44;
+                const barX = slotX + (colWidth - barWidth) / 2;
+
+                const hasCompleted = day.completedCount > 0;
+                const barH = hasCompleted
+                  ? Math.max(12, (day.completedCount / maxCountScale) * maxBarHeight)
+                  : 4;
+                const barY = 96 - barH;
+                const isHovered = hoveredDate === day.dateStr;
+
+                return (
+                  <g
+                    key={day.dateStr}
+                    className="cursor-pointer group"
+                    onMouseEnter={() => setHoveredDate(day.dateStr)}
+                    onMouseLeave={() => setHoveredDate(null)}
+                  >
+                    {/* Background hover pillar */}
+                    <rect
+                      x={slotX}
+                      y={8}
+                      width={colWidth}
+                      height={120}
+                      rx={8}
+                      className={`transition-colors ${
+                        isHovered
+                          ? 'fill-neutral-200/50 dark:fill-white/10'
+                          : 'fill-transparent'
+                      }`}
+                    />
+
+                    {/* Bar Pill */}
+                    <rect
+                      x={barX}
+                      y={barY}
+                      width={barWidth}
+                      height={barH}
+                      rx={hasCompleted ? 6 : 2}
+                      className={`transition-all duration-200 ${
+                        isHovered ? 'filter drop-shadow-[0_2px_8px_rgba(16,185,129,0.3)]' : ''
+                      }`}
+                      fill={
+                        hasCompleted
+                          ? day.isToday
+                            ? 'url(#todayBarGrad)'
+                            : 'url(#emeraldBarGrad)'
+                          : 'currentColor'
+                      }
+                      opacity={hasCompleted ? (isHovered ? 1 : 0.9) : 0.15}
+                    />
+
+                    {/* Numerical Count on top of bar */}
+                    {hasCompleted && (
+                      <text
+                        x={barX + barWidth / 2}
+                        y={barY - 6}
+                        textAnchor="middle"
+                        className="text-[11px] font-bold fill-neutral-800 dark:fill-white select-none transition-all"
+                      >
+                        {day.completedCount}
+                      </text>
+                    )}
+
+                    {/* Day label (Mon / Tue / Today) */}
+                    <text
+                      x={slotX + colWidth / 2}
+                      y={112}
+                      textAnchor="middle"
+                      className={`text-[10px] select-none transition-colors ${
+                        day.isToday
+                          ? 'font-bold fill-blue-600 dark:fill-blue-400'
+                          : isHovered
+                          ? 'font-semibold fill-neutral-900 dark:fill-white'
+                          : 'font-medium fill-neutral-500 dark:fill-white/40'
+                      }`}
+                    >
+                      {day.dayLabel}
+                    </text>
+
+                    {/* Calendar date under day label (e.g. 19) */}
+                    <text
+                      x={slotX + colWidth / 2}
+                      y={124}
+                      textAnchor="middle"
+                      className="text-[9px] fill-neutral-400 dark:fill-white/30 select-none"
+                    >
+                      {day.displayDate.split(' ')[1]}
+                    </text>
+                  </g>
+                );
+              })}
+            </svg>
+
+            {/* Dynamic Hover Tooltip Banner */}
+            <div className="min-h-[22px] mt-1 text-center">
+              {activeHoverDay ? (
+                <p className="text-[11px] font-medium text-neutral-700 dark:text-white/80 animate-in fade-in duration-100">
+                  <span className="font-semibold text-neutral-900 dark:text-white">{activeHoverDay.displayDate} ({activeHoverDay.dayLabel}):</span>{' '}
+                  {activeHoverDay.completedCount > 0 ? (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                      {activeHoverDay.completedCount} {activeHoverDay.completedCount === 1 ? 'task' : 'tasks'} completed ({activeHoverDay.completedPoints} cognitive points)
+                    </span>
+                  ) : (
+                    <span className="text-neutral-400 dark:text-white/40">No completed tasks</span>
+                  )}
+                </p>
+              ) : !velocity.hasData ? (
+                <p className="text-[11px] text-neutral-400 dark:text-white/40">
+                  No completed tasks in the last 7 days. Completing tasks will chart throughput here.
+                </p>
+              ) : (
+                <p className="text-[10px] text-neutral-400 dark:text-white/40">
+                  Hover over bars to view daily task completions and cognitive output.
+                </p>
+              )}
             </div>
           </div>
         </div>

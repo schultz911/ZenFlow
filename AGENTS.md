@@ -6,6 +6,10 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ### 1. Discovered Optimizations
 
+### Sweep 14: 2026-09-19 (Multitasking & Context-Switching Guard & 7-Day Velocity Micro-Sparkline)
+- **FEAT-08 (Cognitive Flow & Multitasking Risk Guard - Soft Column WIP Limits):** In `Swimlane.tsx`, added cognitive WIP limits to active working columns (`in_progress: 2`, `in_review: 3`). When active cards exceed the threshold, the header counter displays `{count}/{limit}` alongside an ambient amber alert pill (`+{excess} WIP`) and subtle amber border tint. Dragging a card over an overloaded column surfaces an ambient notification (`Note: exceeds WIP limit`) without disrupting or blocking user workflow.
+- **FEAT-09 (Throughput Analytics - Zero-Dependency 7-Day Velocity Sparkline):** In `workload.ts` and `WorkloadModal.tsx`, implemented a pure client-side 7-day velocity and lead-time tracker. Leverages existing `task.completedAt` and `activityLog` without new backend services or charting libraries, rendering an SVG sparkline with 7 trailing calendar bars, count chips, today accents, interactive daily tooltips, and lead-time duration metrics.
+
 ### Sweep 13: 2026-09-19 (Task Due Date Visual Simplification & Logged-In User Unscheduled Tasks Ribbon)
 - **BUG-06 (Runtime Crash - React Hook Order Invariant Violation #310 in UnscheduledTasksRibbon):** In `UnscheduledTasksRibbon.tsx`, early returns `if (!currentUser) return null;` and `if (allUnscheduledTasks.length === 0) return null;` were positioned ahead of subsequent `useMemo`, `useState`, `useCallback`, and `useEffect` hooks. When session authentication state transitioned (e.g., logging in or signing out), the total number of evaluated hooks changed across render passes, triggering React Error #310 ("Rendered more/fewer hooks than during the previous render"). All 13 hooks were elevated unconditionally to the top of the component body, and the rendering gate was positioned cleanly after all hook evaluations.
 - **VIS-06 (Visual Redundancy - Dual Color Chips for Task Due Dates):** `TaskCard.tsx` featured both a circular deadline badge (Clock icon with proximity urgency coloring) at the top of the card and a second bordered, color-filled chip at the bottom. This produced unnecessary chromatic clutter. The bottom date was converted to clean, minimal text with a calendar icon, retaining the click-to-reschedule popover while preserving the top circular badge as the single authoritative urgency indicator.
@@ -93,6 +97,12 @@ This document records the complete lifecycle of architectural sweeps, discovered
 ---
 
 ## 2. Previously Suggested
+
+### Sweep 14: 2026-09-19 (Multitasking & Context-Switching Guard & 7-Day Velocity Micro-Sparkline)
+- **Phase 1: Soft Column WIP Limits in Swimlane**
+  - FEAT-08: Equip `in_progress` (limit: 2) and `in_review` (limit: 3) columns in [Swimlane.tsx](file:///c:/ZenFlow/src/components/Swimlane.tsx) with non-blocking ambient amber warning pills and column container accents.
+- **Phase 2: 7-Day Throughput Velocity Micro-Sparkline**
+  - FEAT-09: Implement `calculateWeeklyVelocity()` in [workload.ts](file:///c:/ZenFlow/src/utils/workload.ts) and mount native SVG bar sparkline in [WorkloadModal.tsx](file:///c:/ZenFlow/src/components/WorkloadModal.tsx) with hook order invariant preservation.
 
 ### Sweep 13: 2026-09-19 (Task Due Date Visual Simplification & Logged-In User Unscheduled Tasks Ribbon)
 - **Phase 1: Date Chip Styling De-duplication**
@@ -188,6 +198,10 @@ This document records the complete lifecycle of architectural sweeps, discovered
 ---
 
 ## 3. Approved and Implemented
+
+### Sweep 14: Multitasking & Context-Switching Guard & 7-Day Velocity Micro-Sparkline (Executed: 2026-09-19)
+- **FEAT-08 (Executed):** Configured soft WIP limits on active columns in [Swimlane.tsx](file:///c:/ZenFlow/src/components/Swimlane.tsx) (`in_progress: 2`, `in_review: 3`). When exceeded, the counter badge formats as `{count}/{limit}` with an amber warning pill (`+{excess} WIP`) and subtle amber container border. Drag-over operations display a non-blocking multitasking warning note without disrupting user actions.
+- **FEAT-09 (Executed):** Built zero-dependency 7-day throughput velocity analytics in [workload.ts](file:///c:/ZenFlow/src/utils/workload.ts) and [WorkloadModal.tsx](file:///c:/ZenFlow/src/components/WorkloadModal.tsx). Aggregates completions across the trailing 7 days, renders an SVG bar sparkline with dynamic count badges and hover tooltips, and computes total cognitive points cleared and average completion lead time, with strict React hook order invariant preservation.
 
 ### Sweep 11: Inline Title Editing, React Hook Invariant Enforcement & Portaled Datepicker (Executed: 2026-09-19)
 - **BUG-05 (Executed):** Lifted `activities` and `cycleMetrics` `useMemo` hooks above `if (!isOpen) return null;` in [TaskModal.tsx](file:///c:/ZenFlow/src/components/TaskModal.tsx), strictly preserving constant hook call order and permanently eliminating `Minified React error #310`.
