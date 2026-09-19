@@ -160,7 +160,6 @@ export const UnscheduledTasksRibbon: React.FC<UnscheduledTasksRibbonProps> = Rea
         >
           {displayList.map((task, idx) => {
             const user = userMap.get(task.userId);
-            const isMine = task.userId === currentUser.id;
             const cognitiveLabel = getCognitiveLoadLabel(task.cognitiveLoad, user?.role);
 
             return (
@@ -183,11 +182,6 @@ export const UnscheduledTasksRibbon: React.FC<UnscheduledTasksRibbonProps> = Rea
                   <span className="font-semibold text-neutral-800 dark:text-neutral-200 max-w-[100px] truncate text-[11px]">
                     {user?.name || 'Unassigned'}
                   </span>
-                  {isMine && (
-                    <span className="rounded bg-blue-500/15 px-1 py-0.2 text-[9px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-tight">
-                      You
-                    </span>
-                  )}
                 </div>
 
                 <span className="text-neutral-300 dark:text-white/20 text-[10px]">•</span>
