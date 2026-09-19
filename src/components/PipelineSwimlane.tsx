@@ -24,7 +24,7 @@ interface PipelineSwimlaneProps {
   onDeleteTask: (taskId: string) => void;
 }
 
-export const PipelineSwimlane: React.FC<PipelineSwimlaneProps> = ({
+const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
   user,
   tasks,
   onQuickAdd,
@@ -368,3 +368,26 @@ export const PipelineSwimlane: React.FC<PipelineSwimlaneProps> = ({
     </div>
   );
 };
+
+function arePipelinePropsEqual(prev: PipelineSwimlaneProps, next: PipelineSwimlaneProps): boolean {
+  if (prev.user !== next.user) return false;
+  if (prev.onQuickAdd !== next.onQuickAdd) return false;
+  if (prev.onDragStart !== next.onDragStart) return false;
+  if (prev.onDragEnd !== next.onDragEnd) return false;
+  if (prev.onMoveTask !== next.onMoveTask) return false;
+  if (prev.onEditTask !== next.onEditTask) return false;
+  if (prev.onUpdateTitle !== next.onUpdateTitle) return false;
+  if (prev.onDeleteTask !== next.onDeleteTask) return false;
+
+  const prevTasks = prev.tasks;
+  const nextTasks = next.tasks;
+  if (prevTasks === nextTasks) return true;
+  if (prevTasks.length !== nextTasks.length) return false;
+  for (let i = 0; i < prevTasks.length; i++) {
+    if (prevTasks[i] !== nextTasks[i]) return false;
+  }
+  return true;
+}
+
+export const PipelineSwimlane = React.memo(PipelineSwimlaneComponent, arePipelinePropsEqual);
+PipelineSwimlane.displayName = 'PipelineSwimlane';

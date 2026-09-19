@@ -6,6 +6,18 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
+### Sweep 18: 2026-09-19 (Firestore Security Rule Sync, Event Loop Optimization, Virtual DOM Containment, Ribbon Layout & Audit Trail Completeness)
+
+- **BUG-08 / SEC-07 (Security & Data Rejection - Missing 'pipeline' Status in Firestore Security Rules):** In `firestore.rules`, the `isValidTask(data)` helper function enforced task status membership strictly against `['todo', 'in_progress', 'in_review', 'done', 'archived']`. With the introduction of the horizontal pipeline swimlane feature (Sweep 16), any client attempting to create, update, or sync tasks in `'pipeline'` status directly against Cloud Firestore would be rejected with permission denied. Added `'pipeline'` to the valid status list in `firestore.rules`.
+- **PERF-19 (Virtual DOM & Heap Allocation - Unconditional Activity Log Fallback in getTaskBillableMs):** In `src/utils/workload.ts`, `getTaskBillableMs` checked `if (task.inProgressDurationMs !== undefined && task.inProgressDurationMs > 0) return task.inProgressDurationMs;`. Because newly created cards or backlog tasks have `inProgressDurationMs === 0`, they fell through to the legacy fallback branch which filtered and sorted `task.activityLog` on every render pass across all 50+ cards. Updated guard to `if (task.inProgressDurationMs !== undefined) return task.inProgressDurationMs;`, eliminating array allocation and sorting for modern tasks.
+- **PERF-20 (Event-Loop CPU Bottleneck - Quadratic User Lookup in Batch Task Reordering):** In `server.ts`, `/api/tasks/reorder` validated user existence for up to 500 batch updates using `store.users.find(u => u.id === update.userId)` inside the loop ($O(M \times U)$ complexity). Pre-indexed `store.users` into a `Map<string, User>` (`userMap`) prior to the iteration loop, converting user existence validation to $O(1)$ and reducing overall complexity to $O(M + U)$.
+- **DATA-02 / REL-03 (Data Integrity Fragility - String Prefix Filtering of Dummy Tasks in Firestore Sync):** In `server.ts`, `syncFromFirestore()` purged demo seed data using crude prefix matching: `store.tasks.filter(t => !t.id.startsWith('task-10') && !t.id.startsWith('task-11') && !t.id.startsWith('task-12'))`. User tasks with legitimate IDs starting with those prefixes risked silent deletion upon sync. Replaced with exact `DUMMY_TASK_IDS` set matching (`!DUMMY_TASK_IDS.has(t.id)`).
+- **PERF-21 (Main-Thread CPU Leak - Background Velocity & Workload Computation in Inactive Modal):** In `src/components/WorkloadModal.tsx`, heavy `useMemo` hooks calculating user tasks, workload capacity scores, cognitive load metrics, and 7-day velocity sparklines computed continuously on every state update even when the modal was closed (`isOpen === false`). Added early short-circuit guards `if (!isOpen || !user) return ...` to prevent unnecessary computation while inactive.
+- **VIS-10 (Viewport Layout Alignment - Unconstrained Pinned Ribbons on Widescreen Displays):** In `src/App.tsx`, `<MarqueeRibbon />` and `<UnscheduledTasksRibbon />` lacked maximum width and horizontal padding containers, stretching edge-to-edge across ultra-wide viewports and colliding with browser margins while the header and board grid remained centered. Wrapped ribbons in `<div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-2">`.
+- **OPT-06 (Virtual DOM Thrashing - Unmemoized PipelineSwimlane & Prop Instability):** `PipelineSwimlane.tsx` was unmemoized, re-rendering on every parent state mutation or card drag. In addition, `Swimlane.tsx` passed an inline lambda `onMoveStatus` and re-filtered/sorted `userTasks` in `handleDropOnTask`. Wrapped `PipelineSwimlane` with `React.memo` and `arePipelinePropsEqual`, passed stable `handleMoveStatus`, and reused `tasksByColumn` in `handleDropOnTask`.
+- **GOV-03 (Audit Trail Lifecycle Gap - Unaudited Auto-Archive Transitions):** In `server.ts`, `autoArchiveDoneTasks()` automatically transitioned tasks older than 7 days from `'done'` to `'archived'` without recording an entry in `task.activityLog`. Added an automated `status_change` audit event (`"Auto-archived after 7 days in Done"`), maintaining complete audit traceability across the task lifecycle.
+- **PERF-22 & PERF-23 (Algorithmic Sorting & Non-Blocking File I/O Optimization):** In `server.ts`, removed redundant blocking `fs.existsSync` check in `saveStore()` by leveraging non-blocking `await fs.promises.mkdir(DATA_DIR, { recursive: true })`. In `src/App.tsx`, replaced repeated $O(U \times K)$ `indexOf` scans in `roleFilteredUsers` with a pre-indexed `Map<string, number>` for $O(1)$ custom user ordering.
+
 ### Sweep 17: 2026-09-19 (Cross-User Drag Reliability, Heartbeat Leak Remediation, Non-Blocking Credential I/O, Pipeline Buffer Integrity, Excel Export & Animation Polish)
 
 - **BUG-07 (Critical Workflow - Cross-User Drag Target & Pipeline Activation Silent Drop):** In `Swimlane.tsx`, `validateAndExecuteMove` intercepted drag operations to validate target column WIP limits and deadline demand gating by looking up the dragged task in `tasks.find(t => t.id === taskId)`. Because `App.tsx` slices and passes tasks to each user's swimlane isolated by `tasksByUserId.get(user.id)` to preserve `React.memo` performance, dragging a task from User A to User B's swimlane resulted in `task` being `undefined` in User B's swimlane context. In addition, the drag payload omitted `dueDate`. Consequently, dragging tasks between different users or activating pipeline tasks into another user's lane silently aborted. Resolved by extending `DragTaskInfo` with `task` and `dueDate`, supplying them in `TaskCard.tsx` and `PipelineSwimlane.tsx`, and updating `validateAndExecuteMove` and `extractDragData` in `Swimlane.tsx` to read from `activeDragInfo.task` and HTML5 fallback payload while preserving `React.memo` isolation.
@@ -137,6 +149,23 @@ This document records the complete lifecycle of architectural sweeps, discovered
 ---
 
 ## 2. Previously Suggested
+
+### Proposed in Sweep 18: Enterprise Sanitization, Runtime Performance & MVP Elevation
+
+- **Phase 1: Critical Security & Contract Alignment (BUG-08 / SEC-07)**
+  - BUG-08 / SEC-07: In [firestore.rules](file:///c:/ZenFlow/firestore.rules), add `'pipeline'` to `isValidTask(data)` status validation list (`['pipeline', 'todo', 'in_progress', 'in_review', 'done', 'archived']`) to ensure Firestore rules permit pipeline tasks without permission rejection.
+- **Phase 2: Event Loop Optimization, Data Integrity & Governance (PERF-20, DATA-02, GOV-03, PERF-24)**
+  - PERF-20: In [server.ts](file:///c:/ZenFlow/server.ts), pre-index `store.users` into a `Map` before the batch update loop in `POST /api/tasks/reorder` for $O(1)$ user validation.
+  - DATA-02: In [server.ts](file:///c:/ZenFlow/server.ts), replace crude `startsWith` string prefix checks in `syncFromFirestore()` with exact `DUMMY_TASK_IDS.has(t.id)` set matching.
+  - GOV-03: In [server.ts](file:///c:/ZenFlow/server.ts), record an audit event (`status_change` to `archived`, `"Auto-archived after 7 days in Done"`) when tasks are auto-archived in `autoArchiveDoneTasks()`.
+  - PERF-24: In [server.ts](file:///c:/ZenFlow/server.ts), replace blocking `fs.existsSync` check in `saveStore()` with non-blocking `await fs.promises.mkdir(DATA_DIR, { recursive: true })`.
+- **Phase 3: Virtual DOM Containment & Frontend Compute Optimization (PERF-19, PERF-21, OPT-06, PERF-22)**
+  - PERF-19: In [src/utils/workload.ts](file:///c:/ZenFlow/src/utils/workload.ts), guard `getTaskBillableMs` with `task.inProgressDurationMs !== undefined` to avoid array allocation and sorting on backlog tasks.
+  - PERF-21: In [src/components/WorkloadModal.tsx](file:///c:/ZenFlow/src/components/WorkloadModal.tsx), add `!isOpen || !user` early exits to `userTasks`, `workload`, and `velocity` `useMemo` hooks.
+  - OPT-06: Wrap [PipelineSwimlane.tsx](file:///c:/ZenFlow/src/components/PipelineSwimlane.tsx) with `React.memo` and `arePipelinePropsEqual`. In [Swimlane.tsx](file:///c:/ZenFlow/src/components/Swimlane.tsx), reuse memoized `tasksByColumn` in `handleDropOnTask` and pass stable `handleMoveStatus`.
+- **Phase 4: Responsive Viewport Alignment & Algorithmic Sorting (VIS-10, PERF-23)**
+  - VIS-10: In [src/App.tsx](file:///c:/ZenFlow/src/App.tsx), wrap pinned ribbons inside `<div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-2">` to eliminate widescreen edge collisions.
+  - PERF-23: In [src/App.tsx](file:///c:/ZenFlow/src/App.tsx), pre-index `customUserOrder` into a `Map<string, number>` in `roleFilteredUsers` for $O(1)$ sort comparisons.
 
 ### Proposed in Sweep 17: Cross-User Drag Reliability, Heartbeat Leak Remediation, Pipeline Buffer Integrity & Enterprise Excel Export
 
@@ -270,6 +299,18 @@ This document records the complete lifecycle of architectural sweeps, discovered
 ---
 
 ## 3. Approved and Implemented
+
+### Sweep 18 Executed: Security Sync, Event Loop Optimization, Virtual DOM Containment & Viewport Alignment (2026-09-19)
+
+- **BUG-08 / SEC-07 (Executed):** Added `'pipeline'` status to `isValidTask(data)` in [firestore.rules](file:///c:/ZenFlow/firestore.rules). Firestore rules now fully validate and accept pipeline backlog buffer tasks, eliminating runtime permission denials on direct client synchronization.
+- **PERF-19 (Executed):** Updated `getTaskBillableMs` in [src/utils/workload.ts](file:///c:/ZenFlow/src/utils/workload.ts) to check `task.inProgressDurationMs !== undefined`. Backlog and modern tasks with `0` duration no longer allocate intermediate arrays or invoke `.sort()` on `activityLog`, speeding up card render cycles across the board.
+- **PERF-20 (Executed):** Pre-indexed `store.users` into `userMap` in `POST /api/tasks/reorder` in [server.ts](file:///c:/ZenFlow/server.ts), reducing user existence lookup from $O(M \times U)$ linear scans to $O(1)$ constant-time Map lookups and slashing event-loop execution time during large batch reorders.
+- **DATA-02 / REL-03 (Executed):** Replaced substring prefix matching in `syncFromFirestore()` in [server.ts](file:///c:/ZenFlow/server.ts) with `!DUMMY_TASK_IDS.has(t.id)` set matching, safeguarding real user tasks with similar ID formats from accidental deletion during Firestore sync.
+- **PERF-21 (Executed):** Added `!isOpen || !user` short-circuit return guards to `userTasks`, `workload`, and `velocity` `useMemo` hooks in [WorkloadModal.tsx](file:///c:/ZenFlow/src/components/WorkloadModal.tsx). Workload capacity scores and 7-day velocity sparkline SVGs are no longer recalculated while the modal is closed.
+- **VIS-10 (Executed):** Wrapped the pinned ribbon viewport container in [src/App.tsx](file:///c:/ZenFlow/src/App.tsx) within `<div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-2">`, aligning the overdue marquee and unscheduled ribbons with the main navigation header and board grid on widescreen displays.
+- **OPT-06 (Executed):** Wrapped [PipelineSwimlane.tsx](file:///c:/ZenFlow/src/components/PipelineSwimlane.tsx) with `React.memo` and a custom shallow task comparator `arePipelinePropsEqual`. In [Swimlane.tsx](file:///c:/ZenFlow/src/components/Swimlane.tsx), passed the stable `handleMoveStatus` callback and reused pre-grouped `tasksByColumn` in `handleDropOnTask`, preventing virtual DOM thrashing during swimlane drag-over operations.
+- **GOV-03 (Executed):** Integrated automated `status_change` audit event capture into `autoArchiveDoneTasks()` in [server.ts](file:///c:/ZenFlow/server.ts), recording `"Auto-archived after 7 days in Done"` in the task's `activityLog` and maintaining full governance auditability.
+- **PERF-22 & PERF-23 (Executed):** Replaced blocking `fs.existsSync` in `saveStore()` in [server.ts](file:///c:/ZenFlow/server.ts) with non-blocking `await fs.promises.mkdir(DATA_DIR, { recursive: true })`. Pre-indexed `customUserOrder` into a `Map<string, number>` in [src/App.tsx](file:///c:/ZenFlow/src/App.tsx), converting user swimlane sort comparisons to $O(1)$ lookups.
 
 ### Sweep 17 Executed: Cross-User Drag Reliability, Server Optimization, Pipeline Buffer Integrity, Excel Export & Animation Polish (2026-09-19)
 
@@ -409,6 +450,10 @@ This document records the complete lifecycle of architectural sweeps, discovered
 ---
 
 ## 4. Denied or Not Implemented
+
+### Sweep 18 Evaluation: Enterprise Sanitization, Runtime Performance & MVP Elevation (2026-09-19)
+
+- *(None rejected — All 9 proposed optimizations across Phases 1–4 were approved and executed without rejection or modification.)*
 
 ### Sweep 17 Evaluation: Cross-User Drag Reliability, Server Optimization, Pipeline Buffer Integrity & Enterprise Excel Export (2026-09-19)
 

@@ -19,19 +19,21 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
 
   const userTasks = useMemo(() => {
-    if (!user) return [];
+    if (!isOpen || !user) return [];
     return tasks.filter(t => t.userId === user.id);
-  }, [tasks, user]);
+  }, [isOpen, tasks, user]);
 
   const workload = useMemo(() => {
+    if (!isOpen || !user) return null;
     return calculateUserWorkload(userTasks);
-  }, [userTasks]);
+  }, [isOpen, user, userTasks]);
 
   const velocity = useMemo(() => {
+    if (!isOpen || !user) return null;
     return calculateWeeklyVelocity(userTasks);
-  }, [userTasks]);
+  }, [isOpen, user, userTasks]);
 
-  if (!isOpen || !user) return null;
+  if (!isOpen || !user || !workload || !velocity) return null;
 
   const maxBarHeight = 65;
   const maxCountScale = Math.max(3, velocity.maxDayCount);

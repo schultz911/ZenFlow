@@ -67,9 +67,14 @@ function DashboardContent() {
     const filtered = users.filter(u => u.role === activeRoleTab);
     if (customUserOrder.length === 0) return filtered;
 
+    const orderMap = new Map<string, number>();
+    for (let i = 0; i < customUserOrder.length; i++) {
+      orderMap.set(customUserOrder[i], i);
+    }
+
     return [...filtered].sort((a, b) => {
-      const indexA = customUserOrder.indexOf(a.id);
-      const indexB = customUserOrder.indexOf(b.id);
+      const indexA = orderMap.has(a.id) ? orderMap.get(a.id)! : -1;
+      const indexB = orderMap.has(b.id) ? orderMap.get(b.id)! : -1;
       if (indexA !== -1 && indexB !== -1) return indexA - indexB;
       if (indexA !== -1) return -1;
       if (indexB !== -1) return 1;
@@ -286,21 +291,24 @@ function DashboardContent() {
           onOpenFirestoreModal={() => setFirestoreModalOpen(true)}
         />
 
-        {/* Critical Deadlines Marquee Ribbon */}
-        <MarqueeRibbon
-          tasks={tasks}
-          users={users}
-          onTaskClick={handleEditTask}
-        />
+        {/* Sticky Ribbons Alignment Container */}
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-2">
+          {/* Critical Deadlines Marquee Ribbon */}
+          <MarqueeRibbon
+            tasks={tasks}
+            users={users}
+            onTaskClick={handleEditTask}
+          />
 
-        {/* Unscheduled Tasks Prompt Ribbon (Prompts ONLY the logged in user) */}
-        <UnscheduledTasksRibbon
-          currentUser={currentUser}
-          tasks={tasks}
-          users={users}
-          onTaskClick={handleEditTask}
-          onReschedule={handleRescheduleTask}
-        />
+          {/* Unscheduled Tasks Prompt Ribbon (Prompts ONLY the logged in user) */}
+          <UnscheduledTasksRibbon
+            currentUser={currentUser}
+            tasks={tasks}
+            users={users}
+            onTaskClick={handleEditTask}
+            onReschedule={handleRescheduleTask}
+          />
+        </div>
       </div>
 
       {/* Main Container */}

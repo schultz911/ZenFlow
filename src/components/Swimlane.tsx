@@ -407,10 +407,8 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     const { taskId, task } = extractDragData(e);
     if (!taskId || (taskId === targetTask.id && user.id === targetTask.userId)) return;
 
-    // Calculate new index in this user's target status list
-    const tasksInTarget = userTasks
-      .filter(t => t.status === targetStatus && t.id !== taskId)
-      .sort((a, b) => compareTasksByDeadline(a, b, targetStatus));
+    // Calculate new index in this user's target status list using pre-indexed column tasks
+    const tasksInTarget = (tasksByColumn[targetStatus] || []).filter(t => t.id !== taskId);
     const targetIdx = tasksInTarget.findIndex(t => t.id === targetTask.id);
     const newIndex = targetIdx !== -1 ? targetIdx : tasksInTarget.length;
 
@@ -656,7 +654,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 onQuickAdd={handleQuickAddPipeline}
                 onDragStart={handleTaskDragStart}
                 onDragEnd={handleTaskDragEnd}
-                onMoveTask={(taskId, newStatus) => validateAndExecuteMove(taskId, newStatus)}
+                onMoveTask={handleMoveStatus}
                 onEditTask={onEditTask}
                 onUpdateTitle={onUpdateTaskTitle}
                 onDeleteTask={onDeleteTask}

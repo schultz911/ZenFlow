@@ -166,9 +166,7 @@ function saveStore(storeToSave: AppStore) {
     pendingSave = null;
 
     try {
-      if (!fs.existsSync(DATA_DIR)) {
-        await fs.promises.mkdir(DATA_DIR, { recursive: true });
-      }
+      await fs.promises.mkdir(DATA_DIR, { recursive: true });
       const tempPath = `${DATA_FILE}.tmp.${Date.now()}`;
       await fs.promises.writeFile(tempPath, JSON.stringify(dataToWrite, null, 2), 'utf-8');
       await fs.promises.rename(tempPath, DATA_FILE);
@@ -569,13 +567,7 @@ async function syncFromFirestore() {
 
       tasksSnap.forEach((d: any) => {
         const t = d.data() as Task;
-        if (
-          !t.id.startsWith('task-10') &&
-          !t.id.startsWith('task-20') &&
-          !t.id.startsWith('task-30') &&
-          !t.id.startsWith('task-40') &&
-          !demoUserIds.has(t.userId)
-        ) {
+        if (!DUMMY_TASK_IDS.has(t.id) && !demoUserIds.has(t.userId)) {
           firestoreTasks.push(t);
         }
       });
@@ -592,13 +584,7 @@ async function syncFromFirestore() {
 
       tasksSnap.forEach(d => {
         const t = d.data() as Task;
-        if (
-          !t.id.startsWith('task-10') &&
-          !t.id.startsWith('task-20') &&
-          !t.id.startsWith('task-30') &&
-          !t.id.startsWith('task-40') &&
-          !demoUserIds.has(t.userId)
-        ) {
+        if (!DUMMY_TASK_IDS.has(t.id) && !demoUserIds.has(t.userId)) {
           firestoreTasks.push(t);
         }
       });
@@ -688,6 +674,18 @@ function autoArchiveDoneTasks(): boolean {
       if (!isNaN(completionTime) && now - completionTime >= SEVEN_DAYS_MS) {
         task.status = 'archived';
         task.updatedAt = new Date().toISOString();
+        if (!task.activityLog) task.activityLog = [];
+        task.activityLog.unshift({
+          id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          timestamp: new Date().toISOString(),
+          action: 'status_change',
+          from: 'done',
+          to: 'archived',
+          details: 'Auto-archived after 7 days in Done',
+        });
+        if (task.activityLog.length > 15) {
+          task.activityLog = task.activityLog.slice(0, 15);
+        }
         changed = true;
         newlyArchived.push(task);
       }
@@ -1144,6 +1142,11 @@ async function startServer() {
       taskMap.set(t.id, t);
     }
 
+    const userMap = new Map<string, User>();
+    for (const u of store.users) {
+      userMap.set(u.id, u);
+    }
+
     const modifiedTasks: Task[] = [];
 
     for (const update of updates) {
@@ -1152,9 +1155,9 @@ async function startServer() {
       if (task) {
         if (!task.activityLog) task.activityLog = [];
 
-        if (update.userId && typeof update.userId === 'string' && store.users.some(u => u.id === update.userId) && update.userId !== task.userId) {
-          const oldUser = store.users.find(u => u.id === task.userId)?.name || task.userId;
-          const newUser = store.users.find(u => u.id === update.userId)?.name || update.userId;
+        if (update.userId && typeof update.userId === 'string' && userMap.has(update.userId) && update.userId !== task.userId) {
+          const oldUser = userMap.get(task.userId)?.name || task.userId;
+          const newUser = userMap.get(update.userId)?.name || update.userId;
           task.activityLog.unshift({
             id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
             timestamp: new Date().toISOString(),

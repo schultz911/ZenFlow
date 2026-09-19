@@ -275,8 +275,8 @@ export function getTaskBillableMs(task: Task, nowMs: number = Date.now()): numbe
     }
   }
 
-  // If no duration was recorded and task has an activityLog, compute from historical status changes
-  if (totalMs === 0 && task.activityLog && task.activityLog.length > 0) {
+  // If no duration was recorded (legacy tasks without inProgressDurationMs) and task has an activityLog, compute from historical status changes
+  if (task.inProgressDurationMs === undefined && task.activityLog && task.activityLog.length > 0) {
     let activeStartMs: number | null = null;
     const sortedActivities = [...task.activityLog].sort(
       (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
