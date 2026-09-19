@@ -89,6 +89,8 @@ export interface DragTaskInfo {
   sourceUserId: string;
   sourceStatus: TaskStatus;
   title: string;
+  task?: Task;
+  dueDate?: string;
 }
 
 export interface TaskOrderUpdate {

@@ -6,6 +6,17 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
+### Sweep 17: 2026-09-19 (Cross-User Drag Reliability, Heartbeat Leak Remediation, Non-Blocking Credential I/O, Pipeline Buffer Integrity, Excel Export & Animation Polish)
+
+- **BUG-07 (Critical Workflow - Cross-User Drag Target & Pipeline Activation Silent Drop):** In `Swimlane.tsx`, `validateAndExecuteMove` intercepted drag operations to validate target column WIP limits and deadline demand gating by looking up the dragged task in `tasks.find(t => t.id === taskId)`. Because `App.tsx` slices and passes tasks to each user's swimlane isolated by `tasksByUserId.get(user.id)` to preserve `React.memo` performance, dragging a task from User A to User B's swimlane resulted in `task` being `undefined` in User B's swimlane context. In addition, the drag payload omitted `dueDate`. Consequently, dragging tasks between different users or activating pipeline tasks into another user's lane silently aborted. Resolved by extending `DragTaskInfo` with `task` and `dueDate`, supplying them in `TaskCard.tsx` and `PipelineSwimlane.tsx`, and updating `validateAndExecuteMove` and `extractDragData` in `Swimlane.tsx` to read from `activeDragInfo.task` and HTML5 fallback payload while preserving `React.memo` isolation.
+- **PERF-17 (Server Memory Leak - SSE Heartbeat Inactive Socket Retention):** In `server.ts`, the 20-second Server-Sent Events (SSE) heartbeat interval looped through all active connections in `clients` to write ping comments. When client sockets were abruptly terminated or encountered socket write failures, the code failed to remove the dead response objects from the `clients` array, allowing in-memory `Response` objects to accumulate until the 100-client threshold was reached. Added active pruning on write error and socket closure/destruction to prevent memory leaks.
+- **PERF-18 (Event Loop Latency - Synchronous File I/O in Service Account Ingestion):** In `server.ts`, `POST /api/firestore/credentials` wrote uploaded service account JSON credentials to disk using blocking `fs.writeFileSync`. Under concurrent request traffic on single-core container hosts, blocking the Node.js event loop degraded API throughput and increased response latencies. Migrated to non-blocking `await fs.promises.writeFile`.
+- **FEAT-14 (Pipeline Buffer Integrity - Suppression of False-Positive Unscheduled Ribbons):** The horizontal pipeline swimlane introduced in Sweep 16 serves as an exploratory, deadline-free backlog buffer. However, `UnscheduledTasksRibbon.tsx` matched all tasks with `!task.dueDate`, displaying personal pipeline items as urgent unscheduled tasks requiring immediate deadlines. Added `&& t.status !== 'pipeline'` filter to preserve the pipeline's purpose as a relaxed exploratory buffer.
+- **INCOMP-01 (User Deletion Modal Completeness - Pipeline Task Accounting):** In `DeleteUserModal.tsx`, the deletion summary aggregated tasks in `todo`, `in_progress`, `in_review`, `done`, and `archived`, but omitted tasks currently in the `pipeline` backlog buffer. Added pipeline task tracking and rendered an indigo status chip in the confirmation modal.
+- **FEAT-15 (Enterprise Workload & Billable Hours Excel Report):** Implemented `exportWorkspaceXLS` in `workload.ts` generating an XML/HTML-based Excel `.xls` spreadsheet with formatted styling, custom headers, billable hours, detailed in-progress durations, cognitive points, assignees, and completion dates. Operates entirely client-side without heavy external dependencies.
+- **UX-07 (Overview Bar Export Flyout Dismissal):** In `OverviewBar.tsx`, the export format dropdown lacked outside-click event listeners, causing it to remain permanently open when users clicked outside or interacted with other dashboard elements. Added a click-outside detection hook via `exportMenuRef` and auto-closing behavior.
+- **ANIM-01 (Modal Exit Animation Truncation):** In both `DeadlineDemandModal.tsx` and `WipLimitModal.tsx`, early returns `if (!isOpen ...) return null;` were placed before `<AnimatePresence>`. When the modals closed, the component unmounted immediately and skipped all Framer Motion exit transitions. Moved conditional rendering inside `<AnimatePresence>` to restore smooth backdrop fade-out and dialog scale-down animations.
+
 ### Sweep 16: 2026-09-19 (Pipeline Swimlane, Deadline Demand Gate, 2-Task WIP Guard, Billable Hours & Workspace Customization)
 
 - **FEAT-11 (Horizontal Pipeline Swimlane & Backlog Buffer):** Implemented horizontal scrollable PipelineSwimlane.tsx at the top of each user's swimlane card. Cards display solely task title and cognitive load indicator. Tasks have no deadline and are excluded from the workload capacity score. Supports drag-and-drop and inline quick creation.
@@ -127,6 +138,21 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 2. Previously Suggested
 
+### Proposed in Sweep 17: Cross-User Drag Reliability, Heartbeat Leak Remediation, Pipeline Buffer Integrity & Enterprise Excel Export
+
+- **Phase 1: Critical Workflow Fix (BUG-07)**
+  - BUG-07: Enrich `DragTaskInfo` in [types.ts](file:///c:/ZenFlow/src/types.ts) with `task?: Task; dueDate?: string;`. Update `handleDragTaskStart` in [App.tsx](file:///c:/ZenFlow/src/App.tsx) and drag data transfers in [TaskCard.tsx](file:///c:/ZenFlow/src/components/TaskCard.tsx) and [PipelineSwimlane.tsx](file:///c:/ZenFlow/src/components/PipelineSwimlane.tsx). Update `validateAndExecuteMove` and `extractDragData` in [Swimlane.tsx](file:///c:/ZenFlow/src/components/Swimlane.tsx) to resolve task references seamlessly across user boundary slices.
+- **Phase 2: Server Memory & Event-Loop Optimization (PERF-17 & PERF-18)**
+  - PERF-17: In [server.ts](file:///c:/ZenFlow/server.ts), filter out dead or destroyed client sockets during the 20-second SSE heartbeat interval and remove failing clients on write error.
+  - PERF-18: In [server.ts](file:///c:/ZenFlow/server.ts), replace synchronous `fs.writeFileSync` in `POST /api/firestore/credentials` with non-blocking `await fs.promises.writeFile`.
+- **Phase 3: Product Fidelity & Pipeline Buffer Integration (FEAT-14 & INCOMP-01)**
+  - FEAT-14: In [UnscheduledTasksRibbon.tsx](file:///c:/ZenFlow/src/components/UnscheduledTasksRibbon.tsx), add `&& t.status !== 'pipeline'` filter to prevent intentional backlog buffer items from triggering urgent deadline alerts.
+  - INCOMP-01: In [DeleteUserModal.tsx](file:///c:/ZenFlow/src/components/DeleteUserModal.tsx), aggregate `pipeline` status counts and render a dedicated indigo chip in the confirmation modal.
+- **Phase 4: Enterprise Reporting, Popover Hygiene & Animation Polish (FEAT-15, UX-07, ANIM-01)**
+  - FEAT-15: Implement formatted workspace export in [workload.ts](file:///c:/ZenFlow/src/utils/workload.ts) with full billable hours, assignee metrics, and task statuses (user directed Excel `.xls` format).
+  - UX-07: Add outside-click listener in [OverviewBar.tsx](file:///c:/ZenFlow/src/components/OverviewBar.tsx) to auto-close the export menu when clicking outside.
+  - ANIM-01: In [DeadlineDemandModal.tsx](file:///c:/ZenFlow/src/components/DeadlineDemandModal.tsx) and [WipLimitModal.tsx](file:///c:/ZenFlow/src/components/WipLimitModal.tsx), eliminate early returns and wrap conditional rendering within `<AnimatePresence>` to allow exit animations to complete smoothly.
+
 ### Proposed in Sweep 15: Column Default Deadline Sorting & Done/Archived Card Clarity
 
 - **Phase 1: Default Column Deadline Sorting**
@@ -244,6 +270,17 @@ This document records the complete lifecycle of architectural sweeps, discovered
 ---
 
 ## 3. Approved and Implemented
+
+### Sweep 17 Executed: Cross-User Drag Reliability, Server Optimization, Pipeline Buffer Integrity, Excel Export & Animation Polish (2026-09-19)
+
+- **BUG-07 (Executed):** Extended `DragTaskInfo` in [types.ts](file:///c:/ZenFlow/src/types.ts) with `task?: Task` and `dueDate?: string`, populated them in [App.tsx](file:///c:/ZenFlow/src/App.tsx), added `dueDate` to HTML5 `dragPayload` in [TaskCard.tsx](file:///c:/ZenFlow/src/components/TaskCard.tsx) and [PipelineSwimlane.tsx](file:///c:/ZenFlow/src/components/PipelineSwimlane.tsx), and updated `validateAndExecuteMove` in [Swimlane.tsx](file:///c:/ZenFlow/src/components/Swimlane.tsx) to resolve task data across memoized user boundary slices, permanently fixing silent drops on cross-user and pipeline moves.
+- **PERF-17 (Executed):** Hardened the 20-second SSE heartbeat in [server.ts](file:///c:/ZenFlow/server.ts) by filtering and pruning dead sockets (`socket.destroyed`, `writableEnded`, or write errors) from the `clients` array, preventing socket object retention leaks.
+- **PERF-18 (Executed):** Converted synchronous `fs.writeFileSync` in `POST /api/firestore/credentials` in [server.ts](file:///c:/ZenFlow/server.ts) to non-blocking `await fs.promises.writeFile`, safeguarding Node.js event-loop throughput during service account uploads.
+- **FEAT-14 (Executed):** Added `&& t.status !== 'pipeline'` to [UnscheduledTasksRibbon.tsx](file:///c:/ZenFlow/src/components/UnscheduledTasksRibbon.tsx), preserving pipeline items as relaxed backlog buffer items without triggering urgent deadline alerts.
+- **INCOMP-01 (Executed):** Updated [DeleteUserModal.tsx](file:///c:/ZenFlow/src/components/DeleteUserModal.tsx) to count and display `pipeline` tasks in the deletion summary dialog alongside existing status chips.
+- **FEAT-15 (Executed - User Modified to XLS):** Implemented `exportWorkspaceXLS` in [workload.ts](file:///c:/ZenFlow/src/utils/workload.ts) generating an Excel-compatible XML/HTML table spreadsheet (`.xls`) with formatted bold headers, styled gridlines, billable hours, duration breakdowns, assignees, and completion timestamps, eliminating the need for external third-party dependencies.
+- **UX-07 (Executed):** Added outside-click dismissal ref and listener to the export dropdown in [OverviewBar.tsx](file:///c:/ZenFlow/src/components/OverviewBar.tsx), auto-closing the menu when users click anywhere outside the dropdown.
+- **ANIM-01 (Executed):** Removed early component returns in [DeadlineDemandModal.tsx](file:///c:/ZenFlow/src/components/DeadlineDemandModal.tsx) and [WipLimitModal.tsx](file:///c:/ZenFlow/src/components/WipLimitModal.tsx), moving `{isOpen && ...}` blocks directly inside `<AnimatePresence>` so exit animations run smoothly on close.
 
 ### Sweep 14 Executed: Multitasking & Context-Switching Guard & 7-Day Velocity Micro-Sparkline (2026-09-19)
 
@@ -372,6 +409,10 @@ This document records the complete lifecycle of architectural sweeps, discovered
 ---
 
 ## 4. Denied or Not Implemented
+
+### Sweep 17 Evaluation: Cross-User Drag Reliability, Server Optimization, Pipeline Buffer Integrity & Enterprise Excel Export (2026-09-19)
+
+- *(None rejected — All proposed optimizations were approved across Phases 1–4. User directed one modification for FEAT-15: replaced standard CSV export format with a formatted Excel `.xls` spreadsheet report.)*
 
 ### Sweep 9 Evaluation: Enterprise Virtual DOM Isolation, Credential Hydration & Performance Hardening (2026-09-19)
 

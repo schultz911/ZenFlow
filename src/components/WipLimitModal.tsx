@@ -20,11 +20,10 @@ export const WipLimitModal: React.FC<WipLimitModalProps> = ({
   onMoveToDone,
   onMoveToTodo,
 }) => {
-  if (!isOpen || !user) return null;
-
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {isOpen && user && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -138,6 +137,7 @@ export const WipLimitModal: React.FC<WipLimitModalProps> = ({
           </div>
         </motion.div>
       </div>
-    </AnimatePresence>
+    )}
+  </AnimatePresence>
   );
 };

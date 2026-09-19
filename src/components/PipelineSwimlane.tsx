@@ -255,6 +255,7 @@ export const PipelineSwimlane: React.FC<PipelineSwimlaneProps> = ({
                     userId: user.id,
                     order: task.order,
                     title: task.title,
+                    dueDate: task.dueDate,
                   };
                   e.dataTransfer.setData('application/json', JSON.stringify(dragPayload));
                   e.dataTransfer.setData('text/plain', task.id);

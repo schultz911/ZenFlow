@@ -1,6 +1,6 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useDashboard } from '../context/DashboardContext';
-import { calculateUserWorkload, exportWorkspaceCSV, exportWorkspaceJSON } from '../utils/workload';
+import { calculateUserWorkload, exportWorkspaceXLS, exportWorkspaceJSON } from '../utils/workload';
 import {
   Search,
   Plus,
@@ -27,6 +27,19 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
   const { activeRoleTab, users, tasks } = useDashboard();
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close export menu when clicking outside
+  useEffect(() => {
+    if (!showExportMenu) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [showExportMenu]);
 
   // Synchronize local search state with parent
   useEffect(() => {
@@ -192,7 +205,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
         </div>
 
         {/* Export Workspace Dropdown */}
-        <div className="relative">
+        <div className="relative" ref={exportMenuRef}>
           <button
             id="export-workspace-btn"
             onClick={() => setShowExportMenu(prev => !prev)}
@@ -203,16 +216,16 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
           </button>
 
           {showExportMenu && (
-            <div className="absolute right-0 mt-1.5 w-48 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] p-1.5 shadow-xl z-20">
+            <div className="absolute right-0 mt-1.5 w-52 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] p-1.5 shadow-xl z-20">
               <button
                 onClick={() => {
                   setShowExportMenu(false);
-                  exportWorkspaceCSV(tasks, users);
+                  exportWorkspaceXLS(tasks, users);
                 }}
                 className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
               >
                 <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-500" />
-                <span>Export CSV Report</span>
+                <span>Export Excel (.xls) Report</span>
               </button>
               <button
                 onClick={() => {

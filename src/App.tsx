@@ -212,6 +212,8 @@ function DashboardContent() {
         sourceUserId: draggedTask.userId,
         sourceStatus: draggedTask.status,
         title: draggedTask.title,
+        task: draggedTask,
+        dueDate: draggedTask.dueDate,
       });
     },
     [setActiveDragInfo]

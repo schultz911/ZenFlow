@@ -31,9 +31,9 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({
   }, [isOpen, isDeleting, onClose]);
 
   const { userTasks, counts } = useMemo(() => {
-    if (!user) return { userTasks: [], counts: { todo: 0, in_progress: 0, in_review: 0, done: 0, archived: 0 } };
+    if (!user) return { userTasks: [], counts: { pipeline: 0, todo: 0, in_progress: 0, in_review: 0, done: 0, archived: 0 } };
     const list: Task[] = [];
-    const c = { todo: 0, in_progress: 0, in_review: 0, done: 0, archived: 0 };
+    const c = { pipeline: 0, todo: 0, in_progress: 0, in_review: 0, done: 0, archived: 0 };
     for (const t of tasks) {
       if (t.userId === user.id) {
         list.push(t);
@@ -47,6 +47,7 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({
 
   if (!isOpen || !user) return null;
 
+  const pipelineCount = counts.pipeline;
   const todoCount = counts.todo;
   const inProgressCount = counts.in_progress;
   const inReviewCount = counts.in_review;
@@ -143,6 +144,11 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({
                 Tasks to be deleted ({userTasks.length} total):
               </p>
               <div className="flex flex-wrap gap-1.5">
+                {pipelineCount > 0 && (
+                  <span className="rounded-md bg-indigo-500/10 border border-indigo-500/20 px-2 py-0.5 text-[10px] text-indigo-600 dark:text-indigo-400">
+                    Pipeline: {pipelineCount}
+                  </span>
+                )}
                 {todoCount > 0 && (
                   <span className="rounded-md bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 px-2 py-0.5 text-[10px] text-neutral-600 dark:text-white/60">
                     To Do: {todoCount}

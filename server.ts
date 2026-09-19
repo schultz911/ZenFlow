@@ -1260,7 +1260,7 @@ async function startServer() {
       }
 
       const keyPath = path.join(process.cwd(), 'serviceAccountKey.json');
-      fs.writeFileSync(keyPath, JSON.stringify(parsed, null, 2), 'utf-8');
+      await fs.promises.writeFile(keyPath, JSON.stringify(parsed, null, 2), 'utf-8');
 
       initPromise = null;
       adminDb = null;
@@ -1327,12 +1327,14 @@ async function startServer() {
     const heartbeatInterval = setInterval(() => {
       if (res.destroyed || res.writableEnded) {
         clearInterval(heartbeatInterval);
+        clients = clients.filter(c => c.id !== clientId);
         return;
       }
       try {
         res.write(': heartbeat\n\n');
       } catch {
         clearInterval(heartbeatInterval);
+        clients = clients.filter(c => c.id !== clientId);
       }
     }, 20000);
 

@@ -189,6 +189,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       userId: task.userId,
       order: task.order,
       title: task.title,
+      dueDate: task.dueDate,
     };
 
     e.dataTransfer.setData('application/json', JSON.stringify(dragPayload));

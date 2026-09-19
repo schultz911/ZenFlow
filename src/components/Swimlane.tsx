@@ -210,9 +210,13 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
 
   // Central move validator enforcing deadline demand and 2-task WIP limit
   const validateAndExecuteMove = useCallback(
-    (taskId: string, targetStatus: TaskStatus, targetIndex?: number) => {
-      // Find the moving task in userTasks or tasks (cross-user drag)
-      const task = tasks.find(t => t.id === taskId) || userTasks.find(t => t.id === taskId);
+    (taskId: string, targetStatus: TaskStatus, targetIndex?: number, fallbackTask?: Task) => {
+      // Find the moving task in userTasks, tasks, activeDragInfo, or fallbackTask (cross-user drag)
+      const task =
+        tasks.find(t => t.id === taskId) ||
+        userTasks.find(t => t.id === taskId) ||
+        (activeDragInfo?.taskId === taskId ? activeDragInfo.task : undefined) ||
+        fallbackTask;
       if (!task) return;
 
       // 1. Demand Deadline Check:
@@ -240,7 +244,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
       // Otherwise valid: execute move
       onMoveTask(taskId, user.id, targetStatus, targetIndex);
     },
-    [tasks, userTasks, tasksByColumn.in_progress, onMoveTask, user.id]
+    [tasks, userTasks, activeDragInfo, tasksByColumn.in_progress, onMoveTask, user.id]
   );
 
   const handleConfirmDemandDeadline = useCallback(
@@ -289,6 +293,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   const extractDragData = (e: React.DragEvent) => {
     let taskId = '';
     let status: TaskStatus | undefined;
+    let payloadTask: Task | undefined;
 
     // 1. Try application/json
     try {
@@ -297,6 +302,19 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
         const parsed = JSON.parse(raw);
         if (parsed.taskId) taskId = parsed.taskId;
         if (parsed.status) status = parsed.status;
+        if (parsed.taskId && parsed.title) {
+          payloadTask = {
+            id: parsed.taskId,
+            userId: parsed.userId || user.id,
+            title: parsed.title,
+            status: parsed.status || 'todo',
+            order: parsed.order ?? 0,
+            cognitiveLoad: parsed.cognitiveLoad || 'medium',
+            dueDate: parsed.dueDate,
+            createdAt: parsed.createdAt || new Date().toISOString(),
+            updatedAt: parsed.updatedAt || new Date().toISOString(),
+          };
+        }
       }
     } catch {
       // ignore
@@ -316,7 +334,13 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
       status = activeDragInfo.sourceStatus;
     }
 
-    return { taskId, status };
+    const resolvedTask =
+      tasks.find(t => t.id === taskId) ||
+      userTasks.find(t => t.id === taskId) ||
+      (activeDragInfo?.taskId === taskId ? activeDragInfo.task : undefined) ||
+      payloadTask;
+
+    return { taskId, status, task: resolvedTask };
   };
 
   const handleDragOverColumn = (e: React.DragEvent, status: TaskStatus) => {
@@ -353,12 +377,12 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     setDragOverHeader(false);
     setDragOverColumn(null);
 
-    const { taskId, status } = extractDragData(e);
+    const { taskId, status, task } = extractDragData(e);
     if (!taskId) return;
 
     // Drop onto user header maintains original status (or default 'todo') and reassigns user
     const targetStatus = status || 'todo';
-    validateAndExecuteMove(taskId, targetStatus);
+    validateAndExecuteMove(taskId, targetStatus, undefined, task);
   };
 
   const handleDropOnColumn = (e: React.DragEvent, targetStatus: TaskStatus) => {
@@ -367,11 +391,11 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     setDragOverColumn(null);
     setDragOverTaskId(null);
 
-    const { taskId } = extractDragData(e);
+    const { taskId, task } = extractDragData(e);
     if (!taskId) return;
 
     // Assign to this user and move to target column status
-    validateAndExecuteMove(taskId, targetStatus);
+    validateAndExecuteMove(taskId, targetStatus, undefined, task);
   };
 
   const handleDropOnTask = (e: React.DragEvent, targetTask: Task, targetStatus: TaskStatus) => {
@@ -380,7 +404,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     setDragOverColumn(null);
     setDragOverTaskId(null);
 
-    const { taskId } = extractDragData(e);
+    const { taskId, task } = extractDragData(e);
     if (!taskId || (taskId === targetTask.id && user.id === targetTask.userId)) return;
 
     // Calculate new index in this user's target status list
@@ -390,7 +414,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     const targetIdx = tasksInTarget.findIndex(t => t.id === targetTask.id);
     const newIndex = targetIdx !== -1 ? targetIdx : tasksInTarget.length;
 
-    validateAndExecuteMove(taskId, targetStatus, newIndex);
+    validateAndExecuteMove(taskId, targetStatus, newIndex, task);
   };
 
   const handleMoveStatus = useCallback(

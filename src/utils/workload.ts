@@ -469,38 +469,74 @@ export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
 }
 
 /**
- * Generates and downloads a clean CSV report of all workspace tasks with workload metrics
+ * Generates and downloads an Excel (.xls) spreadsheet report of all workspace tasks with workload and billable hours metrics
  */
-export function exportWorkspaceCSV(tasks: Task[], users: { id: string; name: string; email: string; role: Role }[]) {
+export function exportWorkspaceXLS(tasks: Task[], users: { id: string; name: string; email: string; role: Role }[]) {
   const userMap = new Map(users.map(u => [u.id, u]));
-  const headers = ['Task ID', 'Title', 'Status', 'Cognitive Load', 'Assignee Name', 'Assignee Email', 'Role', 'Due Date', 'Created At'];
-  
-  const rows = tasks.map(t => {
-    const user = userMap.get(t.userId);
-    return [
-      `"${t.id}"`,
-      `"${(t.title || '').replace(/"/g, '""')}"`,
-      `"${t.status}"`,
-      `"${t.cognitiveLoad}"`,
-      `"${(user?.name || 'Unassigned').replace(/"/g, '""')}"`,
-      `"${user?.email || ''}"`,
-      `"${user?.role || ''}"`,
-      `"${t.dueDate || 'None'}"`,
-      `"${t.createdAt}"`,
-    ].join(',');
-  });
+  const headers = [
+    'Task ID',
+    'Title',
+    'Status',
+    'Cognitive Load',
+    'Assignee Name',
+    'Assignee Email',
+    'Role',
+    'Due Date',
+    'Billable Hours',
+    'Billable Duration (Detailed)',
+    'Completed At',
+    'Created At',
+  ];
 
-  const csvContent = [headers.join(','), ...rows].join('\n');
-  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const escapeXml = (str: string) =>
+    str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  const headerCells = headers
+    .map(h => `<th style="background-color:#1e293b;color:#ffffff;font-weight:bold;padding:8px;border:1px solid #cbd5e1;text-align:left;">${escapeXml(h)}</th>`)
+    .join('');
+
+  const rows = tasks
+    .map(t => {
+      const user = userMap.get(t.userId);
+      const billableMs = getTaskBillableMs(t);
+      const billableHoursStr = formatBillableHours(billableMs);
+      const billableDetailedStr = formatBillableDetailed(billableMs);
+      const statusLabel = t.status.replace('_', ' ');
+
+      const cells = [
+        t.id,
+        t.title || '',
+        statusLabel,
+        t.cognitiveLoad || 'medium',
+        user?.name || 'Unassigned',
+        user?.email || '',
+        user?.role || '',
+        t.dueDate || 'None',
+        billableHoursStr,
+        billableDetailedStr,
+        t.completedAt ? new Date(t.completedAt).toISOString() : 'N/A',
+        t.createdAt || '',
+      ];
+
+      return `<tr>${cells.map(c => `<td style="padding:6px;border:1px solid #e2e8f0;text-align:left;">${escapeXml(c)}</td>`).join('')}</tr>`;
+    })
+    .join('');
+
+  const xlsContent = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Workspace Report</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--><meta http-equiv="content-type" content="text/plain; charset=UTF-8"/></head><body><table><thead><tr>${headerCells}</tr></thead><tbody>${rows}</tbody></table></body></html>`;
+
+  const blob = new Blob([xlsContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.setAttribute('download', `zenflow-workspace-${new Date().toISOString().slice(0, 10)}.csv`);
+  link.setAttribute('download', `zenflow-workspace-${new Date().toISOString().slice(0, 10)}.xls`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
+// Backwards-compatible alias for CSV callers
+export const exportWorkspaceCSV = exportWorkspaceXLS;
 
 /**
  * Generates and downloads a complete JSON audit file

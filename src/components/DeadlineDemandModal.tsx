@@ -22,8 +22,6 @@ export const DeadlineDemandModal: React.FC<DeadlineDemandModalProps> = ({
 }) => {
   const [selectedDate, setSelectedDate] = useState<string>('');
 
-  if (!isOpen || !task || !targetStatus) return null;
-
   const todayStr = new Date().toISOString().slice(0, 10);
 
   const getPresetDate = (daysAhead: number) => {
@@ -44,20 +42,21 @@ export const DeadlineDemandModal: React.FC<DeadlineDemandModalProps> = ({
     archived: 'Archived',
   };
 
-  const targetLabel = statusLabels[targetStatus] || targetStatus;
+  const targetLabel = targetStatus ? (statusLabels[targetStatus] || targetStatus) : '';
 
   const handleApply = (date: string) => {
-    if (!date) return;
+    if (!date || !task) return;
     onConfirm(task.id, date);
   };
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        {/* Backdrop */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
+      {isOpen && task && targetStatus && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onCancel}
           className="fixed inset-0 bg-black/60 backdrop-blur-xs"
@@ -186,6 +185,7 @@ export const DeadlineDemandModal: React.FC<DeadlineDemandModalProps> = ({
           </div>
         </motion.div>
       </div>
-    </AnimatePresence>
+    )}
+  </AnimatePresence>
   );
 };
