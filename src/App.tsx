@@ -286,36 +286,31 @@ function DashboardContent() {
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-[#0A0A0A] text-neutral-900 dark:text-[#E5E5E5] font-sans antialiased selection:bg-blue-500/30 selection:text-white transition-colors">
-      {/* Pinned Sticky Header & Ribbons Container */}
-      <div className="sticky top-0 z-30 w-full backdrop-blur-md bg-white/95 dark:bg-[#0D0D0D]/95 shadow-xs transition-colors">
-        <Header
-          onOpenLoginModal={handleOpenLogin}
-          onOpenNewUserModal={handleOpenNewUser}
-          onOpenFirestoreModal={() => setFirestoreModalOpen(true)}
-        />
-
-        {/* Sticky Ribbons Alignment Container */}
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-2 relative z-10">
-          {/* Critical Deadlines Marquee Ribbon */}
-          <MarqueeRibbon
-            tasks={tasks}
-            users={users}
-            onTaskClick={handleEditTask}
-          />
-
-          {/* Unscheduled Tasks Prompt Ribbon (Prompts ONLY the logged in user) */}
-          <UnscheduledTasksRibbon
-            currentUser={currentUser}
-            tasks={tasks}
-            users={users}
-            onTaskClick={handleEditTask}
-            onReschedule={handleRescheduleTask}
-          />
-        </div>
-      </div>
+      {/* Sticky Header */}
+      <Header
+        onOpenLoginModal={handleOpenLogin}
+        onOpenNewUserModal={handleOpenNewUser}
+        onOpenFirestoreModal={() => setFirestoreModalOpen(true)}
+      />
 
       {/* Main Container */}
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        {/* Critical Deadlines Marquee Ribbon */}
+        <MarqueeRibbon
+          tasks={tasks}
+          users={users}
+          onTaskClick={handleEditTask}
+        />
+
+        {/* Unscheduled Tasks Prompt Ribbon (Prompts ONLY the logged in user) */}
+        <UnscheduledTasksRibbon
+          currentUser={currentUser}
+          tasks={tasks}
+          users={users}
+          onTaskClick={handleEditTask}
+          onReschedule={handleRescheduleTask}
+        />
+
         {/* Overview Bar */}
         <OverviewBar
           searchQuery={searchQuery}
