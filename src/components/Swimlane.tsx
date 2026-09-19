@@ -22,6 +22,7 @@ import {
   Trash2,
   ArrowUp,
   ArrowDown,
+  Calendar,
 } from 'lucide-react';
 
 interface SwimlaneProps {
@@ -31,7 +32,13 @@ interface SwimlaneProps {
   onDragTaskStart?: (task: Task) => void;
   onDragTaskEnd?: () => void;
   onAddTask: (userId: string, status?: TaskStatus) => void;
-  onQuickAddTask?: (userId: string, title: string, status: TaskStatus, cognitiveLoad: 'low' | 'medium' | 'high') => Promise<void>;
+  onQuickAddTask?: (
+    userId: string,
+    title: string,
+    status: TaskStatus,
+    cognitiveLoad: 'low' | 'medium' | 'high',
+    dueDate?: string
+  ) => Promise<void>;
   onEditTask: (task: Task) => void;
   onRescheduleTask?: (taskId: string, newDueDate: string | undefined) => void;
   onUpdateTaskTitle?: (taskId: string, newTitle: string) => void;
@@ -144,21 +151,33 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   const [quickAddStatus, setQuickAddStatus] = useState<TaskStatus | null>(null);
   const [quickAddTitle, setQuickAddTitle] = useState('');
   const [quickAddLoad, setQuickAddLoad] = useState<'low' | 'medium' | 'high'>('medium');
+  const [quickAddDueDate, setQuickAddDueDate] = useState<string>('');
   const [isSubmittingQuickAdd, setIsSubmittingQuickAdd] = useState(false);
+
+  const getPresetDateStr = useCallback((daysAhead: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + daysAhead);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }, []);
 
   const handleCommitQuickAdd = useCallback(async (status: TaskStatus) => {
     const trimmed = quickAddTitle.trim();
-    if (!trimmed || isSubmittingQuickAdd) return;
+    const resolvedDueDate = quickAddDueDate || getPresetDateStr(1);
+    if (!trimmed || !resolvedDueDate || isSubmittingQuickAdd) return;
     setIsSubmittingQuickAdd(true);
     try {
       if (onQuickAddTask) {
-        await onQuickAddTask(user.id, trimmed, status, quickAddLoad);
+        await onQuickAddTask(user.id, trimmed, status, quickAddLoad, resolvedDueDate);
       }
       setQuickAddTitle('');
+      setQuickAddDueDate(getPresetDateStr(1));
     } finally {
       setIsSubmittingQuickAdd(false);
     }
-  }, [quickAddTitle, isSubmittingQuickAdd, onQuickAddTask, user.id, quickAddLoad]);
+  }, [quickAddTitle, quickAddDueDate, getPresetDateStr, isSubmittingQuickAdd, onQuickAddTask, user.id, quickAddLoad]);
 
   const handleTaskDragStart = useCallback(
     (draggedTask: Task) => {
@@ -705,6 +724,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                 setQuickAddStatus(col.status);
                                 setQuickAddTitle('');
                                 setQuickAddLoad('medium');
+                                setQuickAddDueDate(getPresetDateStr(1));
                               }
                             }}
                             title={`Inline quick add to ${col.title}`}
@@ -759,6 +779,45 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                 className="w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-[#121212] px-2.5 py-1.5 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none"
                               />
 
+                              {/* Quick Deadline Selector (Mandatory for main swimlanes) */}
+                              <div className="flex items-center justify-between gap-1 text-[10px] pt-1.5 border-t border-neutral-100 dark:border-white/5">
+                                <div className="flex items-center gap-1 text-neutral-500 dark:text-white/40 shrink-0">
+                                  <Calendar className="h-3 w-3 text-amber-500 shrink-0" />
+                                  <span className="font-semibold text-[10px] text-neutral-700 dark:text-white/70">Due *:</span>
+                                </div>
+                                <div className="flex items-center gap-1 flex-wrap justify-end">
+                                  {([
+                                    { label: 'Today', days: 0 },
+                                    { label: 'Tomorrow', days: 1 },
+                                    { label: '+3d', days: 3 },
+                                    { label: '+7d', days: 7 },
+                                  ]).map(preset => {
+                                    const dateStr = getPresetDateStr(preset.days);
+                                    const isSelected = quickAddDueDate === dateStr;
+                                    return (
+                                      <button
+                                        key={preset.label}
+                                        type="button"
+                                        onClick={() => setQuickAddDueDate(dateStr)}
+                                        className={`rounded px-1.5 py-0.5 text-[9px] font-medium border transition-colors cursor-pointer ${
+                                          isSelected
+                                            ? 'bg-blue-600 text-white border-blue-600 shadow-2xs font-semibold'
+                                            : 'border-neutral-200 dark:border-white/10 text-neutral-600 dark:text-white/60 hover:bg-neutral-100 dark:hover:bg-white/5'
+                                        }`}
+                                      >
+                                        {preset.label}
+                                      </button>
+                                    );
+                                  })}
+                                  <input
+                                    type="date"
+                                    value={quickAddDueDate}
+                                    onChange={e => setQuickAddDueDate(e.target.value)}
+                                    className="rounded border border-neutral-200 dark:border-white/10 bg-transparent px-1 py-0.5 text-[9px] text-neutral-800 dark:text-white/90 cursor-pointer focus:outline-none"
+                                  />
+                                </div>
+                              </div>
+
                               <div className="flex items-center justify-between gap-1.5 pt-0.5">
                                 <div className="flex items-center gap-1">
                                   {(['low', 'medium', 'high'] as const).map(load => (
@@ -795,7 +854,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                   </button>
                                   <button
                                     type="button"
-                                    disabled={!quickAddTitle.trim() || isSubmittingQuickAdd}
+                                    disabled={!quickAddTitle.trim() || !quickAddDueDate || isSubmittingQuickAdd}
                                     onClick={() => handleCommitQuickAdd(col.status)}
                                     className="rounded-lg bg-blue-600 hover:bg-blue-500 px-2.5 py-1 text-[10px] font-semibold text-white shadow-xs transition-colors cursor-pointer disabled:opacity-40"
                                   >
@@ -817,6 +876,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                   setQuickAddStatus(col.status);
                                   setQuickAddTitle('');
                                   setQuickAddLoad('medium');
+                                  setQuickAddDueDate(getPresetDateStr(1));
                                 }}
                                 className={`flex h-28 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed p-3 text-center transition-all ${
                                   isDropActive

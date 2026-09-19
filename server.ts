@@ -965,6 +965,10 @@ async function startServer() {
     const maxOrder = existingInStatus.reduce((max, t) => Math.max(max, t.order ?? 0), -1);
 
     const cleanStatus = ['pipeline', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : 'todo';
+    const cleanDueDate = dueDate ? sanitizeString(dueDate) : undefined;
+    if (cleanStatus !== 'pipeline' && !cleanDueDate) {
+      return res.status(400).json({ error: 'A deadline is required when adding tasks to active workflow lanes' });
+    }
     const isDone = cleanStatus === 'done';
     const isInProgress = cleanStatus === 'in_progress';
     const taskId = (reqId && typeof reqId === 'string') ? sanitizeString(reqId) : `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
@@ -982,7 +986,7 @@ async function startServer() {
       userId,
       title: cleanTitle,
       description: description ? sanitizeString(description) : undefined,
-      dueDate: dueDate ? sanitizeString(dueDate) : undefined,
+      dueDate: cleanDueDate,
       cognitiveLoad: ['low', 'medium', 'high'].includes(cognitiveLoad) ? cognitiveLoad : 'medium',
       status: cleanStatus,
       order: maxOrder + 1,

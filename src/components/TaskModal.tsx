@@ -128,7 +128,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !userId) return;
+    const isDeadlineRequired = status !== 'pipeline';
+    if (!title.trim() || !userId || (isDeadlineRequired && !dueDate.trim())) return;
 
     setIsSubmitting(true);
     try {
@@ -341,47 +342,52 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             </div>
           </div>
 
-          {/* Due Date (no optional tag, no bottom note) */}
+          {/* Due Date (Mandatory for active workflow lanes) */}
           <div>
             <div className="flex items-center justify-between mb-1">
               <label className="text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 flex items-center gap-1.5">
                 <Calendar className="h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
                 <span>Due Date</span>
+                {status !== 'pipeline' && (
+                  <span className="text-red-500 font-semibold text-[11px] normal-case ml-0.5">
+                    * (Required)
+                  </span>
+                )}
               </label>
               <div className="flex items-center gap-1 text-[10px]">
                 <button
                   type="button"
                   onClick={() => setQuickDate(0)}
-                  className="rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:text-white/40 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white"
+                  className="rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:text-white/40 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
                 >
                   Today
                 </button>
                 <button
                   type="button"
                   onClick={() => setQuickDate(1)}
-                  className="rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:text-white/40 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white"
+                  className="rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:text-white/40 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
                 >
                   Tomorrow
                 </button>
                 <button
                   type="button"
                   onClick={() => setQuickDate(3)}
-                  className="rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:text-white/40 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white"
+                  className="rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:text-white/40 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
                 >
                   +3d
                 </button>
                 <button
                   type="button"
                   onClick={() => setQuickDate(7)}
-                  className="rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:text-white/40 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white"
+                  className="rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:text-white/40 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
                 >
                   +1w
                 </button>
-                {dueDate && (
+                {status === 'pipeline' && dueDate && (
                   <button
                     type="button"
                     onClick={() => setQuickDate(null)}
-                    className="rounded px-1.5 py-0.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+                    className="rounded px-1.5 py-0.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 cursor-pointer"
                   >
                     Clear
                   </button>
@@ -392,10 +398,20 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             <input
               id="task-due-date-input"
               type="date"
+              required={status !== 'pipeline'}
               value={dueDate}
               onChange={e => setDueDate(e.target.value)}
-              className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors"
+              className={`w-full rounded-xl border bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white focus:outline-none transition-colors ${
+                status !== 'pipeline' && !dueDate
+                  ? 'border-amber-400 dark:border-amber-500/50 focus:border-amber-500'
+                  : 'border-neutral-300 dark:border-white/10 focus:border-blue-500'
+              }`}
             />
+            {status !== 'pipeline' && !dueDate && (
+              <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-400">
+                A deadline is required to add tasks directly into active workflow lanes.
+              </p>
+            )}
           </div>
 
           {/* Context (if any) - moved to end */}
@@ -542,7 +558,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               <button
                 type="submit"
                 id="task-submit-button"
-                disabled={isSubmitting || !title.trim() || !userId}
+                disabled={isSubmitting || !title.trim() || !userId || (status !== 'pipeline' && !dueDate.trim())}
                 className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-blue-900/20 hover:bg-blue-500 transition-colors disabled:opacity-50"
               >
                 {taskToEdit ? 'Save Changes' : 'Create Task'}

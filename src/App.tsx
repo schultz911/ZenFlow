@@ -232,8 +232,14 @@ function DashboardContent() {
   }, [setActiveDragInfo]);
 
   const handleQuickAddTask = useCallback(
-    async (userId: string, title: string, status: TaskStatus, cognitiveLoad: 'low' | 'medium' | 'high') => {
-      await createTask({ userId, title, status, cognitiveLoad });
+    async (
+      userId: string,
+      title: string,
+      status: TaskStatus,
+      cognitiveLoad: 'low' | 'medium' | 'high',
+      dueDate?: string
+    ) => {
+      await createTask({ userId, title, status, cognitiveLoad, dueDate });
     },
     [createTask]
   );
