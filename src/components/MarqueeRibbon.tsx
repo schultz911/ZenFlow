@@ -70,7 +70,7 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
   return (
     <div
       id="due-tasks-marquee-ribbon"
-      className="mb-4 flex items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/5 dark:bg-red-950/20 px-3 py-2 text-xs shadow-xs backdrop-blur-sm overflow-hidden"
+      className="flex items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/5 dark:bg-red-950/20 px-3 py-2 text-xs shadow-xs backdrop-blur-sm overflow-hidden"
     >
       {/* Fixed Alert Pill on the Left */}
       <div className="flex items-center gap-1.5 rounded-xl bg-red-600 px-2.5 py-1 text-white shadow-xs shrink-0 z-10 select-none">

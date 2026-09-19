@@ -299,23 +299,26 @@ function DashboardContent() {
         onOpenFirestoreModal={() => setFirestoreModalOpen(true)}
       />
 
+      {/* Pinned Ribbons — sticky just below the header */}
+      <div className="sticky top-16 sm:top-20 z-20 w-full">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-2 space-y-1.5">
+          <MarqueeRibbon
+            tasks={tasks}
+            users={users}
+            onTaskClick={handleEditTask}
+          />
+          <UnscheduledTasksRibbon
+            currentUser={currentUser}
+            tasks={tasks}
+            users={users}
+            onTaskClick={handleEditTask}
+            onReschedule={handleRescheduleTask}
+          />
+        </div>
+      </div>
+
       {/* Main Container */}
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        {/* Critical Deadlines Marquee Ribbon */}
-        <MarqueeRibbon
-          tasks={tasks}
-          users={users}
-          onTaskClick={handleEditTask}
-        />
-
-        {/* Unscheduled Tasks Prompt Ribbon (Prompts ONLY the logged in user) */}
-        <UnscheduledTasksRibbon
-          currentUser={currentUser}
-          tasks={tasks}
-          users={users}
-          onTaskClick={handleEditTask}
-          onReschedule={handleRescheduleTask}
-        />
 
         {/* Overview Bar */}
         <OverviewBar
