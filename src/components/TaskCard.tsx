@@ -192,28 +192,18 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   return (
     <motion.div
       id={`task-card-${task.id}`}
-      layout
-      layoutId={`task-${task.id}`}
-      initial={{ opacity: 0, y: 6, scale: 0.98 }}
+      initial={false}
       animate={{
         opacity: isDragging ? 0.35 : 1,
-        y: 0,
-        scale: isDragging ? 0.96 : 1,
+        scale: isDragging ? 0.98 : 1,
         rotate: isDragging ? 1.5 : 0,
       }}
-      exit={{ opacity: 0, scale: 0.92, transition: { duration: 0.15 } }}
-      transition={{
-        type: 'spring',
-        stiffness: 400,
-        damping: 28,
-        mass: 0.8,
-      }}
-      whileHover={{ y: -1 }}
-      whileTap={{ scale: 0.98 }}
+      transition={{ duration: 0.15, ease: 'easeOut' }}
+      whileTap={isDraggable && !isEditingTitle ? { scale: 0.985 } : undefined}
       draggable={isDraggable && !isEditingTitle}
       onDragStartCapture={handleDragStart}
       onDragEndCapture={handleDragEnd}
-      className={`group relative rounded-xl border p-3 select-none transition-colors shadow-xs ${
+      className={`group relative rounded-xl border p-3 select-none transform-gpu transition-all duration-150 shadow-xs hover:shadow-md ${
         showSnoozeFlyout ? 'z-40' : 'z-0'
       } ${
         isDragging

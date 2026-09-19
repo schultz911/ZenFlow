@@ -518,7 +518,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 )}
 
                 {/* Tasks List (displays top 3 tasks comfortably, scrolls beyond 3 without expanding swimlane board) */}
-                <div className="flex-1 space-y-2.5 max-h-[385px] overflow-y-auto pr-1">
+                <div className="flex-1 space-y-2.5 max-h-[385px] overflow-y-auto pt-1.5 pb-1.5 px-1 pr-1.5">
                   {/* Inline Quick-Add Card */}
                   {quickAddStatus === col.status && (
                     <motion.div
@@ -621,44 +621,49 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                       columnTasks.map(task => {
                         const isTaskDropTarget = dragOverTaskId === task.id;
                         return (
-                          <div
-                            key={task.id}
-                            onDragOver={e => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              if (dragOverTaskId !== task.id) {
-                                setDragOverTaskId(task.id);
-                              }
-                            }}
-                            onDragLeave={e => {
-                              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                                if (dragOverTaskId === task.id) setDragOverTaskId(null);
-                              }
-                            }}
-                            onDrop={e => handleDropOnTask(e, task, col.status)}
-                            className="relative"
-                          >
-                            {/* Visual insertion line indicator */}
-                            {isTaskDropTarget && activeDragInfo && activeDragInfo.taskId !== task.id && (
-                              <motion.div
-                                layoutId="drop-indicator"
-                                className="absolute -top-1.5 left-0 right-0 h-1 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)] z-20 pointer-events-none"
-                              />
-                            )}
-                            <TaskCard
-                              task={task}
-                              userRole={user.role}
-                              onEdit={onEditTask}
-                              onUpdateTitle={onUpdateTaskTitle}
-                              onDelete={onDeleteTask}
-                              onMoveStatus={handleMoveStatus}
-                              onReschedule={onRescheduleTask}
-                              onDragStart={handleTaskDragStart}
-                              onDragEnd={handleTaskDragEnd}
+                        <motion.div
+                          key={task.id}
+                          layout="position"
+                          initial={{ opacity: 0, y: 6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{ duration: 0.18, ease: 'easeOut' }}
+                          onDragOver={e => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (dragOverTaskId !== task.id) {
+                              setDragOverTaskId(task.id);
+                            }
+                          }}
+                          onDragLeave={e => {
+                            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                              if (dragOverTaskId === task.id) setDragOverTaskId(null);
+                            }
+                          }}
+                          onDrop={e => handleDropOnTask(e, task, col.status)}
+                          className="relative"
+                        >
+                          {/* Visual insertion line indicator */}
+                          {isTaskDropTarget && activeDragInfo && activeDragInfo.taskId !== task.id && (
+                            <motion.div
+                              layoutId="drop-indicator"
+                              className="absolute -top-1.5 left-0 right-0 h-1 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.6)] z-20 pointer-events-none"
                             />
-                          </div>
-                        );
-                      })
+                          )}
+                          <TaskCard
+                            task={task}
+                            userRole={user.role}
+                            onEdit={onEditTask}
+                            onUpdateTitle={onUpdateTaskTitle}
+                            onDelete={onDeleteTask}
+                            onMoveStatus={handleMoveStatus}
+                            onReschedule={onRescheduleTask}
+                            onDragStart={handleTaskDragStart}
+                            onDragEnd={handleTaskDragEnd}
+                          />
+                        </motion.div>
+                      );
+                    })
                     )}
                   </AnimatePresence>
                 </div>
@@ -691,7 +696,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               </div>
 
               {/* Archived Tasks List (aligned with 3-task max height) */}
-              <div className="flex-1 space-y-2.5 max-h-[385px] overflow-y-auto pr-1">
+              <div className="flex-1 space-y-2.5 max-h-[385px] overflow-y-auto pt-1.5 pb-1.5 px-1 pr-1.5">
                 <AnimatePresence mode="popLayout">
                   {archivedTasks.length === 0 ? (
                     <motion.div
@@ -705,18 +710,27 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                     </motion.div>
                   ) : (
                     archivedTasks.map(task => (
-                      <TaskCard
+                      <motion.div
                         key={task.id}
-                        task={task}
-                        userRole={user.role}
-                        onEdit={onEditTask}
-                        onUpdateTitle={onUpdateTaskTitle}
-                        onDelete={onDeleteTask}
-                        onMoveStatus={handleMoveStatus}
-                        onReschedule={onRescheduleTask}
-                        onDragStart={handleTaskDragStart}
-                        onDragEnd={handleTaskDragEnd}
-                      />
+                        layout="position"
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95 }}
+                        transition={{ duration: 0.18, ease: 'easeOut' }}
+                        className="relative"
+                      >
+                        <TaskCard
+                          task={task}
+                          userRole={user.role}
+                          onEdit={onEditTask}
+                          onUpdateTitle={onUpdateTaskTitle}
+                          onDelete={onDeleteTask}
+                          onMoveStatus={handleMoveStatus}
+                          onReschedule={onRescheduleTask}
+                          onDragStart={handleTaskDragStart}
+                          onDragEnd={handleTaskDragEnd}
+                        />
+                      </motion.div>
                     ))
                   )}
                 </AnimatePresence>

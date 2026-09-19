@@ -6,6 +6,10 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ### 1. Discovered Optimizations
 
+### Sweep 12: 2026-09-19 (Card Animation De-jittering & Scrollport Clipping Remediation)
+- **VIS-05 (Visual Defect - Topmost Card Upper Border Clipped on Hover):** In `Swimlane.tsx`, the column task list containers declared `overflow-y-auto pr-1` with 0px top padding. Combined with Framer Motion's `whileHover={{ y: -1 }}` on `TaskCard.tsx`, hovering over the topmost card translated its upper border 1px into the negative overflow boundary, causing the top border and box shadow to be clipped by the browser.
+- **PERF-16 (Motion Jitter & Stutter - Layout Projection Conflict & Uncoordinated List Exit):** `TaskCard.tsx` declared both `layout` and redundant `layoutId={`task-${task.id}`}` alongside `whileHover={{ y: -1 }}` and high-stiffness spring transitions. Motion's layout projection engine detected fractional translateY movements and computed inverted correction deltas on every frame, generating high-frequency visual stutter and mouse-boundary fluttering. In addition, task items in `Swimlane.tsx` were wrapped in static `<div>` containers within `<AnimatePresence mode="popLayout">`, breaking smooth exit transitions and causing reordering cards to snap abruptly.
+
 ### Sweep 11: 2026-09-19 (Inline Title Editing, React Hook Invariant Enforcement & Portaled Datepicker)
 - **BUG-05 (Runtime Crash - React Hook Order Invariant Violation #310):** In `TaskModal.tsx`, `useMemo` hooks for `activities` and `cycleMetrics` were positioned downstream of the early return `if (!isOpen) return null;`. When the modal opened, React evaluated 11 hooks versus 9 in the previous render pass, triggering `Minified React error #310`.
 - **UX-04 (Interaction Friction - Modal Diversion on Task Name Edits):** Clicking on the task title previously invoked the full task modal rather than enabling direct, frictionless inline renaming inside the card canvas.
@@ -84,6 +88,12 @@ This document records the complete lifecycle of architectural sweeps, discovered
 ---
 
 ## 2. Previously Suggested
+
+### Sweep 12: 2026-09-19 (Card Animation De-jittering & Scrollport Clipping Remediation)
+- **Phase 1: Scrollport Boundary Protection & Anti-Clipping Clearance**
+  - VIS-05: Update column task list containers in [Swimlane.tsx](file:///c:/ZenFlow/src/components/Swimlane.tsx) across all status columns and the archived column from `overflow-y-auto pr-1` to `overflow-y-auto pt-1.5 pb-1.5 px-1 pr-1.5`. This provides 6px top headroom, ensuring topmost task cards never have their upper borders or elevated box shadows clipped by the scroll viewport.
+- **Phase 2: Framer Motion De-jittering & Layout Projection Stabilization**
+  - PERF-16: Remove conflicting `layout`, `layoutId`, and `whileHover={{ y: -1 }}` props from [TaskCard.tsx](file:///c:/ZenFlow/src/components/TaskCard.tsx). Transition to GPU-accelerated CSS hover styling (`transform-gpu transition-all duration-150 shadow-xs hover:shadow-md hover:border-neutral-300 dark:hover:border-white/15 hover:bg-neutral-50/50 dark:hover:bg-[#202020]`). Wrap column list items in [Swimlane.tsx](file:///c:/ZenFlow/src/components/Swimlane.tsx) with `<motion.div layout="position" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.18, ease: 'easeOut' }}>` as immediate children of `<AnimatePresence mode="popLayout">`, eliminating layout projection jitter and enabling buttery-smooth list transitions.
 
 ### Sweep 10: 2026-09-19 (Phase-Wise Master Implementation Plan)
 - **Phase 1: Frictionless Quick-Add & Quick Due-Date Reschedule with Proximity Tiers**
