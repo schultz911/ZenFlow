@@ -6,6 +6,10 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ### 1. Discovered Optimizations
 
+### Sweep 15: 2026-09-19 (Column Default Deadline Sorting & Done/Archived Card Clarity)
+- **FEAT-10 (Column Default Sort by Deadline - Nearest to Farthest / No Deadline):** In `workload.ts`, `Swimlane.tsx`, and `DashboardContext.tsx`, implemented `compareTasksByDeadline` establishing default column sorting from nearest to farthest due date, with tasks without deadlines gracefully placed at the bottom. Active columns tie-break by manual `order`, while completed and archived columns tie-break by `completedAt` descending (most recently completed first).
+- **VIS-07 (Done & Archived Task Card Clarity - Proximity Badge Suppression & Completed Date Display):** In `TaskCard.tsx` and `workload.ts`, hid the circular deadline proximity Clock badge for tasks in the `done` and `archived` columns (`!isDoneOrArchived`). Replaced the deadline date and reschedule popover trigger with a clean, informational `CheckCircle2` completion date indicator (`formatCompletedDate(task.completedAt || task.updatedAt)`), eliminating confusing overdue/urgent alerts on already-completed tasks while retaining hover tooltips with full completion dates.
+
 ### Sweep 14: 2026-09-19 (Multitasking & Context-Switching Guard & 7-Day Velocity Micro-Sparkline)
 - **FEAT-08 (Cognitive Flow & Multitasking Risk Guard - Soft Column WIP Limits):** In `Swimlane.tsx`, added cognitive WIP limits to active working columns (`in_progress: 2`, `in_review: 3`). When active cards exceed the threshold, the header counter displays `{count}/{limit}` alongside an ambient amber alert pill (`+{excess} WIP`) and subtle amber border tint. Dragging a card over an overloaded column surfaces an ambient notification (`Note: exceeds WIP limit`) without disrupting or blocking user workflow.
 - **FEAT-09 (Throughput Analytics - Zero-Dependency 7-Day Velocity Sparkline):** In `workload.ts` and `WorkloadModal.tsx`, implemented a pure client-side 7-day velocity and lead-time tracker. Leverages existing `task.completedAt` and `activityLog` without new backend services or charting libraries, rendering an SVG sparkline with 7 trailing calendar bars, count chips, today accents, interactive daily tooltips, and lead-time duration metrics.
@@ -97,6 +101,12 @@ This document records the complete lifecycle of architectural sweeps, discovered
 ---
 
 ## 2. Previously Suggested
+
+### Sweep 15: 2026-09-19 (Column Default Deadline Sorting & Done/Archived Card Clarity)
+- **Phase 1: Default Column Deadline Sorting**
+  - FEAT-10: Implement `compareTasksByDeadline` in [workload.ts](file:///c:/ZenFlow/src/utils/workload.ts) sorting tasks by nearest to farthest deadline with no-deadline tasks placed at the bottom. Use in `tasksByColumn` and `handleDropOnTask` in [Swimlane.tsx](file:///c:/ZenFlow/src/components/Swimlane.tsx) and `moveTask` in [DashboardContext.tsx](file:///c:/ZenFlow/src/context/DashboardContext.tsx).
+- **Phase 2: Done & Archived Card Clarification**
+  - VIS-07: In [TaskCard.tsx](file:///c:/ZenFlow/src/components/TaskCard.tsx), hide the top circular Clock deadline proximity badge for tasks in `done` and `archived`. Replace the deadline date and reschedule popover trigger with an informational `CheckCircle2` completion date display (`formatCompletedDate`).
 
 ### Sweep 14: 2026-09-19 (Multitasking & Context-Switching Guard & 7-Day Velocity Micro-Sparkline)
 - **Phase 1: Soft Column WIP Limits in Swimlane**

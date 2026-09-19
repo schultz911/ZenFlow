@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task, TaskStatus, DragTaskInfo } from '../types';
-import { calculateUserWorkload } from '../utils/workload';
+import { calculateUserWorkload, compareTasksByDeadline } from '../utils/workload';
 import { TaskCard } from './TaskCard';
 import {
   Plus,
@@ -158,7 +158,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
       }
     }
     for (const status in grouped) {
-      grouped[status as TaskStatus].sort((a, b) => a.order - b.order);
+      grouped[status as TaskStatus].sort((a, b) => compareTasksByDeadline(a, b, status));
     }
     return grouped;
   }, [userTasks]);
@@ -269,7 +269,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     // Calculate new index in this user's target status list
     const tasksInTarget = userTasks
       .filter(t => t.status === targetStatus && t.id !== taskId)
-      .sort((a, b) => a.order - b.order);
+      .sort((a, b) => compareTasksByDeadline(a, b, targetStatus));
     const targetIdx = tasksInTarget.findIndex(t => t.id === targetTask.id);
     const newIndex = targetIdx !== -1 ? targetIdx : tasksInTarget.length;
 

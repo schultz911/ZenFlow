@@ -117,6 +117,54 @@ export function formatDateOnly(dueDateStr?: string): string {
 }
 
 /**
+ * Formats the completion date for bottom-left display on done/archived cards (e.g., 'Sep 19' or 'Completed').
+ */
+export function formatCompletedDate(completedAtStr?: string): string {
+  if (!completedAtStr) return 'Completed';
+  const dateObj = new Date(completedAtStr);
+  if (isNaN(dateObj.getTime())) return 'Completed';
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${monthNames[dateObj.getMonth()]} ${dateObj.getDate()}`;
+}
+
+/**
+ * Default comparator for column tasks:
+ * Sorts by deadline from nearest to farthest, placing tasks with no deadline at the bottom.
+ * If deadlines are equal (or both absent), breaks ties cleanly:
+ * - In done/archived: most recently completed first (completedAt descending), then task order.
+ * - In active columns: task order.
+ */
+export function compareTasksByDeadline(a: Task, b: Task, status?: string): number {
+  const currentStatus = status || a.status;
+
+  // 1. Both have dueDate: sort ascending by dueDate (nearest deadline first)
+  if (a.dueDate && b.dueDate) {
+    const cmp = a.dueDate.localeCompare(b.dueDate);
+    if (cmp !== 0) return cmp;
+    if ((currentStatus === 'done' || currentStatus === 'archived') && a.completedAt && b.completedAt) {
+      const timeDiff = new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime();
+      if (timeDiff !== 0) return timeDiff;
+    }
+    return (a.order ?? 0) - (b.order ?? 0);
+  }
+
+  // 2. Nearest to farthest / no deadline: task with dueDate comes before task without dueDate
+  if (a.dueDate && !b.dueDate) return -1;
+  if (!a.dueDate && b.dueDate) return 1;
+
+  // 3. Neither has dueDate:
+  if (currentStatus === 'done' || currentStatus === 'archived') {
+    const aTime = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+    const bTime = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+    if (aTime !== bTime) {
+      return bTime - aTime;
+    }
+  }
+
+  return (a.order ?? 0) - (b.order ?? 0);
+}
+
+/**
  * Provides color mappings and labels for the due date chip and clock icon based on proximity:
  * - Red: Overdue (< 0 days)
  * - Orange: 2, 1, or today (0 - 2 days)

@@ -2,11 +2,12 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Task, TaskStatus, Role } from '../types';
-import { getDuePillInfo, formatDateOnly, getCognitiveLoadLabel } from '../utils/workload';
+import { getDuePillInfo, formatDateOnly, formatCompletedDate, getCognitiveLoadLabel } from '../utils/workload';
 import {
   GripVertical,
   Clock,
   Calendar,
+  CheckCircle2,
   Edit2,
   Trash2,
   ChevronRight,
@@ -125,6 +126,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
     };
   }, [showSnoozeFlyout, updateFlyoutPosition]);
 
+  const isDoneOrArchived = task.status === 'done' || task.status === 'archived';
   const pillInfo = getDuePillInfo(task.dueDate);
   const cognitiveLabel = getCognitiveLoadLabel(task.cognitiveLoad, userRole);
 
@@ -223,18 +225,20 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             <GripVertical className="h-3.5 w-3.5" />
           </div>
 
-          {/* Due Clock Icon Badge (color-coded, compact micro size) */}
-          <button
-            type="button"
-            onClick={e => {
-              e.stopPropagation();
-              setShowSnoozeFlyout(prev => !prev);
-            }}
-            title={`${pillInfo.label} — Click to quick-reschedule`}
-            className={`inline-flex items-center justify-center rounded-full p-1 border cursor-pointer transition-transform hover:scale-110 ${pillInfo.badgeClass}`}
-          >
-            <Clock className={`h-2.5 w-2.5 ${pillInfo.iconClass} shrink-0`} />
-          </button>
+          {/* Due Clock Icon Badge (color-coded, compact micro size) - hidden in done/archived columns */}
+          {!isDoneOrArchived && (
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation();
+                setShowSnoozeFlyout(prev => !prev);
+              }}
+              title={`${pillInfo.label} — Click to quick-reschedule`}
+              className={`inline-flex items-center justify-center rounded-full p-1 border cursor-pointer transition-transform hover:scale-110 ${pillInfo.badgeClass}`}
+            >
+              <Clock className={`h-2.5 w-2.5 ${pillInfo.iconClass} shrink-0`} />
+            </button>
+          )}
 
           {/* Cognitive Load Dot Badge (compact micro size) */}
           <span
@@ -329,24 +333,42 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         </p>
       )}
 
-      {/* Bottom Row: Due date (clean text without chip & snooze flyout) & quick status stepper */}
+      {/* Bottom Row: Date display (deadline for active, completedAt for done/archived) & quick status stepper */}
       <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-neutral-100 dark:border-white/5 pt-2">
         <div className="relative" ref={snoozeRef}>
-          <button
-            type="button"
-            onClick={e => {
-              e.stopPropagation();
-              setShowSnoozeFlyout(prev => !prev);
-            }}
-            title="Click to adjust deadline"
-            className="inline-flex items-center gap-1.5 text-[10px] font-medium text-neutral-500 dark:text-white/40 hover:text-neutral-800 dark:hover:text-white/90 transition-colors cursor-pointer py-0.5"
-          >
-            <Calendar className="h-3 w-3 text-neutral-400 dark:text-white/30 shrink-0" />
-            <span>{formatDateOnly(task.dueDate)}</span>
-          </button>
+          {isDoneOrArchived ? (
+            <div
+              title={
+                task.completedAt
+                  ? `Completed on ${new Date(task.completedAt).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}`
+                  : 'Completed'
+              }
+              className="inline-flex items-center gap-1.5 text-[10px] font-medium text-neutral-500 dark:text-white/40 py-0.5 select-none"
+            >
+              <CheckCircle2 className="h-3 w-3 text-green-600/70 dark:text-green-400/70 shrink-0" />
+              <span>{formatCompletedDate(task.completedAt || task.updatedAt)}</span>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation();
+                setShowSnoozeFlyout(prev => !prev);
+              }}
+              title="Click to adjust deadline"
+              className="inline-flex items-center gap-1.5 text-[10px] font-medium text-neutral-500 dark:text-white/40 hover:text-neutral-800 dark:hover:text-white/90 transition-colors cursor-pointer py-0.5"
+            >
+              <Calendar className="h-3 w-3 text-neutral-400 dark:text-white/30 shrink-0" />
+              <span>{formatDateOnly(task.dueDate)}</span>
+            </button>
+          )}
 
-          {/* Quick Reschedule Snooze Flyout Rendered via React Portal at high z-index */}
-          {showSnoozeFlyout && flyoutPosition && createPortal(
+          {/* Quick Reschedule Snooze Flyout Rendered via React Portal at high z-index (active columns only) */}
+          {!isDoneOrArchived && showSnoozeFlyout && flyoutPosition && createPortal(
             <div
               ref={flyoutMenuRef}
               style={{ top: `${flyoutPosition.top}px`, left: `${flyoutPosition.left}px` }}

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import { User, Task, Role, TaskStatus, RealtimeEvent, DragTaskInfo, TaskOrderUpdate, QueuedMutation } from '../types';
 import { INITIAL_USERS, INITIAL_TASKS } from '../data/initialData';
+import { compareTasksByDeadline } from '../utils/workload';
 
 export interface FirestoreStatus {
   connected: boolean;
@@ -698,7 +699,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     // Get current tasks in target column excluding the moving task
     const targetUserTasksInStatus = currentTasks
       .filter(t => t.userId === targetUserId && t.status === newStatus && t.id !== taskId)
-      .sort((a, b) => a.order - b.order);
+      .sort((a, b) => compareTasksByDeadline(a, b, newStatus));
 
     const targetOrder =
       newIndex !== undefined
