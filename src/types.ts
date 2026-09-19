@@ -2,7 +2,7 @@ export type Role = 'content' | 'design';
 
 export type CognitiveLoad = 'low' | 'medium' | 'high';
 
-export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done' | 'archived';
+export type TaskStatus = 'pipeline' | 'todo' | 'in_progress' | 'in_review' | 'done' | 'archived';
 
 export interface User {
   id: string;
@@ -11,6 +11,7 @@ export interface User {
   role: Role;
   avatarColor?: string;
   createdAt: string;
+  order?: number;
 }
 
 export interface TaskActivity {
@@ -33,6 +34,8 @@ export interface Task {
   status: TaskStatus;
   order: number;
   completedAt?: string;
+  inProgressStartedAt?: string; // ISO timestamp when task entered in_progress
+  inProgressDurationMs?: number; // Total accumulated milliseconds in in_progress
   createdAt: string;
   updatedAt: string;
   activityLog?: TaskActivity[];
@@ -64,6 +67,7 @@ export interface TaskScoreItem {
 
 export interface WorkloadBreakdown {
   totalScore: number;
+  pipelineCount: number;
   inProgressCount: number;
   todoWithDeadlineCount: number;
   todoNoDeadlineCount: number;

@@ -52,10 +52,30 @@ function DashboardContent() {
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Filter users by role tab
+  // User workspace ordering with persistent localStorage storage
+  const [customUserOrder, setCustomUserOrder] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('zenflow_user_order_v1');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Filter users by role tab and apply persistent custom ordering
   const roleFilteredUsers = useMemo(() => {
-    return users.filter(u => u.role === activeRoleTab);
-  }, [users, activeRoleTab]);
+    const filtered = users.filter(u => u.role === activeRoleTab);
+    if (customUserOrder.length === 0) return filtered;
+
+    return [...filtered].sort((a, b) => {
+      const indexA = customUserOrder.indexOf(a.id);
+      const indexB = customUserOrder.indexOf(b.id);
+      if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      return 0;
+    });
+  }, [users, activeRoleTab, customUserOrder]);
 
   // Fast O(1) lookup map of user names for search queries
   const userNameMap = useMemo(() => {
@@ -222,30 +242,64 @@ function DashboardContent() {
     [updateTask]
   );
 
+  const handleMoveUserUp = useCallback((userId: string) => {
+    setCustomUserOrder(prev => {
+      const currentList = roleFilteredUsers.map(u => u.id);
+      const idx = currentList.indexOf(userId);
+      if (idx <= 0) return prev;
+      const nextList = [...currentList];
+      const temp = nextList[idx - 1];
+      nextList[idx - 1] = nextList[idx];
+      nextList[idx] = temp;
+      try {
+        localStorage.setItem('zenflow_user_order_v1', JSON.stringify(nextList));
+      } catch {}
+      return nextList;
+    });
+  }, [roleFilteredUsers]);
+
+  const handleMoveUserDown = useCallback((userId: string) => {
+    setCustomUserOrder(prev => {
+      const currentList = roleFilteredUsers.map(u => u.id);
+      const idx = currentList.indexOf(userId);
+      if (idx === -1 || idx >= currentList.length - 1) return prev;
+      const nextList = [...currentList];
+      const temp = nextList[idx + 1];
+      nextList[idx + 1] = nextList[idx];
+      nextList[idx] = temp;
+      try {
+        localStorage.setItem('zenflow_user_order_v1', JSON.stringify(nextList));
+      } catch {}
+      return nextList;
+    });
+  }, [roleFilteredUsers]);
+
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-[#0A0A0A] text-neutral-900 dark:text-[#E5E5E5] font-sans antialiased selection:bg-blue-500/30 selection:text-white transition-colors">
-      {/* Sticky Top Header */}
-      <Header
-        onOpenLoginModal={handleOpenLogin}
-        onOpenNewUserModal={handleOpenNewUser}
-        onOpenFirestoreModal={() => setFirestoreModalOpen(true)}
-      />
+      {/* Pinned Sticky Header & Ribbons Container */}
+      <div className="sticky top-0 z-30 w-full backdrop-blur-md bg-white/95 dark:bg-[#0D0D0D]/95 shadow-xs transition-colors">
+        <Header
+          onOpenLoginModal={handleOpenLogin}
+          onOpenNewUserModal={handleOpenNewUser}
+          onOpenFirestoreModal={() => setFirestoreModalOpen(true)}
+        />
 
-      {/* Critical Deadlines Marquee Ribbon */}
-      <MarqueeRibbon
-        tasks={tasks}
-        users={users}
-        onTaskClick={handleEditTask}
-      />
+        {/* Critical Deadlines Marquee Ribbon */}
+        <MarqueeRibbon
+          tasks={tasks}
+          users={users}
+          onTaskClick={handleEditTask}
+        />
 
-      {/* Unscheduled Tasks Prompt Ribbon (Prompts ONLY the logged in user) */}
-      <UnscheduledTasksRibbon
-        currentUser={currentUser}
-        tasks={tasks}
-        users={users}
-        onTaskClick={handleEditTask}
-        onReschedule={handleRescheduleTask}
-      />
+        {/* Unscheduled Tasks Prompt Ribbon (Prompts ONLY the logged in user) */}
+        <UnscheduledTasksRibbon
+          currentUser={currentUser}
+          tasks={tasks}
+          users={users}
+          onTaskClick={handleEditTask}
+          onReschedule={handleRescheduleTask}
+        />
+      </div>
 
       {/* Main Container */}
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
@@ -283,7 +337,7 @@ function DashboardContent() {
           </div>
         ) : (
           <div className="space-y-6">
-            {roleFilteredUsers.map(user => (
+            {roleFilteredUsers.map((user, index) => (
               <Swimlane
                 key={user.id}
                 user={user}
@@ -301,6 +355,10 @@ function DashboardContent() {
                 onMoveTask={moveTask}
                 onOpenWorkloadModal={handleOpenWorkloadModal}
                 isCurrentUser={currentUser?.id === user.id}
+                onMoveUserUp={handleMoveUserUp}
+                onMoveUserDown={handleMoveUserDown}
+                canMoveUp={index > 0}
+                canMoveDown={index < roleFilteredUsers.length - 1}
               />
             ))}
           </div>

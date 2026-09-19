@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Task, TaskStatus, Role } from '../types';
-import { getDuePillInfo, formatDateOnly, formatCompletedDate, getCognitiveLoadLabel } from '../utils/workload';
+import { getDuePillInfo, formatDateOnly, formatCompletedDate, getCognitiveLoadLabel, getTaskBillableMs, formatBillableHours, formatBillableDetailed } from '../utils/workload';
 import {
   GripVertical,
   Clock,
@@ -13,6 +13,7 @@ import {
   ChevronRight,
   ChevronLeft,
   Archive,
+  Timer,
 } from 'lucide-react';
 
 interface TaskCardProps {
@@ -52,6 +53,17 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(task.title);
   const titleInputRef = useRef<HTMLInputElement>(null);
+
+  // Live timer for in_progress billable hours
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (task.status === 'in_progress') {
+      const interval = setInterval(() => setNow(Date.now()), 10000);
+      return () => clearInterval(interval);
+    }
+  }, [task.status]);
+
+  const billableMs = getTaskBillableMs(task, now);
 
   useEffect(() => {
     if (!isEditingTitle) {
@@ -440,6 +452,21 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             document.body
           )}
         </div>
+
+        {/* Billable Hours individual counter for this task */}
+        {(billableMs > 0 || task.status === 'in_progress') && (
+          <div
+            title={`Billable Duration: ${formatBillableDetailed(billableMs)} spent in In Progress`}
+            className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium border select-none transition-colors shrink-0 ${
+              task.status === 'in_progress'
+                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30 shadow-2xs'
+                : 'bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border-neutral-200/60 dark:border-white/5'
+            }`}
+          >
+            <Timer className={`h-2.5 w-2.5 ${task.status === 'in_progress' ? 'text-blue-500 animate-pulse' : 'text-neutral-400 dark:text-white/30'}`} />
+            <span>{formatBillableHours(billableMs)}</span>
+          </div>
+        )}
 
         {/* Quick status stepper button */}
         <div className="flex items-center gap-1">

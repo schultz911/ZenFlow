@@ -137,6 +137,11 @@ export function formatCompletedDate(completedAtStr?: string): string {
 export function compareTasksByDeadline(a: Task, b: Task, status?: string): number {
   const currentStatus = status || a.status;
 
+  // Pipeline tasks have no deadline; sort strictly by order
+  if (currentStatus === 'pipeline') {
+    return (a.order ?? 0) - (b.order ?? 0);
+  }
+
   // 1. Both have dueDate: sort ascending by dueDate (nearest deadline first)
   if (a.dueDate && b.dueDate) {
     const cmp = a.dueDate.localeCompare(b.dueDate);
@@ -248,8 +253,92 @@ export function getDuePillInfo(dueDateStr?: string): DuePillInfo {
 }
 
 /**
+ * Calculates the total duration in milliseconds that a task has spent in the 'in_progress' swimlane.
+ * Combines stored inProgressDurationMs with the active session if the task is currently 'in_progress'.
+ * Falls back to computing from activityLog if inProgressDurationMs is not yet initialized.
+ */
+export function getTaskBillableMs(task: Task, nowMs: number = Date.now()): number {
+  let totalMs = typeof task.inProgressDurationMs === 'number' ? task.inProgressDurationMs : 0;
+
+  // Active in-progress session
+  if (task.status === 'in_progress') {
+    if (task.inProgressStartedAt) {
+      const startMs = new Date(task.inProgressStartedAt).getTime();
+      if (!isNaN(startMs) && nowMs >= startMs) {
+        totalMs += (nowMs - startMs);
+      }
+    } else {
+      const fallbackStart = task.updatedAt ? new Date(task.updatedAt).getTime() : new Date(task.createdAt).getTime();
+      if (!isNaN(fallbackStart) && nowMs >= fallbackStart) {
+        totalMs += (nowMs - fallbackStart);
+      }
+    }
+  }
+
+  // If no duration was recorded and task has an activityLog, compute from historical status changes
+  if (totalMs === 0 && task.activityLog && task.activityLog.length > 0) {
+    let activeStartMs: number | null = null;
+    const sortedActivities = [...task.activityLog].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+    );
+
+    for (const act of sortedActivities) {
+      const actTime = new Date(act.timestamp).getTime();
+      if (isNaN(actTime)) continue;
+
+      if ((act.action === 'status_change' && act.to === 'in_progress') || (act.action === 'created' && act.to === 'in_progress')) {
+        activeStartMs = actTime;
+      } else if (activeStartMs !== null && act.action === 'status_change' && act.from === 'in_progress') {
+        totalMs += Math.max(0, actTime - activeStartMs);
+        activeStartMs = null;
+      }
+    }
+
+    if (activeStartMs !== null && task.status === 'in_progress') {
+      totalMs += Math.max(0, nowMs - activeStartMs);
+    }
+  }
+
+  return totalMs;
+}
+
+/**
+ * Formats duration milliseconds into clean billable hours:
+ * - < 1 minute: "0.0 hrs" (or "< 1m")
+ * - Formats as decimal hours, e.g., "1.5 hrs" or "0.2 hrs"
+ */
+export function formatBillableHours(ms: number): string {
+  if (ms <= 0) return '0.0 hrs';
+  const hours = ms / (1000 * 60 * 60);
+  if (hours < 0.1) {
+    const mins = Math.max(1, Math.round(ms / (1000 * 60)));
+    return `${mins}m`;
+  }
+  return `${hours.toFixed(1)} hrs`;
+}
+
+/**
+ * Returns detailed breakdown string (e.g. "2h 15m 30s")
+ */
+export function formatBillableDetailed(ms: number): string {
+  if (ms <= 0) return '0m';
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) {
+    return `${hours}h ${minutes}m ${seconds}s`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds}s`;
+  }
+  return `${seconds}s`;
+}
+
+/**
  * Calculates a detailed workload score and breakdown for a user's task set.
  * Status weights:
+ * - pipeline: 0.0 (does not contribute to score)
  * - in progress: 1.0
  * - in review: 0.25
  * - to do with deadline: 1.0
@@ -258,6 +347,7 @@ export function getDuePillInfo(dueDateStr?: string): DuePillInfo {
  */
 export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
   let totalScore = 0;
+  let pipelineCount = 0;
   let inProgressCount = 0;
   let todoWithDeadlineCount = 0;
   let todoNoDeadlineCount = 0;
@@ -269,6 +359,11 @@ export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
   const items: TaskScoreItem[] = [];
 
   for (const task of userTasks) {
+    // Pipeline tasks do not have deadlines and do not contribute to workload score
+    if (task.status === 'pipeline') {
+      pipelineCount++;
+      continue;
+    }
     if (task.status === 'done') {
       doneCount++;
       continue;
@@ -355,6 +450,7 @@ export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
 
   return {
     totalScore: roundedScore,
+    pipelineCount,
     inProgressCount,
     todoWithDeadlineCount,
     todoNoDeadlineCount,

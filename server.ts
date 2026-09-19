@@ -42,9 +42,11 @@ interface Task {
   description?: string;
   dueDate?: string;
   cognitiveLoad: 'low' | 'medium' | 'high';
-  status: 'todo' | 'in_progress' | 'in_review' | 'done' | 'archived';
+  status: 'pipeline' | 'todo' | 'in_progress' | 'in_review' | 'done' | 'archived';
   order: number;
   completedAt?: string;
+  inProgressStartedAt?: string;
+  inProgressDurationMs?: number;
   createdAt: string;
   updatedAt: string;
   activityLog?: TaskActivity[];
@@ -964,8 +966,9 @@ async function startServer() {
     );
     const maxOrder = existingInStatus.reduce((max, t) => Math.max(max, t.order ?? 0), -1);
 
-    const cleanStatus = ['todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : 'todo';
+    const cleanStatus = ['pipeline', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : 'todo';
     const isDone = cleanStatus === 'done';
+    const isInProgress = cleanStatus === 'in_progress';
     const taskId = (reqId && typeof reqId === 'string') ? sanitizeString(reqId) : `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
 
     const initialActivity: TaskActivity = {
@@ -986,6 +989,8 @@ async function startServer() {
       status: cleanStatus,
       order: maxOrder + 1,
       completedAt: isDone ? new Date().toISOString() : undefined,
+      inProgressStartedAt: isInProgress ? new Date().toISOString() : undefined,
+      inProgressDurationMs: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       activityLog: [initialActivity],
@@ -1026,11 +1031,25 @@ async function startServer() {
     }
 
     let completedAt = reqCompletedAt !== undefined ? (reqCompletedAt ? sanitizeString(reqCompletedAt) : undefined) : currentTask.completedAt;
+    let inProgressStartedAt = currentTask.inProgressStartedAt;
+    let inProgressDurationMs = typeof currentTask.inProgressDurationMs === 'number' ? currentTask.inProgressDurationMs : 0;
+
     if (status !== undefined) {
       if (status === 'done' && currentTask.status !== 'done' && !reqCompletedAt) {
         completedAt = new Date().toISOString();
       } else if (status !== 'done') {
         completedAt = undefined;
+      }
+
+      // Billable Hours tracking for In Progress transitions
+      if (status === 'in_progress' && currentTask.status !== 'in_progress') {
+        inProgressStartedAt = new Date().toISOString();
+      } else if (status !== 'in_progress' && currentTask.status === 'in_progress') {
+        if (currentTask.inProgressStartedAt) {
+          const sessionMs = Math.max(0, Date.now() - new Date(currentTask.inProgressStartedAt).getTime());
+          inProgressDurationMs += sessionMs;
+        }
+        inProgressStartedAt = undefined;
       }
     }
 
@@ -1078,10 +1097,12 @@ async function startServer() {
       description: description !== undefined ? (description ? sanitizeString(description) : undefined) : currentTask.description,
       dueDate: dueDate !== undefined ? (dueDate ? sanitizeString(dueDate) : undefined) : currentTask.dueDate,
       cognitiveLoad: cognitiveLoad && ['low', 'medium', 'high'].includes(cognitiveLoad) ? cognitiveLoad : currentTask.cognitiveLoad,
-      status: status && ['todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : currentTask.status,
+      status: status && ['pipeline', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : currentTask.status,
       userId: userId || currentTask.userId,
       order: typeof order === 'number' ? order : currentTask.order,
       completedAt,
+      inProgressStartedAt,
+      inProgressDurationMs,
       updatedAt: new Date().toISOString(),
       activityLog: activityEntries.slice(0, 15),
     };
@@ -1145,7 +1166,7 @@ async function startServer() {
           task.userId = update.userId;
         }
 
-        if (update.status && ['todo', 'in_progress', 'in_review', 'done', 'archived'].includes(update.status)) {
+        if (update.status && ['pipeline', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(update.status)) {
           if (update.status !== task.status) {
             task.activityLog.unshift({
               id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -1160,6 +1181,21 @@ async function startServer() {
             } else if (update.status !== 'done') {
               task.completedAt = undefined;
             }
+
+            // Billable Hours tracking for In Progress transitions
+            if (update.status === 'in_progress' && task.status !== 'in_progress') {
+              task.inProgressStartedAt = new Date().toISOString();
+              if (typeof task.inProgressDurationMs !== 'number') {
+                task.inProgressDurationMs = 0;
+              }
+            } else if (update.status !== 'in_progress' && task.status === 'in_progress') {
+              if (task.inProgressStartedAt) {
+                const sessionMs = Math.max(0, Date.now() - new Date(task.inProgressStartedAt).getTime());
+                task.inProgressDurationMs = (task.inProgressDurationMs || 0) + sessionMs;
+              }
+              task.inProgressStartedAt = undefined;
+            }
+
             task.status = update.status;
           }
         }

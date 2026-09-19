@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { Task, CognitiveLoad, TaskStatus, TaskActivity } from '../types';
-import { X, Calendar, Brain, Trash2, History, Clock, ArrowRight, CheckCircle2, UserCheck, PlusCircle } from 'lucide-react';
+import { getTaskBillableMs, formatBillableDetailed } from '../utils/workload';
+import { X, Calendar, Brain, Trash2, History, Clock, ArrowRight, CheckCircle2, UserCheck, PlusCircle, Timer, ChevronDown } from 'lucide-react';
 
 function formatActivityTime(isoString: string): string {
   try {
@@ -94,10 +95,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     const statusStartMs = statusChangeAct ? new Date(statusChangeAct.timestamp).getTime() : startMs;
     const currentStatusMs = statusStartMs > 0 ? Math.max(0, Date.now() - statusStartMs) : 0;
 
+    const billableMs = getTaskBillableMs(taskToEdit);
+    const billableDetailedStr = formatBillableDetailed(billableMs);
+
     return {
       isDone: taskToEdit.status === 'done',
       totalLeadTimeStr: totalLeadTimeMs > 0 ? formatDuration(totalLeadTimeMs) : '< 1m',
       currentStatusStr: currentStatusMs > 0 ? formatDuration(currentStatusMs) : '< 1m',
+      billableDetailedStr,
       revisionCount: activities.length,
     };
   }, [taskToEdit, activities]);
@@ -210,24 +215,27 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
                 Assignee
               </label>
-              <select
-                id="task-assignee-select"
-                value={userId}
-                onChange={e => setUserId(e.target.value)}
-                className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-2.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors"
-              >
-                {users.length === 0 ? (
-                  <option value="" disabled>
-                    No members yet — please add a member first
-                  </option>
-                ) : (
-                  users.map(u => (
-                    <option key={u.id} value={u.id} className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">
-                      {u.name} ({u.role === 'content' ? 'Content' : 'Design'})
+              <div className="relative">
+                <select
+                  id="task-assignee-select"
+                  value={userId}
+                  onChange={e => setUserId(e.target.value)}
+                  className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 pl-3 pr-8 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none focus:ring-0 transition-colors cursor-pointer hover:border-neutral-400 dark:hover:border-white/20"
+                >
+                  {users.length === 0 ? (
+                    <option value="" disabled>
+                      No members yet — please add a member first
                     </option>
-                  ))
-                )}
-              </select>
+                  ) : (
+                    users.map(u => (
+                      <option key={u.id} value={u.id} className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">
+                        {u.name} ({u.role === 'content' ? 'Content' : 'Design'})
+                      </option>
+                    ))
+                  )}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
+              </div>
               {users.length === 0 && (
                 <p className="mt-1 text-[11px] text-amber-500 dark:text-amber-400">
                   Please add at least one member before assigning tasks.
@@ -240,18 +248,22 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
                 Status
               </label>
-              <select
-                id="task-status-select"
-                value={status}
-                onChange={e => setStatus(e.target.value as TaskStatus)}
-                className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-2.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors capitalize"
-              >
-                <option value="todo" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">To Do</option>
-                <option value="in_progress" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">In Progress</option>
-                <option value="in_review" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">In Review</option>
-                <option value="done" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">Done</option>
-                <option value="archived" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">Archived</option>
-              </select>
+              <div className="relative">
+                <select
+                  id="task-status-select"
+                  value={status}
+                  onChange={e => setStatus(e.target.value as TaskStatus)}
+                  className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 pl-3 pr-8 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none focus:ring-0 transition-colors capitalize cursor-pointer hover:border-neutral-400 dark:hover:border-white/20"
+                >
+                  <option value="pipeline" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">Pipeline (Backlog)</option>
+                  <option value="todo" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">To Do</option>
+                  <option value="in_progress" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">In Progress</option>
+                  <option value="in_review" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">In Review</option>
+                  <option value="done" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">Done</option>
+                  <option value="archived" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">Archived</option>
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
+              </div>
             </div>
           </div>
 
@@ -412,6 +424,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     </span>
                     <span className="bg-neutral-100 dark:bg-white/5 px-2 py-0.5 rounded-md border border-neutral-200/50 dark:border-white/5">
                       In status: <strong className="text-neutral-700 dark:text-white/80">{cycleMetrics.currentStatusStr}</strong>
+                    </span>
+                    <span className="flex items-center gap-1 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-md border border-blue-200/60 dark:border-blue-500/25">
+                      <Timer className="h-3 w-3 text-blue-500" />
+                      Billable: <strong className="text-blue-700 dark:text-blue-300">{cycleMetrics.billableDetailedStr}</strong>
                     </span>
                   </div>
                 )}

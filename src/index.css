@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:where(.dark, .dark *));
+@variant dark (&:where(.dark, .dark *));
 
 @layer base {
   :root {
@@ -56,5 +56,22 @@
 
 .animate-marquee:hover {
   animation-play-state: paused;
+}
+
+/* Custom dropdown reset - eliminate native browser arrow hover/focus outlines */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  background-image: none !important;
+}
+
+select::-ms-expand {
+  display: none;
+}
+
+select:focus,
+select:focus-visible {
+  outline: none !important;
 }
 

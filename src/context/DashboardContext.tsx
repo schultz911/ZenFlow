@@ -517,6 +517,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       details: `Created in ${data.status.replace('_', ' ')}`,
     };
 
+    const isInProgress = data.status === 'in_progress';
+
     const optimisticTask: Task = {
       id: realId,
       userId: data.userId,
@@ -527,6 +529,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       status: data.status,
       order: currentTasks.filter(t => t.userId === data.userId && t.status === data.status).length,
       completedAt: isCompleted ? now : undefined,
+      inProgressStartedAt: isInProgress ? now : undefined,
+      inProgressDurationMs: 0,
       createdAt: now,
       updatedAt: now,
       activityLog: [initialActivity],
@@ -583,14 +587,34 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       for (const t of prev) {
         if (t.id === id) {
           let completedAt = t.completedAt;
+          let inProgressStartedAt = t.inProgressStartedAt;
+          let inProgressDurationMs = typeof t.inProgressDurationMs === 'number' ? t.inProgressDurationMs : 0;
+
           if (updates.status !== undefined) {
             if (updates.status === 'done' && t.status !== 'done') {
               completedAt = new Date().toISOString();
             } else if (updates.status !== 'done') {
               completedAt = undefined;
             }
+
+            if (updates.status === 'in_progress' && t.status !== 'in_progress') {
+              inProgressStartedAt = new Date().toISOString();
+            } else if (updates.status !== 'in_progress' && t.status === 'in_progress') {
+              if (t.inProgressStartedAt) {
+                const sessionMs = Math.max(0, Date.now() - new Date(t.inProgressStartedAt).getTime());
+                inProgressDurationMs += sessionMs;
+              }
+              inProgressStartedAt = undefined;
+            }
           }
-          updatedTask = { ...t, ...updates, completedAt, updatedAt: new Date().toISOString() };
+          updatedTask = {
+            ...t,
+            ...updates,
+            completedAt,
+            inProgressStartedAt,
+            inProgressDurationMs,
+            updatedAt: new Date().toISOString(),
+          };
           map.set(t.id, updatedTask);
         } else {
           map.set(t.id, t);
@@ -711,6 +735,17 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     const completedAt = isCompleted
       ? task.completedAt || now
       : undefined;
+    let inProgressStartedAt = task.inProgressStartedAt;
+    let inProgressDurationMs = typeof task.inProgressDurationMs === 'number' ? task.inProgressDurationMs : 0;
+    if (newStatus === 'in_progress' && task.status !== 'in_progress') {
+      inProgressStartedAt = now;
+    } else if (newStatus !== 'in_progress' && task.status === 'in_progress') {
+      if (task.inProgressStartedAt) {
+        const sessionMs = Math.max(0, Date.now() - new Date(task.inProgressStartedAt).getTime());
+        inProgressDurationMs += sessionMs;
+      }
+      inProgressStartedAt = undefined;
+    }
 
     // Prepare full batch updates so order numbers are strictly sorted
     const reorderedTargetTasks = [...targetUserTasksInStatus];
@@ -720,6 +755,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       status: newStatus,
       order: targetOrder,
       completedAt,
+      inProgressStartedAt,
+      inProgressDurationMs,
       updatedAt: now,
     };
     reorderedTargetTasks.splice(targetOrder, 0, movedTaskUpdated);
@@ -737,12 +774,15 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       return prev.map(t => {
         const u = updateMap.get(t.id);
         if (u) {
+          const isMoved = t.id === taskId;
           return {
             ...t,
             userId: u.userId || t.userId,
             status: u.status,
             order: u.order,
-            completedAt,
+            completedAt: isMoved ? completedAt : t.completedAt,
+            inProgressStartedAt: isMoved ? inProgressStartedAt : t.inProgressStartedAt,
+            inProgressDurationMs: isMoved ? inProgressDurationMs : t.inProgressDurationMs,
             updatedAt: now,
           };
         }
