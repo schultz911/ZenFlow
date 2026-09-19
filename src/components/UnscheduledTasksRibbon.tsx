@@ -19,11 +19,6 @@ export const UnscheduledTasksRibbon: React.FC<UnscheduledTasksRibbonProps> = Rea
   onTaskClick,
   onReschedule,
 }) => {
-  // If no user is logged in, DO NOT display this ribbon at all
-  if (!currentUser) {
-    return null;
-  }
-
   const userMap = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -35,12 +30,14 @@ export const UnscheduledTasksRibbon: React.FC<UnscheduledTasksRibbonProps> = Rea
   }, [tasks]);
 
   const myUnscheduledTasks = useMemo(() => {
+    if (!currentUser) return [];
     return allUnscheduledTasks.filter(t => t.userId === currentUser.id);
-  }, [allUnscheduledTasks, currentUser.id]);
+  }, [allUnscheduledTasks, currentUser]);
 
   const otherUnscheduledTasks = useMemo(() => {
+    if (!currentUser) return allUnscheduledTasks;
     return allUnscheduledTasks.filter(t => t.userId !== currentUser.id);
-  }, [allUnscheduledTasks, currentUser.id]);
+  }, [allUnscheduledTasks, currentUser]);
 
   // Tab filter: 'my' or 'all'
   const [activeTab, setActiveTab] = useState<'my' | 'all'>('my');
@@ -53,11 +50,6 @@ export const UnscheduledTasksRibbon: React.FC<UnscheduledTasksRibbonProps> = Rea
       setActiveTab('my');
     }
   }, [myUnscheduledTasks.length, otherUnscheduledTasks.length, activeTab]);
-
-  // If absolutely no tasks in the workspace are missing deadlines, return null
-  if (allUnscheduledTasks.length === 0) {
-    return null;
-  }
 
   // Active list based on selected tab
   const activeTaskList = activeTab === 'my' && myUnscheduledTasks.length > 0 ? myUnscheduledTasks : allUnscheduledTasks;
@@ -149,6 +141,11 @@ export const UnscheduledTasksRibbon: React.FC<UnscheduledTasksRibbonProps> = Rea
 
   // Duplicate tasks for seamless marquee ONLY if tasks exceed viewport width
   const displayList = shouldScroll ? [...activeTaskList, ...activeTaskList] : activeTaskList;
+
+  // Gate: Render nothing if no user is logged in or no unscheduled tasks exist
+  if (!currentUser || allUnscheduledTasks.length === 0) {
+    return null;
+  }
 
   return (
     <div
