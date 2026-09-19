@@ -23,7 +23,7 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
   const urgentTasks = useMemo(() => {
     return tasks
       .filter(t => {
-        if (!t || t.status === 'done' || t.status === 'archived') return false;
+        if (!t || t.status === 'done' || t.status === 'archived' || t.status === 'pipeline') return false;
         const days = getDaysRemaining(t.dueDate);
         return days !== null && days <= 0;
       })

@@ -82,6 +82,9 @@ function DashboardContent() {
     });
   }, [users, activeRoleTab, customUserOrder]);
 
+  const roleFilteredUsersRef = useRef(roleFilteredUsers);
+  roleFilteredUsersRef.current = roleFilteredUsers;
+
   // Fast O(1) lookup map of user names for search queries
   const userNameMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -251,7 +254,7 @@ function DashboardContent() {
 
   const handleMoveUserUp = useCallback((userId: string) => {
     setCustomUserOrder(prev => {
-      const currentList = roleFilteredUsers.map(u => u.id);
+      const currentList = roleFilteredUsersRef.current.map(u => u.id);
       const idx = currentList.indexOf(userId);
       if (idx <= 0) return prev;
       const nextList = [...currentList];
@@ -263,11 +266,11 @@ function DashboardContent() {
       } catch {}
       return nextList;
     });
-  }, [roleFilteredUsers]);
+  }, []);
 
   const handleMoveUserDown = useCallback((userId: string) => {
     setCustomUserOrder(prev => {
-      const currentList = roleFilteredUsers.map(u => u.id);
+      const currentList = roleFilteredUsersRef.current.map(u => u.id);
       const idx = currentList.indexOf(userId);
       if (idx === -1 || idx >= currentList.length - 1) return prev;
       const nextList = [...currentList];
@@ -279,7 +282,7 @@ function DashboardContent() {
       } catch {}
       return nextList;
     });
-  }, [roleFilteredUsers]);
+  }, []);
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-[#0A0A0A] text-neutral-900 dark:text-[#E5E5E5] font-sans antialiased selection:bg-blue-500/30 selection:text-white transition-colors">
@@ -292,7 +295,7 @@ function DashboardContent() {
         />
 
         {/* Sticky Ribbons Alignment Container */}
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-2">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-2 relative z-10">
           {/* Critical Deadlines Marquee Ribbon */}
           <MarqueeRibbon
             tasks={tasks}

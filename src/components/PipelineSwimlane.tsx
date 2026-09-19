@@ -70,7 +70,9 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
-    setIsDragOver(true);
+    if (!isDragOver) {
+      setIsDragOver(true);
+    }
   };
 
   const handleDragLeave = (e: React.DragEvent) => {

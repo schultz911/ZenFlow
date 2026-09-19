@@ -362,7 +362,9 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     e.preventDefault();
     e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
-    setDragOverHeader(true);
+    if (!dragOverHeader) {
+      setDragOverHeader(true);
+    }
   };
 
   const handleHeaderDragLeave = (e: React.DragEvent) => {

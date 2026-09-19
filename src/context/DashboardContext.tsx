@@ -224,6 +224,18 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
                 if (!isNaN(doneTime) && now - doneTime >= SEVEN_DAYS) {
                   t.status = 'archived';
                   t.updatedAt = new Date().toISOString();
+                  if (!t.activityLog) t.activityLog = [];
+                  t.activityLog.unshift({
+                    id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                    timestamp: new Date().toISOString(),
+                    action: 'status_change',
+                    from: 'done',
+                    to: 'archived',
+                    details: 'Auto-archived after 7 days in Done',
+                  });
+                  if (t.activityLog.length > 15) {
+                    t.activityLog = t.activityLog.slice(0, 15);
+                  }
                 }
               }
               taskMap.set(t.id, t);
@@ -841,12 +853,29 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         if (u) {
           const isDone = u.status === 'done';
           const completedAt = isDone ? t.completedAt || now : undefined;
+          let inProgressStartedAt = t.inProgressStartedAt;
+          let inProgressDurationMs = typeof t.inProgressDurationMs === 'number' ? t.inProgressDurationMs : 0;
+
+          if (u.status !== undefined && u.status !== t.status) {
+            if (u.status === 'in_progress') {
+              inProgressStartedAt = now;
+            } else if (t.status === 'in_progress') {
+              if (t.inProgressStartedAt) {
+                const sessionMs = Math.max(0, Date.now() - new Date(t.inProgressStartedAt).getTime());
+                inProgressDurationMs += sessionMs;
+              }
+              inProgressStartedAt = undefined;
+            }
+          }
+
           return {
             ...t,
             userId: u.userId || t.userId,
             status: u.status,
             order: u.order,
             completedAt,
+            inProgressStartedAt,
+            inProgressDurationMs,
             updatedAt: now,
           };
         }

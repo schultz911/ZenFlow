@@ -271,28 +271,46 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           </span>
         </div>
 
-        {/* Quick Edit (Modal) & Delete icons */}
-        <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-0.5 shrink-0">
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              onEdit(task);
-            }}
-            title="Open Details Modal"
-            className="rounded p-1 text-neutral-400 dark:text-white/40 hover:bg-neutral-100 dark:hover:bg-white/10 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
-          >
-            <Edit2 className="h-3 w-3" />
-          </button>
-          <button
-            onClick={e => {
-              e.stopPropagation();
-              onDelete(task.id);
-            }}
-            title="Delete Task"
-            className="rounded p-1 text-neutral-400 dark:text-white/40 hover:bg-red-50 dark:hover:bg-red-500/20 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer"
-          >
-            <Trash2 className="h-3 w-3" />
-          </button>
+        {/* Top Right: Actions & Billable Hours Badge */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Quick Edit (Modal) & Delete icons */}
+          <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-0.5 shrink-0">
+            <button
+              onClick={e => {
+                e.stopPropagation();
+                onEdit(task);
+              }}
+              title="Open Details Modal"
+              className="rounded p-1 text-neutral-400 dark:text-white/40 hover:bg-neutral-100 dark:hover:bg-white/10 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+            >
+              <Edit2 className="h-3 w-3" />
+            </button>
+            <button
+              onClick={e => {
+                e.stopPropagation();
+                onDelete(task.id);
+              }}
+              title="Delete Task"
+              className="rounded p-1 text-neutral-400 dark:text-white/40 hover:bg-red-50 dark:hover:bg-red-500/20 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </div>
+
+          {/* Billable Hours badge (top right of card) */}
+          {(billableMs > 0 || task.status === 'in_progress') && (
+            <div
+              title={`Billable Duration: ${formatBillableDetailed(billableMs)} spent in In Progress`}
+              className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium border select-none transition-colors shrink-0 ${
+                task.status === 'in_progress'
+                  ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30 shadow-2xs'
+                  : 'bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border-neutral-200/60 dark:border-white/5'
+              }`}
+            >
+              <Timer className={`h-2.5 w-2.5 ${task.status === 'in_progress' ? 'text-blue-500 animate-pulse' : 'text-neutral-400 dark:text-white/30'}`} />
+              <span>{formatBillableHours(billableMs)}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -453,21 +471,6 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             document.body
           )}
         </div>
-
-        {/* Billable Hours individual counter for this task */}
-        {(billableMs > 0 || task.status === 'in_progress') && (
-          <div
-            title={`Billable Duration: ${formatBillableDetailed(billableMs)} spent in In Progress`}
-            className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium border select-none transition-colors shrink-0 ${
-              task.status === 'in_progress'
-                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30 shadow-2xs'
-                : 'bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border-neutral-200/60 dark:border-white/5'
-            }`}
-          >
-            <Timer className={`h-2.5 w-2.5 ${task.status === 'in_progress' ? 'text-blue-500 animate-pulse' : 'text-neutral-400 dark:text-white/30'}`} />
-            <span>{formatBillableHours(billableMs)}</span>
-          </div>
-        )}
 
         {/* Quick status stepper button */}
         <div className="flex items-center gap-1">

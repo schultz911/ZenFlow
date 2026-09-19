@@ -44,12 +44,15 @@ export function getCognitiveLoadLabel(load: CognitiveLoad, role: Role = 'content
  */
 export function getDaysRemaining(dueDateStr?: string): number | null {
   if (!dueDateStr) return null;
-  const targetDate = new Date(dueDateStr + 'T23:59:59');
+  const parts = dueDateStr.split('-');
+  if (parts.length < 3) return null;
+  const targetDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
   if (isNaN(targetDate.getTime())) return null;
 
   const now = new Date();
-  const diffTime = targetDate.getTime() - now.getTime();
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffTime = targetDate.getTime() - today.getTime();
+  return Math.round(diffTime / (1000 * 60 * 60 * 24));
 }
 
 /**
@@ -304,17 +307,18 @@ export function getTaskBillableMs(task: Task, nowMs: number = Date.now()): numbe
 
 /**
  * Formats duration milliseconds into clean billable hours:
- * - < 1 minute: "0.0 hrs" (or "< 1m")
- * - Formats as decimal hours, e.g., "1.5 hrs" or "0.2 hrs"
+ * - < 1 minute: "0h" (or "< 1m")
+ * - Formats as compact hours, e.g., "24h", "1.5h", or "15m"
  */
 export function formatBillableHours(ms: number): string {
-  if (ms <= 0) return '0.0 hrs';
+  if (ms <= 0) return '0h';
   const hours = ms / (1000 * 60 * 60);
   if (hours < 0.1) {
     const mins = Math.max(1, Math.round(ms / (1000 * 60)));
     return `${mins}m`;
   }
-  return `${hours.toFixed(1)} hrs`;
+  const formattedHours = parseFloat(hours.toFixed(1));
+  return `${formattedHours}h`;
 }
 
 /**

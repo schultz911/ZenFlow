@@ -29,7 +29,11 @@ service cloud.firestore {
              data.createdAt is string && data.createdAt.size() <= 40 &&
              data.updatedAt is string && data.updatedAt.size() <= 40 &&
              (!('description' in data) || (data.description is string && data.description.size() <= 3000)) &&
-             (!('dueDate' in data) || (data.dueDate is string && data.dueDate.size() <= 30));
+             (!('dueDate' in data) || (data.dueDate is string && data.dueDate.size() <= 30)) &&
+             (!('completedAt' in data) || (data.completedAt is string && data.completedAt.size() <= 40)) &&
+             (!('inProgressStartedAt' in data) || (data.inProgressStartedAt is string && data.inProgressStartedAt.size() <= 40)) &&
+             (!('inProgressDurationMs' in data) || (data.inProgressDurationMs is number)) &&
+             (!('activityLog' in data) || (data.activityLog is list));
     }
 
     // Users collection

@@ -67,12 +67,30 @@
         },
         "status": {
           "type": "string",
-          "enum": ["todo", "in_progress", "in_review", "done", "archived"],
+          "enum": ["pipeline", "todo", "in_progress", "in_review", "done", "archived"],
           "description": "Current status in the workflow"
         },
         "order": {
           "type": "number",
           "description": "Order index within the user status column"
+        },
+        "completedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Completion timestamp ISO string"
+        },
+        "inProgressStartedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp when task entered in_progress status"
+        },
+        "inProgressDurationMs": {
+          "type": "number",
+          "description": "Total accumulated duration in milliseconds spent in in_progress"
+        },
+        "activityLog": {
+          "type": "array",
+          "description": "Audit trail of task lifecycle state transitions and assignments"
         },
         "createdAt": {
           "type": "string",
