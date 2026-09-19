@@ -28,6 +28,7 @@ interface SwimlaneProps {
   onQuickAddTask?: (userId: string, title: string, status: TaskStatus, cognitiveLoad: 'low' | 'medium' | 'high') => Promise<void>;
   onEditTask: (task: Task) => void;
   onRescheduleTask?: (taskId: string, newDueDate: string | undefined) => void;
+  onUpdateTaskTitle?: (taskId: string, newTitle: string) => void;
   onDeleteTask: (taskId: string) => void;
   onDeleteUser?: (user: User) => void;
   onMoveTask: (taskId: string, targetUserId: string, newStatus: TaskStatus, newIndex?: number) => void;
@@ -84,6 +85,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   onQuickAddTask,
   onEditTask,
   onRescheduleTask,
+  onUpdateTaskTitle,
   onDeleteTask,
   onDeleteUser,
   onMoveTask,
@@ -647,6 +649,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                               task={task}
                               userRole={user.role}
                               onEdit={onEditTask}
+                              onUpdateTitle={onUpdateTaskTitle}
                               onDelete={onDeleteTask}
                               onMoveStatus={handleMoveStatus}
                               onReschedule={onRescheduleTask}
@@ -707,6 +710,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                         task={task}
                         userRole={user.role}
                         onEdit={onEditTask}
+                        onUpdateTitle={onUpdateTaskTitle}
                         onDelete={onDeleteTask}
                         onMoveStatus={handleMoveStatus}
                         onReschedule={onRescheduleTask}
@@ -733,6 +737,7 @@ function areSwimlanePropsEqual(prev: SwimlaneProps, next: SwimlaneProps): boolea
   if (prev.onQuickAddTask !== next.onQuickAddTask) return false;
   if (prev.onEditTask !== next.onEditTask) return false;
   if (prev.onRescheduleTask !== next.onRescheduleTask) return false;
+  if (prev.onUpdateTaskTitle !== next.onUpdateTaskTitle) return false;
   if (prev.onDeleteTask !== next.onDeleteTask) return false;
   if (prev.onDeleteUser !== next.onDeleteUser) return false;
   if (prev.onMoveTask !== next.onMoveTask) return false;

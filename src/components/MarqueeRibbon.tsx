@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Task, User } from '../types';
 import { getDaysRemaining } from '../utils/workload';
 import { AlertTriangle, Clock } from 'lucide-react';
@@ -15,6 +15,9 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
   onTaskClick,
 }) => {
   const userMap = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [shouldScroll, setShouldScroll] = useState(false);
 
   // Filter for active tasks that are overdue (< 0 days) or due today (0 days)
   const urgentTasks = useMemo(() => {
@@ -31,14 +34,35 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
       });
   }, [tasks]);
 
+  // Dynamically detect whether unique tasks exceed the container's viewport
+  useEffect(() => {
+    const checkOverflow = () => {
+      if (!containerRef.current || !contentRef.current) return;
+      const containerWidth = containerRef.current.clientWidth;
+      const contentWidth = contentRef.current.scrollWidth;
+      const uniqueWidth = shouldScroll ? contentWidth / 2 : contentWidth;
+      setShouldScroll(uniqueWidth > containerWidth + 4);
+    };
+
+    checkOverflow();
+
+    const ro = new ResizeObserver(() => {
+      checkOverflow();
+    });
+
+    if (containerRef.current) ro.observe(containerRef.current);
+    if (contentRef.current) ro.observe(contentRef.current);
+
+    return () => ro.disconnect();
+  }, [urgentTasks, shouldScroll]);
+
   if (urgentTasks.length === 0) {
     return null;
   }
 
-  // Duplicate list to achieve continuous, seamless horizontal loop animation
-  const loopList = urgentTasks.length < 5
-    ? [...urgentTasks, ...urgentTasks, ...urgentTasks, ...urgentTasks]
-    : [...urgentTasks, ...urgentTasks];
+  // Duplicate tasks for continuous seamless marquee ONLY if unique tasks exceed the viewport.
+  // When they fit, render unique tasks once without repetition or animation.
+  const displayList = shouldScroll ? [...urgentTasks, ...urgentTasks] : urgentTasks;
 
   const overdueCount = urgentTasks.filter(t => (getDaysRemaining(t.dueDate) ?? 0) < 0).length;
   const dueTodayCount = urgentTasks.length - overdueCount;
@@ -56,10 +80,15 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
         </span>
       </div>
 
-      {/* Marquee Continuous Scrolling Ticker */}
-      <div className="flex-1 overflow-hidden relative">
-        <div className="animate-marquee gap-3 py-0.5">
-          {loopList.map((task, idx) => {
+      {/* Marquee Ticker (animates only when tasks exceed viewport) */}
+      <div ref={containerRef} className="flex-1 overflow-hidden relative">
+        <div
+          ref={contentRef}
+          className={`${
+            shouldScroll ? 'animate-marquee gap-3 py-0.5' : 'flex items-center gap-3 py-0.5 overflow-x-auto no-scrollbar'
+          }`}
+        >
+          {displayList.map((task, idx) => {
             const user = userMap.get(task.userId);
             const days = getDaysRemaining(task.dueDate);
             const isOverdue = days !== null && days < 0;

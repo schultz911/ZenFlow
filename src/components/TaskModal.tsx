@@ -76,25 +76,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     setShowConfirmDelete(false);
   }, [taskToEdit, defaultUserId, defaultStatus, currentUser, users, isOpen]);
 
-  if (!isOpen) return null;
-
-  const selectedUser = users.find(u => u.id === userId);
-  const role = selectedUser?.role || 'content';
-
-  // Helper for quick due dates
-  const setQuickDate = (daysFromNow: number | null) => {
-    if (daysFromNow === null) {
-      setDueDate('');
-      return;
-    }
-    const d = new Date();
-    d.setDate(d.getDate() + daysFromNow);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    setDueDate(`${yyyy}-${mm}-${dd}`);
-  };
-
   const activities = useMemo(() => {
     return taskToEdit?.activityLog || [];
   }, [taskToEdit]);
@@ -120,6 +101,25 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       revisionCount: activities.length,
     };
   }, [taskToEdit, activities]);
+
+  if (!isOpen) return null;
+
+  const selectedUser = users.find(u => u.id === userId);
+  const role = selectedUser?.role || 'content';
+
+  // Helper for quick due dates
+  const setQuickDate = (daysFromNow: number | null) => {
+    if (daysFromNow === null) {
+      setDueDate('');
+      return;
+    }
+    const d = new Date();
+    d.setDate(d.getDate() + daysFromNow);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    setDueDate(`${yyyy}-${mm}-${dd}`);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

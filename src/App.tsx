@@ -33,6 +33,7 @@ function DashboardContent() {
     deleteTask,
     deleteUser,
     createTask,
+    updateTask,
     rescheduleTask,
   } = useDashboard();
 
@@ -213,6 +214,13 @@ function DashboardContent() {
     [rescheduleTask]
   );
 
+  const handleUpdateTaskTitle = useCallback(
+    async (taskId: string, newTitle: string) => {
+      await updateTask(taskId, { title: newTitle });
+    },
+    [updateTask]
+  );
+
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-[#0A0A0A] text-neutral-900 dark:text-[#E5E5E5] font-sans antialiased selection:bg-blue-500/30 selection:text-white transition-colors">
       {/* Sticky Top Header */}
@@ -277,6 +285,7 @@ function DashboardContent() {
                 onQuickAddTask={handleQuickAddTask}
                 onEditTask={handleEditTask}
                 onRescheduleTask={handleRescheduleTask}
+                onUpdateTaskTitle={handleUpdateTaskTitle}
                 onDeleteTask={deleteTask}
                 onDeleteUser={handleOpenDeleteUser}
                 onMoveTask={moveTask}

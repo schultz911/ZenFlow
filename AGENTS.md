@@ -6,6 +6,13 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ### 1. Discovered Optimizations
 
+### Sweep 11: 2026-09-19 (Inline Title Editing, React Hook Invariant Enforcement & Portaled Datepicker)
+- **BUG-05 (Runtime Crash - React Hook Order Invariant Violation #310):** In `TaskModal.tsx`, `useMemo` hooks for `activities` and `cycleMetrics` were positioned downstream of the early return `if (!isOpen) return null;`. When the modal opened, React evaluated 11 hooks versus 9 in the previous render pass, triggering `Minified React error #310`.
+- **UX-04 (Interaction Friction - Modal Diversion on Task Name Edits):** Clicking on the task title previously invoked the full task modal rather than enabling direct, frictionless inline renaming inside the card canvas.
+- **VIS-03 (Z-Index Collision & Clipping - Datepicker Flyout Trapped in Column Stacking Context):** The Quick Reschedule datepicker flyout was positioned as an absolute child within the transformed `motion.div` card and `overflow-y-auto` column container, causing it to render underneath subsequent task cards and clip at scroll boundaries.
+- **VIS-04 (Visual Ticker Churn - Redundant Infinite Duplication of Under-Viewport Tasks):** `MarqueeRibbon.tsx` unconditionally looped duplicate copies of tasks even when 1 or 2 unique tasks comfortably fit within the viewport width.
+- **UX-05 (Visual Noise - Residual Done Countdown Text):** The `Archive in x days` countdown text on completed cards occupied visual space alongside the dedicated Archive button.
+
 ### Sweep 10: 2026-09-19 (Frictionless Quick Actions, Micro-Audit Trails & Offline Durability)
 - **UX-02 (Friction in Micro-Interactions - Modal Fatigue on Task Inception):** Creating a task previously required opening the full `TaskModal.tsx` backdrop modal, interrupting the team lead's triage flow even when rapidly logging high-volume backlog items.
 - **UX-03 (Friction in Deadline Rescheduling - Multi-Click Date Edits):** Rescheduling overdue or slip-risk tasks required launching the full task modal, scrolling past title/description, selecting the native HTML date picker, and saving. Quick snooze actions (+1d, +2d, +3d, +7d) were absent.
@@ -160,6 +167,13 @@ This document records the complete lifecycle of architectural sweeps, discovered
 ---
 
 ## 3. Approved and Implemented
+
+### Sweep 11: Inline Title Editing, React Hook Invariant Enforcement & Portaled Datepicker (Executed: 2026-09-19)
+- **BUG-05 (Executed):** Lifted `activities` and `cycleMetrics` `useMemo` hooks above `if (!isOpen) return null;` in [TaskModal.tsx](file:///c:/ZenFlow/src/components/TaskModal.tsx), strictly preserving constant hook call order and permanently eliminating `Minified React error #310`.
+- **UX-04 (Executed):** Added direct inline title editing to [TaskCard.tsx](file:///c:/ZenFlow/src/components/TaskCard.tsx). Clicking on the card title activates an inline text input with `Enter` (save), `Esc` (cancel), and `onBlur` auto-save without opening any modal or popup, wired with memoized `onUpdateTitle` through [Swimlane.tsx](file:///c:/ZenFlow/src/components/Swimlane.tsx) and [App.tsx](file:///c:/ZenFlow/src/App.tsx).
+- **VIS-03 (Executed):** Migrated the Quick Reschedule datepicker flyout in [TaskCard.tsx](file:///c:/ZenFlow/src/components/TaskCard.tsx) to `createPortal(..., document.body)` with fixed positioning, elevated `z-[9999]`, dynamic boundary-aware placement (opening up or down based on screen clearance), and native custom date picker support, eliminating clipping inside column scroll containers and guaranteeing visibility above all cards and modals.
+- **VIS-04 (Executed):** Refactored [MarqueeRibbon.tsx](file:///c:/ZenFlow/src/components/MarqueeRibbon.tsx) with a `ResizeObserver` measuring unique content width against container viewport width. When tasks fit within the viewport, unique tasks are displayed statically without animation or duplicate repetition. Only when content exceeds the viewport width does the continuous loop scrolling trigger.
+- **UX-05 (Executed):** Removed the `Archive in x days` countdown indicator text on completed cards in [TaskCard.tsx](file:///c:/ZenFlow/src/components/TaskCard.tsx), streamlining the card footer to display only the clean, minimalist `Archive` button.
 
 ### Sweep 10: Frictionless Quick Actions, Micro-Audit Trails & Offline Durability (Executed: 2026-09-19)
 - **FEAT-04 (Executed):**
