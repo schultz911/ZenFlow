@@ -1,7 +1,35 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useDashboard } from '../context/DashboardContext';
-import { Task, CognitiveLoad, TaskStatus } from '../types';
-import { X, Calendar, Brain, Trash2 } from 'lucide-react';
+import { Task, CognitiveLoad, TaskStatus, TaskActivity } from '../types';
+import { X, Calendar, Brain, Trash2, History, Clock, ArrowRight, CheckCircle2, UserCheck, PlusCircle } from 'lucide-react';
+
+function formatActivityTime(isoString: string): string {
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    const now = Date.now();
+    const diffMs = now - d.getTime();
+    const diffMin = Math.floor(diffMs / (1000 * 60));
+    if (diffMin < 1) return 'Just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    const diffHours = Math.floor(diffMin / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return isoString;
+  }
+}
+
+function formatDuration(ms: number): string {
+  if (ms <= 0) return '< 1m';
+  const hours = Math.floor(ms / (1000 * 60 * 60));
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  if (days > 0) return `${days}d ${remHours}h`;
+  if (hours > 0) return `${hours}h`;
+  const minutes = Math.floor(ms / (1000 * 60));
+  return `${Math.max(1, minutes)}m`;
+}
 
 interface TaskModalProps {
   isOpen: boolean;
@@ -67,6 +95,32 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     setDueDate(`${yyyy}-${mm}-${dd}`);
   };
 
+  const activities = useMemo(() => {
+    return taskToEdit?.activityLog || [];
+  }, [taskToEdit]);
+
+  const cycleMetrics = useMemo(() => {
+    if (!taskToEdit) return null;
+    const startMs = taskToEdit.createdAt ? new Date(taskToEdit.createdAt).getTime() : 0;
+    const endMs = taskToEdit.completedAt
+      ? new Date(taskToEdit.completedAt).getTime()
+      : (taskToEdit.status === 'done' ? Date.now() : Date.now());
+
+    const totalLeadTimeMs = startMs > 0 ? Math.max(0, endMs - startMs) : 0;
+
+    // Time in current status: find latest activity that changed status or created task
+    const statusChangeAct = activities.find(a => a.action === 'status_change' || a.action === 'created');
+    const statusStartMs = statusChangeAct ? new Date(statusChangeAct.timestamp).getTime() : startMs;
+    const currentStatusMs = statusStartMs > 0 ? Math.max(0, Date.now() - statusStartMs) : 0;
+
+    return {
+      isDone: taskToEdit.status === 'done',
+      totalLeadTimeStr: totalLeadTimeMs > 0 ? formatDuration(totalLeadTimeMs) : '< 1m',
+      currentStatusStr: currentStatusMs > 0 ? formatDuration(currentStatusMs) : '< 1m',
+      revisionCount: activities.length,
+    };
+  }, [taskToEdit, activities]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !userId) return;
@@ -117,7 +171,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 backdrop-blur-sm p-4">
       <div
         id="task-modal"
-        className="w-full max-w-lg rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] p-6 shadow-2xl transition-all animate-in fade-in zoom-in-95 duration-200 text-neutral-900 dark:text-white"
+        className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] p-6 shadow-2xl transition-all animate-in fade-in zoom-in-95 duration-200 text-neutral-900 dark:text-white"
       >
         <div className="flex items-center justify-between border-b border-neutral-100 dark:border-white/5 pb-3.5">
           <h2 className="text-base font-semibold tracking-tight text-neutral-900 dark:text-white">
@@ -341,6 +395,82 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none resize-none transition-colors"
             />
           </div>
+
+          {/* Micro Activity Audit Trail & Cycle Time */}
+          {taskToEdit && (
+            <div className="pt-3 border-t border-neutral-100 dark:border-white/5 space-y-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-white/40">
+                  <History className="h-3.5 w-3.5 text-blue-500" />
+                  <span>Activity & Cycle Time</span>
+                </div>
+                {cycleMetrics && (
+                  <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-neutral-400 dark:text-white/40">
+                    <span className="flex items-center gap-1 bg-neutral-100 dark:bg-white/5 px-2 py-0.5 rounded-md border border-neutral-200/50 dark:border-white/5">
+                      <Clock className="h-3 w-3 text-neutral-500 dark:text-white/50" />
+                      {cycleMetrics.isDone ? 'Completed in:' : 'Lead time:'} <strong className="text-neutral-700 dark:text-white/80">{cycleMetrics.totalLeadTimeStr}</strong>
+                    </span>
+                    <span className="bg-neutral-100 dark:bg-white/5 px-2 py-0.5 rounded-md border border-neutral-200/50 dark:border-white/5">
+                      In status: <strong className="text-neutral-700 dark:text-white/80">{cycleMetrics.currentStatusStr}</strong>
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {activities.length === 0 ? (
+                <div className="rounded-xl border border-neutral-200/70 dark:border-white/5 bg-neutral-50 dark:bg-[#121212] p-3 text-center text-[11px] text-neutral-400 dark:text-white/30">
+                  Created {formatActivityTime(taskToEdit.createdAt || '')} • No modifications recorded yet
+                </div>
+              ) : (
+                <div className="max-h-36 overflow-y-auto rounded-xl border border-neutral-200/70 dark:border-white/5 bg-neutral-50 dark:bg-[#121212] p-2.5 space-y-2 text-xs divide-y divide-neutral-100 dark:divide-white/5">
+                  {activities.map(act => {
+                    let IconComponent = Clock;
+                    let iconBg = 'text-neutral-500 bg-neutral-200/60 dark:bg-white/10';
+
+                    if (act.action === 'created') {
+                      IconComponent = PlusCircle;
+                      iconBg = 'text-blue-500 bg-blue-100 dark:bg-blue-500/10';
+                    } else if (act.action === 'status_change') {
+                      IconComponent = act.to === 'done' ? CheckCircle2 : ArrowRight;
+                      iconBg = act.to === 'done'
+                        ? 'text-emerald-500 bg-emerald-100 dark:bg-emerald-500/10'
+                        : 'text-amber-500 bg-amber-100 dark:bg-amber-500/10';
+                    } else if (act.action === 'reassigned') {
+                      IconComponent = UserCheck;
+                      iconBg = 'text-purple-500 bg-purple-100 dark:bg-purple-500/10';
+                    } else if (act.action === 'rescheduled') {
+                      IconComponent = Calendar;
+                      iconBg = 'text-sky-500 bg-sky-100 dark:bg-sky-500/10';
+                    }
+
+                    return (
+                      <div key={act.id} className="pt-1.5 first:pt-0 flex items-start gap-2.5">
+                        <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${iconBg}`}>
+                          <IconComponent className="h-3 w-3" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-medium text-neutral-700 dark:text-neutral-300 leading-snug">
+                            {act.details || (
+                              act.action === 'status_change'
+                                ? `Moved to ${act.to?.replace('_', ' ')}`
+                                : act.action === 'reassigned'
+                                ? `Assigned to ${act.to}`
+                                : act.action === 'rescheduled'
+                                ? `Due date: ${act.to}`
+                                : 'Task created'
+                            )}
+                          </p>
+                          <span className="text-[10px] text-neutral-400 dark:text-white/30">
+                            {formatActivityTime(act.timestamp)}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Actions */}
           <div className="mt-6 flex items-center justify-between pt-3 border-t border-neutral-100 dark:border-white/5">

@@ -9,6 +9,7 @@ import { WorkloadModal } from './components/WorkloadModal';
 import { FirestoreModal } from './components/FirestoreModal';
 import { DeleteUserModal } from './components/DeleteUserModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { MarqueeRibbon } from './components/MarqueeRibbon';
 import { User, Task, TaskStatus } from './types';
 import { UserPlus, FileText, Palette } from 'lucide-react';
 import { testConnection } from './lib/firebase';
@@ -31,6 +32,8 @@ function DashboardContent() {
     moveTask,
     deleteTask,
     deleteUser,
+    createTask,
+    rescheduleTask,
   } = useDashboard();
 
   // Modals state
@@ -196,6 +199,20 @@ function DashboardContent() {
     setActiveDragInfo(null);
   }, [setActiveDragInfo]);
 
+  const handleQuickAddTask = useCallback(
+    async (userId: string, title: string, status: TaskStatus, cognitiveLoad: 'low' | 'medium' | 'high') => {
+      await createTask({ userId, title, status, cognitiveLoad });
+    },
+    [createTask]
+  );
+
+  const handleRescheduleTask = useCallback(
+    async (taskId: string, newDueDate: string | undefined) => {
+      await rescheduleTask(taskId, newDueDate);
+    },
+    [rescheduleTask]
+  );
+
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-[#0A0A0A] text-neutral-900 dark:text-[#E5E5E5] font-sans antialiased selection:bg-blue-500/30 selection:text-white transition-colors">
       {/* Sticky Top Header */}
@@ -203,6 +220,13 @@ function DashboardContent() {
         onOpenLoginModal={handleOpenLogin}
         onOpenNewUserModal={handleOpenNewUser}
         onOpenFirestoreModal={() => setFirestoreModalOpen(true)}
+      />
+
+      {/* Critical Deadlines Marquee Ribbon */}
+      <MarqueeRibbon
+        tasks={tasks}
+        users={users}
+        onTaskClick={handleEditTask}
       />
 
       {/* Main Container */}
@@ -250,7 +274,9 @@ function DashboardContent() {
                 onDragTaskStart={handleDragTaskStart}
                 onDragTaskEnd={handleDragTaskEnd}
                 onAddTask={handleOpenAddTask}
+                onQuickAddTask={handleQuickAddTask}
                 onEditTask={handleEditTask}
+                onRescheduleTask={handleRescheduleTask}
                 onDeleteTask={deleteTask}
                 onDeleteUser={handleOpenDeleteUser}
                 onMoveTask={moveTask}

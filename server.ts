@@ -25,6 +25,16 @@ interface User {
   createdAt: string;
 }
 
+interface TaskActivity {
+  id: string;
+  timestamp: string;
+  action: 'created' | 'status_change' | 'reassigned' | 'rescheduled' | 'updated';
+  from?: string;
+  to?: string;
+  actorName?: string;
+  details?: string;
+}
+
 interface Task {
   id: string;
   userId: string;
@@ -37,6 +47,7 @@ interface Task {
   completedAt?: string;
   createdAt: string;
   updatedAt: string;
+  activityLog?: TaskActivity[];
 }
 
 interface AppStore {
@@ -927,7 +938,15 @@ async function startServer() {
 
   // API: Create a task
   app.post('/api/tasks', (req: Request, res: Response) => {
-    const { userId, title, description, dueDate, cognitiveLoad, status } = req.body;
+    const { id: reqId, userId, title, description, dueDate, cognitiveLoad, status } = req.body;
+
+    // Idempotency guard for offline mutation replay: if task with this ID already exists, return it
+    if (reqId && typeof reqId === 'string') {
+      const existingTask = store.tasks.find(t => t.id === reqId);
+      if (existingTask) {
+        return res.status(200).json(existingTask);
+      }
+    }
 
     const cleanTitle = sanitizeString(title);
     if (!userId || !cleanTitle) {
@@ -947,9 +966,18 @@ async function startServer() {
 
     const cleanStatus = ['todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : 'todo';
     const isDone = cleanStatus === 'done';
+    const taskId = (reqId && typeof reqId === 'string') ? sanitizeString(reqId) : `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+
+    const initialActivity: TaskActivity = {
+      id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: new Date().toISOString(),
+      action: 'created',
+      to: cleanStatus,
+      details: `Created in ${cleanStatus.replace('_', ' ')}`,
+    };
 
     const newTask: Task = {
-      id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: taskId,
       userId,
       title: cleanTitle,
       description: description ? sanitizeString(description) : undefined,
@@ -960,6 +988,7 @@ async function startServer() {
       completedAt: isDone ? new Date().toISOString() : undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      activityLog: [initialActivity],
     };
 
     store.tasks.push(newTask);
@@ -1005,6 +1034,44 @@ async function startServer() {
       }
     }
 
+    // Micro activity audit logging
+    const activityEntries: TaskActivity[] = Array.isArray(currentTask.activityLog) ? [...currentTask.activityLog] : [];
+
+    if (status !== undefined && status !== currentTask.status) {
+      activityEntries.unshift({
+        id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        action: 'status_change',
+        from: currentTask.status,
+        to: status,
+        details: `Status changed: ${currentTask.status.replace('_', ' ')} → ${status.replace('_', ' ')}`,
+      });
+    }
+
+    if (userId !== undefined && userId !== currentTask.userId) {
+      const oldUser = store.users.find(u => u.id === currentTask.userId)?.name || currentTask.userId;
+      const newUser = store.users.find(u => u.id === userId)?.name || userId;
+      activityEntries.unshift({
+        id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        action: 'reassigned',
+        from: oldUser,
+        to: newUser,
+        details: `Reassigned from ${oldUser} to ${newUser}`,
+      });
+    }
+
+    if (dueDate !== undefined && dueDate !== currentTask.dueDate) {
+      activityEntries.unshift({
+        id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        action: 'rescheduled',
+        from: currentTask.dueDate || 'None',
+        to: dueDate || 'None',
+        details: `Due date changed from ${currentTask.dueDate || 'None'} to ${dueDate || 'None'}`,
+      });
+    }
+
     const updatedTask: Task = {
       ...currentTask,
       title: title !== undefined ? sanitizeString(title) : currentTask.title,
@@ -1016,6 +1083,7 @@ async function startServer() {
       order: typeof order === 'number' ? order : currentTask.order,
       completedAt,
       updatedAt: new Date().toISOString(),
+      activityLog: activityEntries.slice(0, 15),
     };
 
     store.tasks[taskIndex] = updatedTask;
@@ -1045,7 +1113,7 @@ async function startServer() {
 
   // API: Reorder tasks / move between statuses
   app.post('/api/tasks/reorder', (req: Request, res: Response) => {
-    const { updates } = req.body; // Array of { id, status, order }
+    const { updates } = req.body; // Array of { id, status, order, userId }
     if (!Array.isArray(updates) || updates.length > 500) {
       return res.status(400).json({ error: 'updates array is required and must contain at most 500 items' });
     }
@@ -1061,20 +1129,49 @@ async function startServer() {
       if (!update || typeof update !== 'object' || !update.id) continue;
       const task = taskMap.get(update.id);
       if (task) {
-        if (update.userId && typeof update.userId === 'string' && store.users.some(u => u.id === update.userId)) {
+        if (!task.activityLog) task.activityLog = [];
+
+        if (update.userId && typeof update.userId === 'string' && store.users.some(u => u.id === update.userId) && update.userId !== task.userId) {
+          const oldUser = store.users.find(u => u.id === task.userId)?.name || task.userId;
+          const newUser = store.users.find(u => u.id === update.userId)?.name || update.userId;
+          task.activityLog.unshift({
+            id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            timestamp: new Date().toISOString(),
+            action: 'reassigned',
+            from: oldUser,
+            to: newUser,
+            details: `Reassigned from ${oldUser} to ${newUser}`,
+          });
           task.userId = update.userId;
         }
+
         if (update.status && ['todo', 'in_progress', 'in_review', 'done', 'archived'].includes(update.status)) {
-          if (update.status === 'done' && task.status !== 'done') {
-            task.completedAt = new Date().toISOString();
-          } else if (update.status !== 'done') {
-            task.completedAt = undefined;
+          if (update.status !== task.status) {
+            task.activityLog.unshift({
+              id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              timestamp: new Date().toISOString(),
+              action: 'status_change',
+              from: task.status,
+              to: update.status,
+              details: `Moved from ${task.status.replace('_', ' ')} to ${update.status.replace('_', ' ')}`,
+            });
+            if (update.status === 'done' && task.status !== 'done') {
+              task.completedAt = new Date().toISOString();
+            } else if (update.status !== 'done') {
+              task.completedAt = undefined;
+            }
+            task.status = update.status;
           }
-          task.status = update.status;
         }
+
         if (typeof update.order === 'number') {
           task.order = update.order;
         }
+
+        if (task.activityLog.length > 15) {
+          task.activityLog = task.activityLog.slice(0, 15);
+        }
+
         task.updatedAt = new Date().toISOString();
         modifiedTasks.push(task);
       }

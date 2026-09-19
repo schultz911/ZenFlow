@@ -25,7 +25,9 @@ interface SwimlaneProps {
   onDragTaskStart?: (task: Task) => void;
   onDragTaskEnd?: () => void;
   onAddTask: (userId: string, status?: TaskStatus) => void;
+  onQuickAddTask?: (userId: string, title: string, status: TaskStatus, cognitiveLoad: 'low' | 'medium' | 'high') => Promise<void>;
   onEditTask: (task: Task) => void;
+  onRescheduleTask?: (taskId: string, newDueDate: string | undefined) => void;
   onDeleteTask: (taskId: string) => void;
   onDeleteUser?: (user: User) => void;
   onMoveTask: (taskId: string, targetUserId: string, newStatus: TaskStatus, newIndex?: number) => void;
@@ -79,7 +81,9 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   onDragTaskStart,
   onDragTaskEnd,
   onAddTask,
+  onQuickAddTask,
   onEditTask,
+  onRescheduleTask,
   onDeleteTask,
   onDeleteUser,
   onMoveTask,
@@ -90,6 +94,26 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
   const [dragOverHeader, setDragOverHeader] = useState(false);
   const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
+
+  // Inline Quick-Add state
+  const [quickAddStatus, setQuickAddStatus] = useState<TaskStatus | null>(null);
+  const [quickAddTitle, setQuickAddTitle] = useState('');
+  const [quickAddLoad, setQuickAddLoad] = useState<'low' | 'medium' | 'high'>('medium');
+  const [isSubmittingQuickAdd, setIsSubmittingQuickAdd] = useState(false);
+
+  const handleCommitQuickAdd = useCallback(async (status: TaskStatus) => {
+    const trimmed = quickAddTitle.trim();
+    if (!trimmed || isSubmittingQuickAdd) return;
+    setIsSubmittingQuickAdd(true);
+    try {
+      if (onQuickAddTask) {
+        await onQuickAddTask(user.id, trimmed, status, quickAddLoad);
+      }
+      setQuickAddTitle('');
+    } finally {
+      setIsSubmittingQuickAdd(false);
+    }
+  }, [quickAddTitle, isSubmittingQuickAdd, onQuickAddTask, user.id, quickAddLoad]);
 
   const handleTaskDragStart = useCallback(
     (draggedTask: Task) => {
@@ -459,9 +483,21 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                   </div>
 
                   <button
-                    onClick={() => onAddTask(user.id, col.status)}
-                    title={`Add task to ${col.title}`}
-                    className="rounded-md p-1 text-neutral-400 dark:text-white/30 hover:bg-neutral-200 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer shrink-0"
+                    onClick={() => {
+                      if (quickAddStatus === col.status) {
+                        setQuickAddStatus(null);
+                      } else {
+                        setQuickAddStatus(col.status);
+                        setQuickAddTitle('');
+                        setQuickAddLoad('medium');
+                      }
+                    }}
+                    title={`Inline quick add to ${col.title}`}
+                    className={`rounded-md p-1 transition-colors cursor-pointer shrink-0 ${
+                      quickAddStatus === col.status
+                        ? 'bg-blue-600 text-white shadow-xs'
+                        : 'text-neutral-400 dark:text-white/30 hover:bg-neutral-200 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white'
+                    }`}
                   >
                     <Plus className="h-3 w-3" />
                   </button>
@@ -481,14 +517,90 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
 
                 {/* Tasks List (displays top 3 tasks comfortably, scrolls beyond 3 without expanding swimlane board) */}
                 <div className="flex-1 space-y-2.5 max-h-[385px] overflow-y-auto pr-1">
+                  {/* Inline Quick-Add Card */}
+                  {quickAddStatus === col.status && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                      className="rounded-xl border border-blue-500/50 bg-white dark:bg-[#1C1C1C] p-2.5 shadow-md space-y-2 mb-2"
+                    >
+                      <input
+                        type="text"
+                        autoFocus
+                        value={quickAddTitle}
+                        onChange={e => setQuickAddTitle(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleCommitQuickAdd(col.status);
+                          } else if (e.key === 'Escape') {
+                            setQuickAddStatus(null);
+                          }
+                        }}
+                        placeholder="Task title... (Enter to save, Esc to cancel)"
+                        className="w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-[#121212] px-2.5 py-1.5 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none"
+                      />
+
+                      <div className="flex items-center justify-between gap-1.5 pt-0.5">
+                        <div className="flex items-center gap-1">
+                          {(['low', 'medium', 'high'] as const).map(load => (
+                            <button
+                              key={load}
+                              type="button"
+                              onClick={() => setQuickAddLoad(load)}
+                              className={`rounded px-1.5 py-0.5 text-[9px] font-medium border capitalize transition-all cursor-pointer ${
+                                quickAddLoad === load
+                                  ? load === 'high'
+                                    ? 'bg-red-500/15 border-red-500/40 text-red-500'
+                                    : load === 'medium'
+                                    ? 'bg-yellow-500/15 border-yellow-500/40 text-yellow-600 dark:text-yellow-400'
+                                    : 'bg-green-500/15 border-green-500/40 text-green-600 dark:text-green-400'
+                                  : 'border-transparent text-neutral-500 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white'
+                              }`}
+                            >
+                              {load}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setQuickAddStatus(null);
+                              onAddTask(user.id, col.status);
+                            }}
+                            title="Open full form with details & due date"
+                            className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                          >
+                            Full form...
+                          </button>
+                          <button
+                            type="button"
+                            disabled={!quickAddTitle.trim() || isSubmittingQuickAdd}
+                            onClick={() => handleCommitQuickAdd(col.status)}
+                            className="rounded-lg bg-blue-600 hover:bg-blue-500 px-2.5 py-1 text-[10px] font-semibold text-white shadow-xs transition-colors cursor-pointer disabled:opacity-40"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
                   <AnimatePresence mode="popLayout">
-                    {columnTasks.length === 0 ? (
+                    {columnTasks.length === 0 && quickAddStatus !== col.status ? (
                       <motion.div
                         key="empty-dropzone"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        onClick={() => onAddTask(user.id, col.status)}
+                        onClick={() => {
+                          setQuickAddStatus(col.status);
+                          setQuickAddTitle('');
+                          setQuickAddLoad('medium');
+                        }}
                         className={`flex h-28 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed p-3 text-center transition-all ${
                           isDropActive
                             ? 'border-blue-500 bg-blue-100/50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 scale-[1.02]'
@@ -500,7 +612,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                           {isDropActive ? `Drop to assign to ${user.name.split(' ')[0]}` : 'No tasks'}
                         </p>
                         <p className="text-[10px] text-neutral-400 dark:text-white/30">
-                          {isDropActive ? `in ${col.title}` : 'Drop here or click +'}
+                          {isDropActive ? `in ${col.title}` : 'Click for quick add or drop here'}
                         </p>
                       </motion.div>
                     ) : (
@@ -537,6 +649,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                               onEdit={onEditTask}
                               onDelete={onDeleteTask}
                               onMoveStatus={handleMoveStatus}
+                              onReschedule={onRescheduleTask}
                               onDragStart={handleTaskDragStart}
                               onDragEnd={handleTaskDragEnd}
                             />
@@ -596,6 +709,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                         onEdit={onEditTask}
                         onDelete={onDeleteTask}
                         onMoveStatus={handleMoveStatus}
+                        onReschedule={onRescheduleTask}
                         onDragStart={handleTaskDragStart}
                         onDragEnd={handleTaskDragEnd}
                       />
@@ -616,7 +730,9 @@ function areSwimlanePropsEqual(prev: SwimlaneProps, next: SwimlaneProps): boolea
   if (prev.isCurrentUser !== next.isCurrentUser) return false;
   if (prev.activeDragInfo !== next.activeDragInfo) return false;
   if (prev.onAddTask !== next.onAddTask) return false;
+  if (prev.onQuickAddTask !== next.onQuickAddTask) return false;
   if (prev.onEditTask !== next.onEditTask) return false;
+  if (prev.onRescheduleTask !== next.onRescheduleTask) return false;
   if (prev.onDeleteTask !== next.onDeleteTask) return false;
   if (prev.onDeleteUser !== next.onDeleteUser) return false;
   if (prev.onMoveTask !== next.onMoveTask) return false;

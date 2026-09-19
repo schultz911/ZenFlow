@@ -117,18 +117,18 @@ export function formatDateOnly(dueDateStr?: string): string {
 }
 
 /**
- * Provides color mappings for the due clock icon:
+ * Provides color mappings and labels for the due date chip and clock icon based on proximity:
  * - Red: Overdue (< 0 days)
- * - Amber: Due today / tomorrow (0 - 1 days)
- * - Green: Due in 2-3 days (2 - 3 days)
- * - Blue: Due this week (4 - 7 days)
+ * - Orange: 2, 1, or today (0 - 2 days)
+ * - Yellow: > 2 days (3 - 4 days)
+ * - Green: > 4 days (5 - 7 days)
  * - Grey: > 7 days or no deadline
  */
-export function getDuePillInfo(dueDateStr?: string): DuePillInfo {
+export function getDateChipStyle(dueDateStr?: string): DuePillInfo {
   if (!dueDateStr) {
     return {
       label: 'No deadline',
-      badgeClass: 'bg-neutral-100 text-neutral-400 border-neutral-200 dark:bg-white/5 dark:text-white/30 dark:border-white/5',
+      badgeClass: 'bg-neutral-100 text-neutral-500 border-neutral-200 dark:bg-white/5 dark:text-white/40 dark:border-white/10',
       iconClass: 'text-neutral-400 dark:text-white/30',
       isOverdue: false,
     };
@@ -139,13 +139,13 @@ export function getDuePillInfo(dueDateStr?: string): DuePillInfo {
   if (days === null) {
     return {
       label: 'No deadline',
-      badgeClass: 'bg-neutral-100 text-neutral-400 border-neutral-200 dark:bg-white/5 dark:text-white/30 dark:border-white/5',
+      badgeClass: 'bg-neutral-100 text-neutral-500 border-neutral-200 dark:bg-white/5 dark:text-white/40 dark:border-white/10',
       iconClass: 'text-neutral-400 dark:text-white/30',
       isOverdue: false,
     };
   }
 
-  // Red for overdue
+  // Red for overdue (< 0 days)
   if (days < 0) {
     return {
       label: `Overdue (${Math.abs(days)}d)`,
@@ -155,18 +155,29 @@ export function getDuePillInfo(dueDateStr?: string): DuePillInfo {
     };
   }
 
-  // Amber for due today / tomorrow
-  if (days <= 1) {
+  // Orange for 2, 1, or today (0 - 2 days)
+  if (days <= 2) {
+    const label = days === 0 ? 'Due Today' : days === 1 ? 'Due Tomorrow' : 'Due in 2 days';
     return {
-      label: days === 0 ? 'Due Today' : 'Due Tomorrow',
-      badgeClass: 'bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/20',
-      iconClass: 'text-amber-500 dark:text-amber-400',
+      label,
+      badgeClass: 'bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-500/15 dark:text-orange-400 dark:border-orange-500/20',
+      iconClass: 'text-orange-500 dark:text-orange-400',
       isOverdue: false,
     };
   }
 
-  // Green for due in 2-3 days
-  if (days <= 3) {
+  // Yellow for > 2 days (3 - 4 days)
+  if (days <= 4) {
+    return {
+      label: `Due in ${days} days`,
+      badgeClass: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-yellow-500/15 dark:text-yellow-400 dark:border-yellow-500/20',
+      iconClass: 'text-amber-500 dark:text-yellow-400',
+      isOverdue: false,
+    };
+  }
+
+  // Green for > 4 days (5 - 7 days)
+  if (days <= 7) {
     return {
       label: `Due in ${days} days`,
       badgeClass: 'bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-emerald-500/20',
@@ -175,23 +186,17 @@ export function getDuePillInfo(dueDateStr?: string): DuePillInfo {
     };
   }
 
-  // Blue for due this week (4-7 days)
-  if (days <= 7) {
-    return {
-      label: `Due this week (${days}d)`,
-      badgeClass: 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/15 dark:text-blue-400 dark:border-blue-500/20',
-      iconClass: 'text-blue-500 dark:text-blue-400',
-      isOverdue: false,
-    };
-  }
-
   // Grey for > 7 days
   return {
     label: `Due in ${days} days`,
-    badgeClass: 'bg-neutral-100 text-neutral-400 border-neutral-200 dark:bg-white/5 dark:text-white/30 dark:border-white/5',
+    badgeClass: 'bg-neutral-100 text-neutral-500 border-neutral-200 dark:bg-white/5 dark:text-white/40 dark:border-white/10',
     iconClass: 'text-neutral-400 dark:text-white/30',
     isOverdue: false,
   };
+}
+
+export function getDuePillInfo(dueDateStr?: string): DuePillInfo {
+  return getDateChipStyle(dueDateStr);
 }
 
 /**

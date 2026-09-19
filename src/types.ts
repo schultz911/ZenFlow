@@ -13,6 +13,16 @@ export interface User {
   createdAt: string;
 }
 
+export interface TaskActivity {
+  id: string;
+  timestamp: string;
+  action: 'created' | 'status_change' | 'reassigned' | 'rescheduled' | 'updated';
+  from?: string;
+  to?: string;
+  actorName?: string;
+  details?: string;
+}
+
 export interface Task {
   id: string;
   userId: string;
@@ -25,6 +35,17 @@ export interface Task {
   completedAt?: string;
   createdAt: string;
   updatedAt: string;
+  activityLog?: TaskActivity[];
+}
+
+export interface QueuedMutation {
+  id: string;
+  type: 'create_task' | 'update_task' | 'delete_task' | 'reorder_tasks' | 'delete_user';
+  endpoint: string;
+  method: 'POST' | 'PUT' | 'DELETE';
+  payload?: any;
+  timestamp: number;
+  retryCount: number;
 }
 
 export interface TaskScoreItem {

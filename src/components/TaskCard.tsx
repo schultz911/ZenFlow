@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Task, TaskStatus, Role } from '../types';
 import { getDuePillInfo, formatDateOnly, getCognitiveLoadLabel } from '../utils/workload';
@@ -19,6 +19,7 @@ interface TaskCardProps {
   onEdit: (task: Task) => void;
   onDelete: (taskId: string) => void;
   onMoveStatus: (taskId: string, newStatus: TaskStatus) => void;
+  onReschedule?: (taskId: string, newDueDate: string | undefined) => void;
   onDragStart?: (task: Task) => void;
   onDragEnd?: () => void;
   isDraggable?: boolean;
@@ -32,14 +33,49 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   onEdit,
   onDelete,
   onMoveStatus,
+  onReschedule,
   onDragStart,
   onDragEnd,
   isDraggable = true,
 }) => {
   const [isDragging, setIsDragging] = useState(false);
+  const [showSnoozeFlyout, setShowSnoozeFlyout] = useState(false);
+  const snoozeRef = useRef<HTMLDivElement>(null);
+
+  // Dismiss snooze flyout on click outside
+  useEffect(() => {
+    if (!showSnoozeFlyout) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (snoozeRef.current && !snoozeRef.current.contains(e.target as Node)) {
+        setShowSnoozeFlyout(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [showSnoozeFlyout]);
 
   const pillInfo = getDuePillInfo(task.dueDate);
   const cognitiveLabel = getCognitiveLoadLabel(task.cognitiveLoad, userRole);
+
+  const handleSnooze = (daysToAdd: number | null) => {
+    let newDueDate: string | undefined;
+    if (daysToAdd !== null) {
+      const target = new Date();
+      target.setDate(target.getDate() + daysToAdd);
+      const yyyy = target.getFullYear();
+      const mm = String(target.getMonth() + 1).padStart(2, '0');
+      const dd = String(target.getDate()).padStart(2, '0');
+      newDueDate = `${yyyy}-${mm}-${dd}`;
+    } else {
+      newDueDate = undefined;
+    }
+    setShowSnoozeFlyout(false);
+    if (onReschedule) {
+      onReschedule(task.id, newDueDate);
+    } else {
+      onEdit({ ...task, dueDate: newDueDate });
+    }
+  };
 
   // Next and Prev status for single-click progression
   const currentIdx = STATUS_SEQUENCE.indexOf(task.status);
@@ -111,12 +147,17 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           </div>
 
           {/* Due Clock Icon Badge (color-coded, compact micro size) */}
-          <span
-            title={pillInfo.label}
-            className={`inline-flex items-center justify-center rounded-full p-1 border ${pillInfo.badgeClass}`}
+          <button
+            type="button"
+            onClick={e => {
+              e.stopPropagation();
+              setShowSnoozeFlyout(prev => !prev);
+            }}
+            title={`${pillInfo.label} — Click to quick-reschedule`}
+            className={`inline-flex items-center justify-center rounded-full p-1 border cursor-pointer transition-transform hover:scale-110 ${pillInfo.badgeClass}`}
           >
             <Clock className={`h-2.5 w-2.5 ${pillInfo.iconClass} shrink-0`} />
-          </span>
+          </button>
 
           {/* Cognitive Load Dot Badge (compact micro size) */}
           <span
@@ -180,11 +221,77 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         </p>
       )}
 
-      {/* Bottom Row: Due date & quick status stepper */}
+      {/* Bottom Row: Due date (with proximity color chip & snooze flyout) & quick status stepper */}
       <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-neutral-100 dark:border-white/5 pt-2">
-        <div className="flex items-center gap-1 text-[10px] text-neutral-500 dark:text-white/40">
-          <Calendar className="h-3 w-3 text-neutral-400 dark:text-white/30" />
-          <span>{formatDateOnly(task.dueDate)}</span>
+        <div className="relative" ref={snoozeRef}>
+          <button
+            type="button"
+            onClick={e => {
+              e.stopPropagation();
+              setShowSnoozeFlyout(prev => !prev);
+            }}
+            title={`${pillInfo.label} — Click to quick-reschedule`}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-0.5 text-[10px] font-medium border transition-all cursor-pointer ${pillInfo.badgeClass}`}
+          >
+            <Calendar className={`h-3 w-3 ${pillInfo.iconClass} shrink-0`} />
+            <span>{formatDateOnly(task.dueDate)}</span>
+          </button>
+
+          {/* Quick Reschedule Snooze Flyout */}
+          {showSnoozeFlyout && (
+            <div
+              onClick={e => e.stopPropagation()}
+              className="absolute bottom-full left-0 mb-1.5 z-40 w-44 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#121212] p-1.5 shadow-2xl text-neutral-900 dark:text-white"
+            >
+              <div className="px-2 py-1 border-b border-neutral-100 dark:border-white/5 text-[10px] font-semibold text-neutral-400 dark:text-white/40 uppercase tracking-wider">
+                Quick Reschedule
+              </div>
+              <div className="mt-1 space-y-0.5">
+                <button
+                  type="button"
+                  onClick={() => handleSnooze(1)}
+                  className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-[11px] text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/10 cursor-pointer transition-colors"
+                >
+                  <span>Tomorrow</span>
+                  <span className="text-[10px] text-neutral-400 dark:text-white/40">+1d</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSnooze(2)}
+                  className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-[11px] text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/10 cursor-pointer transition-colors"
+                >
+                  <span>In 2 days</span>
+                  <span className="text-[10px] text-neutral-400 dark:text-white/40">+2d</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSnooze(3)}
+                  className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-[11px] text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/10 cursor-pointer transition-colors"
+                >
+                  <span>In 3 days</span>
+                  <span className="text-[10px] text-neutral-400 dark:text-white/40">+3d</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSnooze(7)}
+                  className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-[11px] text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/10 cursor-pointer transition-colors"
+                >
+                  <span>Next week</span>
+                  <span className="text-[10px] text-neutral-400 dark:text-white/40">+7d</span>
+                </button>
+                {task.dueDate && (
+                  <button
+                    type="button"
+                    onClick={() => handleSnooze(null)}
+                    className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-[11px] text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 cursor-pointer border-t border-neutral-100 dark:border-white/5 mt-0.5 pt-1 transition-colors"
+                  >
+                    <span>Clear deadline</span>
+                    <span className="text-[10px] text-red-400">None</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Quick status stepper button */}

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
-import { User, Task, Role, TaskStatus, RealtimeEvent, DragTaskInfo, TaskOrderUpdate } from '../types';
+import { User, Task, Role, TaskStatus, RealtimeEvent, DragTaskInfo, TaskOrderUpdate, QueuedMutation } from '../types';
 import { INITIAL_USERS, INITIAL_TASKS } from '../data/initialData';
 
 export interface FirestoreStatus {
@@ -12,6 +12,44 @@ export interface FirestoreStatus {
   totalTasks: number;
   lastError: string | null;
   lastSyncTime?: string;
+}
+
+const OFFLINE_QUEUE_KEY = 'zenflow_mutation_queue_v1';
+
+function loadMutationQueue(): QueuedMutation[] {
+  try {
+    const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {
+    // ignore
+  }
+  return [];
+}
+
+function saveMutationQueue(queue: QueuedMutation[]) {
+  try {
+    if (queue.length > 0) {
+      localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+    } else {
+      localStorage.removeItem(OFFLINE_QUEUE_KEY);
+    }
+  } catch {
+    // ignore
+  }
+}
+
+function enqueueMutation(mutation: Omit<QueuedMutation, 'id' | 'timestamp' | 'retryCount'>) {
+  const queue = loadMutationQueue();
+  queue.push({
+    ...mutation,
+    id: `mut-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    timestamp: Date.now(),
+    retryCount: 0,
+  });
+  saveMutationQueue(queue);
 }
 
 interface DashboardContextType {
@@ -42,6 +80,7 @@ interface DashboardContextType {
     status: TaskStatus;
   }) => Promise<Task>;
   updateTask: (id: string, updates: Partial<Task>) => Promise<Task>;
+  rescheduleTask: (taskId: string, newDueDate?: string) => Promise<Task>;
   deleteTask: (id: string) => Promise<void>;
   deleteUser: (userId: string) => Promise<void>;
   moveTask: (taskId: string, targetUserId: string, newStatus: TaskStatus, newIndex?: number) => Promise<void>;
@@ -201,10 +240,77 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, []);
 
+  const isReplayingRef = useRef(false);
+
+  // Replay persistent offline mutation queue in FIFO sequence upon network restore
+  const replayQueue = useCallback(async () => {
+    if (isReplayingRef.current) return;
+    const queue = loadMutationQueue();
+    if (queue.length === 0) return;
+
+    isReplayingRef.current = true;
+    const remainingQueue: QueuedMutation[] = [];
+
+    for (let i = 0; i < queue.length; i++) {
+      const item = queue[i];
+      try {
+        const res = await fetch(item.endpoint, {
+          method: item.method,
+          headers: { 'Content-Type': 'application/json' },
+          body: item.payload ? JSON.stringify(item.payload) : undefined,
+        });
+        if (!res.ok && res.status >= 400 && res.status < 500) {
+          console.warn(`[Offline Queue] Discarding client error (${res.status}) for:`, item);
+        } else if (!res.ok) {
+          item.retryCount = (item.retryCount || 0) + 1;
+          remainingQueue.push(item);
+          remainingQueue.push(...queue.slice(i + 1));
+          break;
+        }
+      } catch (err) {
+        item.retryCount = (item.retryCount || 0) + 1;
+        remainingQueue.push(item);
+        remainingQueue.push(...queue.slice(i + 1));
+        break;
+      }
+    }
+
+    saveMutationQueue(remainingQueue);
+    isReplayingRef.current = false;
+
+    if (remainingQueue.length === 0) {
+      await fetchState();
+      await refreshFirestoreStatus();
+      setSyncStatus('connected');
+    }
+  }, [fetchState, refreshFirestoreStatus]);
+
   useEffect(() => {
     fetchState();
     refreshFirestoreStatus();
   }, [fetchState, refreshFirestoreStatus]);
+
+  // Online / Offline network status listener with auto queue replay
+  useEffect(() => {
+    const handleOnline = () => {
+      setSyncStatus('connecting');
+      replayQueue();
+    };
+    const handleOffline = () => {
+      setSyncStatus('offline');
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    if (navigator.onLine && loadMutationQueue().length > 0) {
+      replayQueue();
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [replayQueue]);
 
   // Server-Sent Events (SSE) Realtime Listener
   useEffect(() => {
@@ -218,7 +324,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         eventSource = new EventSource('/api/events');
 
         eventSource.onopen = () => {
-          if (isMounted) setSyncStatus('connected');
+          if (isMounted) {
+            setSyncStatus('connected');
+            replayQueue();
+          }
         };
 
         eventSource.addEventListener('init', () => {
@@ -385,7 +494,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     setActiveRoleTab(user.role);
   }, []);
 
-  // Task creation
+  // Task creation with offline mutation queuing
   const createTask = useCallback(async (data: {
     userId: string;
     title: string;
@@ -394,13 +503,21 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     cognitiveLoad: 'low' | 'medium' | 'high';
     status: TaskStatus;
   }): Promise<Task> => {
-    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const realId = `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const currentTasks = tasksRef.current;
     const isCompleted = data.status === 'done';
     const now = new Date().toISOString();
-    // Optimistic task
-    const tempTask: Task = {
-      id: tempId,
+
+    const initialActivity = {
+      id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: now,
+      action: 'created' as const,
+      to: data.status,
+      details: `Created in ${data.status.replace('_', ' ')}`,
+    };
+
+    const optimisticTask: Task = {
+      id: realId,
       userId: data.userId,
       title: data.title.trim(),
       description: data.description ? data.description.trim() : undefined,
@@ -411,6 +528,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       completedAt: isCompleted ? now : undefined,
       createdAt: now,
       updatedAt: now,
+      activityLog: [initialActivity],
     };
 
     setTasks(prev => {
@@ -418,38 +536,45 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       for (const t of prev) {
         if (t.id) map.set(t.id, t);
       }
-      map.set(tempId, tempTask);
+      map.set(realId, optimisticTask);
       return Array.from(map.values());
     });
 
+    const payload = { id: realId, ...data };
+
     try {
+      if (!navigator.onLine) throw new Error('Offline');
       const res = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         const saved: Task = await res.json();
         setTasks(prev => {
-          const map = new Map<string, Task>();
-          for (const t of prev) {
-            // Remove the temporary task and any matching id
-            if (t.id === tempId || t.id === saved.id) continue;
-            map.set(t.id, t);
-          }
+          const map = new Map(prev.map(t => [t.id, t]));
           map.set(saved.id, saved);
           return Array.from(map.values());
         });
         return saved;
+      } else {
+        throw new Error(`Server returned ${res.status}`);
       }
     } catch (err) {
-      console.warn('Create task server call failed, using optimistic task:', err);
+      console.warn('Create task offline/failed, buffering in queue:', err);
+      enqueueMutation({
+        type: 'create_task',
+        endpoint: '/api/tasks',
+        method: 'POST',
+        payload,
+      });
+      setSyncStatus('offline');
     }
 
-    return tempTask;
+    return optimisticTask;
   }, []);
 
-  // Task update
+  // Task update with offline mutation queuing
   const updateTask = useCallback(async (id: string, updates: Partial<Task>): Promise<Task> => {
     let updatedTask: Task | undefined;
     setTasks(prev => {
@@ -474,6 +599,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     });
 
     try {
+      if (!navigator.onLine) throw new Error('Offline');
       const res = await fetch(`/api/tasks/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -487,49 +613,73 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
           return Array.from(map.values());
         });
         return serverTask;
+      } else {
+        throw new Error(`Server returned ${res.status}`);
       }
     } catch (err) {
-      console.warn('Update task server call failed:', err);
+      console.warn('Update task offline/failed, buffering in queue:', err);
+      enqueueMutation({
+        type: 'update_task',
+        endpoint: `/api/tasks/${id}`,
+        method: 'PUT',
+        payload: updates,
+      });
+      setSyncStatus('offline');
     }
 
     return updatedTask || (tasksRef.current.find(t => t.id === id) as Task);
   }, []);
 
-  // Task delete
+  // Dedicated reschedule helper for quick snooze
+  const rescheduleTask = useCallback(async (taskId: string, newDueDate?: string): Promise<Task> => {
+    return updateTask(taskId, { dueDate: newDueDate });
+  }, [updateTask]);
+
+  // Task delete with offline mutation queuing
   const deleteTask = useCallback(async (id: string): Promise<void> => {
     setTasks(prev => prev.filter(t => t.id !== id));
 
     try {
-      await fetch(`/api/tasks/${id}`, {
+      if (!navigator.onLine) throw new Error('Offline');
+      const res = await fetch(`/api/tasks/${id}`, {
         method: 'DELETE',
       });
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
     } catch (err) {
-      console.warn('Delete task server call failed:', err);
+      console.warn('Delete task offline/failed, buffering in queue:', err);
+      enqueueMutation({
+        type: 'delete_task',
+        endpoint: `/api/tasks/${id}`,
+        method: 'DELETE',
+      });
+      setSyncStatus('offline');
     }
   }, []);
 
-  // User delete (cascade delete user and all their tasks)
+  // User delete with offline mutation queuing
   const deleteUser = useCallback(async (userId: string): Promise<void> => {
-    // Optimistically remove user and their tasks
     setUsers(prev => prev.filter(u => u.id !== userId));
     setTasks(prev => prev.filter(t => t.userId !== userId));
-    setCurrentUser(prev => {
-      if (prev?.id === userId) {
-        return null;
-      }
-      return prev;
-    });
+    setCurrentUser(prev => (prev?.id === userId ? null : prev));
 
     try {
-      await fetch(`/api/users/${userId}`, {
+      if (!navigator.onLine) throw new Error('Offline');
+      const res = await fetch(`/api/users/${userId}`, {
         method: 'DELETE',
       });
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
     } catch (err) {
-      console.warn('Delete user server call failed:', err);
+      console.warn('Delete user offline/failed, buffering in queue:', err);
+      enqueueMutation({
+        type: 'delete_user',
+        endpoint: `/api/users/${userId}`,
+        method: 'DELETE',
+      });
+      setSyncStatus('offline');
     }
   }, []);
 
-  // Move task across users and/or statuses with order index normalization
+  // Move task across users and/or statuses with order index normalization & offline queuing
   const moveTask = useCallback(async (
     taskId: string,
     targetUserId: string,
@@ -600,13 +750,22 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     });
 
     try {
-      await fetch('/api/tasks/reorder', {
+      if (!navigator.onLine) throw new Error('Offline');
+      const res = await fetch('/api/tasks/reorder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ updates: batchUpdates }),
       });
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
     } catch (err) {
-      console.warn('Move task server call failed:', err);
+      console.warn('Move task offline/failed, buffering in queue:', err);
+      enqueueMutation({
+        type: 'reorder_tasks',
+        endpoint: '/api/tasks/reorder',
+        method: 'POST',
+        payload: { updates: batchUpdates },
+      });
+      setSyncStatus('offline');
     }
   }, []);
 
@@ -630,7 +789,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     await moveTask(taskId, destUser, newStatus, newIndex);
   }, [moveTask]);
 
-  // Reorder tasks batch
+  // Reorder tasks batch with offline queuing
   const reorderTasks = useCallback(async (updates: Array<TaskOrderUpdate>): Promise<void> => {
     const updateMap = new Map(updates.map(u => [u.id, u]));
     const now = new Date().toISOString();
@@ -655,13 +814,22 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     );
 
     try {
-      await fetch('/api/tasks/reorder', {
+      if (!navigator.onLine) throw new Error('Offline');
+      const res = await fetch('/api/tasks/reorder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ updates }),
       });
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
     } catch (err) {
-      console.warn('Reorder tasks server call failed:', err);
+      console.warn('Reorder tasks offline/failed, buffering in queue:', err);
+      enqueueMutation({
+        type: 'reorder_tasks',
+        endpoint: '/api/tasks/reorder',
+        method: 'POST',
+        payload: { updates },
+      });
+      setSyncStatus('offline');
     }
   }, []);
 
@@ -717,6 +885,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       switchUser,
       createTask,
       updateTask,
+      rescheduleTask,
       deleteTask,
       deleteUser,
       moveTask,
@@ -742,6 +911,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       switchUser,
       createTask,
       updateTask,
+      rescheduleTask,
       deleteTask,
       deleteUser,
       moveTask,

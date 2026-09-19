@@ -6,6 +6,14 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ### 1. Discovered Optimizations
 
+### Sweep 10: 2026-09-19 (Frictionless Quick Actions, Micro-Audit Trails & Offline Durability)
+- **UX-02 (Friction in Micro-Interactions - Modal Fatigue on Task Inception):** Creating a task previously required opening the full `TaskModal.tsx` backdrop modal, interrupting the team lead's triage flow even when rapidly logging high-volume backlog items.
+- **UX-03 (Friction in Deadline Rescheduling - Multi-Click Date Edits):** Rescheduling overdue or slip-risk tasks required launching the full task modal, scrolling past title/description, selecting the native HTML date picker, and saving. Quick snooze actions (+1d, +2d, +3d, +7d) were absent.
+- **VIS-01 (Absence of Deadline Proximity Tiers):** Due date chips lacked intuitive chromatic urgency mapping. Team leads could not distinguish at a glance between a card due in 6 days versus a card due in 4 hours or already overdue.
+- **VIS-02 (Low Urgency Visibility - Lack of Top Board Marquee for Imminent Deadlines):** Imminent deadlines (due today or overdue) scattered across multiple users and swimlanes required horizontal and vertical scrolling to identify, risking missed SLAs and lack of team alignment.
+- **GOV-01 (Absence of Lifecycle Traceability - Missing Micro Audit Trail & Cycle Time):** Tasks lacked transition history. Workspace administrators and users had no record of when a task was created, who moved it between columns, who reassigned it, or how long a task dwelled in its current status.
+- **REL-01 (Offline Vulnerability - State Drop on Transient Disconnections):** Network drops during task updates, dragging, or creations resulted in failed API requests and dropped state with no offline persistence queue or FIFO reconciliation upon reconnection.
+
 ### Sweep 9: 2026-09-19 (Enterprise Virtual DOM Isolation, Credential Hydration & Event-Loop Optimization)
 - **PERF-12 (Frontend CPU & Frame-Rate - Context Subscription in Swimlane Neutralizing React.memo):** `Swimlane.tsx` directly subscribed to `DashboardContext` via `useDashboard()` solely for `activeDragInfo` and `setActiveDragInfo`. Because `tasks` is in the context value dependency array, any task mutation anywhere in the workspace forced 100% of all team members' swimlanes to re-render, bypassing `React.memo(Swimlane)`. In addition, `tasksByUserId` in `App.tsx` generated new array instances on every render pass, causing shallow prop equality checks to fail.
 - **PERF-13 (CPU & Heap Churn - Empty Search Query Allocations):** In `App.tsx`, `filteredTasks` instantiated a new `Map` and copied tasks even when `searchQuery` was empty. When user profiles or roles updated, `userNameMap` changed, forcing `filteredTasks` to allocate a fresh array and re-trigger downstream swimlane partitioning across the entire board.
@@ -69,6 +77,16 @@ This document records the complete lifecycle of architectural sweeps, discovered
 ---
 
 ## 2. Previously Suggested
+
+### Sweep 10: 2026-09-19 (Phase-Wise Master Implementation Plan)
+- **Phase 1: Frictionless Quick-Add & Quick Due-Date Reschedule with Proximity Tiers**
+  - FEAT-04: Implement inline quick-add inside column task lists in [Swimlane.tsx](file:///c:/ZenFlow/src/components/Swimlane.tsx) with cognitive load pill selection, Enter to save, Escape to cancel. Implement quick-reschedule snooze flyout in [TaskCard.tsx](file:///c:/ZenFlow/src/components/TaskCard.tsx) (+1d, +2d, +3d, +1w, clear) and 5-tier proximity date chip coloring (grey: >7d, green: >4d, yellow: >2d, orange: 0–2d, red: overdue).
+- **Phase 2: Critical Deadlines Continuous Marquee Ribbon**
+  - FEAT-05: Implement [MarqueeRibbon.tsx](file:///c:/ZenFlow/src/components/MarqueeRibbon.tsx) mounted above the board overview, continuously scrolling all tasks due today or overdue with assignee badges, urgency tags, and pause-on-hover click-to-edit interactions.
+- **Phase 3: Micro Activity Audit Trail & Cycle-Time Analytics**
+  - FEAT-06: Extend `Task` interface in [types.ts](file:///c:/ZenFlow/src/types.ts) and [server.ts](file:///c:/ZenFlow/server.ts) with `activityLog: TaskActivity[]`. Log creation, status transitions, reassignments, and rescheduling events. In [TaskModal.tsx](file:///c:/ZenFlow/src/components/TaskModal.tsx), render a cycle-time metrics header (lead time, status duration) and scrollable activity timeline.
+- **Phase 4: Offline Mutation Queue & FIFO Reconnection Replay**
+  - REL-02: Implement persistent `localStorage` mutation queue in [DashboardContext.tsx](file:///c:/ZenFlow/src/context/DashboardContext.tsx). Intercept mutations when offline or network fails, buffer in FIFO queue, listen for `online` and SSE reconnect events, and replay transactions with server-side idempotency safeguards.
 
 ### Sweep 9: 2026-09-19 (Phase-Wise Master Implementation Plan)
 - **Phase 1: Frontend Render Performance & Virtual DOM Isolation**
@@ -142,6 +160,26 @@ This document records the complete lifecycle of architectural sweeps, discovered
 ---
 
 ## 3. Approved and Implemented
+
+### Sweep 10: Frictionless Quick Actions, Micro-Audit Trails & Offline Durability (Executed: 2026-09-19)
+- **FEAT-04 (Executed):**
+  - Integrated inline quick-add input inside swimlane columns in [Swimlane.tsx](file:///c:/ZenFlow/src/components/Swimlane.tsx) with inline cognitive load toggles, `Enter` key submission, `Escape` key cancellation, and direct link to full modal.
+  - Added quick-reschedule snooze popover flyout to [TaskCard.tsx](file:///c:/ZenFlow/src/components/TaskCard.tsx) allowing instant 1-click deferral (+1d, +2d, +3d, +1w, Clear).
+  - Implemented exact 5-tier proximity date chip coloring in [src/utils/workload.ts](file:///c:/ZenFlow/src/utils/workload.ts):
+    - **Grey:** > 7 days remaining or no deadline
+    - **Green:** > 4 days remaining (5–7 days)
+    - **Yellow:** > 2 days remaining (3–4 days)
+    - **Orange:** 0 to 2 days remaining (Due today, 1d, 2d)
+    - **Red:** Overdue (< 0 days)
+- **FEAT-05 (Executed):** Created [MarqueeRibbon.tsx](file:///c:/ZenFlow/src/components/MarqueeRibbon.tsx) mounted in [App.tsx](file:///c:/ZenFlow/src/App.tsx) below the header. Continuously streams all tasks due today or overdue with assignee avatars, role-based badges, and click-to-edit triggers. Includes hover pause and auto-hiding when no tasks are overdue/due today.
+- **FEAT-06 (Executed):**
+  - Extended `Task` model in [types.ts](file:///c:/ZenFlow/src/types.ts) and [server.ts](file:///c:/ZenFlow/server.ts) with `activityLog: TaskActivity[]`.
+  - Implemented automated audit event capture on `POST /api/tasks` (`created`), `PUT /api/tasks/:id` (`status_change`, `reassigned`, `rescheduled`), and `POST /api/tasks/reorder` (`status_change`, `reassigned`).
+  - Added minimalist cycle-time timeline in [TaskModal.tsx](file:///c:/ZenFlow/src/components/TaskModal.tsx) displaying overall lead time, time spent in current status, revision counts, and visual event cards.
+- **REL-02 (Executed):**
+  - Built persistent mutation buffer (`zenflow_mutation_queue_v1`) in [DashboardContext.tsx](file:///c:/ZenFlow/src/context/DashboardContext.tsx) capturing `create_task`, `update_task`, `delete_task`, `delete_user`, `move_task`, and `reorder_tasks` when offline or when network transport fails.
+  - Implemented FIFO replay with network state listeners (`window.addEventListener('online')` and SSE `onopen`).
+  - Implemented server-side idempotency guard in `POST /api/tasks` in [server.ts](file:///c:/ZenFlow/server.ts) ensuring replayed offline-created tasks do not generate duplicates upon synchronization.
 
 ### Sweep 9: Enterprise Virtual DOM Isolation, Credential Hydration & Performance Hardening (Executed: 2026-09-19)
 - **PERF-12 (Executed):** Detached `Swimlane.tsx` from `DashboardContext` by lifting `activeDragInfo`, `onDragTaskStart`, and `onDragTaskEnd` to props passed from `App.tsx`. Equipped `Swimlane` with `areSwimlanePropsEqual` shallow task comparator and stabilized `tasksByUserId` references with `prevTasksByUserIdRef`. Reduced virtual DOM diffing during card drags by **>85%**, cutting main-thread execution time by 60+ ms per frame and strictly confining re-renders to the affected user's lane.
