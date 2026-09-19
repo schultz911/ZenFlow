@@ -19,19 +19,20 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
   const contentRef = useRef<HTMLDivElement>(null);
   const [shouldScroll, setShouldScroll] = useState(false);
 
-  // Filter for active tasks that are overdue (< 0 days) or due today (0 days)
-  const urgentTasks = useMemo(() => {
-    return tasks
-      .filter(t => {
-        if (!t || t.status === 'done' || t.status === 'archived' || t.status === 'pipeline') return false;
-        const days = getDaysRemaining(t.dueDate);
-        return days !== null && days <= 0;
-      })
-      .sort((a, b) => {
-        const aDays = getDaysRemaining(a.dueDate) ?? 0;
-        const bDays = getDaysRemaining(b.dueDate) ?? 0;
-        return aDays - bDays; // Most overdue first
-      });
+  // Single-pass filter: compute days once per task, derive counts inline — eliminates 2× redundant getDaysRemaining calls
+  const { urgentTasks, overdueCount, dueTodayCount } = useMemo(() => {
+    const filtered: Array<Task & { days: number }> = [];
+    let overdue = 0;
+    for (const t of tasks) {
+      if (!t || t.status === 'done' || t.status === 'archived' || t.status === 'pipeline') continue;
+      const days = getDaysRemaining(t.dueDate);
+      if (days !== null && days <= 0) {
+        filtered.push({ ...t, days });
+        if (days < 0) overdue++;
+      }
+    }
+    filtered.sort((a, b) => a.days - b.days);
+    return { urgentTasks: filtered, overdueCount: overdue, dueTodayCount: filtered.length - overdue };
   }, [tasks]);
 
   // Dynamically detect whether unique tasks exceed the container's viewport
@@ -64,9 +65,6 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
   // When they fit, render unique tasks once without repetition or animation.
   const displayList = shouldScroll ? [...urgentTasks, ...urgentTasks] : urgentTasks;
 
-  const overdueCount = urgentTasks.filter(t => (getDaysRemaining(t.dueDate) ?? 0) < 0).length;
-  const dueTodayCount = urgentTasks.length - overdueCount;
-
   return (
     <div
       id="due-tasks-marquee-ribbon"
@@ -90,8 +88,8 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
         >
           {displayList.map((task, idx) => {
             const user = userMap.get(task.userId);
-            const days = getDaysRemaining(task.dueDate);
-            const isOverdue = days !== null && days < 0;
+            // Use pre-computed days from useMemo — no redundant getDaysRemaining call
+            const isOverdue = task.days < 0;
 
             return (
               <button
@@ -131,7 +129,7 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
                   }`}
                 >
                   <Clock className="h-2.5 w-2.5" />
-                  <span>{isOverdue ? `${Math.abs(days!)}d overdue` : 'Due Today'}</span>
+                  <span>{isOverdue ? `${Math.abs(task.days)}d overdue` : 'Due Today'}</span>
                 </span>
               </button>
             );
@@ -143,3 +141,4 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
 });
 
 MarqueeRibbon.displayName = 'MarqueeRibbon';
+

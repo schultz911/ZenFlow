@@ -1,6 +1,7 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useDashboard } from '../context/DashboardContext';
-import { calculateUserWorkload, exportWorkspaceXLS, exportWorkspaceJSON } from '../utils/workload';
+import { exportWorkspaceXLS, exportWorkspaceJSON } from '../utils/workload';
+import { Task } from '../types';
 import {
   Search,
   Plus,
@@ -16,6 +17,19 @@ interface OverviewBarProps {
   onSearchChange: (q: string) => void;
   onOpenNewTaskModal: () => void;
   onOpenNewUserModal: () => void;
+}
+
+// Lightweight score: computes only the raw workload number without allocating items[], labels, or proximity data
+// Used exclusively for OverviewBar analytics — swimlanes use the full calculateUserWorkload separately
+function quickWorkloadScore(userTasks: Task[]): number {
+  let score = 0;
+  for (const t of userTasks) {
+    if (t.status === 'pipeline' || t.status === 'done' || t.status === 'archived') continue;
+    const cw = t.cognitiveLoad === 'high' ? 3 : t.cognitiveLoad === 'medium' ? 2 : 1;
+    const sw = t.status === 'in_progress' ? 1 : t.status === 'todo' ? (t.dueDate ? 1 : 0.5) : 0.25;
+    score += sw * cw;
+  }
+  return Math.round(score * 10) / 10;
 }
 
 export const OverviewBar: React.FC<OverviewBarProps> = ({
@@ -80,7 +94,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
     let overloaded = 0;
     const totalScores = displayedUsers.map(u => {
       const uTasks = tasksByUser.get(u.id) || [];
-      const score = calculateUserWorkload(uTasks).totalScore;
+      const score = quickWorkloadScore(uTasks);
       if (score >= 12.0) overloaded++;
       return score;
     });

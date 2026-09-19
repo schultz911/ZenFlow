@@ -539,8 +539,6 @@ export function exportWorkspaceXLS(tasks: Task[], users: { id: string; name: str
   URL.revokeObjectURL(url);
 }
 
-// Backwards-compatible alias for CSV callers
-export const exportWorkspaceCSV = exportWorkspaceXLS;
 
 /**
  * Generates and downloads a complete JSON audit file

@@ -550,7 +550,8 @@ async function syncFromFirestore() {
   }
 
   try {
-    const demoUserIds = new Set(['user-1', 'user-2', 'user-3', 'user-4']);
+    // Use module-level DUMMY_USER_IDS — eliminates duplicate Set literal (single source of truth)
+
     const firestoreUsers: User[] = [];
     const firestoreTasks: Task[] = [];
 
@@ -560,14 +561,14 @@ async function syncFromFirestore() {
 
       usersSnap.forEach((d: any) => {
         const u = d.data() as User;
-        if (!demoUserIds.has(u.id) && !u.email?.endsWith('@acme.studio')) {
+        if (!DUMMY_USER_IDS.has(u.id) && !u.email?.endsWith('@acme.studio')) {
           firestoreUsers.push(u);
         }
       });
 
       tasksSnap.forEach((d: any) => {
         const t = d.data() as Task;
-        if (!DUMMY_TASK_IDS.has(t.id) && !demoUserIds.has(t.userId)) {
+        if (!DUMMY_TASK_IDS.has(t.id) && !DUMMY_USER_IDS.has(t.userId)) {
           firestoreTasks.push(t);
         }
       });
@@ -577,14 +578,14 @@ async function syncFromFirestore() {
 
       usersSnap.forEach(d => {
         const u = d.data() as User;
-        if (!demoUserIds.has(u.id) && !u.email?.endsWith('@acme.studio')) {
+        if (!DUMMY_USER_IDS.has(u.id) && !u.email?.endsWith('@acme.studio')) {
           firestoreUsers.push(u);
         }
       });
 
       tasksSnap.forEach(d => {
         const t = d.data() as Task;
-        if (!DUMMY_TASK_IDS.has(t.id) && !demoUserIds.has(t.userId)) {
+        if (!DUMMY_TASK_IDS.has(t.id) && !DUMMY_USER_IDS.has(t.userId)) {
           firestoreTasks.push(t);
         }
       });
@@ -707,6 +708,16 @@ function autoArchiveDoneTasks(): boolean {
 // Background sweep running every hour
 setInterval(autoArchiveDoneTasks, 60 * 60 * 1000).unref();
 
+// Debounce guard for per-request calls — skips the O(N) scan if the sweep ran within the last 60 seconds
+let lastArchiveSweepMs = 0;
+const ARCHIVE_DEBOUNCE_MS = 60_000;
+function maybeArchive(): void {
+  const now = Date.now();
+  if (now - lastArchiveSweepMs < ARCHIVE_DEBOUNCE_MS) return;
+  lastArchiveSweepMs = now;
+  autoArchiveDoneTasks();
+}
+
 async function startServer() {
   const app = express();
 
@@ -740,6 +751,27 @@ async function startServer() {
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.googleapis.com; frame-ancestors 'none';"
+    );
+    next();
+  });
+  // Structured JSON request logger — fires async after response; zero event-loop blocking
+  // Excludes /api/events SSE to avoid log spam from long-lived persistent connections
+  app.use((req: Request, res: Response, next) => {
+    const t0 = Date.now();
+    res.on('finish', () => {
+      if (req.path.startsWith('/api/') && req.path !== '/api/events') {
+        console.log(JSON.stringify({
+          method: req.method,
+          path: req.path,
+          status: res.statusCode,
+          ms: Date.now() - t0,
+          ip: req.ip,
+        }));
+      }
+    });
     next();
   });
 
@@ -761,7 +793,7 @@ async function startServer() {
 
   // API: Get entire state with ETag conditional validation (HTTP 304 Not Modified)
   app.get('/api/state', (req: Request, res: Response) => {
-    autoArchiveDoneTasks();
+    maybeArchive();
     const etag = `W/"zenflow-rev-${stateRevision}"`;
     res.setHeader('ETag', etag);
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
@@ -924,7 +956,7 @@ async function startServer() {
 
   // API: Get all tasks with ETag conditional validation (HTTP 304 Not Modified)
   app.get('/api/tasks', (req: Request, res: Response) => {
-    autoArchiveDoneTasks();
+    maybeArchive();
     const etag = `W/"zenflow-tasks-${stateRevision}"`;
     res.setHeader('ETag', etag);
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');

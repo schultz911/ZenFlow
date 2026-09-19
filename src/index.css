@@ -75,3 +75,11 @@ select:focus-visible {
   outline: none !important;
 }
 
+/* Hide scrollbar while preserving scroll functionality — used by marquee and ribbon overflow fallback paths */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

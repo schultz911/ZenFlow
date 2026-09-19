@@ -30,7 +30,6 @@ export const UnscheduledTasksRibbon: React.FC<UnscheduledTasksRibbonProps> = Rea
     return tasks.filter(t => t.userId === currentUser.id && !t.dueDate && t.status !== 'done' && t.status !== 'archived' && t.status !== 'pipeline');
   }, [tasks, currentUser]);
 
-  const activeTaskList = myUnscheduledTasks;
 
   // Quick Reschedule Flyout State for the ribbon items
   const [activeFlyoutTaskId, setActiveFlyoutTaskId] = useState<string | null>(null);
@@ -115,10 +114,10 @@ export const UnscheduledTasksRibbon: React.FC<UnscheduledTasksRibbonProps> = Rea
     if (contentRef.current) ro.observe(contentRef.current);
 
     return () => ro.disconnect();
-  }, [activeTaskList, shouldScroll]);
+  }, [myUnscheduledTasks, shouldScroll]);
 
   // Duplicate tasks for seamless marquee ONLY if tasks exceed viewport width
-  const displayList = shouldScroll ? [...activeTaskList, ...activeTaskList] : activeTaskList;
+  const displayList = shouldScroll ? [...myUnscheduledTasks, ...myUnscheduledTasks] : myUnscheduledTasks;
 
   // Gate: Render nothing if no user is logged in or active user has no unscheduled tasks
   if (!currentUser || myUnscheduledTasks.length === 0) {

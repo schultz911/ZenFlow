@@ -49,6 +49,20 @@ function DashboardContent() {
   const [firestoreModalOpen, setFirestoreModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
+  // Stable refs for currentUser and users — allow keyboard effect and task modal handler to have empty dep arrays
+  const currentUserRef = useRef(currentUser);
+  const appUsersRef = useRef(users);
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
+  useEffect(() => { appUsersRef.current = users; }, [users]);
+
+  // Task modal open handler — stabilized with empty deps; reads currentUser/users from refs
+  const handleOpenAddTask = useCallback((userId?: string, status?: TaskStatus) => {
+    setTaskToEdit(null);
+    setDefaultTaskUserId(userId || currentUserRef.current?.id || appUsersRef.current[0]?.id);
+    setDefaultTaskStatus(status || 'todo');
+    setTaskModalOpen(true);
+  }, []); // stable — reads from refs at call time
+
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -180,15 +194,7 @@ function DashboardContent() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [currentUser, users]);
-
-  // Task modal handlers
-  const handleOpenAddTask = useCallback((userId?: string, status?: TaskStatus) => {
-    setTaskToEdit(null);
-    setDefaultTaskUserId(userId || currentUser?.id || users[0]?.id);
-    setDefaultTaskStatus(status || 'todo');
-    setTaskModalOpen(true);
-  }, [currentUser?.id, users]);
+  }, []); // stable — handleOpenAddTask reads from refs; Escape closures over stable setters
 
   const handleEditTask = useCallback((task: Task) => {
     setTaskToEdit(task);

@@ -109,6 +109,12 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     tasksRef.current = tasks;
   }, [tasks]);
 
+  // Stable ref for users — keeps login callback dep-free, preventing context re-creation on every SSE user event
+  const usersRef = useRef<User[]>(users);
+  useEffect(() => {
+    usersRef.current = users;
+  }, [users]);
+
   const [activeDragInfo, setActiveDragInfo] = useState<DragTaskInfo | null>(null);
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
@@ -266,6 +272,13 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     for (let i = 0; i < queue.length; i++) {
       const item = queue[i];
+
+      // Discard permanently failing mutations after 5 retries to prevent infinite replay loops
+      if ((item.retryCount ?? 0) >= 5) {
+        console.warn('[Offline Queue] Dropping permanently failed mutation after 5 retries:', item.type, item.endpoint);
+        continue;
+      }
+
       try {
         const res = await fetch(item.endpoint, {
           method: item.method,
@@ -478,9 +491,9 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       console.warn('Direct server login call failed, fallback local creation:', err);
     }
 
-    // Local fallback if offline
+    // Local fallback if offline — reads from ref to avoid stale closure dependency on users
     const cleanEmail = email.trim().toLowerCase();
-    let existing = users.find(u => u.email.toLowerCase() === cleanEmail);
+    let existing = usersRef.current.find(u => u.email.toLowerCase() === cleanEmail);
     if (!existing) {
       const newUser: User = {
         id: `user-${Date.now()}`,
@@ -496,7 +509,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     setCurrentUser(existing);
     setActiveRoleTab(existing.role);
     return existing;
-  }, [users]);
+  }, []); // stable — reads users from usersRef.current
 
   const logout = useCallback(() => {
     setCurrentUser(null);

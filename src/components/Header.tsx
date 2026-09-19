@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import {
   Sun,
@@ -48,8 +48,8 @@ export const Header: React.FC<HeaderProps> = ({
     return () => document.removeEventListener('mousedown', handleOutside);
   }, []);
 
-  const contentUsers = users.filter(u => u.role === 'content');
-  const designUsers = users.filter(u => u.role === 'design');
+  const contentUsers = useMemo(() => users.filter(u => u.role === 'content'), [users]);
+  const designUsers = useMemo(() => users.filter(u => u.role === 'design'), [users]);
 
   return (
     <header className="sticky top-0 z-30 w-full border-b border-neutral-200 dark:border-white/5 bg-white/95 dark:bg-[#0D0D0D]/95 backdrop-blur-md transition-colors">
