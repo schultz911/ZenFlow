@@ -63,6 +63,7 @@ export interface TaskScoreItem {
   cognitiveWeight: number;
   proximityMultiplier: number;
   calculatedScore: number;
+  billableHours?: number;
 }
 
 export interface WorkloadBreakdown {
@@ -98,6 +99,7 @@ export interface TaskOrderUpdate {
   userId?: string;
   status: TaskStatus;
   order: number;
+  dueDate?: string | null;
 }
 
 export type RealtimeEventType = 

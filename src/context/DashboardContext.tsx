@@ -84,9 +84,9 @@ interface DashboardContextType {
   rescheduleTask: (taskId: string, newDueDate?: string) => Promise<Task>;
   deleteTask: (id: string) => Promise<void>;
   deleteUser: (userId: string) => Promise<void>;
-  moveTask: (taskId: string, targetUserId: string, newStatus: TaskStatus, newIndex?: number) => Promise<void>;
+  moveTask: (taskId: string, targetUserId: string, newStatus: TaskStatus, newIndex?: number, newDueDate?: string | null) => Promise<void>;
   reassignTask: (taskId: string, targetUserId: string) => Promise<void>;
-  moveTaskStatus: (taskId: string, newStatus: TaskStatus, newIndex?: number, targetUserId?: string) => Promise<void>;
+  moveTaskStatus: (taskId: string, newStatus: TaskStatus, newIndex?: number, targetUserId?: string, newDueDate?: string | null) => Promise<void>;
   reorderTasks: (updates: Array<TaskOrderUpdate>) => Promise<void>;
 }
 
@@ -632,9 +632,16 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
               inProgressStartedAt = undefined;
             }
           }
+          const finalDueDate = updates.status === 'pipeline'
+            ? undefined
+            : updates.dueDate !== undefined
+            ? (updates.dueDate || undefined)
+            : t.dueDate;
+
           updatedTask = {
             ...t,
             ...updates,
+            dueDate: finalDueDate,
             completedAt,
             inProgressStartedAt,
             inProgressDurationMs,
@@ -734,7 +741,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     taskId: string,
     targetUserId: string,
     newStatus: TaskStatus,
-    newIndex?: number
+    newIndex?: number,
+    newDueDate?: string | null
   ): Promise<void> => {
     const currentTasks = tasksRef.current;
     const task = currentTasks.find(t => t.id === taskId);
@@ -742,8 +750,17 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     const isSameUser = task.userId === targetUserId;
     const isSameStatus = task.status === newStatus;
+    const isDueDateUnchanged = newDueDate === undefined && (newStatus !== 'pipeline' || !task.dueDate);
 
-    if (isSameUser && isSameStatus && newIndex === undefined) return;
+    if (isSameUser && isSameStatus && newIndex === undefined && isDueDateUnchanged) return;
+
+    // Automatic pipeline deadline removal: pipeline tasks strictly possess no deadline
+    const resolvedDueDate =
+      newStatus === 'pipeline'
+        ? undefined
+        : newDueDate !== undefined
+        ? (newDueDate || undefined)
+        : task.dueDate;
 
     // Get current tasks in target column excluding the moving task
     const targetUserTasksInStatus = currentTasks
@@ -778,6 +795,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       ...task,
       userId: targetUserId,
       status: newStatus,
+      dueDate: resolvedDueDate,
       order: targetOrder,
       completedAt,
       inProgressStartedAt,
@@ -791,6 +809,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       userId: targetUserId,
       status: newStatus,
       order: idx,
+      dueDate: t.id === taskId ? (resolvedDueDate || null) : t.dueDate,
     }));
 
     // Optimistically update
@@ -805,6 +824,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
             userId: u.userId || t.userId,
             status: u.status,
             order: u.order,
+            dueDate: isMoved ? resolvedDueDate : t.dueDate,
             completedAt: isMoved ? completedAt : t.completedAt,
             inProgressStartedAt: isMoved ? inProgressStartedAt : t.inProgressStartedAt,
             inProgressDurationMs: isMoved ? inProgressDurationMs : t.inProgressDurationMs,
@@ -847,12 +867,13 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     taskId: string,
     newStatus: TaskStatus,
     newIndex?: number,
-    targetUserId?: string
+    targetUserId?: string,
+    newDueDate?: string | null
   ): Promise<void> => {
     const task = tasksRef.current.find(t => t.id === taskId);
     if (!task) return;
     const destUser = targetUserId || task.userId;
-    await moveTask(taskId, destUser, newStatus, newIndex);
+    await moveTask(taskId, destUser, newStatus, newIndex, newDueDate);
   }, [moveTask]);
 
   // Reorder tasks batch with offline queuing

@@ -24,7 +24,7 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
     const filtered: Array<Task & { days: number }> = [];
     let overdue = 0;
     for (const t of tasks) {
-      if (!t || t.status === 'done' || t.status === 'archived' || t.status === 'pipeline') continue;
+      if (!t || t.status === 'done' || t.status === 'archived' || t.status === 'pipeline' || t.status === 'in_review') continue;
       const days = getDaysRemaining(t.dueDate);
       if (days !== null && days <= 0) {
         filtered.push({ ...t, days });

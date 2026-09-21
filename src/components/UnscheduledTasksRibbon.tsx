@@ -27,7 +27,7 @@ export const UnscheduledTasksRibbon: React.FC<UnscheduledTasksRibbonProps> = Rea
   // Active unscheduled tasks ONLY for the active user (excluding done/archived)
   const myUnscheduledTasks = useMemo(() => {
     if (!currentUser) return [];
-    return tasks.filter(t => t.userId === currentUser.id && !t.dueDate && t.status !== 'done' && t.status !== 'archived' && t.status !== 'pipeline');
+    return tasks.filter(t => t.userId === currentUser.id && !t.dueDate && t.status !== 'done' && t.status !== 'archived' && t.status !== 'pipeline' && t.status !== 'in_review');
   }, [tasks, currentUser]);
 
 

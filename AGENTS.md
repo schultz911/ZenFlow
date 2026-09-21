@@ -6,6 +6,13 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
+### Sweep 22: 2026-09-21 (In-Review Workload Formula, Atomic Pipeline Move, Revive Deadline Prompts & Ribbon Isolation)
+
+- **BUG-10 (Race Condition - Pipeline-to-To-Do Drag Drop Silent Disappearance):** Previously, confirming the deadline demand modal when activating a pipeline card called `onRescheduleTask` (issuing `PUT /api/tasks/:id` with `{ dueDate }`) and `onMoveTask` (issuing `POST /api/tasks/reorder`) in parallel. When the `PUT` completed, its response contained `status: 'pipeline'`, overwriting the client's optimistic `todo` state and causing the task to disappear from the To Do list. Upgraded `moveTask` and `POST /api/tasks/reorder` to accept an atomic `dueDate` field within the batch update payload, unifying status migration and deadline assignment into a single deterministic operation.
+- **FEAT-16 (In-Review Workload Scoring via Billable Hours & Cognitive Load):** Bypassed calendar deadline proximity and overdue counting for tasks in `in_review`. Workload index for review tasks is now calculated strictly as accumulated billable hours multiplied by role cognitive rates (`high`: 0.25 pts/hr, `medium`: 0.20 pts/hr, `low`: 0.15 pts/hr). Synchronized across `calculateUserWorkload` in `workload.ts`, `quickWorkloadScore` in `OverviewBar.tsx`, and `WorkloadModal.tsx`.
+- **DATA-05 (Pipeline Deadline Hygiene & Active Workflow Re-Gating):** Automatically stripped `dueDate` from task data whenever moved to `pipeline` across client state setters (`DashboardContext.tsx`), API endpoints (`PUT /api/tasks/:id`, `POST /api/tasks/reorder`), and modal submission (`TaskModal.tsx`). Enforced `DeadlineDemandModal` prompt whenever tasks are moved or revived from `pipeline`, `in_review`, `done`, or `archived` into `todo` or `in_progress`.
+- **VIS-14 (In-Review Ribbon Exclusion):** Added `in_review` status to the exclusion predicates in `MarqueeRibbon.tsx` and `UnscheduledTasksRibbon.tsx`, keeping the top marquee strictly focused on active execution deadlines (`todo`, `in_progress`).
+
 ### Sweep 21: 2026-09-19 (Definitive Codebase Sweep & Enterprise MVP Certification)
 
 - **AUDIT-01 (Definitive Enterprise MVP Verification):** Comprehensive vector-by-vector audit covering Vector A (Sanitization & Dead Code), Vector B (Runtime & Resource Optimization), and Vector C (Production Integration & Security). Verified 0 dangling assets, 0 dead imports, 0 commented-out blocks, 0 unused packages. Confirmed all prior architectural optimizations across Sweeps 1–20 remain 100% active, deterministic, and regression-free. Platform certified as a world-class, institutional-grade MVP ("We have reached a great MVP").

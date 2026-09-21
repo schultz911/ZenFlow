@@ -132,13 +132,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     if (!title.trim() || !userId || (isDeadlineRequired && !dueDate.trim())) return;
 
     setIsSubmitting(true);
+    const finalDueDate = status === 'pipeline' ? undefined : (dueDate.trim() || undefined);
     try {
       if (taskToEdit) {
         await updateTask(taskToEdit.id, {
           title: title.trim(),
           description: description.trim() || undefined,
           userId,
-          dueDate: dueDate || undefined,
+          dueDate: finalDueDate,
           cognitiveLoad,
           status,
         });
@@ -147,7 +148,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           userId,
           title: title.trim(),
           description: description.trim() || undefined,
-          dueDate: dueDate || undefined,
+          dueDate: finalDueDate,
           cognitiveLoad,
           status,
         });

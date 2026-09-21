@@ -119,6 +119,10 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                 <p className="text-neutral-500 dark:text-white/40 text-[10px] uppercase tracking-wider">To Do (No Date)</p>
                 <p className="font-semibold text-neutral-500 dark:text-white/40 mt-0.5">{workload.todoNoDeadlineCount} tasks</p>
               </div>
+              <div>
+                <p className="text-neutral-500 dark:text-white/40 text-[10px] uppercase tracking-wider">In Review</p>
+                <p className="font-semibold text-purple-600 dark:text-purple-400 mt-0.5">{workload.inReviewCount} tasks</p>
+              </div>
             </div>
           </div>
 
@@ -357,7 +361,11 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                           </span>
                         </td>
                         <td className="py-2 px-3 text-neutral-600 dark:text-white/60">
-                          {item.hasDeadline ? (
+                          {item.status === 'in_review' ? (
+                            <span className="text-purple-600 dark:text-purple-400 font-medium text-[11px]">
+                              {item.billableHours !== undefined ? `${item.billableHours}h` : '0h'} billable ({item.calculatedScore} pts)
+                            </span>
+                          ) : item.hasDeadline ? (
                             <span className={dueInfo.isOverdue ? 'text-red-500 font-medium' : dueInfo.isToday ? 'text-yellow-600 dark:text-yellow-400 font-medium' : ''}>
                               {dueInfo.text}
                             </span>

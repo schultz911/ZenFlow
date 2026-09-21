@@ -1114,14 +1114,23 @@ async function startServer() {
       });
     }
 
-    if (dueDate !== undefined && dueDate !== currentTask.dueDate) {
+    const targetStatus = status && ['pipeline', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : currentTask.status;
+    const resolvedDueDate = targetStatus === 'pipeline'
+      ? undefined
+      : dueDate !== undefined
+      ? (dueDate ? sanitizeString(dueDate) : undefined)
+      : currentTask.dueDate;
+
+    if (resolvedDueDate !== currentTask.dueDate) {
       activityEntries.unshift({
         id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         timestamp: new Date().toISOString(),
         action: 'rescheduled',
         from: currentTask.dueDate || 'None',
-        to: dueDate || 'None',
-        details: `Due date changed from ${currentTask.dueDate || 'None'} to ${dueDate || 'None'}`,
+        to: resolvedDueDate || 'None',
+        details: resolvedDueDate
+          ? `Due date changed from ${currentTask.dueDate || 'None'} to ${resolvedDueDate}`
+          : 'Deadline removed upon moving to pipeline',
       });
     }
 
@@ -1129,9 +1138,9 @@ async function startServer() {
       ...currentTask,
       title: title !== undefined ? sanitizeString(title) : currentTask.title,
       description: description !== undefined ? (description ? sanitizeString(description) : undefined) : currentTask.description,
-      dueDate: dueDate !== undefined ? (dueDate ? sanitizeString(dueDate) : undefined) : currentTask.dueDate,
+      dueDate: resolvedDueDate,
       cognitiveLoad: cognitiveLoad && ['low', 'medium', 'high'].includes(cognitiveLoad) ? cognitiveLoad : currentTask.cognitiveLoad,
-      status: status && ['pipeline', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : currentTask.status,
+      status: targetStatus,
       userId: userId || currentTask.userId,
       order: typeof order === 'number' ? order : currentTask.order,
       completedAt,
@@ -1241,6 +1250,34 @@ async function startServer() {
 
         if (typeof update.order === 'number') {
           task.order = update.order;
+        }
+
+        // Handle deadline updates & pipeline deadline stripping
+        if (task.status === 'pipeline') {
+          if (task.dueDate) {
+            task.activityLog.unshift({
+              id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              timestamp: new Date().toISOString(),
+              action: 'rescheduled',
+              from: task.dueDate,
+              to: 'None',
+              details: 'Deadline removed upon moving to pipeline',
+            });
+            task.dueDate = undefined;
+          }
+        } else if (update.dueDate !== undefined) {
+          const newDate = update.dueDate ? sanitizeString(update.dueDate) : undefined;
+          if (newDate !== task.dueDate) {
+            task.activityLog.unshift({
+              id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              timestamp: new Date().toISOString(),
+              action: 'rescheduled',
+              from: task.dueDate || 'None',
+              to: newDate || 'None',
+              details: newDate ? `Due date set to ${newDate}` : 'Deadline removed',
+            });
+            task.dueDate = newDate;
+          }
         }
 
         if (task.activityLog.length > 15) {

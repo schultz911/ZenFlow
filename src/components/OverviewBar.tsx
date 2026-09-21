@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useDashboard } from '../context/DashboardContext';
-import { exportWorkspaceXLS, exportWorkspaceJSON } from '../utils/workload';
+import { exportWorkspaceXLS, exportWorkspaceJSON, getTaskBillableMs, IN_REVIEW_HOURLY_RATES } from '../utils/workload';
 import { Task } from '../types';
 import {
   Search,
@@ -25,9 +25,15 @@ function quickWorkloadScore(userTasks: Task[]): number {
   let score = 0;
   for (const t of userTasks) {
     if (t.status === 'pipeline' || t.status === 'done' || t.status === 'archived') continue;
-    const cw = t.cognitiveLoad === 'high' ? 3 : t.cognitiveLoad === 'medium' ? 2 : 1;
-    const sw = t.status === 'in_progress' ? 1 : t.status === 'todo' ? (t.dueDate ? 1 : 0.5) : 0.25;
-    score += sw * cw;
+    if (t.status === 'in_review') {
+      const rate = IN_REVIEW_HOURLY_RATES[t.cognitiveLoad] ?? 0.2;
+      const billableHours = getTaskBillableMs(t) / (1000 * 60 * 60);
+      score += billableHours * rate;
+    } else {
+      const cw = t.cognitiveLoad === 'high' ? 3 : t.cognitiveLoad === 'medium' ? 2 : 1;
+      const sw = t.status === 'in_progress' ? 1 : (t.dueDate ? 1 : 0.5);
+      score += sw * cw;
+    }
   }
   return Math.round(score * 10) / 10;
 }

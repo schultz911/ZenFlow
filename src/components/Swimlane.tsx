@@ -44,7 +44,7 @@ interface SwimlaneProps {
   onUpdateTaskTitle?: (taskId: string, newTitle: string) => void;
   onDeleteTask: (taskId: string) => void;
   onDeleteUser?: (user: User) => void;
-  onMoveTask: (taskId: string, targetUserId: string, newStatus: TaskStatus, newIndex?: number) => void;
+  onMoveTask: (taskId: string, targetUserId: string, newStatus: TaskStatus, newIndex?: number, newDueDate?: string | null) => void;
   onOpenWorkloadModal: (user: User) => void;
   isCurrentUser: boolean;
   onMoveUserUp?: (userId: string) => void;
@@ -238,12 +238,28 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
         fallbackTask;
       if (!task) return;
 
-      // 1. Demand Deadline Check:
-      // "When these tasks are moved to either to the primary swimlanes, they should demand a deadline. tasks without a deadline shouldn't be able to be moved into the active workflow lanes."
-      const isActiveLane = ['todo', 'in_progress', 'in_review', 'done'].includes(targetStatus);
-      const hasNoDeadline = !task.dueDate || task.dueDate.trim() === '';
+      // When moving any task to pipeline: clear its deadline immediately from its data
+      if (targetStatus === 'pipeline') {
+        onMoveTask(taskId, user.id, 'pipeline', targetIndex, null);
+        return;
+      }
 
-      if (isActiveLane && hasNoDeadline) {
+      // Demand Deadline Check:
+      // 1. Moving from in_review, done, or archived into todo or in_progress -> demand new deadline
+      // 2. Moving from pipeline into active workflow -> demand new deadline
+      // 3. Any move into active workflow if task has no deadline -> demand deadline
+      const isTargetActive = ['todo', 'in_progress'].includes(targetStatus);
+      const isFromReviewDoneArchived = ['in_review', 'done', 'archived'].includes(task.status);
+      const isFromPipeline = task.status === 'pipeline';
+      const hasNoDeadline = !task.dueDate || task.dueDate.trim() === '';
+      const isActiveLane = ['todo', 'in_progress', 'in_review', 'done'].includes(targetStatus);
+
+      const requiresDeadlinePrompt =
+        (isFromReviewDoneArchived && isTargetActive) ||
+        (isFromPipeline && isActiveLane) ||
+        (isActiveLane && hasNoDeadline);
+
+      if (requiresDeadlinePrompt) {
         setDemandModalTask(task);
         setDemandModalTargetStatus(targetStatus);
         setDemandModalTargetIndex(targetIndex);
@@ -251,7 +267,6 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
       }
 
       // 2. WIP Limit Check (In Progress max 2):
-      // "instead of the WIP badge, when a user tries to move more than three tasks into the in progress swinmlane, show a prompt informing the user that only two tasks can be in progress at any given time and to complete one of the tasks or move a ttask to to do to start working on a new one"
       if (targetStatus === 'in_progress') {
         const otherInProgress = tasksByColumn.in_progress.filter(t => t.id !== taskId);
         if (otherInProgress.length >= 2) {
@@ -284,19 +299,14 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
         }
       }
 
-      if (onRescheduleTask) {
-        onRescheduleTask(taskId, newDueDate);
-      } else if (demandModalTask) {
-        onEditTask({ ...demandModalTask, dueDate: newDueDate });
-      }
-
-      onMoveTask(taskId, user.id, targetStatus, targetIndex);
+      // Perform atomic move with new deadline — eliminates race condition and enables instant rendering in To Do
+      onMoveTask(taskId, user.id, targetStatus, targetIndex, newDueDate);
 
       setDemandModalTask(null);
       setDemandModalTargetStatus(null);
       setDemandModalTargetIndex(undefined);
     },
-    [demandModalTargetStatus, demandModalTargetIndex, demandModalTask, onRescheduleTask, onEditTask, onMoveTask, tasksByColumn.in_progress, user.id]
+    [demandModalTargetStatus, demandModalTargetIndex, onMoveTask, tasksByColumn.in_progress, user.id]
   );
 
   const handleQuickAddPipeline = useCallback(

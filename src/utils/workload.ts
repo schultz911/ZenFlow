@@ -6,6 +6,12 @@ export const COGNITIVE_LOAD_WEIGHTS: Record<CognitiveLoad, number> = {
   high: 3.0,
 };
 
+export const IN_REVIEW_HOURLY_RATES: Record<CognitiveLoad, number> = {
+  low: 0.15,
+  medium: 0.20,
+  high: 0.25,
+};
+
 /**
  * Returns role-tailored cognitive load naming
  * Content: Low (Content Writing), Medium (Creative Concept), High (Strategy and Planning)
@@ -343,8 +349,8 @@ export function formatBillableDetailed(ms: number): string {
  * Calculates a detailed workload score and breakdown for a user's task set.
  * Status weights:
  * - pipeline: 0.0 (does not contribute to score)
- * - in progress: 1.0
- * - in review: 0.25
+ * - in progress: 1.0 (multiplied by cognitive load weight and deadline proximity)
+ * - in review: rate per billable hour (high: 0.25, medium: 0.20, low: 0.15 pts/hr, deadline proximity bypassed)
  * - to do with deadline: 1.0
  * - to do with no deadline: 0.5
  * - done / archived: 0.0
@@ -382,9 +388,18 @@ export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
     const cognitiveWeight = COGNITIVE_LOAD_WEIGHTS[task.cognitiveLoad] || 1.0;
 
     let statusWeight = 0;
+    let proximityMultiplier = 1.0;
+    let taskScore = 0;
+    let billableHours: number | undefined;
+
     if (task.status === 'in_progress') {
       statusWeight = 1.0; // In progress: 1.0
       inProgressCount++;
+      proximityMultiplier = hasDeadline ? getProximityMultiplier(daysRemaining) : 1.0;
+      if (daysRemaining !== null && daysRemaining < 0) {
+        overdueCount++;
+      }
+      taskScore = statusWeight * cognitiveWeight * proximityMultiplier;
     } else if (task.status === 'todo') {
       if (hasDeadline) {
         statusWeight = 1.0; // To do with deadline: 1.0
@@ -393,17 +408,21 @@ export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
         statusWeight = 0.5; // To do with no deadline: 0.5
         todoNoDeadlineCount++;
       }
+      proximityMultiplier = hasDeadline ? getProximityMultiplier(daysRemaining) : 1.0;
+      if (daysRemaining !== null && daysRemaining < 0) {
+        overdueCount++;
+      }
+      taskScore = statusWeight * cognitiveWeight * proximityMultiplier;
     } else if (task.status === 'in_review') {
-      statusWeight = 0.25; // In review: 0.25
       inReviewCount++;
+      const ratePerHour = IN_REVIEW_HOURLY_RATES[task.cognitiveLoad] ?? 0.2;
+      const billableMs = getTaskBillableMs(task);
+      billableHours = billableMs / (1000 * 60 * 60);
+      taskScore = billableHours * ratePerHour;
+      statusWeight = ratePerHour;
+      proximityMultiplier = 1.0; // In review ignores deadline proximity and does not count towards overdueCount
     }
 
-    const proximityMultiplier = hasDeadline ? getProximityMultiplier(daysRemaining) : 1.0;
-    if (daysRemaining !== null && daysRemaining < 0) {
-      overdueCount++;
-    }
-
-    const taskScore = statusWeight * cognitiveWeight * proximityMultiplier;
     totalScore += taskScore;
 
     items.push({
@@ -413,11 +432,12 @@ export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
       cognitiveLoad: task.cognitiveLoad,
       hasDeadline,
       dueDate: task.dueDate,
-      daysRemaining,
+      daysRemaining: task.status === 'in_review' ? null : daysRemaining,
       statusWeight,
-      cognitiveWeight,
+      cognitiveWeight: task.status === 'in_review' ? (IN_REVIEW_HOURLY_RATES[task.cognitiveLoad] ?? 0.2) : cognitiveWeight,
       proximityMultiplier,
       calculatedScore: Math.round(taskScore * 100) / 100,
+      billableHours: task.status === 'in_review' ? Math.round(billableHours! * 100) / 100 : undefined,
     });
   }
 
