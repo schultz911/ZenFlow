@@ -28,7 +28,7 @@ interface User {
 interface TaskActivity {
   id: string;
   timestamp: string;
-  action: 'created' | 'status_change' | 'reassigned' | 'rescheduled' | 'updated';
+  action: 'created' | 'status_change' | 'reassigned' | 'rescheduled' | 'updated' | 'billable_adjusted';
   from?: string;
   to?: string;
   actorName?: string;
@@ -188,6 +188,18 @@ function sanitizeString(input: unknown): string {
     .trim()
     .replace(/[<>]/g, '') // Strip basic HTML tags
     .slice(0, 1000); // Enforce max string length boundary
+}
+
+// Format duration milliseconds into compact billable hours string for audit records
+function formatBillableHoursServer(ms: number): string {
+  if (ms <= 0) return '0h';
+  const hours = ms / (1000 * 60 * 60);
+  if (hours < 0.1) {
+    const mins = Math.max(1, Math.round(ms / (1000 * 60)));
+    return `${mins}m`;
+  }
+  const formattedHours = parseFloat(hours.toFixed(1));
+  return `${formattedHours}h`;
 }
 
 // In-memory sliding-window rate limiter for sensitive mutation endpoints
@@ -1048,7 +1060,20 @@ async function startServer() {
     }
 
     const currentTask = store.tasks[taskIndex];
-    const { title, description, dueDate, cognitiveLoad, status, userId, order, completedAt: reqCompletedAt } = req.body;
+    const {
+      title,
+      description,
+      dueDate,
+      cognitiveLoad,
+      status,
+      userId,
+      order,
+      completedAt: reqCompletedAt,
+      inProgressDurationMs: reqDurationMs,
+      inProgressStartedAt: reqStartedAt,
+      adjustmentReason,
+      actorName,
+    } = req.body;
 
     if (title !== undefined) {
       const cleanTitle = sanitizeString(title);
@@ -1064,6 +1089,8 @@ async function startServer() {
       }
     }
 
+    const targetStatus = status && ['pipeline', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : currentTask.status;
+
     let completedAt = reqCompletedAt !== undefined ? (reqCompletedAt ? sanitizeString(reqCompletedAt) : undefined) : currentTask.completedAt;
     let inProgressStartedAt = currentTask.inProgressStartedAt;
     let inProgressDurationMs = typeof currentTask.inProgressDurationMs === 'number' ? currentTask.inProgressDurationMs : 0;
@@ -1074,7 +1101,55 @@ async function startServer() {
       } else if (status !== 'done') {
         completedAt = undefined;
       }
+    }
 
+    // Micro activity audit logging
+    const activityEntries: TaskActivity[] = Array.isArray(currentTask.activityLog) ? [...currentTask.activityLog] : [];
+
+    // Billable Hours tracking & manual adjustment
+    if (reqDurationMs !== undefined && (typeof reqDurationMs === 'number' || !isNaN(Number(reqDurationMs)))) {
+      const parsedDurationMs = Math.max(0, Math.round(Number(reqDurationMs)));
+      const previousBillableMs = (() => {
+        let ms = typeof currentTask.inProgressDurationMs === 'number' ? currentTask.inProgressDurationMs : 0;
+        if (currentTask.status === 'in_progress' && currentTask.inProgressStartedAt) {
+          const startMs = new Date(currentTask.inProgressStartedAt).getTime();
+          if (!isNaN(startMs) && Date.now() >= startMs) {
+            ms += (Date.now() - startMs);
+          }
+        }
+        return ms;
+      })();
+
+      inProgressDurationMs = parsedDurationMs;
+      if (targetStatus === 'in_progress') {
+        inProgressStartedAt = reqStartedAt && typeof reqStartedAt === 'string'
+          ? sanitizeString(reqStartedAt)
+          : new Date().toISOString();
+      } else {
+        inProgressStartedAt = undefined;
+      }
+
+      if (parsedDurationMs !== previousBillableMs) {
+        const fromStr = formatBillableHoursServer(previousBillableMs);
+        const toStr = formatBillableHoursServer(parsedDurationMs);
+        const reasonText = adjustmentReason && typeof adjustmentReason === 'string' && adjustmentReason.trim()
+          ? ` (${sanitizeString(adjustmentReason.trim())})`
+          : '';
+        const cleanActor = actorName && typeof actorName === 'string' && actorName.trim()
+          ? sanitizeString(actorName.trim())
+          : undefined;
+
+        activityEntries.unshift({
+          id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          timestamp: new Date().toISOString(),
+          action: 'billable_adjusted',
+          from: fromStr,
+          to: toStr,
+          actorName: cleanActor,
+          details: `Billable hours adjusted from ${fromStr} to ${toStr}${reasonText}`,
+        });
+      }
+    } else if (status !== undefined) {
       // Billable Hours tracking for In Progress transitions
       if (status === 'in_progress' && currentTask.status !== 'in_progress') {
         inProgressStartedAt = new Date().toISOString();
@@ -1086,9 +1161,6 @@ async function startServer() {
         inProgressStartedAt = undefined;
       }
     }
-
-    // Micro activity audit logging
-    const activityEntries: TaskActivity[] = Array.isArray(currentTask.activityLog) ? [...currentTask.activityLog] : [];
 
     if (status !== undefined && status !== currentTask.status) {
       activityEntries.unshift({
@@ -1114,7 +1186,6 @@ async function startServer() {
       });
     }
 
-    const targetStatus = status && ['pipeline', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : currentTask.status;
     const resolvedDueDate = targetStatus === 'pipeline'
       ? undefined
       : dueDate !== undefined

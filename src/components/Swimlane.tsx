@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task, TaskStatus, DragTaskInfo, CognitiveLoad } from '../types';
 import { calculateUserWorkload, compareTasksByDeadline } from '../utils/workload';
@@ -41,6 +41,7 @@ interface SwimlaneProps {
   ) => Promise<void>;
   onEditTask: (task: Task) => void;
   onRescheduleTask?: (taskId: string, newDueDate: string | undefined) => void;
+  onAdjustBillableHours?: (task: Task) => void;
   onUpdateTaskTitle?: (taskId: string, newTitle: string) => void;
   onDeleteTask: (taskId: string) => void;
   onDeleteUser?: (user: User) => void;
@@ -102,6 +103,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   onQuickAddTask,
   onEditTask,
   onRescheduleTask,
+  onAdjustBillableHours,
   onUpdateTaskTitle,
   onDeleteTask,
   onDeleteUser,
@@ -153,6 +155,38 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   const [quickAddLoad, setQuickAddLoad] = useState<'low' | 'medium' | 'high'>('medium');
   const [quickAddDueDate, setQuickAddDueDate] = useState<string>('');
   const [isSubmittingQuickAdd, setIsSubmittingQuickAdd] = useState(false);
+  const quickAddCardRef = useRef<HTMLDivElement>(null);
+
+  // Click outside to dismiss quick add in swimlane column
+  useEffect(() => {
+    if (!quickAddStatus) return;
+
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+
+      // If clicking inside the quick add card itself, keep it open
+      if (quickAddCardRef.current && quickAddCardRef.current.contains(target)) {
+        return;
+      }
+
+      // If clicking the column header toggle button for this active column, let the button's onClick handle it
+      const el = target instanceof Element ? target : target.parentElement;
+      if (el?.closest(`[data-quick-add-toggle="${quickAddStatus}"]`)) {
+        return;
+      }
+
+      setQuickAddStatus(null);
+      setQuickAddTitle('');
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [quickAddStatus]);
 
   const getPresetDateStr = useCallback((daysAhead: number) => {
     const d = new Date();
@@ -727,6 +761,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                           </div>
 
                           <button
+                            data-quick-add-toggle={col.status}
                             onClick={() => {
                               if (quickAddStatus === col.status) {
                                 setQuickAddStatus(null);
@@ -767,6 +802,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                           {/* Inline Quick-Add Card */}
                           {quickAddStatus === col.status && (
                             <motion.div
+                              ref={quickAddCardRef}
                               initial={{ opacity: 0, y: -4, scale: 0.98 }}
                               animate={{ opacity: 1, y: 0, scale: 1 }}
                               exit={{ opacity: 0, y: -4, scale: 0.98 }}
@@ -943,6 +979,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                     onDelete={onDeleteTask}
                                     onMoveStatus={handleMoveStatus}
                                     onReschedule={onRescheduleTask}
+                                    onAdjustBillableHours={onAdjustBillableHours}
                                     onDragStart={handleTaskDragStart}
                                     onDragEnd={handleTaskDragEnd}
                                   />
@@ -1012,6 +1049,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                   onDelete={onDeleteTask}
                                   onMoveStatus={handleMoveStatus}
                                   onReschedule={onRescheduleTask}
+                                  onAdjustBillableHours={onAdjustBillableHours}
                                   onDragStart={handleTaskDragStart}
                                   onDragEnd={handleTaskDragEnd}
                                 />
@@ -1063,6 +1101,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     if (prev.onQuickAddTask !== next.onQuickAddTask) return false;
     if (prev.onEditTask !== next.onEditTask) return false;
     if (prev.onRescheduleTask !== next.onRescheduleTask) return false;
+    if (prev.onAdjustBillableHours !== next.onAdjustBillableHours) return false;
     if (prev.onUpdateTaskTitle !== next.onUpdateTaskTitle) return false;
     if (prev.onDeleteTask !== next.onDeleteTask) return false;
     if (prev.onDeleteUser !== next.onDeleteUser) return false;

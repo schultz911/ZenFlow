@@ -46,11 +46,37 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
   const [editingTitle, setEditingTitle] = useState('');
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const quickAddCardRef = useRef<HTMLDivElement>(null);
+  const toggleBtnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (isAdding && inputRef.current) {
       inputRef.current.focus();
     }
+  }, [isAdding]);
+
+  // Click outside to dismiss quick add in pipeline
+  useEffect(() => {
+    if (!isAdding) return;
+
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node;
+      if (
+        (quickAddCardRef.current && quickAddCardRef.current.contains(target)) ||
+        (toggleBtnRef.current && toggleBtnRef.current.contains(target))
+      ) {
+        return;
+      }
+      setIsAdding(false);
+      setNewTitle('');
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, [isAdding]);
 
   const handleCommitAdd = async () => {
@@ -135,6 +161,7 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
         </div>
 
         <button
+          ref={toggleBtnRef}
           type="button"
           onClick={() => {
             setIsAdding(prev => !prev);
@@ -164,6 +191,7 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
       {/* Inline Quick Add into Pipeline */}
       {isAdding && (
         <motion.div
+          ref={quickAddCardRef}
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -4 }}

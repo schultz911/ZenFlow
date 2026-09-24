@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
-import { User, Task, Role, TaskStatus, RealtimeEvent, DragTaskInfo, TaskOrderUpdate, QueuedMutation } from '../types';
+import { User, Task, Role, TaskStatus, RealtimeEvent, DragTaskInfo, TaskOrderUpdate, QueuedMutation, TaskActivity } from '../types';
 import { INITIAL_USERS, INITIAL_TASKS } from '../data/initialData';
-import { compareTasksByDeadline } from '../utils/workload';
+import { compareTasksByDeadline, formatBillableHours, getTaskBillableMs } from '../utils/workload';
 
 export interface FirestoreStatus {
   connected: boolean;
@@ -81,6 +81,7 @@ interface DashboardContextType {
     status: TaskStatus;
   }) => Promise<Task>;
   updateTask: (id: string, updates: Partial<Task>) => Promise<Task>;
+  adjustBillableHours: (taskId: string, newDurationMs: number, reason?: string) => Promise<Task>;
   rescheduleTask: (taskId: string, newDueDate?: string) => Promise<Task>;
   deleteTask: (id: string) => Promise<void>;
   deleteUser: (userId: string) => Promise<void>;
@@ -133,6 +134,12 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
     return null;
   });
+
+  // Stable ref for currentUser — keeps adjustBillableHours and task helpers dep-free
+  const currentUserRef = useRef<User | null>(currentUser);
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
 
   const [activeRoleTab, setActiveRoleTab] = useState<Role>(() => {
     if (currentUser?.role) return currentUser.role;
@@ -615,7 +622,12 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
           let inProgressStartedAt = t.inProgressStartedAt;
           let inProgressDurationMs = typeof t.inProgressDurationMs === 'number' ? t.inProgressDurationMs : 0;
 
-          if (updates.status !== undefined) {
+          if (updates.inProgressDurationMs !== undefined) {
+            inProgressDurationMs = Math.max(0, updates.inProgressDurationMs);
+            if (updates.inProgressStartedAt !== undefined) {
+              inProgressStartedAt = updates.inProgressStartedAt;
+            }
+          } else if (updates.status !== undefined) {
             if (updates.status === 'done' && t.status !== 'done') {
               completedAt = new Date().toISOString();
             } else if (updates.status !== 'done') {
@@ -685,6 +697,91 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     return updatedTask || (tasksRef.current.find(t => t.id === id) as Task);
+  }, []);
+
+  // Dedicated helper to adjust billable hours manually with immediate optimistic update and audit history logging
+  const adjustBillableHours = useCallback(async (taskId: string, newDurationMs: number, reason?: string): Promise<Task> => {
+    const cleanDuration = Math.max(0, Math.round(newDurationMs));
+    const currentTask = tasksRef.current.find(t => t.id === taskId);
+    const previousBillableMs = currentTask ? getTaskBillableMs(currentTask) : 0;
+    const oldFormatted = formatBillableHours(previousBillableMs);
+    const newFormatted = formatBillableHours(cleanDuration);
+
+    const isCurrentInProgress = currentTask?.status === 'in_progress';
+    const newStartedAt = isCurrentInProgress ? new Date().toISOString() : undefined;
+
+    const trimmedReason = reason?.trim() || '';
+    const details = `Billable hours adjusted from ${oldFormatted} to ${newFormatted}${trimmedReason ? ` (${trimmedReason})` : ''}`;
+
+    const activityEntry: TaskActivity = {
+      id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: new Date().toISOString(),
+      action: 'billable_adjusted',
+      from: oldFormatted,
+      to: newFormatted,
+      actorName: currentUserRef.current?.name,
+      details,
+    };
+
+    let optimisticTask: Task | undefined;
+    setTasks(prev => {
+      const map = new Map<string, Task>();
+      for (const t of prev) {
+        if (t.id === taskId) {
+          const currentLogs = Array.isArray(t.activityLog) ? t.activityLog : [];
+          const updatedLogs = [activityEntry, ...currentLogs].slice(0, 15);
+          optimisticTask = {
+            ...t,
+            inProgressDurationMs: cleanDuration,
+            inProgressStartedAt: newStartedAt,
+            updatedAt: new Date().toISOString(),
+            activityLog: updatedLogs,
+          };
+          map.set(t.id, optimisticTask);
+        } else {
+          map.set(t.id, t);
+        }
+      }
+      return Array.from(map.values());
+    });
+
+    const payload = {
+      inProgressDurationMs: cleanDuration,
+      inProgressStartedAt: newStartedAt,
+      adjustmentReason: trimmedReason || undefined,
+      actorName: currentUserRef.current?.name || undefined,
+    };
+
+    try {
+      if (!navigator.onLine) throw new Error('Offline');
+      const res = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        const serverTask: Task = await res.json();
+        setTasks(prev => {
+          const map = new Map(prev.map(t => [t.id, t]));
+          map.set(taskId, serverTask);
+          return Array.from(map.values());
+        });
+        return serverTask;
+      } else {
+        throw new Error(`Server returned ${res.status}`);
+      }
+    } catch (err) {
+      console.warn('Adjust billable hours offline/failed, buffering in queue:', err);
+      enqueueMutation({
+        type: 'update_task',
+        endpoint: `/api/tasks/${taskId}`,
+        method: 'PUT',
+        payload,
+      });
+      setSyncStatus('offline');
+    }
+
+    return optimisticTask || (tasksRef.current.find(t => t.id === taskId) as Task);
   }, []);
 
   // Dedicated reschedule helper for quick snooze
@@ -989,6 +1086,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       switchUser,
       createTask,
       updateTask,
+      adjustBillableHours,
       rescheduleTask,
       deleteTask,
       deleteUser,
@@ -1015,6 +1113,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       switchUser,
       createTask,
       updateTask,
+      adjustBillableHours,
       rescheduleTask,
       deleteTask,
       deleteUser,

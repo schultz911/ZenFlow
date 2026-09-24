@@ -17,7 +17,7 @@ export interface User {
 export interface TaskActivity {
   id: string;
   timestamp: string;
-  action: 'created' | 'status_change' | 'reassigned' | 'rescheduled' | 'updated';
+  action: 'created' | 'status_change' | 'reassigned' | 'rescheduled' | 'updated' | 'billable_adjusted';
   from?: string;
   to?: string;
   actorName?: string;

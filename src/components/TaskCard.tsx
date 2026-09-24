@@ -24,6 +24,7 @@ interface TaskCardProps {
   onDelete: (taskId: string) => void;
   onMoveStatus: (taskId: string, newStatus: TaskStatus) => void;
   onReschedule?: (taskId: string, newDueDate: string | undefined) => void;
+  onAdjustBillableHours?: (task: Task) => void;
   onDragStart?: (task: Task) => void;
   onDragEnd?: () => void;
   isDraggable?: boolean;
@@ -39,6 +40,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   onDelete,
   onMoveStatus,
   onReschedule,
+  onAdjustBillableHours,
   onDragStart,
   onDragEnd,
   isDraggable = true,
@@ -297,19 +299,37 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             </button>
           </div>
 
-          {/* Billable Hours badge (top right of card) */}
-          {(billableMs > 0 || task.status === 'in_progress') && (
-            <div
-              title={`Billable Duration: ${formatBillableDetailed(billableMs)} spent in In Progress`}
-              className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium border select-none transition-colors shrink-0 ${
+          {/* Billable Hours badge (top right of card - clickable to manually correct hours) */}
+          {billableMs > 0 || task.status === 'in_progress' ? (
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation();
+                onAdjustBillableHours?.(task);
+              }}
+              title={`Billable Duration: ${formatBillableDetailed(billableMs)} · Click to correct hours`}
+              className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium border select-none transition-all cursor-pointer shrink-0 group/timer ${
                 task.status === 'in_progress'
-                  ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30 shadow-2xs'
-                  : 'bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border-neutral-200/60 dark:border-white/5'
+                  ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30 shadow-2xs hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:border-blue-400'
+                  : 'bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border-neutral-200/60 dark:border-white/5 hover:bg-neutral-200/80 dark:hover:bg-white/10 hover:text-neutral-800 dark:hover:text-white hover:border-neutral-300 dark:hover:border-white/20'
               }`}
             >
-              <Timer className={`h-2.5 w-2.5 ${task.status === 'in_progress' ? 'text-blue-500 animate-pulse' : 'text-neutral-400 dark:text-white/30'}`} />
+              <Timer className={`h-2.5 w-2.5 ${task.status === 'in_progress' ? 'text-blue-500 animate-pulse' : 'text-neutral-400 dark:text-white/30 group-hover/timer:text-blue-500'}`} />
               <span>{formatBillableHours(billableMs)}</span>
-            </div>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={e => {
+                e.stopPropagation();
+                onAdjustBillableHours?.(task);
+              }}
+              title="Click to log billable hours"
+              className="opacity-0 group-hover:opacity-100 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium border border-dashed border-neutral-300 dark:border-white/15 bg-neutral-50 dark:bg-white/5 text-neutral-400 dark:text-white/40 hover:bg-neutral-100 dark:hover:bg-white/10 hover:text-neutral-700 dark:hover:text-white hover:border-neutral-400 transition-all cursor-pointer shrink-0"
+            >
+              <Timer className="h-2.5 w-2.5 text-neutral-400 dark:text-white/30" />
+              <span>0h</span>
+            </button>
           )}
         </div>
       </div>

@@ -8,6 +8,7 @@ import { TaskModal } from './components/TaskModal';
 import { WorkloadModal } from './components/WorkloadModal';
 import { FirestoreModal } from './components/FirestoreModal';
 import { DeleteUserModal } from './components/DeleteUserModal';
+import { BillableHoursModal } from './components/BillableHoursModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MarqueeRibbon } from './components/MarqueeRibbon';
 import { UnscheduledTasksRibbon } from './components/UnscheduledTasksRibbon';
@@ -35,6 +36,7 @@ function DashboardContent() {
     deleteUser,
     createTask,
     updateTask,
+    adjustBillableHours,
     rescheduleTask,
   } = useDashboard();
 
@@ -43,6 +45,7 @@ function DashboardContent() {
   const [isNewAccountModal, setIsNewAccountModal] = useState(false);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
+  const [adjustBillableTask, setAdjustBillableTask] = useState<Task | null>(null);
   const [defaultTaskUserId, setDefaultTaskUserId] = useState<string | undefined>(undefined);
   const [defaultTaskStatus, setDefaultTaskStatus] = useState<TaskStatus | undefined>('todo');
   const [workloadModalUser, setWorkloadModalUser] = useState<User | null>(null);
@@ -200,6 +203,27 @@ function DashboardContent() {
     setTaskToEdit(task);
     setTaskModalOpen(true);
   }, []);
+
+  const handleOpenAdjustBillableHours = useCallback((task: Task) => {
+    setAdjustBillableTask(task);
+  }, []);
+
+  const handleSaveBillableHours = useCallback(
+    async (taskId: string, newDurationMs: number, reason?: string) => {
+      await adjustBillableHours(taskId, newDurationMs, reason);
+    },
+    [adjustBillableHours]
+  );
+
+  const currentTaskToEdit = useMemo(() => {
+    if (!taskToEdit) return null;
+    return tasks.find(t => t.id === taskToEdit.id) || taskToEdit;
+  }, [taskToEdit, tasks]);
+
+  const currentAdjustBillableTask = useMemo(() => {
+    if (!adjustBillableTask) return null;
+    return tasks.find(t => t.id === adjustBillableTask.id) || adjustBillableTask;
+  }, [adjustBillableTask, tasks]);
 
   const handleOpenLogin = useCallback(() => {
     setIsNewAccountModal(false);
@@ -372,6 +396,7 @@ function DashboardContent() {
                 onQuickAddTask={handleQuickAddTask}
                 onEditTask={handleEditTask}
                 onRescheduleTask={handleRescheduleTask}
+                onAdjustBillableHours={handleOpenAdjustBillableHours}
                 onUpdateTaskTitle={handleUpdateTaskTitle}
                 onDeleteTask={deleteTask}
                 onDeleteUser={handleOpenDeleteUser}
@@ -398,9 +423,18 @@ function DashboardContent() {
       <TaskModal
         isOpen={taskModalOpen}
         onClose={() => setTaskModalOpen(false)}
-        taskToEdit={taskToEdit}
+        taskToEdit={currentTaskToEdit}
         defaultUserId={defaultTaskUserId}
         defaultStatus={defaultTaskStatus}
+        onAdjustBillableHours={handleOpenAdjustBillableHours}
+      />
+
+      <BillableHoursModal
+        isOpen={Boolean(adjustBillableTask)}
+        task={currentAdjustBillableTask}
+        currentUser={currentUser}
+        onClose={() => setAdjustBillableTask(null)}
+        onSave={handleSaveBillableHours}
       />
 
       <WorkloadModal

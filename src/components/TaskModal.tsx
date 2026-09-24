@@ -38,6 +38,7 @@ interface TaskModalProps {
   taskToEdit?: Task | null;
   defaultUserId?: string;
   defaultStatus?: TaskStatus;
+  onAdjustBillableHours?: (task: Task) => void;
 }
 
 export const TaskModal: React.FC<TaskModalProps> = ({
@@ -46,6 +47,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   taskToEdit,
   defaultUserId,
   defaultStatus = 'todo',
+  onAdjustBillableHours,
 }) => {
   const { users, currentUser, createTask, updateTask, deleteTask } = useDashboard();
 
@@ -447,10 +449,18 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     <span className="bg-neutral-100 dark:bg-white/5 px-2 py-0.5 rounded-md border border-neutral-200/50 dark:border-white/5">
                       In status: <strong className="text-neutral-700 dark:text-white/80">{cycleMetrics.currentStatusStr}</strong>
                     </span>
-                    <span className="flex items-center gap-1 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-md border border-blue-200/60 dark:border-blue-500/25">
-                      <Timer className="h-3 w-3 text-blue-500" />
-                      Billable: <strong className="text-blue-700 dark:text-blue-300">{cycleMetrics.billableDetailedStr}</strong>
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onAdjustBillableHours?.(taskToEdit)}
+                      title="Click to manually correct billable hours"
+                      className="flex items-center gap-1 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-md border border-blue-200/60 dark:border-blue-500/25 hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:border-blue-400 transition-all cursor-pointer group"
+                    >
+                      <Timer className="h-3 w-3 text-blue-500 group-hover:scale-110 transition-transform" />
+                      <span>Billable:</span>
+                      <strong className="text-blue-700 dark:text-blue-300 underline decoration-blue-300 dark:decoration-blue-500 underline-offset-2">
+                        {cycleMetrics.billableDetailedStr}
+                      </strong>
+                    </button>
                   </div>
                 )}
               </div>
@@ -479,6 +489,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     } else if (act.action === 'rescheduled') {
                       IconComponent = Calendar;
                       iconBg = 'text-sky-500 bg-sky-100 dark:bg-sky-500/10';
+                    } else if (act.action === 'billable_adjusted') {
+                      IconComponent = Timer;
+                      iconBg = 'text-indigo-500 bg-indigo-100 dark:bg-indigo-500/10';
                     }
 
                     return (
@@ -495,11 +508,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                                 ? `Assigned to ${act.to}`
                                 : act.action === 'rescheduled'
                                 ? `Due date: ${act.to}`
+                                : act.action === 'billable_adjusted'
+                                ? `Billable hours adjusted to ${act.to}`
                                 : 'Task created'
                             )}
                           </p>
                           <span className="text-[10px] text-neutral-400 dark:text-white/30">
                             {formatActivityTime(act.timestamp)}
+                            {act.actorName ? ` • by ${act.actorName}` : ''}
                           </span>
                         </div>
                       </div>
