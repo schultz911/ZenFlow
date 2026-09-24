@@ -186,7 +186,7 @@ export function compareTasksByDeadline(a: Task, b: Task, status?: string): numbe
  * - Green: > 4 days (5 - 7 days)
  * - Grey: > 7 days or no deadline
  */
-export function getDateChipStyle(dueDateStr?: string): DuePillInfo {
+export function getDuePillInfo(dueDateStr?: string): DuePillInfo {
   if (!dueDateStr) {
     return {
       label: 'No deadline',
@@ -255,10 +255,6 @@ export function getDateChipStyle(dueDateStr?: string): DuePillInfo {
     iconClass: 'text-neutral-400 dark:text-white/30',
     isOverdue: false,
   };
-}
-
-export function getDuePillInfo(dueDateStr?: string): DuePillInfo {
-  return getDateChipStyle(dueDateStr);
 }
 
 /**

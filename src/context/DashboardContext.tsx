@@ -106,12 +106,14 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   });
 
   const tasksRef = useRef<Task[]>(tasks);
+  tasksRef.current = tasks;
   useEffect(() => {
     tasksRef.current = tasks;
   }, [tasks]);
 
   // Stable ref for users — keeps login callback dep-free, preventing context re-creation on every SSE user event
   const usersRef = useRef<User[]>(users);
+  usersRef.current = users;
   useEffect(() => {
     usersRef.current = users;
   }, [users]);
@@ -137,6 +139,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Stable ref for currentUser — keeps adjustBillableHours and task helpers dep-free
   const currentUserRef = useRef<User | null>(currentUser);
+  currentUserRef.current = currentUser;
   useEffect(() => {
     currentUserRef.current = currentUser;
   }, [currentUser]);

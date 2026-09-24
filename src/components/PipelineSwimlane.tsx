@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState, useRef, useEffect } from 'react';
+import { motion } from 'motion/react';
 import { Task, User, TaskStatus, CognitiveLoad } from '../types';
 import { getCognitiveLoadLabel } from '../utils/workload';
 import {
@@ -9,7 +9,6 @@ import {
   Edit2,
   Trash2,
   X,
-  Check,
 } from 'lucide-react';
 
 interface PipelineSwimlaneProps {

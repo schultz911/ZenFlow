@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Calendar, AlertCircle, X, Check, ArrowRight } from 'lucide-react';
+import { Calendar, X, Check, ArrowRight } from 'lucide-react';
 import { Task, TaskStatus } from '../types';
 
 interface DeadlineDemandModalProps {

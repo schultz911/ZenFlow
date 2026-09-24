@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useDashboard } from '../context/DashboardContext';
-import { Task, CognitiveLoad, TaskStatus, TaskActivity } from '../types';
+import { Task, CognitiveLoad, TaskStatus } from '../types';
 import { getTaskBillableMs, formatBillableDetailed } from '../utils/workload';
 import { X, Calendar, Brain, Trash2, History, Clock, ArrowRight, CheckCircle2, UserCheck, PlusCircle, Timer, ChevronDown } from 'lucide-react';
 

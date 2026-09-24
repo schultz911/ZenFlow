@@ -176,6 +176,7 @@ function DashboardContent() {
         setWorkloadModalUser(null);
         setFirestoreModalOpen(false);
         setUserToDelete(null);
+        setAdjustBillableTask(null);
       }
 
       // Ctrl+N / Cmd+N: Quick create task

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Timer, X, Clock, Plus, Minus, RotateCcw, Check, History, ArrowRight, CheckCircle2, UserCheck, Calendar } from 'lucide-react';
+import { Timer, X, Clock, Plus, Minus, RotateCcw, Check, History } from 'lucide-react';
 import { Task, User } from '../types';
 import { getTaskBillableMs, formatBillableHours, formatBillableDetailed } from '../utils/workload';
 
@@ -119,21 +119,20 @@ export const BillableHoursModal: React.FC<BillableHoursModalProps> = ({
     );
   }, [task?.activityLog]);
 
-  if (!isOpen || !task) return null;
-
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-        {/* Backdrop */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={e => {
-            if (e.target === e.currentTarget && !isSubmitting) onClose();
-          }}
-          className="fixed inset-0 bg-black/60 backdrop-blur-xs"
-        />
+      {isOpen && task && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={e => {
+              if (e.target === e.currentTarget && !isSubmitting) onClose();
+            }}
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs"
+          />
 
         {/* Modal Dialog */}
         <motion.div
@@ -353,6 +352,7 @@ export const BillableHoursModal: React.FC<BillableHoursModalProps> = ({
           </form>
         </motion.div>
       </div>
+      )}
     </AnimatePresence>
   );
 };

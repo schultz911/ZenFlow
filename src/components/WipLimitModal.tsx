@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AlertCircle, X, CheckCircle2, ArrowLeft, Layers } from 'lucide-react';
+import { X, CheckCircle2, ArrowLeft, Layers } from 'lucide-react';
 import { Task, User } from '../types';
 
 interface WipLimitModalProps {
