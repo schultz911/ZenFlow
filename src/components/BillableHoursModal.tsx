@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Timer, X, Clock, Plus, Minus, RotateCcw, Check, History } from 'lucide-react';
+import { Timer, X, Clock, Plus, Minus, RotateCcw, Check } from 'lucide-react';
 import { Task, User } from '../types';
 import { getTaskBillableMs, formatBillableHours, formatBillableDetailed } from '../utils/workload';
 
@@ -83,7 +83,6 @@ export const BillableHoursModal: React.FC<BillableHoursModalProps> = ({
   }, [hours, minutes]);
 
   const oldFormatted = useMemo(() => formatBillableHours(currentDurationMs), [currentDurationMs]);
-  const newFormatted = useMemo(() => formatBillableHours(newDurationMs), [newDurationMs]);
 
   // Adjust duration by adding or subtracting minutes
   const applyPresetMinutes = (deltaMinutes: number) => {
@@ -110,14 +109,6 @@ export const BillableHoursModal: React.FC<BillableHoursModalProps> = ({
       setIsSubmitting(false);
     }
   };
-
-  // Filter task activities to display past billable & timeline events
-  const relevantActivities = useMemo(() => {
-    if (!task?.activityLog) return [];
-    return task.activityLog.filter(
-      act => act.action === 'billable_adjusted' || act.action === 'status_change'
-    );
-  }, [task?.activityLog]);
 
   return (
     <AnimatePresence>
@@ -293,43 +284,6 @@ export const BillableHoursModal: React.FC<BillableHoursModalProps> = ({
                 className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#161616] px-3.5 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-hidden focus:ring-1 focus:ring-blue-500 transition-colors"
               />
             </div>
-
-            {/* Audit Trail Preview Card */}
-            <div className="rounded-xl border border-blue-200/60 dark:border-blue-500/20 bg-blue-50/50 dark:bg-blue-950/20 p-3 text-xs space-y-1">
-              <div className="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                <History className="h-3 w-3" />
-                <span>Audit Trail Preview</span>
-              </div>
-              <p className="text-[11px] text-neutral-700 dark:text-neutral-300 leading-snug">
-                Billable hours adjusted from <strong className="text-neutral-900 dark:text-white">{oldFormatted}</strong> to <strong className="text-blue-600 dark:text-blue-400">{newFormatted}</strong>
-                {reason.trim() ? ` (${reason.trim()})` : ''}
-              </p>
-              <div className="text-[10px] text-neutral-400 dark:text-white/40">
-                Logged by {currentUser?.name || 'Current User'} • Permanently saved in task history
-              </div>
-            </div>
-
-            {/* Past Billable History inside this task (if any) */}
-            {relevantActivities.length > 0 && (
-              <div className="pt-2 border-t border-neutral-100 dark:border-white/5">
-                <div className="text-[10px] uppercase font-semibold text-neutral-400 dark:text-white/40 mb-1.5 flex items-center gap-1">
-                  <Clock className="h-3 w-3" />
-                  <span>Recent Time & Status History</span>
-                </div>
-                <div className="max-h-24 overflow-y-auto space-y-1.5 pr-1">
-                  {relevantActivities.slice(0, 4).map(act => (
-                    <div key={act.id} className="flex items-start gap-1.5 text-[10px] text-neutral-500 dark:text-white/50">
-                      <div className="mt-1 h-1.5 w-1.5 rounded-full bg-blue-500 shrink-0" />
-                      <span className="flex-1 truncate">{act.details}</span>
-                      <span className="shrink-0 text-neutral-400 dark:text-white/30">
-                        {new Date(act.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Form Actions */}
             <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-neutral-100 dark:border-white/5">
               <button

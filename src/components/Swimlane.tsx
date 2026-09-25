@@ -516,7 +516,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
         {/* User Identity */}
         <div className="flex items-center gap-3.5">
           {/* User Workspace Reordering Buttons */}
-            {(onMoveUserUp || onMoveUserDown) && (
+            {(onMoveUserUp || onMoveUserDown) && !isCurrentUser && (
               <div className="flex flex-col gap-0.5 border border-neutral-200/80 dark:border-white/10 rounded-lg p-0.5 bg-neutral-50 dark:bg-[#141414] shrink-0">
                 <button
                   type="button"

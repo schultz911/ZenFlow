@@ -26,12 +26,12 @@ function quickWorkloadScore(userTasks: Task[]): number {
   for (const t of userTasks) {
     if (t.status === 'pipeline' || t.status === 'done' || t.status === 'archived') continue;
     if (t.status === 'in_review') {
-      const rate = IN_REVIEW_HOURLY_RATES[t.cognitiveLoad] ?? 0.2;
+      const rate = IN_REVIEW_HOURLY_RATES[t.cognitiveLoad] ?? (0.15 / 4);
       const billableHours = getTaskBillableMs(t) / (1000 * 60 * 60);
       score += billableHours * rate;
     } else {
       const cw = t.cognitiveLoad === 'high' ? 3 : t.cognitiveLoad === 'medium' ? 2 : 1;
-      const sw = t.status === 'in_progress' ? 1 : (t.dueDate ? 1 : 0.5);
+      const sw = t.status === 'in_progress' ? 1 : (t.dueDate ? 0.6 : 0.3);
       score += sw * cw;
     }
   }

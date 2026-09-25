@@ -79,17 +79,22 @@ function DashboardContent() {
     }
   });
 
-  // Filter users by role tab and apply persistent custom ordering
+  // Filter users by role tab and apply persistent custom ordering with current user pinned to top
   const roleFilteredUsers = useMemo(() => {
     const filtered = users.filter(u => u.role === activeRoleTab);
-    if (customUserOrder.length === 0) return filtered;
+    const pinnedUser = currentUser ? filtered.find(u => u.id === currentUser.id) : null;
+    const reorderableUsers = pinnedUser ? filtered.filter(u => u.id !== currentUser.id) : filtered;
+
+    if (customUserOrder.length === 0) {
+      return pinnedUser ? [pinnedUser, ...reorderableUsers] : reorderableUsers;
+    }
 
     const orderMap = new Map<string, number>();
     for (let i = 0; i < customUserOrder.length; i++) {
       orderMap.set(customUserOrder[i], i);
     }
 
-    return [...filtered].sort((a, b) => {
+    const sortedReorderable = [...reorderableUsers].sort((a, b) => {
       const indexA = orderMap.has(a.id) ? orderMap.get(a.id)! : -1;
       const indexB = orderMap.has(b.id) ? orderMap.get(b.id)! : -1;
       if (indexA !== -1 && indexB !== -1) return indexA - indexB;
@@ -97,7 +102,9 @@ function DashboardContent() {
       if (indexB !== -1) return 1;
       return 0;
     });
-  }, [users, activeRoleTab, customUserOrder]);
+
+    return pinnedUser ? [pinnedUser, ...sortedReorderable] : sortedReorderable;
+  }, [users, activeRoleTab, customUserOrder, currentUser]);
 
   const roleFilteredUsersRef = useRef(roleFilteredUsers);
   roleFilteredUsersRef.current = roleFilteredUsers;
@@ -290,10 +297,16 @@ function DashboardContent() {
   );
 
   const handleMoveUserUp = useCallback((userId: string) => {
+    // Current user account is pinned to the top and cannot be reordered
+    if (userId === currentUserRef.current?.id) return;
+
     setCustomUserOrder(prev => {
       const currentList = roleFilteredUsersRef.current.map(u => u.id);
       const idx = currentList.indexOf(userId);
-      if (idx <= 0) return prev;
+      const isPinnedTop = currentList[0] === currentUserRef.current?.id;
+      const minIndex = isPinnedTop ? 2 : 1;
+      if (idx < minIndex) return prev;
+
       const nextList = [...currentList];
       const temp = nextList[idx - 1];
       nextList[idx - 1] = nextList[idx];
@@ -306,10 +319,14 @@ function DashboardContent() {
   }, []);
 
   const handleMoveUserDown = useCallback((userId: string) => {
+    // Current user account is pinned to the top and cannot be reordered
+    if (userId === currentUserRef.current?.id) return;
+
     setCustomUserOrder(prev => {
       const currentList = roleFilteredUsersRef.current.map(u => u.id);
       const idx = currentList.indexOf(userId);
       if (idx === -1 || idx >= currentList.length - 1) return prev;
+
       const nextList = [...currentList];
       const temp = nextList[idx + 1];
       nextList[idx + 1] = nextList[idx];
@@ -385,31 +402,38 @@ function DashboardContent() {
           </div>
         ) : (
           <div className="space-y-6">
-            {roleFilteredUsers.map((user, index) => (
-              <Swimlane
-                key={user.id}
-                user={user}
-                tasks={tasksByUserId.get(user.id) || EMPTY_TASKS}
-                activeDragInfo={activeDragInfo}
-                onDragTaskStart={handleDragTaskStart}
-                onDragTaskEnd={handleDragTaskEnd}
-                onAddTask={handleOpenAddTask}
-                onQuickAddTask={handleQuickAddTask}
-                onEditTask={handleEditTask}
-                onRescheduleTask={handleRescheduleTask}
-                onAdjustBillableHours={handleOpenAdjustBillableHours}
-                onUpdateTaskTitle={handleUpdateTaskTitle}
-                onDeleteTask={deleteTask}
-                onDeleteUser={handleOpenDeleteUser}
-                onMoveTask={moveTask}
-                onOpenWorkloadModal={handleOpenWorkloadModal}
-                isCurrentUser={currentUser?.id === user.id}
-                onMoveUserUp={handleMoveUserUp}
-                onMoveUserDown={handleMoveUserDown}
-                canMoveUp={index > 0}
-                canMoveDown={index < roleFilteredUsers.length - 1}
-              />
-            ))}
+            {roleFilteredUsers.map((user, index) => {
+              const isCurrent = currentUser?.id === user.id;
+              const hasPinnedTop = roleFilteredUsers[0]?.id === currentUser?.id;
+              const canMoveUp = !isCurrent && (hasPinnedTop ? index > 1 : index > 0);
+              const canMoveDown = !isCurrent && index < roleFilteredUsers.length - 1;
+
+              return (
+                <Swimlane
+                  key={user.id}
+                  user={user}
+                  tasks={tasksByUserId.get(user.id) || EMPTY_TASKS}
+                  activeDragInfo={activeDragInfo}
+                  onDragTaskStart={handleDragTaskStart}
+                  onDragTaskEnd={handleDragTaskEnd}
+                  onAddTask={handleOpenAddTask}
+                  onQuickAddTask={handleQuickAddTask}
+                  onEditTask={handleEditTask}
+                  onRescheduleTask={handleRescheduleTask}
+                  onAdjustBillableHours={handleOpenAdjustBillableHours}
+                  onUpdateTaskTitle={handleUpdateTaskTitle}
+                  onDeleteTask={deleteTask}
+                  onDeleteUser={handleOpenDeleteUser}
+                  onMoveTask={moveTask}
+                  onOpenWorkloadModal={handleOpenWorkloadModal}
+                  isCurrentUser={isCurrent}
+                  onMoveUserUp={handleMoveUserUp}
+                  onMoveUserDown={handleMoveUserDown}
+                  canMoveUp={canMoveUp}
+                  canMoveDown={canMoveDown}
+                />
+              );
+            })}
           </div>
         )}
       </main>

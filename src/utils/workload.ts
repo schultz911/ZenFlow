@@ -7,9 +7,9 @@ export const COGNITIVE_LOAD_WEIGHTS: Record<CognitiveLoad, number> = {
 };
 
 export const IN_REVIEW_HOURLY_RATES: Record<CognitiveLoad, number> = {
-  low: 0.15,
-  medium: 0.20,
-  high: 0.25,
+  low: 0.1 / 4,    // 0.1 per 4 billable hours (0.025/hr)
+  medium: 0.15 / 4, // 0.15 per 4 billable hours (0.0375/hr)
+  high: 0.2 / 4,   // 0.2 per 4 billable hours (0.05/hr)
 };
 
 /**
@@ -398,10 +398,10 @@ export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
       taskScore = statusWeight * cognitiveWeight * proximityMultiplier;
     } else if (task.status === 'todo') {
       if (hasDeadline) {
-        statusWeight = 1.0; // To do with deadline: 1.0
+        statusWeight = 0.6; // To do with deadline: 0.6 (60% of in_progress)
         todoWithDeadlineCount++;
       } else {
-        statusWeight = 0.5; // To do with no deadline: 0.5
+        statusWeight = 0.3; // To do with no deadline: 0.3 (60% of 0.5)
         todoNoDeadlineCount++;
       }
       proximityMultiplier = hasDeadline ? getProximityMultiplier(daysRemaining) : 1.0;
@@ -411,7 +411,7 @@ export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
       taskScore = statusWeight * cognitiveWeight * proximityMultiplier;
     } else if (task.status === 'in_review') {
       inReviewCount++;
-      const ratePerHour = IN_REVIEW_HOURLY_RATES[task.cognitiveLoad] ?? 0.2;
+      const ratePerHour = IN_REVIEW_HOURLY_RATES[task.cognitiveLoad] ?? (0.15 / 4);
       const billableMs = getTaskBillableMs(task);
       billableHours = billableMs / (1000 * 60 * 60);
       taskScore = billableHours * ratePerHour;
@@ -430,7 +430,7 @@ export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
       dueDate: task.dueDate,
       daysRemaining: task.status === 'in_review' ? null : daysRemaining,
       statusWeight,
-      cognitiveWeight: task.status === 'in_review' ? (IN_REVIEW_HOURLY_RATES[task.cognitiveLoad] ?? 0.2) : cognitiveWeight,
+      cognitiveWeight: task.status === 'in_review' ? (IN_REVIEW_HOURLY_RATES[task.cognitiveLoad] ?? (0.15 / 4)) : cognitiveWeight,
       proximityMultiplier,
       calculatedScore: Math.round(taskScore * 100) / 100,
       billableHours: task.status === 'in_review' ? Math.round(billableHours! * 100) / 100 : undefined,
