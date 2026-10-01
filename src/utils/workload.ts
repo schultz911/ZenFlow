@@ -45,6 +45,25 @@ export function getCognitiveLoadLabel(load: CognitiveLoad, role: Role = 'content
 }
 
 /**
+ * Calculates the last day of the current month formatted as YYYY-MM-DD.
+ * If today is already the last day of the month, rolls over to the last day of the next month.
+ */
+export function getLastDayOfMonth(fromDate: Date = new Date()): string {
+  const y = fromDate.getFullYear();
+  const m = fromDate.getMonth();
+  const currentMonthLastDay = new Date(y, m + 1, 0);
+
+  const target = fromDate.getDate() >= currentMonthLastDay.getDate()
+    ? new Date(y, m + 2, 0)
+    : currentMonthLastDay;
+
+  const yyyy = target.getFullYear();
+  const mm = String(target.getMonth() + 1).padStart(2, '0');
+  const dd = String(target.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/**
  * Calculates days remaining from today (local time) to the task's due date.
  * Negative number means overdue.
  */

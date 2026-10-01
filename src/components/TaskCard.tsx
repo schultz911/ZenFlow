@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Task, TaskStatus, Role } from '../types';
-import { getDuePillInfo, formatDateOnly, formatCompletedDate, getCognitiveLoadLabel, getTaskBillableMs, formatBillableHours, formatBillableDetailed } from '../utils/workload';
+import { getDuePillInfo, formatDateOnly, formatCompletedDate, getCognitiveLoadLabel, getTaskBillableMs, formatBillableHours, formatBillableDetailed, getLastDayOfMonth } from '../utils/workload';
 import {
   GripVertical,
   Clock,
@@ -48,8 +48,16 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   const [isDragging, setIsDragging] = useState(false);
   const [showSnoozeFlyout, setShowSnoozeFlyout] = useState(false);
   const [flyoutPosition, setFlyoutPosition] = useState<{ top: number; left: number } | null>(null);
+  const [customDateDraft, setCustomDateDraft] = useState(task.dueDate || '');
   const snoozeRef = useRef<HTMLDivElement>(null);
   const flyoutMenuRef = useRef<HTMLDivElement>(null);
+
+  // Synchronize draft date when flyout opens or task dueDate updates
+  useEffect(() => {
+    if (showSnoozeFlyout) {
+      setCustomDateDraft(task.dueDate || '');
+    }
+  }, [showSnoozeFlyout, task.dueDate]);
 
   // Inline Title Editing state
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -102,15 +110,19 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   const updateFlyoutPosition = useCallback(() => {
     if (!snoozeRef.current) return;
     const rect = snoozeRef.current.getBoundingClientRect();
-    const popupHeight = 250;
-    const popupWidth = 192;
+    if (rect.bottom < 0 || rect.top > window.innerHeight) {
+      setShowSnoozeFlyout(false);
+      return;
+    }
+    const popupHeight = 280;
+    const popupWidth = 208;
     const openAbove = rect.top >= popupHeight + 10;
     const top = openAbove ? rect.top - popupHeight - 6 : rect.bottom + 6;
     const left = Math.max(10, Math.min(rect.left, window.innerWidth - popupWidth - 10));
     setFlyoutPosition({ top, left });
   }, []);
 
-  // Dismiss snooze flyout on click outside, scroll, or resize
+  // Dismiss snooze flyout on click outside; keep anchored on scroll/resize
   useEffect(() => {
     if (!showSnoozeFlyout) return;
     updateFlyoutPosition();
@@ -125,18 +137,30 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       }
     };
 
-    const handleScrollOrResize = () => {
-      setShowSnoozeFlyout(false);
+    const handleScroll = (e: Event) => {
+      // Do not close or interrupt if scroll originates inside the flyout or datepicker
+      if (e.target && flyoutMenuRef.current && flyoutMenuRef.current.contains(e.target as Node)) {
+        return;
+      }
+      const targetEl = e.target as HTMLElement;
+      if (targetEl && (targetEl.tagName === 'INPUT' || targetEl.getAttribute?.('type') === 'date')) {
+        return;
+      }
+      updateFlyoutPosition();
+    };
+
+    const handleResize = () => {
+      updateFlyoutPosition();
     };
 
     document.addEventListener('mousedown', handleOutside);
-    window.addEventListener('scroll', handleScrollOrResize, true);
-    window.addEventListener('resize', handleScrollOrResize);
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleResize);
 
     return () => {
       document.removeEventListener('mousedown', handleOutside);
-      window.removeEventListener('scroll', handleScrollOrResize, true);
-      window.removeEventListener('resize', handleScrollOrResize);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleResize);
     };
   }, [showSnoozeFlyout, updateFlyoutPosition]);
 
@@ -144,18 +168,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   const pillInfo = getDuePillInfo(task.dueDate);
   const cognitiveLabel = getCognitiveLoadLabel(task.cognitiveLoad, userRole);
 
-  const handleSnooze = (daysToAdd: number | null) => {
-    let newDueDate: string | undefined;
-    if (daysToAdd !== null) {
-      const target = new Date();
-      target.setDate(target.getDate() + daysToAdd);
-      const yyyy = target.getFullYear();
-      const mm = String(target.getMonth() + 1).padStart(2, '0');
-      const dd = String(target.getDate()).padStart(2, '0');
-      newDueDate = `${yyyy}-${mm}-${dd}`;
-    } else {
-      newDueDate = undefined;
-    }
+  const handleApplyDate = (newDueDate: string) => {
     setShowSnoozeFlyout(false);
     if (onReschedule) {
       onReschedule(task.id, newDueDate);
@@ -164,14 +177,22 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
     }
   };
 
-  const handleCustomDateSelect = (dateStr: string | null) => {
-    const newDueDate = dateStr || undefined;
-    setShowSnoozeFlyout(false);
-    if (onReschedule) {
-      onReschedule(task.id, newDueDate);
-    } else {
-      onEdit({ ...task, dueDate: newDueDate });
-    }
+  const handleSnooze = (daysToAdd: number) => {
+    const target = new Date();
+    target.setDate(target.getDate() + daysToAdd);
+    const yyyy = target.getFullYear();
+    const mm = String(target.getMonth() + 1).padStart(2, '0');
+    const dd = String(target.getDate()).padStart(2, '0');
+    handleApplyDate(`${yyyy}-${mm}-${dd}`);
+  };
+
+  const handleEndOfMonth = () => {
+    handleApplyDate(getLastDayOfMonth());
+  };
+
+  const handleCustomDateSelect = (dateStr: string) => {
+    if (!dateStr) return;
+    handleApplyDate(dateStr);
   };
 
   // Next and Prev status for single-click progression
@@ -424,10 +445,11 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               ref={flyoutMenuRef}
               style={{ top: `${flyoutPosition.top}px`, left: `${flyoutPosition.left}px` }}
               onClick={e => e.stopPropagation()}
-              className="fixed z-[9999] w-48 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#121212] p-1.5 shadow-2xl text-neutral-900 dark:text-white animate-in fade-in zoom-in-95 duration-150"
+              className="fixed z-[9999] w-52 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#121212] p-1.5 shadow-2xl text-neutral-900 dark:text-white animate-in fade-in zoom-in-95 duration-150"
             >
-              <div className="px-2 py-1 border-b border-neutral-100 dark:border-white/5 text-[10px] font-semibold text-neutral-400 dark:text-white/40 uppercase tracking-wider">
-                Quick Reschedule
+              <div className="px-2 py-1 border-b border-neutral-100 dark:border-white/5 text-[10px] font-semibold text-neutral-400 dark:text-white/40 uppercase tracking-wider flex items-center justify-between">
+                <span>Quick Reschedule</span>
+                <Clock className="h-3 w-3 text-blue-500" />
               </div>
               <div className="mt-1 space-y-0.5">
                 <button
@@ -462,30 +484,47 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   <span>Next week</span>
                   <span className="text-[10px] text-neutral-400 dark:text-white/40">+7d</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={handleEndOfMonth}
+                  className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-[11px] text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/10 cursor-pointer transition-colors"
+                >
+                  <span>Last day of month</span>
+                  <span className="text-[10px] text-neutral-400 dark:text-white/40">EOM</span>
+                </button>
 
                 {/* Custom date picker input */}
-                <div className="pt-1 mt-1 border-t border-neutral-100 dark:border-white/5 px-2">
+                <div className="pt-1.5 mt-1 border-t border-neutral-100 dark:border-white/5 px-2 pb-0.5">
                   <label className="block text-[9px] uppercase tracking-wider font-semibold text-neutral-400 dark:text-white/40 mb-1">
                     Pick Date
                   </label>
-                  <input
-                    type="date"
-                    value={task.dueDate || ''}
-                    onChange={e => handleCustomDateSelect(e.target.value)}
-                    className="w-full rounded-md border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-white/5 px-1.5 py-1 text-[11px] text-neutral-800 dark:text-white/90 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="date"
+                      value={customDateDraft}
+                      onChange={e => setCustomDateDraft(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && customDateDraft) {
+                          e.preventDefault();
+                          handleCustomDateSelect(customDateDraft);
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault();
+                          setShowSnoozeFlyout(false);
+                        }
+                      }}
+                      className="flex-1 min-w-0 rounded-md border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-white/5 px-1.5 py-1 text-[11px] text-neutral-800 dark:text-white/90 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    />
+                    <button
+                      type="button"
+                      disabled={!customDateDraft}
+                      onClick={() => handleCustomDateSelect(customDateDraft)}
+                      title="Set deadline"
+                      className="shrink-0 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white px-2 py-1 text-[10px] font-semibold transition-colors cursor-pointer disabled:cursor-not-allowed shadow-2xs"
+                    >
+                      Set
+                    </button>
+                  </div>
                 </div>
-
-                {task.dueDate && (
-                  <button
-                    type="button"
-                    onClick={() => handleSnooze(null)}
-                    className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-[11px] text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 cursor-pointer border-t border-neutral-100 dark:border-white/5 mt-1 pt-1 transition-colors"
-                  >
-                    <span>Clear deadline</span>
-                    <span className="text-[10px] text-red-400">None</span>
-                  </button>
-                )}
               </div>
             </div>,
             document.body

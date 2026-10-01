@@ -6,6 +6,11 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
+### Sweep 26: 2026-10-01 (Quick Reschedule Date Selector Fix, Date Navigation/Typing Stability, Clear Deadline Removal & End of Month Reschedule Preset)
+
+- **UX-14 (Quick Reschedule Date Selector Interaction & Typing Stability):** Resolved an issue where interacting with the quick reschedule date input (typing into the date field, using arrow keys to increment/decrement date components, or navigating the calendar popup) prematurely closed the flyout. Replaced raw controlled `onChange` task rescheduling with a local draft state (`customDateDraft`) and an explicit "Set" button alongside `Enter` key submission. Filtered out scroll events originating within the flyout or datepicker, and replaced abrupt dismissal on scroll with continuous anchor-relative repositioning via `updateFlyoutPosition()`. Synchronized across `<TaskCard>` and `<UnscheduledTasksRibbon>`.
+- **UX-15 (Clear Deadline Prompt Removal & End-of-Month Quick Reschedule Preset):** Removed the "Clear deadline" action button and prompt from the quick reschedule flyout, enforcing active workflow deadline integrity. Added a "Last day of month" quick reschedule preset with an `EOM` tag in both `<TaskCard>` and `<UnscheduledTasksRibbon>`. Implemented `getLastDayOfMonth` in `src/utils/workload.ts`, ensuring precise rollover to the subsequent month's end when executed on the final day of the current month.
+
 ### Sweep 25: 2026-09-25 (Current User Swimlane Top-Pinning, In-Review 4-Hour Rate Scaling, To-Do 0.6x Workload Discount & Billable Modal Decluttering)
 
 - **UX-12 (Account Pinning & Reorder Access Control):** Guaranteed that the currently logged-in account (`currentUser`) always appears pinned at the top (index 0) of the team swimlane board. Reordering controls are completely hidden on the logged-in user's swimlane. Other team members can be reordered freely amongst themselves, with bounded controls (`canMoveUp = index > 1`, `canMoveDown = index < length - 1`) ensuring no member can move above the pinned account.

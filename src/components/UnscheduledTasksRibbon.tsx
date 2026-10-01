@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Task, User } from '../types';
-import { getCognitiveLoadLabel } from '../utils/workload';
+import { getCognitiveLoadLabel, getLastDayOfMonth } from '../utils/workload';
 import { CalendarClock, Calendar, Clock } from 'lucide-react';
 
 interface UnscheduledTasksRibbonProps {
@@ -34,17 +34,19 @@ export const UnscheduledTasksRibbon: React.FC<UnscheduledTasksRibbonProps> = Rea
   // Quick Reschedule Flyout State for the ribbon items
   const [activeFlyoutTaskId, setActiveFlyoutTaskId] = useState<string | null>(null);
   const [flyoutPosition, setFlyoutPosition] = useState<{ top: number; left: number } | null>(null);
+  const [customDateDraft, setCustomDateDraft] = useState('');
   const flyoutMenuRef = useRef<HTMLDivElement>(null);
 
   const openFlyout = useCallback((taskId: string, buttonElement: HTMLElement) => {
     const rect = buttonElement.getBoundingClientRect();
-    const popupHeight = 240;
-    const popupWidth = 192;
+    const popupHeight = 280;
+    const popupWidth = 208;
     const openAbove = rect.top >= popupHeight + 10;
     const top = openAbove ? rect.top - popupHeight - 6 : rect.bottom + 6;
     const left = Math.max(10, Math.min(rect.left, window.innerWidth - popupWidth - 10));
     setFlyoutPosition({ top, left });
     setActiveFlyoutTaskId(taskId);
+    setCustomDateDraft('');
   }, []);
 
   const closeFlyout = useCallback(() => {
@@ -63,18 +65,30 @@ export const UnscheduledTasksRibbon: React.FC<UnscheduledTasksRibbonProps> = Rea
       }
     };
 
-    const handleScrollOrResize = () => {
+    const handleScroll = (e: Event) => {
+      // Do not close or interrupt if scroll originates inside the flyout or datepicker
+      if (e.target && flyoutMenuRef.current && flyoutMenuRef.current.contains(e.target as Node)) {
+        return;
+      }
+      const targetEl = e.target as HTMLElement;
+      if (targetEl && (targetEl.tagName === 'INPUT' || targetEl.getAttribute?.('type') === 'date')) {
+        return;
+      }
+      closeFlyout();
+    };
+
+    const handleResize = () => {
       closeFlyout();
     };
 
     document.addEventListener('mousedown', handleOutside);
-    window.addEventListener('scroll', handleScrollOrResize, true);
-    window.addEventListener('resize', handleScrollOrResize);
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleResize);
 
     return () => {
       document.removeEventListener('mousedown', handleOutside);
-      window.removeEventListener('scroll', handleScrollOrResize, true);
-      window.removeEventListener('resize', handleScrollOrResize);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleResize);
     };
   }, [activeFlyoutTaskId, closeFlyout]);
 
@@ -237,7 +251,7 @@ export const UnscheduledTasksRibbon: React.FC<UnscheduledTasksRibbonProps> = Rea
           ref={flyoutMenuRef}
           style={{ top: `${flyoutPosition.top}px`, left: `${flyoutPosition.left}px` }}
           onClick={e => e.stopPropagation()}
-          className="fixed z-[9999] w-48 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#121212] p-1.5 shadow-2xl text-neutral-900 dark:text-white animate-in fade-in zoom-in-95 duration-150"
+          className="fixed z-[9999] w-52 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#121212] p-1.5 shadow-2xl text-neutral-900 dark:text-white animate-in fade-in zoom-in-95 duration-150"
         >
           <div className="px-2 py-1 border-b border-neutral-100 dark:border-white/5 text-[10px] font-semibold text-neutral-400 dark:text-white/40 uppercase tracking-wider flex items-center justify-between">
             <span>Set Deadline</span>
@@ -284,21 +298,50 @@ export const UnscheduledTasksRibbon: React.FC<UnscheduledTasksRibbonProps> = Rea
               <span>Next week</span>
               <span className="text-[10px] text-neutral-400 dark:text-white/40">+7d</span>
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                const eom = getLastDayOfMonth();
+                closeFlyout();
+                onReschedule?.(activeFlyoutTaskId, eom);
+              }}
+              className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-[11px] text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/10 cursor-pointer transition-colors"
+            >
+              <span>Last day of month</span>
+              <span className="text-[10px] text-neutral-400 dark:text-white/40">EOM</span>
+            </button>
 
             {/* Custom date picker input */}
-            <div className="pt-1 mt-1 border-t border-neutral-100 dark:border-white/5 px-2">
+            <div className="pt-1.5 mt-1 border-t border-neutral-100 dark:border-white/5 px-2 pb-0.5">
               <label className="block text-[9px] uppercase tracking-wider font-semibold text-neutral-400 dark:text-white/40 mb-1">
                 Pick Custom Date
               </label>
-              <input
-                type="date"
-                onChange={e => {
-                  if (e.target.value) {
-                    handleCustomDateSelect(activeFlyoutTaskId, e.target.value);
-                  }
-                }}
-                className="w-full rounded-md border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-white/5 px-1.5 py-1 text-[11px] text-neutral-800 dark:text-white/90 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500"
-              />
+              <div className="flex items-center gap-1">
+                <input
+                  type="date"
+                  value={customDateDraft}
+                  onChange={e => setCustomDateDraft(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && customDateDraft) {
+                      e.preventDefault();
+                      handleCustomDateSelect(activeFlyoutTaskId, customDateDraft);
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      closeFlyout();
+                    }
+                  }}
+                  className="flex-1 min-w-0 rounded-md border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-white/5 px-1.5 py-1 text-[11px] text-neutral-800 dark:text-white/90 cursor-pointer focus:outline-none focus:ring-1 focus:ring-amber-500"
+                />
+                <button
+                  type="button"
+                  disabled={!customDateDraft}
+                  onClick={() => customDateDraft && handleCustomDateSelect(activeFlyoutTaskId, customDateDraft)}
+                  title="Set deadline"
+                  className="shrink-0 rounded-md bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:hover:bg-amber-600 text-white px-2 py-1 text-[10px] font-semibold transition-colors cursor-pointer disabled:cursor-not-allowed shadow-2xs"
+                >
+                  Set
+                </button>
+              </div>
             </div>
           </div>
         </div>,
