@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Task, User } from '../types';
 import { getCognitiveLoadLabel, getLastDayOfMonth } from '../utils/workload';
@@ -36,25 +36,52 @@ export const UnscheduledTasksRibbon: React.FC<UnscheduledTasksRibbonProps> = Rea
   const [flyoutPosition, setFlyoutPosition] = useState<{ top: number; left: number } | null>(null);
   const [customDateDraft, setCustomDateDraft] = useState('');
   const flyoutMenuRef = useRef<HTMLDivElement>(null);
+  const activeTriggerRef = useRef<HTMLElement | null>(null);
+
+  const closeFlyout = useCallback(() => {
+    setActiveFlyoutTaskId(null);
+    setFlyoutPosition(null);
+    activeTriggerRef.current = null;
+  }, []);
+
+  const updateFlyoutPosition = useCallback(() => {
+    if (!activeTriggerRef.current) return;
+    const rect = activeTriggerRef.current.getBoundingClientRect();
+    if (rect.bottom < 0 || rect.top > window.innerHeight) {
+      closeFlyout();
+      return;
+    }
+    const measuredHeight = flyoutMenuRef.current?.offsetHeight;
+    const popupHeight = measuredHeight && measuredHeight > 50 ? measuredHeight : 226;
+    const popupWidth = flyoutMenuRef.current?.offsetWidth || 208;
+    const openAbove = rect.top >= popupHeight + 10;
+    const top = openAbove ? rect.top - popupHeight - 4 : rect.bottom + 4;
+    const left = Math.max(10, Math.min(rect.left, window.innerWidth - popupWidth - 10));
+    setFlyoutPosition({ top, left });
+  }, [closeFlyout]);
 
   const openFlyout = useCallback((taskId: string, buttonElement: HTMLElement) => {
+    activeTriggerRef.current = buttonElement;
     const rect = buttonElement.getBoundingClientRect();
-    const popupHeight = 280;
-    const popupWidth = 208;
+    const measuredHeight = flyoutMenuRef.current?.offsetHeight;
+    const popupHeight = measuredHeight && measuredHeight > 50 ? measuredHeight : 226;
+    const popupWidth = flyoutMenuRef.current?.offsetWidth || 208;
     const openAbove = rect.top >= popupHeight + 10;
-    const top = openAbove ? rect.top - popupHeight - 6 : rect.bottom + 6;
+    const top = openAbove ? rect.top - popupHeight - 4 : rect.bottom + 4;
     const left = Math.max(10, Math.min(rect.left, window.innerWidth - popupWidth - 10));
     setFlyoutPosition({ top, left });
     setActiveFlyoutTaskId(taskId);
     setCustomDateDraft('');
   }, []);
 
-  const closeFlyout = useCallback(() => {
-    setActiveFlyoutTaskId(null);
-    setFlyoutPosition(null);
-  }, []);
+  // Synchronously adjust flyout positioning to exact rendered height before paint
+  useLayoutEffect(() => {
+    if (activeFlyoutTaskId) {
+      updateFlyoutPosition();
+    }
+  }, [activeFlyoutTaskId, updateFlyoutPosition]);
 
-  // Dismiss flyout on outside click or scroll
+  // Dismiss flyout on outside click; keep anchored on scroll/resize
   useEffect(() => {
     if (!activeFlyoutTaskId) return;
 
@@ -74,11 +101,11 @@ export const UnscheduledTasksRibbon: React.FC<UnscheduledTasksRibbonProps> = Rea
       if (targetEl && (targetEl.tagName === 'INPUT' || targetEl.getAttribute?.('type') === 'date')) {
         return;
       }
-      closeFlyout();
+      updateFlyoutPosition();
     };
 
     const handleResize = () => {
-      closeFlyout();
+      updateFlyoutPosition();
     };
 
     document.addEventListener('mousedown', handleOutside);
@@ -90,7 +117,7 @@ export const UnscheduledTasksRibbon: React.FC<UnscheduledTasksRibbonProps> = Rea
       window.removeEventListener('scroll', handleScroll, true);
       window.removeEventListener('resize', handleResize);
     };
-  }, [activeFlyoutTaskId, closeFlyout]);
+  }, [activeFlyoutTaskId, closeFlyout, updateFlyoutPosition]);
 
   const handleQuickSnooze = useCallback((taskId: string, daysToAdd: number) => {
     const target = new Date();

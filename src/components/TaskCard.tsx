@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Task, TaskStatus, Role } from '../types';
@@ -114,13 +114,21 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       setShowSnoozeFlyout(false);
       return;
     }
-    const popupHeight = 280;
-    const popupWidth = 208;
+    const measuredHeight = flyoutMenuRef.current?.offsetHeight;
+    const popupHeight = measuredHeight && measuredHeight > 50 ? measuredHeight : 226;
+    const popupWidth = flyoutMenuRef.current?.offsetWidth || 208;
     const openAbove = rect.top >= popupHeight + 10;
-    const top = openAbove ? rect.top - popupHeight - 6 : rect.bottom + 6;
+    const top = openAbove ? rect.top - popupHeight - 4 : rect.bottom + 4;
     const left = Math.max(10, Math.min(rect.left, window.innerWidth - popupWidth - 10));
     setFlyoutPosition({ top, left });
   }, []);
+
+  // Synchronously adjust flyout positioning to exact rendered height before paint
+  useLayoutEffect(() => {
+    if (showSnoozeFlyout) {
+      updateFlyoutPosition();
+    }
+  }, [showSnoozeFlyout, updateFlyoutPosition]);
 
   // Dismiss snooze flyout on click outside; keep anchored on scroll/resize
   useEffect(() => {
@@ -429,7 +437,13 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               type="button"
               onClick={e => {
                 e.stopPropagation();
-                setShowSnoozeFlyout(prev => !prev);
+                setShowSnoozeFlyout(prev => {
+                  const next = !prev;
+                  if (next) {
+                    updateFlyoutPosition();
+                  }
+                  return next;
+                });
               }}
               title="Click to adjust deadline"
               className="inline-flex items-center gap-1.5 text-[10px] font-medium text-neutral-500 dark:text-white/40 hover:text-neutral-800 dark:hover:text-white/90 transition-colors cursor-pointer py-0.5"
