@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Timer, X, Clock, Plus, Minus, RotateCcw, Check } from 'lucide-react';
-import { Task, User } from '../types';
+import { Task } from '../types';
 import { getTaskBillableMs, formatBillableHours, formatBillableDetailed } from '../utils/workload';
 
 interface BillableHoursModalProps {
   isOpen: boolean;
   task: Task | null;
-  currentUser?: User | null;
   onClose: () => void;
   onSave: (taskId: string, newDurationMs: number, reason?: string) => Promise<void>;
 }
@@ -32,7 +31,6 @@ const REASON_PRESETS = [
 export const BillableHoursModal: React.FC<BillableHoursModalProps> = ({
   isOpen,
   task,
-  currentUser,
   onClose,
   onSave,
 }) => {

@@ -754,7 +754,7 @@ async function startServer() {
 
   // Security & Permissions-Policy middleware
   // Explicitly set standards-compliant security headers and Permissions-Policy
-  app.use((req: Request, res: Response, next) => {
+  app.use((_req: Request, res: Response, next) => {
     res.setHeader(
       'Permissions-Policy',
       'camera=(), microphone=(), geolocation=(), payment=(), usb=()'
@@ -798,7 +798,7 @@ async function startServer() {
   autoArchiveDoneTasks();
 
   // API: Health check
-  app.get('/api/health', (req: Request, res: Response) => {
+  app.get('/api/health', (_req: Request, res: Response) => {
     res.setHeader('Cache-Control', 'no-store');
     res.json({ status: 'ok', time: new Date().toISOString() });
   });
@@ -1370,7 +1370,7 @@ async function startServer() {
   });
 
   // API: Firestore status & health check
-  app.get('/api/firestore/status', (req: Request, res: Response) => {
+  app.get('/api/firestore/status', (_req: Request, res: Response) => {
     res.json({
       connected: !!adminDb || !!webDb,
       mode: firestoreMode,
@@ -1425,7 +1425,7 @@ async function startServer() {
   });
 
   // API: Force manual synchronization with Firestore
-  app.post('/api/firestore/sync', firestoreLimiter, async (req: Request, res: Response) => {
+  app.post('/api/firestore/sync', firestoreLimiter, async (_req: Request, res: Response) => {
     try {
       await syncFromFirestore();
       broadcastEvent('sync_all', { users: store.users, tasks: store.tasks });
@@ -1505,7 +1505,7 @@ async function startServer() {
         },
       })
     );
-    app.get('*', (req: Request, res: Response) => {
+    app.get('*', (_req: Request, res: Response) => {
       res.setHeader('Cache-Control', 'no-cache, must-revalidate');
       res.sendFile(path.join(distPath, 'index.html'));
     });
@@ -1529,7 +1529,7 @@ async function startServer() {
   }
 
   // Global production error handling middleware (masks raw stack traces, prevents CWE-209 info leak)
-  app.use((err: any, req: Request, res: Response, _next: () => void) => {
+  app.use((err: any, _req: Request, res: Response, _next: () => void) => {
     console.error('[Server Error]:', err);
     if (res.headersSent) return;
     res.status(500).json({ error: 'Internal Server Error' });

@@ -64,6 +64,31 @@ export function getLastDayOfMonth(fromDate: Date = new Date()): string {
 }
 
 /**
+ * Lightweight, zero-allocation workload scoring function.
+ * Computes the exact numeric workload score without allocating intermediate items[] or string labels.
+ * 100% mathematically aligned with calculateUserWorkload.
+ */
+export function quickWorkloadScore(userTasks: Task[]): number {
+  let score = 0;
+  for (const t of userTasks) {
+    if (t.status === 'pipeline' || t.status === 'done' || t.status === 'archived') continue;
+    if (t.status === 'in_review') {
+      const rate = IN_REVIEW_HOURLY_RATES[t.cognitiveLoad] ?? 0.15;
+      const billableHours = getTaskBillableMs(t) / (1000 * 60 * 60);
+      score += billableHours * rate;
+    } else {
+      const cw = COGNITIVE_LOAD_WEIGHTS[t.cognitiveLoad] ?? 1.0;
+      const hasDeadline = Boolean(t.dueDate && t.dueDate.trim() !== '');
+      const sw = t.status === 'in_progress' ? 1.0 : (hasDeadline ? 0.75 : 0.50);
+      const days = getDaysRemaining(t.dueDate);
+      const prox = hasDeadline ? getProximityMultiplier(days) : 1.0;
+      score += sw * cw * prox;
+    }
+  }
+  return Math.round(score * 10) / 10;
+}
+
+/**
  * Calculates days remaining from today (local time) to the task's due date.
  * Negative number means overdue.
  */
