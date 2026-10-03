@@ -16,7 +16,12 @@ service cloud.firestore {
              data.email is string && data.email.size() > 0 && data.email.size() <= 150 &&
              data.role in ['content', 'design'] &&
              data.createdAt is string && data.createdAt.size() <= 40 &&
-             (!('avatarColor' in data) || (data.avatarColor is string && data.avatarColor.size() <= 100));
+             (!('avatarColor' in data) || (data.avatarColor is string && data.avatarColor.size() <= 100)) &&
+             (!('isCreativeDirector' in data) || (data.isCreativeDirector is bool)) &&
+             (!('creativeDirectorId' in data) || (data.creativeDirectorId is string && data.creativeDirectorId.size() <= 128)) &&
+             (!('clickupApiKey' in data) || (data.clickupApiKey is string && data.clickupApiKey.size() <= 200)) &&
+             (!('selectedClickupSpaceId' in data) || (data.selectedClickupSpaceId is string && data.selectedClickupSpaceId.size() <= 100)) &&
+             (!('selectedClickupSpaceName' in data) || (data.selectedClickupSpaceName is string && data.selectedClickupSpaceName.size() <= 200));
     }
 
     function isValidTask(data) {
@@ -33,7 +38,14 @@ service cloud.firestore {
              (!('completedAt' in data) || (data.completedAt is string && data.completedAt.size() <= 40)) &&
              (!('inProgressStartedAt' in data) || (data.inProgressStartedAt is string && data.inProgressStartedAt.size() <= 40)) &&
              (!('inProgressDurationMs' in data) || (data.inProgressDurationMs is number)) &&
-             (!('activityLog' in data) || (data.activityLog is list));
+             (!('activityLog' in data) || (data.activityLog is list)) &&
+             (!('clickupTaskId' in data) || (data.clickupTaskId is string && data.clickupTaskId.size() <= 100)) &&
+             (!('clickupFolderId' in data) || (data.clickupFolderId is string && data.clickupFolderId.size() <= 100)) &&
+             (!('clickupFolderName' in data) || (data.clickupFolderName is string && data.clickupFolderName.size() <= 200)) &&
+             (!('clickupListId' in data) || (data.clickupListId is string && data.clickupListId.size() <= 100)) &&
+             (!('clickupListName' in data) || (data.clickupListName is string && data.clickupListName.size() <= 200)) &&
+             (!('clickupSpaceId' in data) || (data.clickupSpaceId is string && data.clickupSpaceId.size() <= 100)) &&
+             (!('clickupUrl' in data) || (data.clickupUrl is string && data.clickupUrl.size() <= 500));
     }
 
     // Users collection

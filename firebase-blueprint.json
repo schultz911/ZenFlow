@@ -31,6 +31,26 @@
           "type": "string",
           "format": "date-time",
           "description": "Creation timestamp ISO string"
+        },
+        "isCreativeDirector": {
+          "type": "boolean",
+          "description": "Whether this user is a designated Creative Director"
+        },
+        "creativeDirectorId": {
+          "type": "string",
+          "description": "ID of the Creative Director this user is mapped to"
+        },
+        "clickupApiKey": {
+          "type": "string",
+          "description": "Personal ClickUp API Token"
+        },
+        "selectedClickupSpaceId": {
+          "type": "string",
+          "description": "Active ClickUp space ID"
+        },
+        "selectedClickupSpaceName": {
+          "type": "string",
+          "description": "Active ClickUp space name"
         }
       },
       "required": ["id", "name", "email", "role", "createdAt"]
@@ -91,6 +111,34 @@
         "activityLog": {
           "type": "array",
           "description": "Audit trail of task lifecycle state transitions and assignments"
+        },
+        "clickupTaskId": {
+          "type": "string",
+          "description": "Associated ClickUp task ID"
+        },
+        "clickupFolderId": {
+          "type": "string",
+          "description": "Associated ClickUp folder ID"
+        },
+        "clickupFolderName": {
+          "type": "string",
+          "description": "Associated ClickUp folder name"
+        },
+        "clickupListId": {
+          "type": "string",
+          "description": "Associated ClickUp list ID"
+        },
+        "clickupListName": {
+          "type": "string",
+          "description": "Associated ClickUp list name"
+        },
+        "clickupSpaceId": {
+          "type": "string",
+          "description": "Associated ClickUp space ID"
+        },
+        "clickupUrl": {
+          "type": "string",
+          "description": "URL to the task on ClickUp"
         },
         "createdAt": {
           "type": "string",

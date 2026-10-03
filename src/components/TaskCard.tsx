@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Task, TaskStatus, Role } from '../types';
+import { useDashboard } from '../context/DashboardContext';
 import { getDuePillInfo, formatDateOnly, formatCompletedDate, getCognitiveLoadLabel, getTaskBillableMs, formatBillableHours, formatBillableDetailed, getLastDayOfMonth } from '../utils/workload';
 import {
   GripVertical,
@@ -14,6 +15,7 @@ import {
   ChevronLeft,
   Archive,
   Timer,
+  Folder,
 } from 'lucide-react';
 
 interface TaskCardProps {
@@ -45,6 +47,10 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   onDragEnd,
   isDraggable = true,
 }) => {
+  const { canEditUserTasks, isZensciencesUser } = useDashboard();
+  const canEdit = canEditUserTasks(task.userId);
+  const effectivelyDraggable = isDraggable && canEdit;
+
   const [isDragging, setIsDragging] = useState(false);
   const [showSnoozeFlyout, setShowSnoozeFlyout] = useState(false);
   const [flyoutPosition, setFlyoutPosition] = useState<{ top: number; left: number } | null>(null);
@@ -245,8 +251,8 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         rotate: isDragging ? 1.5 : 0,
       }}
       transition={{ duration: 0.15, ease: 'easeOut' }}
-      whileTap={isDraggable && !isEditingTitle ? { scale: 0.985 } : undefined}
-      draggable={isDraggable && !isEditingTitle}
+      whileTap={effectivelyDraggable && !isEditingTitle ? { scale: 0.985 } : undefined}
+      draggable={effectivelyDraggable && !isEditingTitle}
       onDragStartCapture={handleDragStart}
       onDragEndCapture={handleDragEnd}
       className={`group relative rounded-xl border p-3 select-none transform-gpu transition-all duration-150 shadow-xs hover:shadow-md ${
@@ -262,12 +268,14 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       {/* Top row: Drag grip, Due Clock icon badge & Cognitive load badge on same line, and Quick actions */}
       <div className="flex items-center justify-between gap-1.5 mb-2">
         <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-          <div
-            title="Drag to move, reorder, or assign to another team member"
-            className="cursor-grab active:cursor-grabbing text-neutral-400 dark:text-white/20 group-hover:text-neutral-700 dark:group-hover:text-white/60 transition-colors shrink-0 p-0.5 -ml-1 rounded hover:bg-neutral-100 dark:hover:bg-white/5"
-          >
-            <GripVertical className="h-3.5 w-3.5" />
-          </div>
+          {canEdit && (
+            <div
+              title="Drag to move, reorder, or assign to another team member"
+              className="cursor-grab active:cursor-grabbing text-neutral-400 dark:text-white/20 group-hover:text-neutral-700 dark:group-hover:text-white/60 transition-colors shrink-0 p-0.5 -ml-1 rounded hover:bg-neutral-100 dark:hover:bg-white/5"
+            >
+              <GripVertical className="h-3.5 w-3.5" />
+            </div>
+          )}
 
           {/* Due Clock Icon Badge (color-coded, compact micro size) - hidden in done/archived columns */}
           {!isDoneOrArchived && (
@@ -405,6 +413,27 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           <Edit2 className="h-2.5 w-2.5 opacity-0 group-hover/title:opacity-60 shrink-0 text-neutral-400 dark:text-white/40" />
         </h4>
       )}
+
+      {/* ClickUp Destination Breadcrumb (Folder & List path) */}
+      {task.clickupListName ? (
+        <div className="mt-1 flex items-center gap-1 text-[10px] text-purple-600 dark:text-purple-400 font-medium truncate">
+          <Folder className="w-2.5 h-2.5 shrink-0 opacity-70" />
+          <span className="truncate">
+            {task.clickupFolderName ? `${task.clickupFolderName} / ${task.clickupListName}` : task.clickupListName}
+          </span>
+        </div>
+      ) : isZensciencesUser && task.status !== 'done' && task.status !== 'archived' ? (
+        <button
+          type="button"
+          onClick={e => {
+            e.stopPropagation();
+            onEdit(task);
+          }}
+          className="mt-0.5 inline-flex items-center gap-1 text-[9px] font-semibold text-amber-600 dark:text-amber-400 hover:underline"
+        >
+          <span>+ Assign ClickUp List</span>
+        </button>
+      ) : null}
 
       {/* Optional Context snippet */}
       {task.description && (

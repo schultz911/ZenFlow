@@ -11,7 +11,8 @@ import { DeleteUserModal } from './components/DeleteUserModal';
 import { BillableHoursModal } from './components/BillableHoursModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MarqueeRibbon } from './components/MarqueeRibbon';
-import { UnscheduledTasksRibbon } from './components/UnscheduledTasksRibbon';
+import { UnassignedListRibbon } from './components/UnassignedListRibbon';
+import { ClickupConnectModal } from './components/ClickupConnectModal';
 import { User, Task, TaskStatus } from './types';
 import { UserPlus, FileText, Palette } from 'lucide-react';
 import { testConnection } from './lib/firebase';
@@ -38,6 +39,9 @@ function DashboardContent() {
     updateTask,
     adjustBillableHours,
     rescheduleTask,
+    activeBoardId,
+    showClickupPrompt,
+    setShowClickupPrompt,
   } = useDashboard();
 
   // Modals state
@@ -79,9 +83,13 @@ function DashboardContent() {
     }
   });
 
-  // Filter users by role tab and apply persistent custom ordering with current user pinned to top
+  // Filter users by role tab and active team board, and apply persistent custom ordering with current user pinned to top
   const roleFilteredUsers = useMemo(() => {
-    const filtered = users.filter(u => u.role === activeRoleTab);
+    let boardUsers = users;
+    if (activeBoardId !== 'all') {
+      boardUsers = users.filter(u => u.id === activeBoardId || u.creativeDirectorId === activeBoardId);
+    }
+    const filtered = boardUsers.filter(u => u.role === activeRoleTab);
     const pinnedUser = currentUser ? filtered.find(u => u.id === currentUser.id) : null;
     const reorderableUsers = pinnedUser ? filtered.filter(u => u.id !== currentUser.id) : filtered;
 
@@ -104,7 +112,7 @@ function DashboardContent() {
     });
 
     return pinnedUser ? [pinnedUser, ...sortedReorderable] : sortedReorderable;
-  }, [users, activeRoleTab, customUserOrder, currentUser]);
+  }, [users, activeRoleTab, customUserOrder, currentUser, activeBoardId]);
 
   const roleFilteredUsersRef = useRef(roleFilteredUsers);
   roleFilteredUsersRef.current = roleFilteredUsers;
@@ -345,6 +353,7 @@ function DashboardContent() {
         onOpenLoginModal={handleOpenLogin}
         onOpenNewUserModal={handleOpenNewUser}
         onOpenFirestoreModal={() => setFirestoreModalOpen(true)}
+        onOpenClickupModal={() => setShowClickupPrompt(true)}
       />
 
       {/* Pinned Ribbons — sticky just below the header */}
@@ -355,12 +364,10 @@ function DashboardContent() {
             users={users}
             onTaskClick={handleEditTask}
           />
-          <UnscheduledTasksRibbon
-            currentUser={currentUser}
+          <UnassignedListRibbon
             tasks={tasks}
             users={users}
             onTaskClick={handleEditTask}
-            onReschedule={handleRescheduleTask}
           />
         </div>
       </div>
@@ -479,6 +486,11 @@ function DashboardContent() {
       <FirestoreModal
         isOpen={firestoreModalOpen}
         onClose={() => setFirestoreModalOpen(false)}
+      />
+
+      <ClickupConnectModal
+        isOpen={showClickupPrompt}
+        onClose={() => setShowClickupPrompt(false)}
       />
     </div>
   );

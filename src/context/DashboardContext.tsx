@@ -1,7 +1,21 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
-import { User, Task, Role, TaskStatus, RealtimeEvent, DragTaskInfo, TaskOrderUpdate, QueuedMutation, TaskActivity } from '../types';
+import {
+  User,
+  Task,
+  Role,
+  TaskStatus,
+  RealtimeEvent,
+  DragTaskInfo,
+  TaskOrderUpdate,
+  QueuedMutation,
+  TaskActivity,
+  ClickupSpace,
+  ClickupList,
+  ClickupFolder,
+} from '../types';
 import { INITIAL_USERS, INITIAL_TASKS } from '../data/initialData';
 import { compareTasksByDeadline, formatBillableHours, getTaskBillableMs } from '../utils/workload';
+import { signInWithGoogle, signOutFirebase } from '../lib/firebase';
 
 export interface FirestoreStatus {
   connected: boolean;
@@ -70,8 +84,42 @@ interface DashboardContextType {
   syncWithFirestore: () => Promise<{ success: boolean; message: string }>;
   uploadServiceAccountKey: (keyContent: string) => Promise<{ success: boolean; message: string }>;
   login: (name: string, role: Role, email: string) => Promise<User>;
+  loginWithGoogle: () => Promise<User>;
   logout: () => void;
   switchUser: (user: User) => void;
+  createUser: (data: {
+    name: string;
+    email: string;
+    role: Role;
+    isCreativeDirector?: boolean;
+    creativeDirectorId?: string;
+  }) => Promise<User>;
+  updateUserProfile: (userId: string, updates: Partial<User>) => Promise<User>;
+  // Role & Permissions
+  isSuperadmin: boolean;
+  isCreativeDirector: boolean;
+  canManageMembers: boolean;
+  canEditUserTasks: (targetUserId: string) => boolean;
+  canSwitchBoards: boolean;
+  creativeDirectors: User[];
+  activeBoardId: string;
+  setActiveBoardId: (boardId: string) => void;
+  // ClickUp Integration
+  isZensciencesUser: boolean;
+  isClickupConnected: boolean;
+  clickupApiKey: string;
+  clickupSpaces: ClickupSpace[];
+  selectedClickupSpaceId: string;
+  clickupFoldersAndLists: { folders: ClickupFolder[]; folderlessLists: ClickupList[] };
+  showClickupPrompt: boolean;
+  setShowClickupPrompt: (val: boolean) => void;
+  connectClickup: (apiKey: string) => Promise<{ success: boolean; error?: string }>;
+  disconnectClickup: () => void;
+  setSelectedClickupSpaceId: (spaceId: string, spaceName?: string) => Promise<void>;
+  createClickupList: (name: string, spaceId: string, folderId?: string) => Promise<ClickupList | null>;
+  syncUserTasksWithClickUp: (userId: string) => Promise<{ success: boolean; syncedCount: number; archivedCount: number; message: string }>;
+  assignTaskClickupList: (taskId: string, listId: string, listName: string, folderId?: string, folderName?: string) => Promise<Task>;
+  // Tasks
   createTask: (data: {
     userId: string;
     title: string;
@@ -79,6 +127,13 @@ interface DashboardContextType {
     dueDate?: string;
     cognitiveLoad: 'low' | 'medium' | 'high';
     status: TaskStatus;
+    clickupTaskId?: string;
+    clickupFolderId?: string;
+    clickupFolderName?: string;
+    clickupListId?: string;
+    clickupListName?: string;
+    clickupSpaceId?: string;
+    clickupUrl?: string;
   }) => Promise<Task>;
   updateTask: (id: string, updates: Partial<Task>) => Promise<Task>;
   adjustBillableHours: (taskId: string, newDurationMs: number, reason?: string) => Promise<Task>;
@@ -148,6 +203,90 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     if (currentUser?.role) return currentUser.role;
     return 'content';
   });
+
+  // Roles & Permissions
+  const SUPERADMIN_EMAIL = 'kiran.s@zensciences.com';
+  const isSuperadmin = useMemo(() => {
+    return currentUser?.email?.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase();
+  }, [currentUser]);
+
+  const isCreativeDirector = useMemo(() => {
+    return Boolean(currentUser?.isCreativeDirector || isSuperadmin);
+  }, [currentUser, isSuperadmin]);
+
+  const creativeDirectors = useMemo(() => {
+    return users.filter(u => u.isCreativeDirector || u.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase());
+  }, [users]);
+
+  const [activeBoardId, setActiveBoardIdState] = useState<string>(() => {
+    return localStorage.getItem('zenflow_active_board_id') || 'all';
+  });
+
+  const setActiveBoardId = useCallback((boardId: string) => {
+    setActiveBoardIdState(boardId);
+    try {
+      localStorage.setItem('zenflow_active_board_id', boardId);
+    } catch {}
+  }, []);
+
+  // Synchronize board access with user role
+  useEffect(() => {
+    if (currentUser) {
+      const isSuper = currentUser.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase();
+      const isCD = Boolean(currentUser.isCreativeDirector || isSuper);
+      if (!isCD) {
+        // Regular user: locked to their assigned Creative Director's board
+        const targetBoard = currentUser.creativeDirectorId || currentUser.id;
+        setActiveBoardIdState(targetBoard);
+      } else if (activeBoardId !== 'all' && !creativeDirectors.some(cd => cd.id === activeBoardId)) {
+        setActiveBoardIdState(currentUser.id);
+      }
+    }
+  }, [currentUser, creativeDirectors, activeBoardId]);
+
+  const canManageMembers = useMemo(() => {
+    if (!currentUser) return false;
+    return isSuperadmin || isCreativeDirector;
+  }, [currentUser, isSuperadmin, isCreativeDirector]);
+
+  const canSwitchBoards = useMemo(() => {
+    if (!currentUser) return false;
+    return isSuperadmin || isCreativeDirector;
+  }, [currentUser, isSuperadmin, isCreativeDirector]);
+
+  const canEditUserTasks = useCallback((targetUserId: string): boolean => {
+    if (!currentUser) return false;
+    if (isSuperadmin) return true;
+    if (isCreativeDirector) {
+      if (targetUserId === currentUser.id) return true;
+      const target = usersRef.current.find(u => u.id === targetUserId);
+      return target?.creativeDirectorId === currentUser.id;
+    }
+    return targetUserId === currentUser.id;
+  }, [currentUser, isSuperadmin, isCreativeDirector]);
+
+  // ClickUp Integration State
+  const isZensciencesUser = useMemo(() => {
+    return Boolean(currentUser?.email?.toLowerCase().endsWith('@zensciences.com'));
+  }, [currentUser]);
+
+  const clickupApiKey = useMemo(() => {
+    return currentUser?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
+  }, [currentUser]);
+
+  const isClickupConnected = useMemo(() => {
+    return Boolean(isZensciencesUser && clickupApiKey);
+  }, [isZensciencesUser, clickupApiKey]);
+
+  const [showClickupPrompt, setShowClickupPrompt] = useState<boolean>(false);
+  const [clickupSpaces, setClickupSpaces] = useState<ClickupSpace[]>([]);
+  const [selectedClickupSpaceId, setSelectedClickupSpaceIdState] = useState<string>(() => {
+    return currentUser?.selectedClickupSpaceId || localStorage.getItem('zenflow_clickup_space_id') || '';
+  });
+  const [clickupFoldersAndLists, setClickupFoldersAndLists] = useState<{
+    folders: ClickupFolder[];
+    folderlessLists: ClickupList[];
+  }>({ folders: [], folderlessLists: [] });
 
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     try {
@@ -473,14 +612,213 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
   }, []);
 
+  // ClickUp Loaders & Handlers
+  const loadClickupSpaces = useCallback(async (apiKey: string) => {
+    if (!apiKey) return;
+    try {
+      const res = await fetch(`/api/clickup/spaces?apiKey=${encodeURIComponent(apiKey)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.spaces)) {
+          setClickupSpaces(data.spaces);
+          if (data.spaces.length > 0 && !selectedClickupSpaceId) {
+            const firstId = data.spaces[0].id;
+            setSelectedClickupSpaceIdState(firstId);
+            localStorage.setItem('zenflow_clickup_space_id', firstId);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load ClickUp spaces:', err);
+    }
+  }, [selectedClickupSpaceId]);
+
+  const loadClickupFoldersAndLists = useCallback(async (spaceId: string, apiKey: string) => {
+    if (!spaceId || !apiKey) return;
+    try {
+      const res = await fetch(`/api/clickup/folders-and-lists?spaceId=${encodeURIComponent(spaceId)}&apiKey=${encodeURIComponent(apiKey)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setClickupFoldersAndLists({
+          folders: data.folders || [],
+          folderlessLists: data.folderlessLists || [],
+        });
+      }
+    } catch (err) {
+      console.warn('Failed to load ClickUp folders & lists:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isClickupConnected && clickupApiKey) {
+      loadClickupSpaces(clickupApiKey);
+    }
+  }, [isClickupConnected, clickupApiKey, loadClickupSpaces]);
+
+  useEffect(() => {
+    if (isClickupConnected && clickupApiKey && selectedClickupSpaceId) {
+      loadClickupFoldersAndLists(selectedClickupSpaceId, clickupApiKey);
+    }
+  }, [isClickupConnected, clickupApiKey, selectedClickupSpaceId, loadClickupFoldersAndLists]);
+
+  useEffect(() => {
+    if (currentUser && isZensciencesUser && !clickupApiKey) {
+      setShowClickupPrompt(true);
+    } else {
+      setShowClickupPrompt(false);
+    }
+  }, [currentUser, isZensciencesUser, clickupApiKey]);
+
+  const updateUserProfile = useCallback(async (userId: string, updates: Partial<User>): Promise<User> => {
+    setUsers(prev => prev.map(u => (u.id === userId ? { ...u, ...updates } : u)));
+    if (currentUserRef.current?.id === userId) {
+      setCurrentUser(prev => (prev ? { ...prev, ...updates } : null));
+    }
+    try {
+      const res = await fetch(`/api/users/${userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (res.ok) {
+        const updatedUser: User = await res.json();
+        setUsers(prev => prev.map(u => (u.id === userId ? updatedUser : u)));
+        if (currentUserRef.current?.id === userId) {
+          setCurrentUser(updatedUser);
+        }
+        return updatedUser;
+      }
+    } catch (err) {
+      console.warn('Update user profile offline/failed:', err);
+    }
+    return { ...(usersRef.current.find(u => u.id === userId) || {}), ...updates } as User;
+  }, []);
+
+  const connectClickup = useCallback(async (apiKey: string): Promise<{ success: boolean; error?: string }> => {
+    const cleanKey = apiKey.trim();
+    if (!cleanKey) return { success: false, error: 'API key is required' };
+    try {
+      const res = await fetch('/api/clickup/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: cleanKey }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.valid) {
+        return { success: false, error: data.error || 'Invalid ClickUp API Key' };
+      }
+      localStorage.setItem('zenflow_clickup_api_key', cleanKey);
+      if (currentUserRef.current) {
+        await updateUserProfile(currentUserRef.current.id, { clickupApiKey: cleanKey });
+      }
+      await loadClickupSpaces(cleanKey);
+      setShowClickupPrompt(false);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Connection failed' };
+    }
+  }, [updateUserProfile, loadClickupSpaces]);
+
+  const disconnectClickup = useCallback(() => {
+    localStorage.removeItem('zenflow_clickup_api_key');
+    if (currentUserRef.current) {
+      updateUserProfile(currentUserRef.current.id, { clickupApiKey: undefined });
+    }
+    setClickupSpaces([]);
+    setClickupFoldersAndLists({ folders: [], folderlessLists: [] });
+  }, [updateUserProfile]);
+
+  const setSelectedClickupSpaceId = useCallback(async (spaceId: string, spaceName?: string) => {
+    setSelectedClickupSpaceIdState(spaceId);
+    try {
+      localStorage.setItem('zenflow_clickup_space_id', spaceId);
+      if (spaceName) localStorage.setItem('zenflow_clickup_space_name', spaceName);
+    } catch {}
+
+    if (currentUserRef.current) {
+      await updateUserProfile(currentUserRef.current.id, {
+        selectedClickupSpaceId: spaceId,
+        selectedClickupSpaceName: spaceName,
+      });
+    }
+
+    if (clickupApiKey) {
+      await loadClickupFoldersAndLists(spaceId, clickupApiKey);
+    }
+  }, [clickupApiKey, updateUserProfile, loadClickupFoldersAndLists]);
+
+  const createClickupList = useCallback(async (
+    name: string,
+    spaceId: string,
+    folderId?: string
+  ): Promise<ClickupList | null> => {
+    const apiKey = currentUserRef.current?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
+    if (!apiKey || !name) return null;
+    try {
+      const res = await fetch('/api/clickup/lists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey,
+          spaceId,
+          folderId,
+          name: name.trim(),
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const createdList: ClickupList = data.list;
+        await loadClickupFoldersAndLists(spaceId, apiKey);
+        return createdList;
+      }
+    } catch (err) {
+      console.warn('Failed to create ClickUp list:', err);
+    }
+    return null;
+  }, [loadClickupFoldersAndLists]);
+
+  const syncUserTasksWithClickUp = useCallback(async (userId: string) => {
+    const apiKey = currentUserRef.current?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
+    try {
+      const res = await fetch('/api/clickup/sync-user-tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, apiKey }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        await fetchState();
+        return {
+          success: true,
+          syncedCount: data.syncedCount || 0,
+          archivedCount: data.archivedCount || 0,
+          message: data.message || 'Sync complete',
+        };
+      }
+      return {
+        success: false,
+        syncedCount: 0,
+        archivedCount: 0,
+        message: data.error || 'Failed to sync with ClickUp',
+      };
+    } catch (err: any) {
+      return {
+        success: false,
+        syncedCount: 0,
+        archivedCount: 0,
+        message: err.message || 'Sync request failed',
+      };
+    }
+  }, [fetchState]);
+
   // Authentication Login: takes name, role (content or design), official email address
-  // When a new account is created, a new swimlane is formed on the respective role tab
   const login = useCallback(async (name: string, role: Role, email: string): Promise<User> => {
+    const cleanEmail = email.trim().toLowerCase();
     try {
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, role, email }),
+        body: JSON.stringify({ name, role, email: cleanEmail }),
       });
 
       if (res.ok) {
@@ -488,46 +826,88 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         const user: User = data.user;
         setCurrentUser(user);
         setActiveRoleTab(user.role);
-
-        // Update local users array if new
         setUsers(prev => {
           const exists = prev.some(u => u.id === user.id);
           return exists ? prev.map(u => (u.id === user.id ? user : u)) : [...prev, user];
         });
-
         return user;
+      } else {
+        const errData = await res.json();
+        throw new Error(errData.error || 'Authentication rejected');
       }
-    } catch (err) {
-      console.warn('Direct server login call failed, fallback local creation:', err);
+    } catch (err: any) {
+      console.warn('Login call failed:', err);
+      throw err;
+    }
+  }, []);
+
+  const loginWithGoogle = useCallback(async (): Promise<User> => {
+    const googleUser = await signInWithGoogle();
+    const cleanEmail = googleUser.email.trim().toLowerCase();
+
+    let existing = usersRef.current.find(u => u.email.toLowerCase() === cleanEmail);
+
+    if (!existing) {
+      try {
+        const res = await fetch('/api/auth/verify-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: cleanEmail }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          existing = data.user;
+        }
+      } catch (err) {
+        console.warn('Backend verify-email call failed:', err);
+      }
     }
 
-    // Local fallback if offline — reads from ref to avoid stale closure dependency on users
-    const cleanEmail = email.trim().toLowerCase();
-    let existing = usersRef.current.find(u => u.email.toLowerCase() === cleanEmail);
     if (!existing) {
-      const newUser: User = {
-        id: `user-${Date.now()}`,
-        name: name.trim(),
-        email: cleanEmail,
-        role,
-        avatarColor: 'from-blue-500 to-indigo-600',
-        createdAt: new Date().toISOString(),
-      };
-      setUsers(prev => [...prev, newUser]);
-      existing = newUser;
+      await signOutFirebase();
+      throw new Error(`Account not registered: ${cleanEmail}. Only users with existing ZenFlow accounts are authorized to sign in. Please contact kiran.s@zensciences.com to be added.`);
     }
+
     setCurrentUser(existing);
     setActiveRoleTab(existing.role);
+    if (existing.email.toLowerCase().endsWith('@zensciences.com') && !existing.clickupApiKey) {
+      setShowClickupPrompt(true);
+    }
     return existing;
-  }, []); // stable — reads users from usersRef.current
+  }, []);
 
   const logout = useCallback(() => {
     setCurrentUser(null);
+    signOutFirebase().catch(() => {});
   }, []);
 
   const switchUser = useCallback((user: User) => {
     setCurrentUser(user);
     setActiveRoleTab(user.role);
+  }, []);
+
+  const createUser = useCallback(async (data: {
+    name: string;
+    email: string;
+    role: Role;
+    isCreativeDirector?: boolean;
+    creativeDirectorId?: string;
+  }): Promise<User> => {
+    const res = await fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (res.ok) {
+      const newUser: User = await res.json();
+      setUsers(prev => {
+        const filtered = prev.filter(u => u.id !== newUser.id);
+        return [...filtered, newUser];
+      });
+      return newUser;
+    }
+    const err = await res.json();
+    throw new Error(err.error || 'Failed to create user');
   }, []);
 
   // Task creation with offline mutation queuing
@@ -538,6 +918,13 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     dueDate?: string;
     cognitiveLoad: 'low' | 'medium' | 'high';
     status: TaskStatus;
+    clickupTaskId?: string;
+    clickupFolderId?: string;
+    clickupFolderName?: string;
+    clickupListId?: string;
+    clickupListName?: string;
+    clickupSpaceId?: string;
+    clickupUrl?: string;
   }): Promise<Task> => {
     const realId = `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const currentTasks = tasksRef.current;
@@ -566,6 +953,13 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       completedAt: isCompleted ? now : undefined,
       inProgressStartedAt: isInProgress ? now : undefined,
       inProgressDurationMs: 0,
+      clickupTaskId: data.clickupTaskId,
+      clickupFolderId: data.clickupFolderId,
+      clickupFolderName: data.clickupFolderName,
+      clickupListId: data.clickupListId,
+      clickupListName: data.clickupListName,
+      clickupSpaceId: data.clickupSpaceId,
+      clickupUrl: data.clickupUrl,
       createdAt: now,
       updatedAt: now,
       activityLog: [initialActivity],
@@ -701,6 +1095,21 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     return updatedTask || (tasksRef.current.find(t => t.id === id) as Task);
   }, []);
+
+  const assignTaskClickupList = useCallback(async (
+    taskId: string,
+    listId: string,
+    listName: string,
+    folderId?: string,
+    folderName?: string
+  ): Promise<Task> => {
+    return await updateTask(taskId, {
+      clickupListId: listId,
+      clickupListName: listName,
+      clickupFolderId: folderId,
+      clickupFolderName: folderName,
+    });
+  }, [updateTask]);
 
   // Dedicated helper to adjust billable hours manually with immediate optimistic update and audit history logging
   const adjustBillableHours = useCallback(async (taskId: string, newDurationMs: number, reason?: string): Promise<Task> => {
@@ -1085,8 +1494,36 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       syncWithFirestore,
       uploadServiceAccountKey,
       login,
+      loginWithGoogle,
       logout,
       switchUser,
+      createUser,
+      updateUserProfile,
+      // Role & Permissions
+      isSuperadmin,
+      isCreativeDirector,
+      canManageMembers,
+      canEditUserTasks,
+      canSwitchBoards,
+      creativeDirectors,
+      activeBoardId,
+      setActiveBoardId,
+      // ClickUp Integration
+      isZensciencesUser,
+      isClickupConnected,
+      clickupApiKey,
+      clickupSpaces,
+      selectedClickupSpaceId,
+      clickupFoldersAndLists,
+      showClickupPrompt,
+      setShowClickupPrompt,
+      connectClickup,
+      disconnectClickup,
+      setSelectedClickupSpaceId,
+      createClickupList,
+      syncUserTasksWithClickUp,
+      assignTaskClickupList,
+      // Tasks
       createTask,
       updateTask,
       adjustBillableHours,
@@ -1112,8 +1549,32 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       syncWithFirestore,
       uploadServiceAccountKey,
       login,
+      loginWithGoogle,
       logout,
       switchUser,
+      createUser,
+      updateUserProfile,
+      isSuperadmin,
+      isCreativeDirector,
+      canManageMembers,
+      canEditUserTasks,
+      canSwitchBoards,
+      creativeDirectors,
+      activeBoardId,
+      setActiveBoardId,
+      isZensciencesUser,
+      isClickupConnected,
+      clickupApiKey,
+      clickupSpaces,
+      selectedClickupSpaceId,
+      clickupFoldersAndLists,
+      showClickupPrompt,
+      connectClickup,
+      disconnectClickup,
+      setSelectedClickupSpaceId,
+      createClickupList,
+      syncUserTasksWithClickUp,
+      assignTaskClickupList,
       createTask,
       updateTask,
       adjustBillableHours,

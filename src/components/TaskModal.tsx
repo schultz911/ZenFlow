@@ -49,7 +49,19 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   defaultStatus = 'todo',
   onAdjustBillableHours,
 }) => {
-  const { users, currentUser, createTask, updateTask, deleteTask } = useDashboard();
+  const {
+    users,
+    currentUser,
+    createTask,
+    updateTask,
+    deleteTask,
+    isZensciencesUser,
+    isClickupConnected,
+    selectedClickupSpaceId,
+    clickupFoldersAndLists,
+    createClickupList,
+    canEditUserTasks,
+  } = useDashboard();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -57,8 +69,22 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [dueDate, setDueDate] = useState('');
   const [cognitiveLoad, setCognitiveLoad] = useState<CognitiveLoad>('medium');
   const [status, setStatus] = useState<TaskStatus>('todo');
+
+  // ClickUp folder and list destination state
+  const [clickupFolderId, setClickupFolderId] = useState<string>('');
+  const [clickupListId, setClickupListId] = useState<string>('');
+  const [isCreatingList, setIsCreatingList] = useState(false);
+  const [newListName, setNewListName] = useState('');
+  const [isSubmittingNewList, setIsSubmittingNewList] = useState(false);
+  const [newListError, setNewListError] = useState<string | null>(null);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+
+  const canEdit = useMemo(() => {
+    if (!taskToEdit) return true;
+    return canEditUserTasks(taskToEdit.userId);
+  }, [taskToEdit, canEditUserTasks]);
 
   useEffect(() => {
     if (taskToEdit) {
@@ -68,6 +94,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setDueDate(taskToEdit.dueDate || '');
       setCognitiveLoad(taskToEdit.cognitiveLoad);
       setStatus(taskToEdit.status);
+      setClickupFolderId(taskToEdit.clickupFolderId || '');
+      setClickupListId(taskToEdit.clickupListId || '');
     } else {
       setTitle('');
       setDescription('');
@@ -75,8 +103,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setDueDate('');
       setCognitiveLoad('medium');
       setStatus(defaultStatus);
+      setClickupFolderId('');
+      setClickupListId('');
     }
     setShowConfirmDelete(false);
+    setIsCreatingList(false);
+    setNewListName('');
+    setNewListError(null);
   }, [taskToEdit, defaultUserId, defaultStatus, currentUser, users, isOpen]);
 
   const activities = useMemo(() => {
@@ -114,7 +147,16 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const selectedUser = users.find(u => u.id === userId);
   const role = selectedUser?.role || 'content';
 
-  // Helper for quick due dates
+  // Available lists for the selected folder
+  const availableLists = useMemo(() => {
+    if (clickupFolderId) {
+      const folder = clickupFoldersAndLists.folders.find(f => f.id === clickupFolderId);
+      return folder?.lists || [];
+    }
+    return clickupFoldersAndLists.folderlessLists;
+  }, [clickupFolderId, clickupFoldersAndLists]);
+
+  // Quick due dates helper
   const setQuickDate = (daysFromNow: number | null) => {
     if (daysFromNow === null) {
       setDueDate('');
@@ -128,13 +170,52 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     setDueDate(`${yyyy}-${mm}-${dd}`);
   };
 
+  const handleCreateNewList = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newListName.trim()) return;
+    setIsSubmittingNewList(true);
+    setNewListError(null);
+    try {
+      const created = await createClickupList(
+        newListName.trim(),
+        selectedClickupSpaceId,
+        clickupFolderId || undefined
+      );
+      if (created) {
+        setClickupListId(created.id);
+        setIsCreatingList(false);
+        setNewListName('');
+      } else {
+        setNewListError('Failed to create list');
+      }
+    } catch (err: any) {
+      setNewListError(err.message || 'Error creating list');
+    } finally {
+      setIsSubmittingNewList(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const isDeadlineRequired = status !== 'pipeline';
-    if (!title.trim() || !userId || (isDeadlineRequired && !dueDate.trim())) return;
+    if (!title.trim() || !userId || (isDeadlineRequired && !dueDate.trim()) || !canEdit) return;
 
     setIsSubmitting(true);
     const finalDueDate = status === 'pipeline' ? undefined : (dueDate.trim() || undefined);
+
+    // Resolve folder and list names
+    let folderName: string | undefined;
+    let listName: string | undefined;
+    if (clickupFolderId) {
+      const f = clickupFoldersAndLists.folders.find(fold => fold.id === clickupFolderId);
+      folderName = f?.name;
+      const l = f?.lists?.find(lst => lst.id === clickupListId);
+      listName = l?.name;
+    } else if (clickupListId) {
+      const l = clickupFoldersAndLists.folderlessLists.find(lst => lst.id === clickupListId);
+      listName = l?.name;
+    }
+
     try {
       if (taskToEdit) {
         await updateTask(taskToEdit.id, {
@@ -144,6 +225,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           dueDate: finalDueDate,
           cognitiveLoad,
           status,
+          clickupFolderId: clickupFolderId || undefined,
+          clickupFolderName: folderName,
+          clickupListId: clickupListId || undefined,
+          clickupListName: listName,
+          clickupSpaceId: selectedClickupSpaceId || undefined,
         });
       } else {
         await createTask({
@@ -153,6 +239,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           dueDate: finalDueDate,
           cognitiveLoad,
           status,
+          clickupFolderId: clickupFolderId || undefined,
+          clickupFolderName: folderName,
+          clickupListId: clickupListId || undefined,
+          clickupListName: listName,
+          clickupSpaceId: selectedClickupSpaceId || undefined,
         });
       }
       onClose();
@@ -164,7 +255,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   };
 
   const handleDelete = async () => {
-    if (!taskToEdit) return;
+    if (!taskToEdit || !canEdit) return;
     setIsSubmitting(true);
     try {
       await deleteTask(taskToEdit.id);
@@ -416,6 +507,90 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               </p>
             )}
           </div>
+
+          {/* ClickUp Destination (Folder & List) - for @zensciences.com users */}
+          {isZensciencesUser && isClickupConnected && (
+            <div className="rounded-xl border border-purple-500/25 bg-purple-50/30 dark:bg-purple-950/20 p-3 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs uppercase tracking-wider font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                  <span>ClickUp Destination</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setIsCreatingList(!isCreatingList)}
+                  className="text-[11px] text-purple-600 dark:text-purple-400 hover:underline font-semibold"
+                >
+                  {isCreatingList ? 'Select Existing List' : '+ Create New List'}
+                </button>
+              </div>
+
+              {isCreatingList ? (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    value={newListName}
+                    onChange={e => setNewListName(e.target.value)}
+                    placeholder="Enter new ClickUp list name..."
+                    className="w-full rounded-xl border border-purple-300 dark:border-purple-700 bg-white dark:bg-[#141414] py-1.5 px-3 text-xs text-neutral-900 dark:text-white"
+                  />
+                  {newListError && <p className="text-[10px] text-red-500">{newListError}</p>}
+                  <button
+                    type="button"
+                    onClick={handleCreateNewList}
+                    disabled={isSubmittingNewList || !newListName.trim()}
+                    className="rounded-lg bg-purple-600 px-3 py-1 text-xs font-semibold text-white hover:bg-purple-500 disabled:opacity-50"
+                  >
+                    {isSubmittingNewList ? 'Creating...' : 'Create and Select'}
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {/* Folder Selection */}
+                  <div>
+                    <label className="block text-[10px] uppercase font-semibold text-neutral-500 dark:text-white/40 mb-1">
+                      Folder
+                    </label>
+                    <select
+                      value={clickupFolderId}
+                      onChange={e => {
+                        setClickupFolderId(e.target.value);
+                        setClickupListId('');
+                      }}
+                      className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-1.5 px-2.5 text-xs text-neutral-900 dark:text-white"
+                    >
+                      <option value="">Space (Folderless)</option>
+                      {clickupFoldersAndLists.folders.map(f => (
+                        <option key={f.id} value={f.id}>{f.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* List Selection */}
+                  <div>
+                    <label className="block text-[10px] uppercase font-semibold text-neutral-500 dark:text-white/40 mb-1">
+                      List
+                    </label>
+                    <select
+                      value={clickupListId}
+                      onChange={e => setClickupListId(e.target.value)}
+                      className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-1.5 px-2.5 text-xs text-neutral-900 dark:text-white"
+                    >
+                      <option value="">Select a list...</option>
+                      {availableLists.map(l => (
+                        <option key={l.id} value={l.id}>{l.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!canEdit && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-600 dark:text-amber-400">
+              Read-only view: You only have permission to edit tasks on your assigned board or swimlane.
+            </div>
+          )}
 
           {/* Context (if any) - moved to end */}
           <div>

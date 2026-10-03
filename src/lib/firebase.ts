@@ -17,6 +17,7 @@ export const firebaseConfig = {
 
 let appInstance: FirebaseApp | null = null;
 let dbInstance: Firestore | null = null;
+let authInstance: any = null;
 
 export async function getClientDb(): Promise<Firestore | null> {
   if (dbInstance) return dbInstance;
@@ -34,6 +35,50 @@ export async function getClientDb(): Promise<Firestore | null> {
     }
   }
   return null;
+}
+
+export async function getFirebaseAuth(): Promise<any> {
+  if (authInstance) return authInstance;
+  if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+    try {
+      const { initializeApp, getApps, getApp } = await import('firebase/app');
+      const { getAuth } = await import('firebase/auth');
+      appInstance = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+      authInstance = getAuth(appInstance);
+      return authInstance;
+    } catch (err) {
+      console.warn('Firebase Auth initialization warning:', err);
+    }
+  }
+  return null;
+}
+
+export async function signInWithGoogle(): Promise<{ email: string; name: string; photoURL?: string }> {
+  const auth = await getFirebaseAuth();
+  if (!auth) {
+    throw new Error('Firebase Auth is not initialized');
+  }
+  const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  const result = await signInWithPopup(auth, provider);
+  return {
+    email: result.user.email || '',
+    name: result.user.displayName || result.user.email?.split('@')[0] || 'Member',
+    photoURL: result.user.photoURL || undefined,
+  };
+}
+
+export async function signOutFirebase(): Promise<void> {
+  try {
+    const auth = await getFirebaseAuth();
+    if (auth) {
+      const { signOut } = await import('firebase/auth');
+      await signOut(auth);
+    }
+  } catch (err) {
+    console.warn('Firebase signOut warning:', err);
+  }
 }
 
 let inFlightStatusPromise: Promise<boolean> | null = null;

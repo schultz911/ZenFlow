@@ -23,7 +23,9 @@ import {
   ArrowUp,
   ArrowDown,
   Calendar,
+  RefreshCw,
 } from 'lucide-react';
+import { useDashboard } from '../context/DashboardContext';
 
 interface SwimlaneProps {
   user: User;
@@ -115,6 +117,44 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   canMoveUp,
   canMoveDown,
 }) => {
+  const {
+    isZensciencesUser,
+    isClickupConnected,
+    syncUserTasksWithClickUp,
+    canManageMembers,
+    canEditUserTasks,
+    setShowClickupPrompt,
+  } = useDashboard();
+
+  const [isSyncingClickUp, setIsSyncingClickUp] = useState(false);
+  const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
+
+  const canEdit = useMemo(() => canEditUserTasks(user.id), [canEditUserTasks, user.id]);
+
+  const handleSyncClickUp = async () => {
+    if (!isClickupConnected) {
+      setShowClickupPrompt(true);
+      return;
+    }
+    setIsSyncingClickUp(true);
+    setSyncFeedback(null);
+    try {
+      const res = await syncUserTasksWithClickUp(user.id);
+      if (res.success) {
+        setSyncFeedback(`Synced ${res.syncedCount}`);
+        setTimeout(() => setSyncFeedback(null), 3000);
+      } else {
+        setSyncFeedback(res.message || 'Sync failed');
+        setTimeout(() => setSyncFeedback(null), 3000);
+      }
+    } catch {
+      setSyncFeedback('Sync error');
+      setTimeout(() => setSyncFeedback(null), 3000);
+    } finally {
+      setIsSyncingClickUp(false);
+    }
+  };
+
   const [showArchived, setShowArchived] = useState(false);
   const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
   const [dragOverHeader, setDragOverHeader] = useState(false);
@@ -651,18 +691,40 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               </div>
             </button>
 
-            {/* Add Task Button for this user */}
-            <button
-              id={`add-task-btn-${user.id}`}
-              onClick={() => onAddTask(user.id, 'todo')}
-              className="flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 px-3.5 py-2 text-xs font-semibold text-white shadow-md shadow-blue-900/20 transition-all cursor-pointer"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              <span>Add Task</span>
-            </button>
+            {/* Sync tasks with ClickUp button */}
+            {isZensciencesUser && (
+              <button
+                id={`sync-clickup-btn-${user.id}`}
+                type="button"
+                onClick={handleSyncClickUp}
+                disabled={isSyncingClickUp}
+                title="Sync tasks with ClickUp"
+                className="flex items-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-50/50 dark:bg-purple-950/20 hover:bg-purple-100/50 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 text-purple-600 dark:text-purple-400 ${isSyncingClickUp ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">
+                  {isSyncingClickUp ? 'Syncing...' : syncFeedback || 'Sync with ClickUp'}
+                </span>
+                <span className="sm:hidden">
+                  {isSyncingClickUp ? '...' : 'Sync'}
+                </span>
+              </button>
+            )}
 
-            {/* Delete User Button */}
-            {onDeleteUser && (
+            {/* Add Task Button for this user */}
+            {canEdit && (
+              <button
+                id={`add-task-btn-${user.id}`}
+                onClick={() => onAddTask(user.id, 'todo')}
+                className="flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 px-3.5 py-2 text-xs font-semibold text-white shadow-md shadow-blue-900/20 transition-all cursor-pointer"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Add Task</span>
+              </button>
+            )}
+
+            {/* Delete User Button - Only authorized managers */}
+            {onDeleteUser && canManageMembers && !isCurrentUser && (
               <button
                 id={`delete-user-btn-${user.id}`}
                 onClick={() => onDeleteUser(user)}

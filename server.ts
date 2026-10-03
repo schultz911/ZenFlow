@@ -23,6 +23,12 @@ interface User {
   role: 'content' | 'design';
   avatarColor?: string;
   createdAt: string;
+  order?: number;
+  isCreativeDirector?: boolean;
+  creativeDirectorId?: string;
+  clickupApiKey?: string;
+  selectedClickupSpaceId?: string;
+  selectedClickupSpaceName?: string;
 }
 
 interface TaskActivity {
@@ -50,12 +56,35 @@ interface Task {
   createdAt: string;
   updatedAt: string;
   activityLog?: TaskActivity[];
+  clickupTaskId?: string;
+  clickupFolderId?: string;
+  clickupFolderName?: string;
+  clickupListId?: string;
+  clickupListName?: string;
+  clickupSpaceId?: string;
+  clickupUrl?: string;
 }
 
 interface AppStore {
   users: User[];
   tasks: Task[];
 }
+
+const SUPERADMIN_EMAIL = 'kiran.s@zensciences.com';
+
+const ZENFLOW_TO_CLICKUP_STATUS: Record<string, string> = {
+  todo: 'to do',
+  in_progress: 'in progress',
+  in_review: 'internal review',
+  done: 'client review',
+  archived: 'complete',
+};
+
+const COGNITIVE_LOAD_ESTIMATES_MS: Record<string, number> = {
+  low: 12 * 3600 * 1000,
+  medium: 24 * 3600 * 1000,
+  high: 36 * 3600 * 1000,
+};
 
 // Support Railway dynamic PORT or default to 3000
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
@@ -628,6 +657,7 @@ async function syncFromFirestore() {
       await dbBatchSaveTasks(store.tasks);
     }
 
+    ensureSuperadmin(store);
     saveStore(store);
     firestoreLastError = null;
     firestoreLastSyncTime = new Date().toISOString();
@@ -669,6 +699,105 @@ function broadcastEvent(type: string, payload: any) {
       return false;
     }
   });
+}
+
+function ensureSuperadmin(appStore: AppStore) {
+  let superadmin = appStore.users.find(u => u.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase());
+  if (!superadmin) {
+    superadmin = {
+      id: 'user-superadmin-kiran',
+      name: 'Kiran S',
+      email: SUPERADMIN_EMAIL,
+      role: 'content',
+      avatarColor: 'from-blue-600 to-indigo-600',
+      isCreativeDirector: true,
+      createdAt: new Date().toISOString(),
+    };
+    appStore.users.unshift(superadmin);
+    saveStore(appStore);
+    dbSaveUser(superadmin).catch(e => console.error('Firestore superadmin init err:', e));
+    console.log(`[Superadmin] Initialized ${SUPERADMIN_EMAIL} with Creative Director privileges.`);
+  } else if (!superadmin.isCreativeDirector) {
+    superadmin.isCreativeDirector = true;
+    saveStore(appStore);
+    dbSaveUser(superadmin).catch(e => console.error('Firestore superadmin update err:', e));
+  }
+}
+
+// Ensure superadmin exists on startup
+ensureSuperadmin(store);
+
+async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User) {
+  const token = (apiKey || user?.clickupApiKey || '').trim();
+  if (!token || !task.clickupListId) return;
+
+  const targetStatus = ZENFLOW_TO_CLICKUP_STATUS[task.status] || 'to do';
+  const estimateMs = COGNITIVE_LOAD_ESTIMATES_MS[task.cognitiveLoad] || COGNITIVE_LOAD_ESTIMATES_MS.medium;
+  const tag = (user?.role === 'design' || (!user && task.userId.includes('design'))) ? 'Design' : 'Content & Copy';
+
+  // If task already exists in ClickUp, update it
+  if (task.clickupTaskId) {
+    try {
+      const updatePayload: Record<string, any> = {
+        name: task.title,
+        status: targetStatus,
+        time_estimate: estimateMs,
+      };
+      if (task.description) updatePayload.description = task.description;
+      if (task.dueDate) updatePayload.due_date = new Date(task.dueDate + 'T23:59:59').getTime();
+      if (task.inProgressStartedAt) updatePayload.start_date = new Date(task.inProgressStartedAt).getTime();
+
+      const res = await fetch(`https://api.clickup.com/api/v2/task/${task.clickupTaskId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token,
+        },
+        body: JSON.stringify(updatePayload),
+      });
+      if (!res.ok) {
+        console.warn(`[ClickUp Sync] Failed to update task ${task.id} in ClickUp:`, await res.text());
+      }
+    } catch (err) {
+      console.warn(`[ClickUp Sync] Error updating task ${task.id}:`, err);
+    }
+    return;
+  }
+
+  // Create new task in ClickUp
+  try {
+    const createPayload: Record<string, any> = {
+      name: task.title,
+      status: targetStatus,
+      time_estimate: estimateMs,
+      tags: [tag],
+    };
+    if (task.description) createPayload.description = task.description;
+    if (task.dueDate) createPayload.due_date = new Date(task.dueDate + 'T23:59:59').getTime();
+    if (task.inProgressStartedAt) createPayload.start_date = new Date(task.inProgressStartedAt).getTime();
+
+    const res = await fetch(`https://api.clickup.com/api/v2/list/${task.clickupListId}/task`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: token,
+      },
+      body: JSON.stringify(createPayload),
+    });
+    if (res.ok) {
+      const clickupTask = await res.json();
+      task.clickupTaskId = clickupTask.id;
+      task.clickupUrl = clickupTask.url;
+      saveStore(store);
+      dbSaveTask(task).catch(e => console.error('Firestore save task err:', e));
+      broadcastEvent('task_updated', task);
+      console.log(`[ClickUp Sync] Created task ${task.id} in ClickUp (${clickupTask.id})`);
+    } else {
+      console.warn(`[ClickUp Sync] Failed to create task ${task.id} in ClickUp:`, await res.text());
+    }
+  } catch (err) {
+    console.warn(`[ClickUp Sync] Error creating task ${task.id}:`, err);
+  }
 }
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
@@ -765,7 +894,7 @@ async function startServer() {
     res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://*.googleapis.com; frame-ancestors 'none';"
+      "default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://lh3.googleusercontent.com https://*.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.clickup.com; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com; frame-ancestors 'none';"
     );
     next();
   });
@@ -820,30 +949,24 @@ async function startServer() {
     });
   });
 
-  // API: Simple Login / Register with Name, Role, Email
+  // API: Simple Login / Register with Name, Role, Email (enforces existing account requirement)
   app.post('/api/auth/login', authLimiter, (req: Request, res: Response) => {
     const { name, email, role } = req.body;
 
-    if (!name || !email || !role) {
-      return res.status(400).json({ error: 'Name, email, and role are required' });
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
     }
 
     const cleanEmail = sanitizeString(email).toLowerCase();
-    const cleanName = sanitizeString(name);
+    const cleanName = name ? sanitizeString(name) : '';
     const cleanRole = (role === 'design' ? 'design' : 'content') as 'content' | 'design';
-
-    if (!cleanEmail || !cleanName) {
-      return res.status(400).json({ error: 'Valid name and email are required' });
-    }
 
     let existingUser = store.users.find(u => u.email.toLowerCase() === cleanEmail);
 
     if (existingUser) {
-      // If user already exists, update name or role if changed
       let changed = false;
-      if (existingUser.name !== cleanName || existingUser.role !== cleanRole) {
+      if (cleanName && existingUser.name !== cleanName) {
         existingUser.name = cleanName;
-        existingUser.role = cleanRole;
         changed = true;
       }
       if (changed) {
@@ -854,23 +977,40 @@ async function startServer() {
       return res.json({ user: existingUser, isNew: false });
     }
 
-    // New user created: a new swimlane is automatically formed on their role tab
-    const colorIndex = store.users.length % AVATAR_COLORS.length;
-    const newUser: User = {
-      id: `user-${Date.now()}`,
-      name: cleanName,
-      email: cleanEmail,
-      role: cleanRole,
-      avatarColor: AVATAR_COLORS[colorIndex],
-      createdAt: new Date().toISOString(),
-    };
+    // Only allow login if user exists. Exception: bootstrap superadmin
+    if (cleanEmail === SUPERADMIN_EMAIL.toLowerCase()) {
+      const superadmin: User = {
+        id: 'user-superadmin-kiran',
+        name: cleanName || 'Kiran S',
+        email: SUPERADMIN_EMAIL,
+        role: cleanRole,
+        avatarColor: 'from-blue-600 to-indigo-600',
+        isCreativeDirector: true,
+        createdAt: new Date().toISOString(),
+      };
+      store.users.unshift(superadmin);
+      saveStore(store);
+      dbSaveUser(superadmin).catch(e => console.error('Firestore user create err:', e));
+      broadcastEvent('user_created', superadmin);
+      return res.status(201).json({ user: superadmin, isNew: true });
+    }
 
-    store.users.push(newUser);
-    saveStore(store);
-    dbSaveUser(newUser).catch(e => console.error('Firestore user create err:', e));
+    // Unregistered accounts cannot log in
+    return res.status(403).json({
+      error: 'Account not registered. Only team members with an existing ZenFlow account are authorized to log in. Please contact kiran.s@zensciences.com to be added.',
+    });
+  });
 
-    broadcastEvent('user_created', newUser);
-    return res.status(201).json({ user: newUser, isNew: true });
+  // API: Verify if an email is registered in ZenFlow
+  app.post('/api/auth/verify-email', (req: Request, res: Response) => {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+    const cleanEmail = sanitizeString(email).toLowerCase();
+    const user = store.users.find(u => u.email.toLowerCase() === cleanEmail);
+    if (!user) {
+      return res.status(404).json({ error: 'No account registered with this email address' });
+    }
+    res.json({ user });
   });
 
   // API: Get all users with ETag conditional validation (HTTP 304 Not Modified)
@@ -886,9 +1026,19 @@ async function startServer() {
     res.json(store.users);
   });
 
-  // API: Create a user explicitly
+  // API: Create a user explicitly (Superadmin & Creative Directors)
   app.post('/api/users', (req: Request, res: Response) => {
-    const { name, email, role } = req.body;
+    const {
+      name,
+      email,
+      role,
+      isCreativeDirector,
+      creativeDirectorId,
+      clickupApiKey,
+      selectedClickupSpaceId,
+      selectedClickupSpaceName,
+    } = req.body;
+
     if (!name || !email || !role) {
       return res.status(400).json({ error: 'Name, email, and role are required' });
     }
@@ -905,6 +1055,9 @@ async function startServer() {
     if (existingUser) {
       existingUser.name = cleanName;
       existingUser.role = cleanRole;
+      if (isCreativeDirector !== undefined) existingUser.isCreativeDirector = !!isCreativeDirector;
+      if (creativeDirectorId !== undefined) existingUser.creativeDirectorId = creativeDirectorId ? sanitizeString(creativeDirectorId) : undefined;
+      if (clickupApiKey !== undefined) existingUser.clickupApiKey = clickupApiKey ? sanitizeString(clickupApiKey) : undefined;
       saveStore(store);
       dbSaveUser(existingUser).catch(e => console.error('Firestore user update err:', e));
       broadcastEvent('user_updated', existingUser);
@@ -918,6 +1071,11 @@ async function startServer() {
       email: cleanEmail,
       role: cleanRole,
       avatarColor: AVATAR_COLORS[colorIndex],
+      isCreativeDirector: !!isCreativeDirector,
+      creativeDirectorId: creativeDirectorId ? sanitizeString(creativeDirectorId) : undefined,
+      clickupApiKey: clickupApiKey ? sanitizeString(clickupApiKey) : undefined,
+      selectedClickupSpaceId: selectedClickupSpaceId ? sanitizeString(selectedClickupSpaceId) : undefined,
+      selectedClickupSpaceName: selectedClickupSpaceName ? sanitizeString(selectedClickupSpaceName) : undefined,
       createdAt: new Date().toISOString(),
     };
 
@@ -927,6 +1085,55 @@ async function startServer() {
 
     broadcastEvent('user_created', newUser);
     res.status(201).json(newUser);
+  });
+
+  // API: Update user settings / profile
+  app.put('/api/users/:id', (req: Request, res: Response) => {
+    const { id } = req.params;
+    const userIndex = store.users.findIndex(u => u.id === id);
+
+    if (userIndex === -1) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const current = store.users[userIndex];
+    const {
+      name,
+      role,
+      isCreativeDirector,
+      creativeDirectorId,
+      clickupApiKey,
+      selectedClickupSpaceId,
+      selectedClickupSpaceName,
+    } = req.body;
+
+    if (name !== undefined) {
+      const cleanName = sanitizeString(name);
+      if (cleanName) current.name = cleanName;
+    }
+    if (role !== undefined && (role === 'content' || role === 'design')) {
+      current.role = role;
+    }
+    if (isCreativeDirector !== undefined) {
+      current.isCreativeDirector = !!isCreativeDirector;
+    }
+    if (creativeDirectorId !== undefined) {
+      current.creativeDirectorId = creativeDirectorId ? sanitizeString(creativeDirectorId) : undefined;
+    }
+    if (clickupApiKey !== undefined) {
+      current.clickupApiKey = clickupApiKey ? sanitizeString(clickupApiKey) : undefined;
+    }
+    if (selectedClickupSpaceId !== undefined) {
+      current.selectedClickupSpaceId = selectedClickupSpaceId ? sanitizeString(selectedClickupSpaceId) : undefined;
+    }
+    if (selectedClickupSpaceName !== undefined) {
+      current.selectedClickupSpaceName = selectedClickupSpaceName ? sanitizeString(selectedClickupSpaceName) : undefined;
+    }
+
+    saveStore(store);
+    dbSaveUser(current).catch(e => console.error('Firestore user update err:', e));
+    broadcastEvent('user_updated', current);
+    res.json(current);
   });
 
   // API: Delete a user and all tasks associated with them
@@ -982,7 +1189,22 @@ async function startServer() {
 
   // API: Create a task
   app.post('/api/tasks', (req: Request, res: Response) => {
-    const { id: reqId, userId, title, description, dueDate, cognitiveLoad, status } = req.body;
+    const {
+      id: reqId,
+      userId,
+      title,
+      description,
+      dueDate,
+      cognitiveLoad,
+      status,
+      clickupTaskId,
+      clickupFolderId,
+      clickupFolderName,
+      clickupListId,
+      clickupListName,
+      clickupSpaceId,
+      clickupUrl,
+    } = req.body;
 
     // Idempotency guard for offline mutation replay: if task with this ID already exists, return it
     if (reqId && typeof reqId === 'string') {
@@ -1037,6 +1259,13 @@ async function startServer() {
       completedAt: isDone ? new Date().toISOString() : undefined,
       inProgressStartedAt: isInProgress ? new Date().toISOString() : undefined,
       inProgressDurationMs: 0,
+      clickupTaskId: clickupTaskId ? sanitizeString(clickupTaskId) : undefined,
+      clickupFolderId: clickupFolderId ? sanitizeString(clickupFolderId) : undefined,
+      clickupFolderName: clickupFolderName ? sanitizeString(clickupFolderName) : undefined,
+      clickupListId: clickupListId ? sanitizeString(clickupListId) : undefined,
+      clickupListName: clickupListName ? sanitizeString(clickupListName) : undefined,
+      clickupSpaceId: clickupSpaceId ? sanitizeString(clickupSpaceId) : undefined,
+      clickupUrl: clickupUrl ? sanitizeString(clickupUrl) : undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       activityLog: [initialActivity],
@@ -1047,6 +1276,15 @@ async function startServer() {
     dbSaveTask(newTask).catch(e => console.error('Firestore task create err:', e));
 
     broadcastEvent('task_created', newTask);
+
+    // Asynchronously push task to ClickUp if a list has been assigned
+    const assignedUser = store.users.find(u => u.id === userId);
+    if (newTask.clickupListId && assignedUser?.clickupApiKey) {
+      syncTaskToClickUp(newTask, assignedUser.clickupApiKey, assignedUser).catch(e =>
+        console.error('[ClickUp] Post-create sync err:', e)
+      );
+    }
+
     res.status(201).json(newTask);
   });
 
@@ -1073,6 +1311,13 @@ async function startServer() {
       inProgressStartedAt: reqStartedAt,
       adjustmentReason,
       actorName,
+      clickupTaskId,
+      clickupFolderId,
+      clickupFolderName,
+      clickupListId,
+      clickupListName,
+      clickupSpaceId,
+      clickupUrl,
     } = req.body;
 
     if (title !== undefined) {
@@ -1217,6 +1462,13 @@ async function startServer() {
       completedAt,
       inProgressStartedAt,
       inProgressDurationMs,
+      clickupTaskId: clickupTaskId !== undefined ? (clickupTaskId ? sanitizeString(clickupTaskId) : undefined) : currentTask.clickupTaskId,
+      clickupFolderId: clickupFolderId !== undefined ? (clickupFolderId ? sanitizeString(clickupFolderId) : undefined) : currentTask.clickupFolderId,
+      clickupFolderName: clickupFolderName !== undefined ? (clickupFolderName ? sanitizeString(clickupFolderName) : undefined) : currentTask.clickupFolderName,
+      clickupListId: clickupListId !== undefined ? (clickupListId ? sanitizeString(clickupListId) : undefined) : currentTask.clickupListId,
+      clickupListName: clickupListName !== undefined ? (clickupListName ? sanitizeString(clickupListName) : undefined) : currentTask.clickupListName,
+      clickupSpaceId: clickupSpaceId !== undefined ? (clickupSpaceId ? sanitizeString(clickupSpaceId) : undefined) : currentTask.clickupSpaceId,
+      clickupUrl: clickupUrl !== undefined ? (clickupUrl ? sanitizeString(clickupUrl) : undefined) : currentTask.clickupUrl,
       updatedAt: new Date().toISOString(),
       activityLog: activityEntries.slice(0, 15),
     };
@@ -1226,6 +1478,15 @@ async function startServer() {
     dbSaveTask(updatedTask).catch(e => console.error('Firestore task update err:', e));
 
     broadcastEvent('task_updated', updatedTask);
+
+    // Live Push to ClickUp
+    const taskUser = store.users.find(u => u.id === updatedTask.userId);
+    if ((updatedTask.clickupTaskId || updatedTask.clickupListId) && taskUser?.clickupApiKey) {
+      syncTaskToClickUp(updatedTask, taskUser.clickupApiKey, taskUser).catch(e =>
+        console.error('[ClickUp] Post-update sync err:', e)
+      );
+    }
+
     res.json(updatedTask);
   });
 
@@ -1366,7 +1627,246 @@ async function startServer() {
     }
 
     broadcastEvent('tasks_reordered', modifiedTasks);
+
+    // Live push reordered/status-changed tasks to ClickUp
+    for (const modTask of modifiedTasks) {
+      if (modTask.clickupTaskId || modTask.clickupListId) {
+        const modUser = store.users.find(u => u.id === modTask.userId);
+        if (modUser?.clickupApiKey) {
+          syncTaskToClickUp(modTask, modUser.clickupApiKey, modUser).catch(e =>
+            console.error('[ClickUp] Reorder sync err:', e)
+          );
+        }
+      }
+    }
+
     res.json({ success: true, tasks: modifiedTasks });
+  });
+
+  // ==========================================
+  // CLICKUP INTEGRATION ENDPOINTS
+  // ==========================================
+
+  // API: Verify Personal ClickUp API Token & retrieve teams
+  app.post('/api/clickup/verify', async (req: Request, res: Response) => {
+    const { apiKey } = req.body;
+    if (!apiKey || typeof apiKey !== 'string') {
+      return res.status(400).json({ error: 'ClickUp API key is required' });
+    }
+
+    try {
+      const cleanKey = apiKey.trim();
+      const userRes = await fetch('https://api.clickup.com/api/v2/user', {
+        headers: { Authorization: cleanKey },
+      });
+
+      if (!userRes.ok) {
+        return res.status(401).json({ error: 'Invalid or unauthorized ClickUp API Token' });
+      }
+
+      const userData = await userRes.json();
+      const teamRes = await fetch('https://api.clickup.com/api/v2/team', {
+        headers: { Authorization: cleanKey },
+      });
+      const teamData = teamRes.ok ? await teamRes.json() : { teams: [] };
+
+      res.json({
+        valid: true,
+        user: userData.user,
+        teams: teamData.teams || [],
+      });
+    } catch (err: any) {
+      console.error('[ClickUp] Verify error:', err);
+      res.status(500).json({ error: err.message || 'Error communicating with ClickUp API' });
+    }
+  });
+
+  // API: Get Spaces for a ClickUp Workspace/Team
+  app.get('/api/clickup/spaces', async (req: Request, res: Response) => {
+    const apiKey = (req.headers['x-clickup-api-key'] as string) || (req.query.apiKey as string);
+    const teamId = req.query.teamId as string;
+
+    if (!apiKey) {
+      return res.status(400).json({ error: 'ClickUp API key is required' });
+    }
+
+    try {
+      const cleanKey = apiKey.trim();
+      let targetTeamId = teamId;
+
+      if (!targetTeamId) {
+        const teamRes = await fetch('https://api.clickup.com/api/v2/team', {
+          headers: { Authorization: cleanKey },
+        });
+        if (teamRes.ok) {
+          const teamData = await teamRes.json();
+          targetTeamId = teamData.teams?.[0]?.id;
+        }
+      }
+
+      if (!targetTeamId) {
+        return res.json({ spaces: [] });
+      }
+
+      const spacesRes = await fetch(`https://api.clickup.com/api/v2/team/${targetTeamId}/space`, {
+        headers: { Authorization: cleanKey },
+      });
+
+      if (!spacesRes.ok) {
+        return res.status(spacesRes.status).json({ error: 'Failed to retrieve spaces from ClickUp' });
+      }
+
+      const data = await spacesRes.json();
+      res.json({ spaces: data.spaces || [], teamId: targetTeamId });
+    } catch (err: any) {
+      console.error('[ClickUp] Spaces fetch error:', err);
+      res.status(500).json({ error: err.message || 'Error fetching ClickUp spaces' });
+    }
+  });
+
+  // API: Get Folders and Folderless Lists for a ClickUp Space
+  app.get('/api/clickup/folders-and-lists', async (req: Request, res: Response) => {
+    const apiKey = (req.headers['x-clickup-api-key'] as string) || (req.query.apiKey as string);
+    const spaceId = req.query.spaceId as string;
+
+    if (!apiKey || !spaceId) {
+      return res.status(400).json({ error: 'apiKey and spaceId are required' });
+    }
+
+    try {
+      const cleanKey = apiKey.trim();
+      const [foldersRes, listsRes] = await Promise.all([
+        fetch(`https://api.clickup.com/api/v2/space/${spaceId}/folder`, {
+          headers: { Authorization: cleanKey },
+        }),
+        fetch(`https://api.clickup.com/api/v2/space/${spaceId}/list`, {
+          headers: { Authorization: cleanKey },
+        }),
+      ]);
+
+      const foldersData = foldersRes.ok ? await foldersRes.json() : { folders: [] };
+      const listsData = listsRes.ok ? await listsRes.json() : { lists: [] };
+
+      res.json({
+        folders: foldersData.folders || [],
+        folderlessLists: listsData.lists || [],
+      });
+    } catch (err: any) {
+      console.error('[ClickUp] Folders & Lists fetch error:', err);
+      res.status(500).json({ error: err.message || 'Error fetching folders and lists' });
+    }
+  });
+
+  // API: Create a new List in ClickUp (under a folder or folderless under a space)
+  app.post('/api/clickup/lists', async (req: Request, res: Response) => {
+    const { apiKey, spaceId, folderId, name } = req.body;
+
+    if (!apiKey || !name || (!spaceId && !folderId)) {
+      return res.status(400).json({ error: 'apiKey, name, and spaceId or folderId are required' });
+    }
+
+    try {
+      const cleanKey = apiKey.trim();
+      const cleanName = sanitizeString(name);
+      const url = folderId
+        ? `https://api.clickup.com/api/v2/folder/${folderId}/list`
+        : `https://api.clickup.com/api/v2/space/${spaceId}/list`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: cleanKey,
+        },
+        body: JSON.stringify({ name: cleanName }),
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        return res.status(response.status).json({ error: text });
+      }
+
+      const list = await response.json();
+      res.status(201).json({ list });
+    } catch (err: any) {
+      console.error('[ClickUp] Create list error:', err);
+      res.status(500).json({ error: err.message || 'Error creating list in ClickUp' });
+    }
+  });
+
+  // API: Sync tasks for a specific user with ClickUp
+  app.post('/api/clickup/sync-user-tasks', async (req: Request, res: Response) => {
+    const { userId, apiKey } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    const user = store.users.find(u => u.id === userId);
+    const token = (apiKey || user?.clickupApiKey || '').trim();
+
+    if (!token) {
+      return res.status(400).json({ error: 'ClickUp API key is not connected for this user' });
+    }
+
+    const userTasks = store.tasks.filter(t => t.userId === userId);
+    let syncedCount = 0;
+    let archivedCount = 0;
+    const modifiedTasks: Task[] = [];
+
+    for (const task of userTasks) {
+      // 1. Archive sync exception: Check if task in done is completed on ClickUp
+      if (task.status === 'done' && task.clickupTaskId) {
+        try {
+          const cRes = await fetch(`https://api.clickup.com/api/v2/task/${task.clickupTaskId}`, {
+            headers: { Authorization: token },
+          });
+          if (cRes.ok) {
+            const cTask = await cRes.json();
+            const cuStatus = (cTask.status?.status || '').toLowerCase();
+            const cuType = (cTask.status?.type || '').toLowerCase();
+
+            if (cuStatus === 'complete' || cuStatus === 'closed' || cuType === 'closed') {
+              task.status = 'archived';
+              task.updatedAt = new Date().toISOString();
+              if (!task.activityLog) task.activityLog = [];
+              task.activityLog.unshift({
+                id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                timestamp: new Date().toISOString(),
+                action: 'status_change',
+                from: 'done',
+                to: 'archived',
+                details: 'Archived via ClickUp task completion sync',
+              });
+              if (task.activityLog.length > 15) task.activityLog = task.activityLog.slice(0, 15);
+              archivedCount++;
+              modifiedTasks.push(task);
+              continue;
+            }
+          }
+        } catch (err) {
+          console.warn(`[ClickUp Sync] Error checking task ${task.id} status:`, err);
+        }
+      }
+
+      // 2. Push active tasks with assigned list to ClickUp
+      if (task.clickupListId) {
+        await syncTaskToClickUp(task, token, user);
+        syncedCount++;
+      }
+    }
+
+    if (modifiedTasks.length > 0) {
+      saveStore(store);
+      dbBatchSaveTasks(modifiedTasks).catch(e => console.error('Firestore batch save err:', e));
+      broadcastEvent('tasks_reordered', modifiedTasks);
+    }
+
+    res.json({
+      success: true,
+      syncedCount,
+      archivedCount,
+      message: `Synced ${syncedCount} task(s), archived ${archivedCount} completed task(s).`,
+    });
   });
 
   // API: Firestore status & health check

@@ -12,6 +12,11 @@ export interface User {
   avatarColor?: string;
   createdAt: string;
   order?: number;
+  isCreativeDirector?: boolean;
+  creativeDirectorId?: string;
+  clickupApiKey?: string;
+  selectedClickupSpaceId?: string;
+  selectedClickupSpaceName?: string;
 }
 
 export interface TaskActivity {
@@ -39,6 +44,40 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
   activityLog?: TaskActivity[];
+  clickupTaskId?: string;
+  clickupFolderId?: string;
+  clickupFolderName?: string;
+  clickupListId?: string;
+  clickupListName?: string;
+  clickupSpaceId?: string;
+  clickupUrl?: string;
+}
+
+export interface ClickupSpace {
+  id: string;
+  name: string;
+  color?: string;
+  private?: boolean;
+}
+
+export interface ClickupList {
+  id: string;
+  name: string;
+  orderindex?: number;
+  folder?: {
+    id: string;
+    name: string;
+  };
+  space?: {
+    id: string;
+    name: string;
+  };
+}
+
+export interface ClickupFolder {
+  id: string;
+  name: string;
+  lists: ClickupList[];
 }
 
 export interface QueuedMutation {
