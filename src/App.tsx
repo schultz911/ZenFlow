@@ -13,6 +13,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { MarqueeRibbon } from './components/MarqueeRibbon';
 import { UnassignedListRibbon } from './components/UnassignedListRibbon';
 import { ClickupConnectModal } from './components/ClickupConnectModal';
+import { EditUserModal } from './components/EditUserModal';
 import { User, Task, TaskStatus } from './types';
 import { UserPlus, FileText, Palette } from 'lucide-react';
 import { testConnection } from './lib/firebase';
@@ -55,6 +56,7 @@ function DashboardContent() {
   const [workloadModalUser, setWorkloadModalUser] = useState<User | null>(null);
   const [firestoreModalOpen, setFirestoreModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
 
   // Stable refs for currentUser and users — allow keyboard effect and task modal handler to have empty dep arrays
   const currentUserRef = useRef(currentUser);
@@ -191,6 +193,7 @@ function DashboardContent() {
         setWorkloadModalUser(null);
         setFirestoreModalOpen(false);
         setUserToDelete(null);
+        setEditingUser(null);
         setAdjustBillableTask(null);
       }
 
@@ -430,6 +433,7 @@ function DashboardContent() {
                   onAdjustBillableHours={handleOpenAdjustBillableHours}
                   onUpdateTaskTitle={handleUpdateTaskTitle}
                   onDeleteTask={deleteTask}
+                  onEditUser={setEditingUser}
                   onDeleteUser={handleOpenDeleteUser}
                   onMoveTask={moveTask}
                   onOpenWorkloadModal={handleOpenWorkloadModal}
@@ -491,6 +495,12 @@ function DashboardContent() {
       <ClickupConnectModal
         isOpen={showClickupPrompt}
         onClose={() => setShowClickupPrompt(false)}
+      />
+
+      <EditUserModal
+        isOpen={Boolean(editingUser)}
+        user={editingUser}
+        onClose={() => setEditingUser(null)}
       />
     </div>
   );

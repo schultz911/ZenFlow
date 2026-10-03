@@ -350,18 +350,51 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       const res = await fetch('/api/state');
       if (res.ok) {
         const data = await res.json();
+        const idReassignments = new Map<string, string>(); // duplicateId -> primaryId
+
         if (Array.isArray(data.users) && data.users.length > 0) {
-          const userMap = new Map<string, User>();
+          const rawTasks = Array.isArray(data.tasks) ? data.tasks : [];
+          const byEmail = new Map<string, User[]>();
           for (const u of data.users) {
-            if (u && u.id) userMap.set(u.id, u);
+            if (!u || !u.id || !u.email) continue;
+            const em = u.email.toLowerCase().trim();
+            if (!byEmail.has(em)) byEmail.set(em, []);
+            byEmail.get(em)!.push(u);
           }
-          const uniqueUsers = Array.from(userMap.values());
-          setUsers(uniqueUsers);
-          // If currentUser exists, sync it
+
+          const dedupedUsers: User[] = [];
+
+          for (const [em, list] of byEmail.entries()) {
+            if (list.length === 1) {
+              const u = list[0];
+              if (em === SUPERADMIN_EMAIL.toLowerCase()) u.isCreativeDirector = true;
+              dedupedUsers.push(u);
+              continue;
+            }
+
+            // Deduplicate! Pick the one with tasks, or non-user-superadmin-kiran
+            let primary = list.find(u => rawTasks.some(t => t.userId === u.id));
+            if (!primary) {
+              primary = list.find(u => u.id !== 'user-superadmin-kiran') || list[0];
+            }
+            if (em === SUPERADMIN_EMAIL.toLowerCase()) primary.isCreativeDirector = true;
+            dedupedUsers.push(primary);
+
+            for (const dup of list) {
+              if (dup.id !== primary.id) {
+                idReassignments.set(dup.id, primary.id);
+              }
+            }
+          }
+
+          setUsers(dedupedUsers);
+
+          // If currentUser exists, sync it to the primary deduplicated user
           setCurrentUser(prev => {
-            if (!prev) return uniqueUsers[0] || null;
-            const matched = uniqueUsers.find(
-              (u: User) => u.id === prev.id || u.email.toLowerCase() === prev.email.toLowerCase()
+            if (!prev) return dedupedUsers[0] || null;
+            const targetId = idReassignments.get(prev.id) || prev.id;
+            const matched = dedupedUsers.find(
+              (u: User) => u.id === targetId || u.email.toLowerCase() === prev.email.toLowerCase()
             );
             return matched || prev;
           });
@@ -372,6 +405,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
           const taskMap = new Map<string, Task>();
           for (const t of data.tasks) {
             if (t && t.id) {
+              // Reassign task userId if it was assigned to a duplicate ID
+              if (idReassignments.has(t.userId)) {
+                t.userId = idReassignments.get(t.userId)!;
+              }
               if (t.status === 'done') {
                 const doneTime = t.completedAt
                   ? new Date(t.completedAt).getTime()
@@ -845,7 +882,11 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     const googleUser = await signInWithGoogle();
     const cleanEmail = googleUser.email.trim().toLowerCase();
 
-    let existing = usersRef.current.find(u => u.email.toLowerCase() === cleanEmail);
+    // Prefer user with existing tasks if multiple exist
+    const matchingUsers = usersRef.current.filter(u => u.email.toLowerCase() === cleanEmail);
+    let existing = matchingUsers.find(u => tasksRef.current.some(t => t.userId === u.id))
+      || matchingUsers.find(u => u.id !== 'user-superadmin-kiran')
+      || matchingUsers[0];
 
     if (!existing) {
       try {

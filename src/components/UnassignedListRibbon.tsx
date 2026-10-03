@@ -27,6 +27,10 @@ export const UnassignedListRibbon: React.FC<UnassignedListRibbonProps> = React.m
 
   const userMap = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
 
+  // Safe folders and folderless lists
+  const folders = useMemo(() => clickupFoldersAndLists?.folders || [], [clickupFoldersAndLists]);
+  const folderlessLists = useMemo(() => clickupFoldersAndLists?.folderlessLists || [], [clickupFoldersAndLists]);
+
   // Tasks lacking ClickUp list assignment, excluding done/archived
   const unassignedTasks = useMemo(() => {
     return tasks.filter(t => !t.clickupListId && t.status !== 'done' && t.status !== 'archived');
@@ -106,7 +110,7 @@ export const UnassignedListRibbon: React.FC<UnassignedListRibbonProps> = React.m
         selectedFolderForNewList || undefined
       );
       if (created) {
-        const folder = clickupFoldersAndLists.folders.find(f => f.id === selectedFolderForNewList);
+        const folder = folders.find(f => f.id === selectedFolderForNewList);
         await assignTaskClickupList(
           activeFlyoutTaskId,
           created.id,
@@ -215,14 +219,14 @@ export const UnassignedListRibbon: React.FC<UnassignedListRibbonProps> = React.m
                 autoFocus
                 className="w-full px-2 py-1.5 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
               />
-              {clickupFoldersAndLists.folders.length > 0 && (
+              {folders.length > 0 && (
                 <select
                   value={selectedFolderForNewList}
                   onChange={e => setSelectedFolderForNewList(e.target.value)}
                   className="w-full px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs"
                 >
                   <option value="">Space (Folderless)</option>
-                  {clickupFoldersAndLists.folders.map(f => (
+                  {folders.map(f => (
                     <option key={f.id} value={f.id}>Folder: {f.name}</option>
                   ))}
                 </select>
@@ -253,7 +257,7 @@ export const UnassignedListRibbon: React.FC<UnassignedListRibbonProps> = React.m
           {/* List existing folders and lists */}
           <div className="space-y-2">
             {/* Folders and lists */}
-            {clickupFoldersAndLists.folders.map(folder => (
+            {folders.map(folder => (
               <div key={folder.id} className="space-y-0.5">
                 <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 px-1 py-0.5">
                   <Folder className="w-3 h-3" />
@@ -273,13 +277,13 @@ export const UnassignedListRibbon: React.FC<UnassignedListRibbonProps> = React.m
             ))}
 
             {/* Folderless lists */}
-            {clickupFoldersAndLists.folderlessLists.length > 0 && (
+            {folderlessLists.length > 0 && (
               <div className="space-y-0.5">
                 <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 px-1 py-0.5">
                   <FolderPlus className="w-3 h-3" />
                   <span>Folderless Lists</span>
                 </div>
-                {clickupFoldersAndLists.folderlessLists.map(list => (
+                {folderlessLists.map(list => (
                   <button
                     key={list.id}
                     onClick={() => handleSelectList(list.id, list.name)}
@@ -292,7 +296,7 @@ export const UnassignedListRibbon: React.FC<UnassignedListRibbonProps> = React.m
               </div>
             )}
 
-            {clickupFoldersAndLists.folders.length === 0 && clickupFoldersAndLists.folderlessLists.length === 0 && (
+            {folders.length === 0 && folderlessLists.length === 0 && (
               <div className="text-center py-4 text-zinc-400 dark:text-zinc-500">
                 <AlertCircle className="w-5 h-5 mx-auto mb-1 opacity-50" />
                 <p>No lists found in this space.</p>

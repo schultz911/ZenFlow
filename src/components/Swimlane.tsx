@@ -24,6 +24,7 @@ import {
   ArrowDown,
   Calendar,
   RefreshCw,
+  UserCog,
 } from 'lucide-react';
 import { useDashboard } from '../context/DashboardContext';
 
@@ -46,6 +47,7 @@ interface SwimlaneProps {
   onAdjustBillableHours?: (task: Task) => void;
   onUpdateTaskTitle?: (taskId: string, newTitle: string) => void;
   onDeleteTask: (taskId: string) => void;
+  onEditUser?: (user: User) => void;
   onDeleteUser?: (user: User) => void;
   onMoveTask: (taskId: string, targetUserId: string, newStatus: TaskStatus, newIndex?: number, newDueDate?: string | null) => void;
   onOpenWorkloadModal: (user: User) => void;
@@ -108,6 +110,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   onAdjustBillableHours,
   onUpdateTaskTitle,
   onDeleteTask,
+  onEditUser,
   onDeleteUser,
   onMoveTask,
   onOpenWorkloadModal,
@@ -720,6 +723,18 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               >
                 <Plus className="h-3.5 w-3.5" />
                 <span>Add Task</span>
+              </button>
+            )}
+
+            {/* Edit User Button - Only Superadmin and CDs */}
+            {onEditUser && canManageMembers && (
+              <button
+                id={`edit-user-btn-${user.id}`}
+                onClick={() => onEditUser(user)}
+                title={`Edit ${user.name}'s profile`}
+                className="flex items-center justify-center rounded-xl p-2 text-neutral-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 border border-neutral-200/60 dark:border-white/5 hover:border-blue-500/20 transition-all cursor-pointer"
+              >
+                <UserCog className="h-3.5 w-3.5" />
               </button>
             )}
 

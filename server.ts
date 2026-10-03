@@ -701,10 +701,86 @@ function broadcastEvent(type: string, payload: any) {
   });
 }
 
+function deduplicateUsers(appStore: AppStore): boolean {
+  let changed = false;
+  const byEmail = new Map<string, User[]>();
+  for (const u of appStore.users) {
+    if (!u || !u.email) continue;
+    const em = u.email.toLowerCase().trim();
+    if (!byEmail.has(em)) byEmail.set(em, []);
+    byEmail.get(em)!.push(u);
+  }
+
+  for (const [email, list] of byEmail.entries()) {
+    if (list.length <= 1) {
+      if (email === SUPERADMIN_EMAIL.toLowerCase() && list[0] && !list[0].isCreativeDirector) {
+        list[0].isCreativeDirector = true;
+        changed = true;
+      }
+      continue;
+    }
+
+    changed = true;
+    console.log(`[Deduplication] Resolving ${list.length} duplicate accounts for ${email}...`);
+
+    // Determine primary user:
+    // 1. Account that has tasks in appStore.tasks
+    // 2. Account whose ID is NOT 'user-superadmin-kiran'
+    // 3. Earliest created account
+    let primary = list.find(u => appStore.tasks.some(t => t.userId === u.id));
+    if (!primary) {
+      primary = list.find(u => u.id !== 'user-superadmin-kiran') || list[0];
+    }
+
+    if (email === SUPERADMIN_EMAIL.toLowerCase()) {
+      primary.isCreativeDirector = true;
+    }
+
+    // Reassign any tasks belonging to other duplicate accounts to primary ID
+    for (const dup of list) {
+      if (dup.id === primary.id) continue;
+      for (const t of appStore.tasks) {
+        if (t.userId === dup.id) {
+          t.userId = primary.id;
+          changed = true;
+        }
+      }
+      dbDeleteUser(dup.id).catch(() => {});
+    }
+
+    // Retain only the primary user
+    appStore.users = appStore.users.filter(u => {
+      if (u.email && u.email.toLowerCase().trim() === email) {
+        return u.id === primary.id;
+      }
+      return true;
+    });
+
+    console.log(`[Deduplication] Successfully retained primary user: ${primary.name} (${primary.id}) and pruned duplicates.`);
+  }
+
+  if (changed) {
+    saveStore(appStore);
+  }
+  return changed;
+}
+
 function ensureSuperadmin(appStore: AppStore) {
-  let superadmin = appStore.users.find(u => u.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase());
-  if (!superadmin) {
-    superadmin = {
+  deduplicateUsers(appStore);
+
+  const existingSuperadmin = appStore.users.find(
+    u => u.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase()
+  );
+
+  if (existingSuperadmin) {
+    if (!existingSuperadmin.isCreativeDirector) {
+      existingSuperadmin.isCreativeDirector = true;
+      saveStore(appStore);
+      dbSaveUser(existingSuperadmin).catch(e => console.error('Firestore superadmin update err:', e));
+    }
+  } else {
+    // Only bootstrap if NO user with SUPERADMIN_EMAIL exists
+    const superadmin: User = {
       id: 'user-superadmin-kiran',
       name: 'Kiran S',
       email: SUPERADMIN_EMAIL,
@@ -717,14 +793,10 @@ function ensureSuperadmin(appStore: AppStore) {
     saveStore(appStore);
     dbSaveUser(superadmin).catch(e => console.error('Firestore superadmin init err:', e));
     console.log(`[Superadmin] Initialized ${SUPERADMIN_EMAIL} with Creative Director privileges.`);
-  } else if (!superadmin.isCreativeDirector) {
-    superadmin.isCreativeDirector = true;
-    saveStore(appStore);
-    dbSaveUser(superadmin).catch(e => console.error('Firestore superadmin update err:', e));
   }
 }
 
-// Ensure superadmin exists on startup
+// Ensure superadmin exists and data is deduplicated on startup
 ensureSuperadmin(store);
 
 async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User) {
@@ -939,6 +1011,8 @@ async function startServer() {
     res.setHeader('ETag', etag);
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
 
+    deduplicateUsers(store);
+
     if (req.headers['if-none-match'] === etag) {
       return res.status(304).end();
     }
@@ -960,6 +1034,8 @@ async function startServer() {
     const cleanEmail = sanitizeString(email).toLowerCase();
     const cleanName = name ? sanitizeString(name) : '';
     const cleanRole = (role === 'design' ? 'design' : 'content') as 'content' | 'design';
+
+    deduplicateUsers(store);
 
     let existingUser = store.users.find(u => u.email.toLowerCase() === cleanEmail);
 
@@ -1006,6 +1082,7 @@ async function startServer() {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });
     const cleanEmail = sanitizeString(email).toLowerCase();
+    deduplicateUsers(store);
     const user = store.users.find(u => u.email.toLowerCase() === cleanEmail);
     if (!user) {
       return res.status(404).json({ error: 'No account registered with this email address' });
@@ -1015,6 +1092,7 @@ async function startServer() {
 
   // API: Get all users with ETag conditional validation (HTTP 304 Not Modified)
   app.get('/api/users', (req: Request, res: Response) => {
+    deduplicateUsers(store);
     const etag = `W/"zenflow-users-${stateRevision}"`;
     res.setHeader('ETag', etag);
     res.setHeader('Cache-Control', 'no-cache, must-revalidate');
@@ -1114,7 +1192,9 @@ async function startServer() {
     if (role !== undefined && (role === 'content' || role === 'design')) {
       current.role = role;
     }
-    if (isCreativeDirector !== undefined) {
+    if (current.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase()) {
+      current.isCreativeDirector = true;
+    } else if (isCreativeDirector !== undefined) {
       current.isCreativeDirector = !!isCreativeDirector;
     }
     if (creativeDirectorId !== undefined) {

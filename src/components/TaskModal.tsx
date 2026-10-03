@@ -142,19 +142,21 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     };
   }, [taskToEdit, activities]);
 
+  // Available lists for the selected folder
+  const availableLists = useMemo(() => {
+    const folders = clickupFoldersAndLists?.folders || [];
+    const folderlessLists = clickupFoldersAndLists?.folderlessLists || [];
+    if (clickupFolderId) {
+      const folder = folders.find(f => f.id === clickupFolderId);
+      return folder?.lists || [];
+    }
+    return folderlessLists;
+  }, [clickupFolderId, clickupFoldersAndLists]);
+
   if (!isOpen) return null;
 
   const selectedUser = users.find(u => u.id === userId);
   const role = selectedUser?.role || 'content';
-
-  // Available lists for the selected folder
-  const availableLists = useMemo(() => {
-    if (clickupFolderId) {
-      const folder = clickupFoldersAndLists.folders.find(f => f.id === clickupFolderId);
-      return folder?.lists || [];
-    }
-    return clickupFoldersAndLists.folderlessLists;
-  }, [clickupFolderId, clickupFoldersAndLists]);
 
   // Quick due dates helper
   const setQuickDate = (daysFromNow: number | null) => {
@@ -206,13 +208,15 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     // Resolve folder and list names
     let folderName: string | undefined;
     let listName: string | undefined;
+    const folders = clickupFoldersAndLists?.folders || [];
+    const folderlessLists = clickupFoldersAndLists?.folderlessLists || [];
     if (clickupFolderId) {
-      const f = clickupFoldersAndLists.folders.find(fold => fold.id === clickupFolderId);
+      const f = folders.find(fold => fold.id === clickupFolderId);
       folderName = f?.name;
       const l = f?.lists?.find(lst => lst.id === clickupListId);
       listName = l?.name;
     } else if (clickupListId) {
-      const l = clickupFoldersAndLists.folderlessLists.find(lst => lst.id === clickupListId);
+      const l = folderlessLists.find(lst => lst.id === clickupListId);
       listName = l?.name;
     }
 
@@ -559,7 +563,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-1.5 px-2.5 text-xs text-neutral-900 dark:text-white"
                     >
                       <option value="">Space (Folderless)</option>
-                      {clickupFoldersAndLists.folders.map(f => (
+                      {(clickupFoldersAndLists?.folders || []).map(f => (
                         <option key={f.id} value={f.id}>{f.name}</option>
                       ))}
                     </select>
