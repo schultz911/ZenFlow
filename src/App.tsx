@@ -355,17 +355,41 @@ function DashboardContent() {
 
   if (isAuthChecking) {
     return (
-      <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center p-4 selection:bg-blue-500/30 selection:text-white">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 shadow-xl shadow-blue-500/20">
-            <span className="font-bold text-2xl text-white tracking-wider">ZF</span>
-            <div className="absolute inset-0 rounded-2xl border border-white/20 animate-pulse" />
+      <div className="min-h-screen bg-neutral-50 dark:bg-[#0A0A0A] flex flex-col items-center justify-center p-4 selection:bg-blue-500/30 selection:text-white transition-colors">
+        <div className="flex flex-col items-center gap-3.5 text-center">
+          <div
+            id="zenflow-loading-logo"
+            className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-900 dark:bg-[#1A1A1A] border border-neutral-800 dark:border-white/10 text-blue-500 shadow-xl shadow-blue-500/10 shrink-0"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-7 w-7"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M 4.5 7.2 C 8.5 4.8, 14 9.6, 19.5 7 L 4.5 17 C 10 14.4, 15.5 19.2, 19.5 16.8" />
+            </svg>
           </div>
           <div>
-            <h1 className="text-xl font-bold text-white tracking-tight">zenFlow</h1>
-            <p className="text-xs text-white/40 mt-1">Verifying Google authentication session...</p>
+            <div className="flex items-baseline justify-center leading-none">
+              <span className="text-2xl font-bold tracking-tight text-neutral-900 dark:text-white">
+                zen
+              </span>
+              <span className="font-flowy text-3xl font-bold text-blue-600 dark:text-blue-400 ml-0.5 select-none">
+                Flow
+              </span>
+            </div>
+            <p className="text-[11px] font-medium text-neutral-500 dark:text-white/40 tracking-normal mt-1">
+              Workflow Management System
+            </p>
           </div>
-          <Loader2 className="w-5 h-5 text-blue-500 animate-spin mt-2" />
+          <div className="flex items-center gap-2 mt-2 text-xs text-neutral-400 dark:text-white/40">
+            <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+            <span>Verifying session...</span>
+          </div>
         </div>
       </div>
     );
