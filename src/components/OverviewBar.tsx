@@ -9,6 +9,9 @@ import {
   AlertTriangle,
   FileSpreadsheet,
   FileCode,
+  Users,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
 
 interface OverviewBarProps {
@@ -24,10 +27,39 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
   onOpenNewTaskModal,
   onOpenNewUserModal,
 }) => {
-  const { activeRoleTab, users, tasks } = useDashboard();
+  const {
+    activeRoleTab,
+    users,
+    tasks,
+    canSwitchBoards,
+    activeBoardId,
+    setActiveBoardId,
+    isSuperadmin,
+    creativeDirectors,
+  } = useDashboard();
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const [isBoardDropdownOpen, setIsBoardDropdownOpen] = useState(false);
+  const boardDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close board dropdown when clicking outside
+  useEffect(() => {
+    if (!isBoardDropdownOpen) return;
+    const handleOutside = (e: MouseEvent) => {
+      if (boardDropdownRef.current && !boardDropdownRef.current.contains(e.target as Node)) {
+        setIsBoardDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [isBoardDropdownOpen]);
+
+  const currentBoardLabel = useMemo(() => {
+    if (activeBoardId === 'all') return 'All Teams';
+    const cd = creativeDirectors.find(c => c.id === activeBoardId);
+    return cd ? `${cd.name}'s Team` : 'Team Board';
+  }, [activeBoardId, creativeDirectors]);
 
   // Close export menu when clicking outside
   useEffect(() => {
@@ -204,41 +236,100 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
           )}
         </div>
 
-        {/* Export Workspace Dropdown */}
-        <div className="relative" ref={exportMenuRef}>
-          <button
-            id="export-workspace-btn"
-            onClick={() => setShowExportMenu(prev => !prev)}
-            className="flex items-center gap-1.5 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414] hover:bg-neutral-50 dark:hover:bg-white/5 px-3 py-2 text-xs font-medium text-neutral-700 dark:text-white/70 transition-colors shadow-xs cursor-pointer"
-          >
-            <Download className="h-3.5 w-3.5" />
-            <span>Export Report</span>
-          </button>
+        {/* Right Action Utilities: Team Board Selector & Export Workspace */}
+        <div className="flex items-center gap-2">
+          {/* Team Board Selector (Superadmin & Creative Directors) */}
+          {canSwitchBoards && (
+            <div className="relative" ref={boardDropdownRef}>
+              <button
+                id="board-selector-btn"
+                onClick={() => setIsBoardDropdownOpen(prev => !prev)}
+                className="flex items-center gap-1.5 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414] hover:bg-neutral-50 dark:hover:bg-white/5 px-3 py-2 text-xs font-medium text-neutral-800 dark:text-neutral-200 transition-colors shadow-xs cursor-pointer"
+              >
+                <Users className="h-3.5 w-3.5 text-neutral-500 dark:text-neutral-400" />
+                <span className="max-w-[140px] truncate">{currentBoardLabel}</span>
+                <ChevronDown className="h-3 w-3 text-neutral-400" />
+              </button>
 
-          {showExportMenu && (
-            <div className="absolute right-0 mt-1.5 w-52 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] p-1.5 shadow-xl z-20">
-              <button
-                onClick={() => {
-                  setShowExportMenu(false);
-                  exportWorkspaceXLS(tasks, users);
-                }}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
-              >
-                <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-500" />
-                <span>Export Excel (.xls) Report</span>
-              </button>
-              <button
-                onClick={() => {
-                  setShowExportMenu(false);
-                  exportWorkspaceJSON(tasks, users);
-                }}
-                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
-              >
-                <FileCode className="h-3.5 w-3.5 text-blue-500" />
-                <span>Export JSON Audit</span>
-              </button>
+              {isBoardDropdownOpen && (
+                <div className="absolute right-0 sm:left-0 sm:right-auto mt-1.5 w-52 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] py-1.5 shadow-xl z-30">
+                  <div className="px-3 py-1.5 text-[10px] font-semibold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider">
+                    Select Team Board
+                  </div>
+                  {isSuperadmin && (
+                    <button
+                      onClick={() => {
+                        setActiveBoardId('all');
+                        setIsBoardDropdownOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-1.5 text-xs text-left hover:bg-neutral-100 dark:hover:bg-white/5 cursor-pointer ${
+                        activeBoardId === 'all'
+                          ? 'text-blue-600 dark:text-blue-400 font-semibold'
+                          : 'text-neutral-700 dark:text-neutral-300'
+                      }`}
+                    >
+                      <span>All Teams (Superadmin)</span>
+                      {activeBoardId === 'all' && <Check className="h-3.5 w-3.5 text-blue-500" />}
+                    </button>
+                  )}
+                  {creativeDirectors.map(cd => (
+                    <button
+                      key={cd.id}
+                      onClick={() => {
+                        setActiveBoardId(cd.id);
+                        setIsBoardDropdownOpen(false);
+                      }}
+                      className={`w-full flex items-center justify-between px-3 py-1.5 text-xs text-left hover:bg-neutral-100 dark:hover:bg-white/5 cursor-pointer ${
+                        activeBoardId === cd.id
+                          ? 'text-blue-600 dark:text-blue-400 font-semibold'
+                          : 'text-neutral-700 dark:text-neutral-300'
+                      }`}
+                    >
+                      <span className="truncate">{cd.name}&apos;s Team</span>
+                      {activeBoardId === cd.id && <Check className="h-3.5 w-3.5 shrink-0 text-blue-500" />}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
+
+          {/* Export Workspace Dropdown */}
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              id="export-workspace-btn"
+              onClick={() => setShowExportMenu(prev => !prev)}
+              className="flex items-center gap-1.5 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414] hover:bg-neutral-50 dark:hover:bg-white/5 px-3 py-2 text-xs font-medium text-neutral-700 dark:text-white/70 transition-colors shadow-xs cursor-pointer"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span>Export Report</span>
+            </button>
+
+            {showExportMenu && (
+              <div className="absolute right-0 mt-1.5 w-52 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] p-1.5 shadow-xl z-20">
+                <button
+                  onClick={() => {
+                    setShowExportMenu(false);
+                    exportWorkspaceXLS(tasks, users);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-500" />
+                  <span>Export Excel (.xls) Report</span>
+                </button>
+                <button
+                  onClick={() => {
+                    setShowExportMenu(false);
+                    exportWorkspaceJSON(tasks, users);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                >
+                  <FileCode className="h-3.5 w-3.5 text-blue-500" />
+                  <span>Export JSON Audit</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

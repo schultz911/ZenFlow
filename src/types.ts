@@ -62,6 +62,25 @@ export interface Task {
   clickupListName?: string;
   clickupSpaceId?: string;
   clickupUrl?: string;
+  clickupTaskType?: string;
+  clickupTaskTypeId?: string;
+  clickupTaskTypeFieldId?: string;
+}
+
+export interface ClickupCustomFieldOption {
+  id: string;
+  name: string;
+  color?: string;
+  orderindex?: number;
+}
+
+export interface ClickupCustomField {
+  id: string;
+  name: string;
+  type: string;
+  type_config?: {
+    options?: ClickupCustomFieldOption[];
+  };
 }
 
 export interface ClickupSpace {

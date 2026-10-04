@@ -65,6 +65,9 @@ interface Task {
   clickupListName?: string;
   clickupSpaceId?: string;
   clickupUrl?: string;
+  clickupTaskType?: string;
+  clickupTaskTypeId?: string;
+  clickupTaskTypeFieldId?: string;
 }
 
 interface AppStore {
@@ -808,12 +811,58 @@ async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User) {
 
   const targetStatus = ZENFLOW_TO_CLICKUP_STATUS[task.status] || 'to do';
   const estimateMs = COGNITIVE_LOAD_ESTIMATES_MS[task.cognitiveLoad] || COGNITIVE_LOAD_ESTIMATES_MS.medium;
-  const tag = (taskUser?.role === 'design' || (!taskUser && task.userId.includes('design'))) ? 'Design' : 'Content & Copy';
   const clickupAssigneeId = taskUser?.clickupUserId ? parseInt(taskUser.clickupUserId, 10) : undefined;
+
+  // Tracked duration in ms from ZenFlow
+  let zenflowTrackedMs = task.inProgressDurationMs || 0;
+  if (task.status === 'in_progress' && task.inProgressStartedAt) {
+    zenflowTrackedMs += Math.max(0, Date.now() - new Date(task.inProgressStartedAt).getTime());
+  }
 
   // If task already exists in ClickUp, update it
   if (task.clickupTaskId) {
     try {
+      // 1. Fetch current task on ClickUp to inspect time_spent and sync tracked time accurately
+      let clickupTimeSpent = 0;
+      try {
+        const getRes = await fetch(`https://api.clickup.com/api/v2/task/${task.clickupTaskId}`, {
+          headers: { Authorization: token },
+        });
+        if (getRes.ok) {
+          const cuTask = await getRes.json();
+          clickupTimeSpent = typeof cuTask.time_spent === 'number' ? cuTask.time_spent : 0;
+        }
+      } catch (err) {
+        console.warn(`[ClickUp Sync] Error reading task ${task.id} details:`, err);
+      }
+
+      // Sync tracked time if ZenFlow has more time than recorded in ClickUp
+      const timeDiffMs = zenflowTrackedMs - clickupTimeSpent;
+      if (timeDiffMs >= 1000) {
+        try {
+          const timeRes = await fetch(`https://api.clickup.com/api/v2/task/${task.clickupTaskId}/time`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: token,
+            },
+            body: JSON.stringify({
+              time: Math.round(timeDiffMs),
+              start: Date.now() - Math.round(timeDiffMs),
+              end: Date.now(),
+            }),
+          });
+          if (timeRes.ok) {
+            console.log(`[ClickUp Sync] Tracked time updated on task ${task.id}: +${Math.round(timeDiffMs)}ms`);
+          } else {
+            console.warn(`[ClickUp Sync] Failed to update tracked time on task ${task.id}:`, await timeRes.text());
+          }
+        } catch (tErr) {
+          console.warn(`[ClickUp Sync] Error posting tracked time to task ${task.id}:`, tErr);
+        }
+      }
+
+      // 2. Update task attributes on ClickUp (no tags)
       const updatePayload: Record<string, any> = {
         name: task.title,
         status: targetStatus,
@@ -837,25 +886,75 @@ async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User) {
       if (!res.ok) {
         console.warn(`[ClickUp Sync] Failed to update task ${task.id} in ClickUp:`, await res.text());
       }
+
+      // 3. Set "Task Type" Custom Field value
+      if (task.clickupTaskTypeFieldId && task.clickupTaskTypeId) {
+        try {
+          await fetch(`https://api.clickup.com/api/v2/task/${task.clickupTaskId}/field/${task.clickupTaskTypeFieldId}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: token,
+            },
+            body: JSON.stringify({ value: task.clickupTaskTypeId }),
+          });
+        } catch (cfErr) {
+          console.warn(`[ClickUp Sync] Error setting Task Type custom field on ${task.id}:`, cfErr);
+        }
+      } else if (task.clickupTaskType && task.clickupListId) {
+        // Resolve field and option dynamically if needed
+        try {
+          const fRes = await fetch(`https://api.clickup.com/api/v2/list/${task.clickupListId}/field`, {
+            headers: { Authorization: token },
+          });
+          if (fRes.ok) {
+            const fData = await fRes.json();
+            const ttField = (fData.fields || []).find((f: any) =>
+              (f.name || '').toLowerCase().trim() === 'task type' || (f.name || '').toLowerCase().includes('task type')
+            );
+            if (ttField) {
+              const matchedOpt = (ttField.type_config?.options || []).find((o: any) =>
+                o.name.toLowerCase() === task.clickupTaskType?.toLowerCase() || o.id === task.clickupTaskType
+              );
+              if (matchedOpt) {
+                task.clickupTaskTypeFieldId = ttField.id;
+                task.clickupTaskTypeId = matchedOpt.id;
+                await fetch(`https://api.clickup.com/api/v2/task/${task.clickupTaskId}/field/${ttField.id}`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: token,
+                  },
+                  body: JSON.stringify({ value: matchedOpt.id }),
+                });
+              }
+            }
+          }
+        } catch (cfErr) {
+          console.warn(`[ClickUp Sync] Dynamic Task Type lookup err:`, cfErr);
+        }
+      }
     } catch (err) {
       console.warn(`[ClickUp Sync] Error updating task ${task.id}:`, err);
     }
     return;
   }
 
-  // Create new task in ClickUp
+  // Create new task in ClickUp (without tags, with custom fields)
   try {
     const createPayload: Record<string, any> = {
       name: task.title,
       status: targetStatus,
       time_estimate: estimateMs,
-      tags: [tag],
     };
     if (task.description) createPayload.description = task.description;
     if (task.dueDate) createPayload.due_date = new Date(task.dueDate + 'T23:59:59').getTime();
     if (task.inProgressStartedAt) createPayload.start_date = new Date(task.inProgressStartedAt).getTime();
     if (clickupAssigneeId && !isNaN(clickupAssigneeId)) {
       createPayload.assignees = [clickupAssigneeId];
+    }
+    if (task.clickupTaskTypeFieldId && task.clickupTaskTypeId) {
+      createPayload.custom_fields = [{ id: task.clickupTaskTypeFieldId, value: task.clickupTaskTypeId }];
     }
 
     const res = await fetch(`https://api.clickup.com/api/v2/list/${task.clickupListId}/task`, {
@@ -870,10 +969,47 @@ async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User) {
       const clickupTask = await res.json();
       task.clickupTaskId = clickupTask.id;
       task.clickupUrl = clickupTask.url;
+
+      // Sync initial tracked duration if already accumulated
+      if (zenflowTrackedMs >= 1000) {
+        try {
+          await fetch(`https://api.clickup.com/api/v2/task/${clickupTask.id}/time`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: token,
+            },
+            body: JSON.stringify({
+              time: Math.round(zenflowTrackedMs),
+              start: Date.now() - Math.round(zenflowTrackedMs),
+              end: Date.now(),
+            }),
+          });
+        } catch (tErr) {
+          console.warn(`[ClickUp Sync] Error adding initial tracked time to task ${task.id}:`, tErr);
+        }
+      }
+
+      // Ensure custom field is set if not accepted in create payload
+      if (task.clickupTaskTypeFieldId && task.clickupTaskTypeId) {
+        try {
+          await fetch(`https://api.clickup.com/api/v2/task/${clickupTask.id}/field/${task.clickupTaskTypeFieldId}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: token,
+            },
+            body: JSON.stringify({ value: task.clickupTaskTypeId }),
+          });
+        } catch {
+          // ignore
+        }
+      }
+
       saveStore(store);
       dbSaveTask(task).catch(e => console.error('Firestore save task err:', e));
       broadcastEvent('task_updated', task);
-      console.log(`[ClickUp Sync] Created task ${task.id} in ClickUp (${clickupTask.id})`);
+      console.log(`[ClickUp Sync] Created task ${task.id} in ClickUp (${clickupTask.id}) with status ${targetStatus} and tracked time ${zenflowTrackedMs}ms`);
     } else {
       console.warn(`[ClickUp Sync] Failed to create task ${task.id} in ClickUp:`, await res.text());
     }
@@ -1308,6 +1444,9 @@ async function startServer() {
       clickupListName,
       clickupSpaceId,
       clickupUrl,
+      clickupTaskType,
+      clickupTaskTypeId,
+      clickupTaskTypeFieldId,
     } = req.body;
 
     // Idempotency guard for offline mutation replay: if task with this ID already exists, return it
@@ -1370,6 +1509,9 @@ async function startServer() {
       clickupListName: clickupListName ? sanitizeString(clickupListName) : undefined,
       clickupSpaceId: clickupSpaceId ? sanitizeString(clickupSpaceId) : undefined,
       clickupUrl: clickupUrl ? sanitizeString(clickupUrl) : undefined,
+      clickupTaskType: clickupTaskType ? sanitizeString(clickupTaskType) : undefined,
+      clickupTaskTypeId: clickupTaskTypeId ? sanitizeString(clickupTaskTypeId) : undefined,
+      clickupTaskTypeFieldId: clickupTaskTypeFieldId ? sanitizeString(clickupTaskTypeFieldId) : undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       activityLog: [initialActivity],
@@ -1422,6 +1564,9 @@ async function startServer() {
       clickupListName,
       clickupSpaceId,
       clickupUrl,
+      clickupTaskType,
+      clickupTaskTypeId,
+      clickupTaskTypeFieldId,
     } = req.body;
 
     if (title !== undefined) {
@@ -1573,6 +1718,9 @@ async function startServer() {
       clickupListName: clickupListName !== undefined ? (clickupListName ? sanitizeString(clickupListName) : undefined) : currentTask.clickupListName,
       clickupSpaceId: clickupSpaceId !== undefined ? (clickupSpaceId ? sanitizeString(clickupSpaceId) : undefined) : currentTask.clickupSpaceId,
       clickupUrl: clickupUrl !== undefined ? (clickupUrl ? sanitizeString(clickupUrl) : undefined) : currentTask.clickupUrl,
+      clickupTaskType: clickupTaskType !== undefined ? (clickupTaskType ? sanitizeString(clickupTaskType) : undefined) : currentTask.clickupTaskType,
+      clickupTaskTypeId: clickupTaskTypeId !== undefined ? (clickupTaskTypeId ? sanitizeString(clickupTaskTypeId) : undefined) : currentTask.clickupTaskTypeId,
+      clickupTaskTypeFieldId: clickupTaskTypeFieldId !== undefined ? (clickupTaskTypeFieldId ? sanitizeString(clickupTaskTypeFieldId) : undefined) : currentTask.clickupTaskTypeFieldId,
       updatedAt: new Date().toISOString(),
       activityLog: activityEntries.slice(0, 15),
     };
@@ -1911,6 +2059,71 @@ async function startServer() {
     } catch (err: any) {
       console.error('[ClickUp] Folders & Lists fetch error:', err);
       res.status(500).json({ error: err.message || 'Error fetching folders and lists' });
+    }
+  });
+
+  // API: Get Custom Fields (specifically "Task Type") from ClickUp
+  app.get('/api/clickup/custom-fields', async (req: Request, res: Response) => {
+    let apiKey = (req.headers['x-clickup-api-key'] as string) || (req.query.apiKey as string);
+    const listId = req.query.listId as string;
+    const spaceId = req.query.spaceId as string;
+    const folderId = req.query.folderId as string;
+
+    if (!apiKey) {
+      const userWithKey = store.users.find(u => u.clickupApiKey);
+      if (userWithKey?.clickupApiKey) {
+        apiKey = userWithKey.clickupApiKey;
+      }
+    }
+
+    if (!apiKey) {
+      return res.status(400).json({ error: 'ClickUp API key is required' });
+    }
+
+    try {
+      const cleanKey = apiKey.trim();
+      let url = '';
+      if (listId) {
+        url = `https://api.clickup.com/api/v2/list/${listId}/field`;
+      } else if (spaceId) {
+        url = `https://api.clickup.com/api/v2/space/${spaceId}/field`;
+      } else if (folderId) {
+        url = `https://api.clickup.com/api/v2/folder/${folderId}/field`;
+      } else {
+        return res.status(400).json({ error: 'listId, spaceId, or folderId is required' });
+      }
+
+      const response = await fetch(url, {
+        headers: { Authorization: cleanKey },
+      });
+
+      if (!response.ok) {
+        return res.status(response.status).json({ error: 'Failed to fetch custom fields from ClickUp' });
+      }
+
+      const data = await response.json();
+      const fields = data.fields || [];
+
+      // Find the "Task Type" field (case-insensitive)
+      const taskTypeField = fields.find((f: any) => 
+        (f.name || '').toLowerCase().trim() === 'task type' || (f.name || '').toLowerCase().includes('task type')
+      );
+
+      const options = taskTypeField?.type_config?.options || [];
+
+      res.json({
+        fields,
+        taskTypeField: taskTypeField ? {
+          id: taskTypeField.id,
+          name: taskTypeField.name,
+          type: taskTypeField.type,
+          options,
+        } : null,
+        options,
+      });
+    } catch (err: any) {
+      console.error('[ClickUp] Custom fields error:', err);
+      res.status(500).json({ error: err.message || 'Error fetching custom fields' });
     }
   });
 

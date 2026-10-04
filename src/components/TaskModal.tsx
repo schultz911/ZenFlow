@@ -58,9 +58,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     isZensciencesUser,
     isClickupConnected,
     selectedClickupSpaceId,
+    setSelectedClickupSpaceId,
+    clickupSpaces,
     clickupFoldersAndLists,
     createClickupList,
     canEditUserTasks,
+    clickupCustomFieldOptions,
+    clickupTaskTypeFieldId: ctxClickupTaskTypeFieldId,
   } = useDashboard();
 
   const [title, setTitle] = useState('');
@@ -69,6 +73,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [dueDate, setDueDate] = useState('');
   const [cognitiveLoad, setCognitiveLoad] = useState<CognitiveLoad>('medium');
   const [status, setStatus] = useState<TaskStatus>('todo');
+
+  // ClickUp Task Type custom field state
+  const [clickupTaskType, setClickupTaskType] = useState<string>('');
+  const [clickupTaskTypeId, setClickupTaskTypeId] = useState<string>('');
+  const [clickupTaskTypeFieldId, setClickupTaskTypeFieldId] = useState<string>('');
 
   // ClickUp folder and list destination state
   const [clickupFolderId, setClickupFolderId] = useState<string>('');
@@ -96,21 +105,80 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setStatus(taskToEdit.status);
       setClickupFolderId(taskToEdit.clickupFolderId || '');
       setClickupListId(taskToEdit.clickupListId || '');
+      setClickupTaskType(taskToEdit.clickupTaskType || '');
+      setClickupTaskTypeId(taskToEdit.clickupTaskTypeId || '');
+      setClickupTaskTypeFieldId(taskToEdit.clickupTaskTypeFieldId || ctxClickupTaskTypeFieldId || '');
     } else {
       setTitle('');
       setDescription('');
-      setUserId(defaultUserId || currentUser?.id || users[0]?.id || '');
+      const defaultUser = defaultUserId || currentUser?.id || users[0]?.id || '';
+      setUserId(defaultUser);
       setDueDate('');
       setCognitiveLoad('medium');
       setStatus(defaultStatus);
       setClickupFolderId('');
       setClickupListId('');
+
+      // If user has a role, match default task type if options available
+      const userObj = users.find(u => u.id === defaultUser);
+      const roleName = userObj?.role === 'content' ? 'Content & Copy' : 'Design';
+      const matchedOption = clickupCustomFieldOptions?.find(
+        o => o.name.toLowerCase() === roleName.toLowerCase()
+      );
+      if (matchedOption) {
+        setClickupTaskType(matchedOption.name);
+        setClickupTaskTypeId(matchedOption.id);
+      } else {
+        setClickupTaskType('');
+        setClickupTaskTypeId('');
+      }
+      setClickupTaskTypeFieldId(ctxClickupTaskTypeFieldId || '');
     }
     setShowConfirmDelete(false);
     setIsCreatingList(false);
     setNewListName('');
     setNewListError(null);
-  }, [taskToEdit, defaultUserId, defaultStatus, currentUser, users, isOpen]);
+  }, [
+    taskToEdit,
+    defaultUserId,
+    defaultStatus,
+    currentUser,
+    users,
+    isOpen,
+    ctxClickupTaskTypeFieldId,
+    clickupCustomFieldOptions,
+  ]);
+
+  // Derived effective task type options (ClickUp dropdown custom fields with fallback)
+  const effectiveTaskTypeOptions = useMemo(() => {
+    let list =
+      clickupCustomFieldOptions && clickupCustomFieldOptions.length > 0
+        ? [...clickupCustomFieldOptions]
+        : [
+            { id: 'content', name: 'Content & Copy' },
+            { id: 'design', name: 'Design' },
+          ];
+    if (
+      clickupTaskType &&
+      !list.some(
+        o => o.name.toLowerCase() === clickupTaskType.toLowerCase() || o.id === clickupTaskTypeId
+      )
+    ) {
+      list.unshift({ id: clickupTaskTypeId || clickupTaskType, name: clickupTaskType });
+    }
+    return list;
+  }, [clickupCustomFieldOptions, clickupTaskType, clickupTaskTypeId]);
+
+  // In-line preview of folders inside selected space
+  const folderPreviewText = useMemo(() => {
+    const space = clickupSpaces.find(s => s.id === selectedClickupSpaceId);
+    const sName = space?.name || 'Selected Space';
+    const folders = clickupFoldersAndLists?.folders || [];
+    if (folders.length > 0) {
+      return `(${sName} | ${folders.map(f => f.name).join(', ')})`;
+    }
+    return `(${sName} | Folderless Space)`;
+  }, [clickupSpaces, selectedClickupSpaceId, clickupFoldersAndLists]);
 
   const activities = useMemo(() => {
     return taskToEdit?.activityLog || [];
@@ -234,6 +302,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           clickupListId: clickupListId || undefined,
           clickupListName: listName,
           clickupSpaceId: selectedClickupSpaceId || undefined,
+          clickupTaskType: clickupTaskType || undefined,
+          clickupTaskTypeId: clickupTaskTypeId || undefined,
+          clickupTaskTypeFieldId: clickupTaskTypeFieldId || ctxClickupTaskTypeFieldId || undefined,
         });
       } else {
         await createTask({
@@ -248,6 +319,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           clickupListId: clickupListId || undefined,
           clickupListName: listName,
           clickupSpaceId: selectedClickupSpaceId || undefined,
+          clickupTaskType: clickupTaskType || undefined,
+          clickupTaskTypeId: clickupTaskTypeId || undefined,
+          clickupTaskTypeFieldId: clickupTaskTypeFieldId || ctxClickupTaskTypeFieldId || undefined,
         });
       }
       onClose();
@@ -295,21 +369,55 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          {/* Task Title */}
-          <div>
-            <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
-              Task <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="task-title-input"
-              type="text"
-              value={title}
-              onChange={e => setTitle(e.target.value)}
-              placeholder="e.g. Redesign navigation menu for mobile screens"
-              className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
-              required
-              autoFocus
-            />
+          {/* Task Name & Task Type */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2">
+              <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                Task Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="task-title-input"
+                type="text"
+                value={title}
+                onChange={e => setTitle(e.target.value)}
+                placeholder="e.g. Redesign navigation menu for mobile screens"
+                className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
+                required
+                autoFocus
+              />
+            </div>
+
+            <div className="sm:col-span-1">
+              <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                Task Type
+              </label>
+              <div className="relative">
+                <select
+                  id="task-type-select"
+                  value={clickupTaskTypeId || clickupTaskType}
+                  onChange={e => {
+                    const val = e.target.value;
+                    const opt = effectiveTaskTypeOptions.find(o => o.id === val || o.name === val);
+                    if (opt) {
+                      setClickupTaskTypeId(opt.id);
+                      setClickupTaskType(opt.name);
+                    } else {
+                      setClickupTaskTypeId(val);
+                      setClickupTaskType(val);
+                    }
+                  }}
+                  className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 pl-3 pr-8 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none focus:ring-0 transition-colors cursor-pointer hover:border-neutral-400 dark:hover:border-white/20"
+                >
+                  <option value="">Select Type...</option>
+                  {effectiveTaskTypeOptions.map(opt => (
+                    <option key={opt.id} value={opt.id} className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">
+                      {opt.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
+              </div>
+            </div>
           </div>
 
           {/* Row: Assignee & Status */}
@@ -528,6 +636,42 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 </button>
               </div>
 
+              {/* Space Selection with in-line preview */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[10px] uppercase font-semibold text-neutral-500 dark:text-white/40">
+                    Space
+                  </label>
+                  {folderPreviewText && (
+                    <span className="text-[10px] text-purple-600 dark:text-purple-300 font-mono truncate max-w-[280px]">
+                      {folderPreviewText}
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <select
+                    value={selectedClickupSpaceId}
+                    onChange={e => {
+                      setSelectedClickupSpaceId(e.target.value);
+                      setClickupFolderId('');
+                      setClickupListId('');
+                    }}
+                    className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-1.5 pl-2.5 pr-8 text-xs text-neutral-900 dark:text-white focus:border-purple-500 focus:outline-none"
+                  >
+                    {clickupSpaces.length === 0 ? (
+                      <option value="">No spaces available</option>
+                    ) : (
+                      clickupSpaces.map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
+                </div>
+              </div>
+
               {isCreatingList ? (
                 <div className="space-y-2">
                   <input
@@ -554,19 +698,22 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     <label className="block text-[10px] uppercase font-semibold text-neutral-500 dark:text-white/40 mb-1">
                       Folder
                     </label>
-                    <select
-                      value={clickupFolderId}
-                      onChange={e => {
-                        setClickupFolderId(e.target.value);
-                        setClickupListId('');
-                      }}
-                      className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-1.5 px-2.5 text-xs text-neutral-900 dark:text-white"
-                    >
-                      <option value="">Space (Folderless)</option>
-                      {(clickupFoldersAndLists?.folders || []).map(f => (
-                        <option key={f.id} value={f.id}>{f.name}</option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <select
+                        value={clickupFolderId}
+                        onChange={e => {
+                          setClickupFolderId(e.target.value);
+                          setClickupListId('');
+                        }}
+                        className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-1.5 pl-2.5 pr-8 text-xs text-neutral-900 dark:text-white"
+                      >
+                        <option value="">Space (Folderless)</option>
+                        {(clickupFoldersAndLists?.folders || []).map(f => (
+                          <option key={f.id} value={f.id}>{f.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
+                    </div>
                   </div>
 
                   {/* List Selection */}
@@ -574,16 +721,19 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     <label className="block text-[10px] uppercase font-semibold text-neutral-500 dark:text-white/40 mb-1">
                       List
                     </label>
-                    <select
-                      value={clickupListId}
-                      onChange={e => setClickupListId(e.target.value)}
-                      className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-1.5 px-2.5 text-xs text-neutral-900 dark:text-white"
-                    >
-                      <option value="">Select a list...</option>
-                      {availableLists.map(l => (
-                        <option key={l.id} value={l.id}>{l.name}</option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <select
+                        value={clickupListId}
+                        onChange={e => setClickupListId(e.target.value)}
+                        className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-1.5 pl-2.5 pr-8 text-xs text-neutral-900 dark:text-white"
+                      >
+                        <option value="">Select a list...</option>
+                        {availableLists.map(l => (
+                          <option key={l.id} value={l.id}>{l.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
+                    </div>
                   </div>
                 </div>
               )}

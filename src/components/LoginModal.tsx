@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { Role } from '../types';
 import { X, Mail, User as UserIcon, Palette, FileText, ArrowRight, ShieldCheck, Crown, Loader2, Link2 } from 'lucide-react';
+import { ClickupMemberPicker } from './ClickupMemberPicker';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -386,26 +387,21 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             </div>
           )}
 
-          {/* New Account Only: ClickUp Member Mapping */}
-          {isNewAccountOnly && clickupMembers.length > 0 && (
-            <div>
+          {/* New Account Only: ClickUp Member Mapping with in-line search filtering */}
+          {isNewAccountOnly && (
+            <div className="space-y-1.5">
               <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5 flex items-center gap-1.5">
                 <Link2 className="w-3.5 h-3.5 text-indigo-500" />
                 <span>Map to ClickUp User (Optional)</span>
               </label>
-              <select
-                value={selectedClickupUserId}
-                onChange={e => setSelectedClickupUserId(e.target.value)}
-                className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white focus:border-indigo-500 focus:outline-none"
-              >
-                <option value="">-- No ClickUp Mapping --</option>
-                {clickupMembers.map(m => (
-                  <option key={m.id} value={m.id}>
-                    {m.username} {m.email ? `(${m.email})` : ''}
-                  </option>
-                ))}
-              </select>
-              <p className="text-[10px] text-neutral-500 dark:text-white/40 mt-1">
+              <ClickupMemberPicker
+                members={clickupMembers}
+                selectedMemberId={selectedClickupUserId}
+                onSelect={member => {
+                  setSelectedClickupUserId(member?.id || '');
+                }}
+              />
+              <p className="text-[10px] text-neutral-500 dark:text-white/40">
                 Automatically assigns tasks created in ZenFlow to this ClickUp member.
               </p>
             </div>

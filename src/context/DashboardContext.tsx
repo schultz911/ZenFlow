@@ -13,6 +13,7 @@ import {
   ClickupList,
   ClickupFolder,
   ClickupMember,
+  ClickupCustomFieldOption,
 } from '../types';
 import { INITIAL_USERS, INITIAL_TASKS } from '../data/initialData';
 import { compareTasksByDeadline, formatBillableHours, getTaskBillableMs } from '../utils/workload';
@@ -127,6 +128,11 @@ interface DashboardContextType {
   createClickupList: (name: string, spaceId: string, folderId?: string) => Promise<ClickupList | null>;
   syncUserTasksWithClickUp: (userId: string) => Promise<{ success: boolean; syncedCount: number; archivedCount: number; message: string }>;
   assignTaskClickupList: (taskId: string, listId: string, listName: string, folderId?: string, folderName?: string) => Promise<Task>;
+  clickupCustomFieldOptions: ClickupCustomFieldOption[];
+  clickupTaskTypeFieldId: string;
+  isLoadingTaskTypes: boolean;
+  fetchClickupCustomFields: (params: { listId?: string; spaceId?: string; folderId?: string }) => Promise<ClickupCustomFieldOption[]>;
+  getUserSyncState: (userId: string) => 'synced' | 'pending' | 'failed' | 'unmapped';
   // Tasks
   createTask: (data: {
     userId: string;
@@ -142,6 +148,9 @@ interface DashboardContextType {
     clickupListName?: string;
     clickupSpaceId?: string;
     clickupUrl?: string;
+    clickupTaskType?: string;
+    clickupTaskTypeId?: string;
+    clickupTaskTypeFieldId?: string;
   }) => Promise<Task>;
   updateTask: (id: string, updates: Partial<Task>) => Promise<Task>;
   adjustBillableHours: (taskId: string, newDurationMs: number, reason?: string) => Promise<Task>;
@@ -309,6 +318,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [clickupMembers, setClickupMembers] = useState<ClickupMember[]>([]);
+  const [clickupCustomFieldOptions, setClickupCustomFieldOptions] = useState<ClickupCustomFieldOption[]>([]);
+  const [clickupTaskTypeFieldId, setClickupTaskTypeFieldId] = useState<string>('');
+  const [isLoadingTaskTypes, setIsLoadingTaskTypes] = useState<boolean>(false);
+  const [userSyncFailures, setUserSyncFailures] = useState<Record<string, boolean>>({});
 
   const [syncStatus, setSyncStatus] = useState<'connected' | 'connecting' | 'offline'>('connecting');
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -923,7 +936,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         body: JSON.stringify({ userId, apiKey }),
       });
       const data = await res.json();
-      if (res.ok) {
+      if (res.ok && data.success) {
+        setUserSyncFailures(prev => ({ ...prev, [userId]: false }));
         await fetchState();
         return {
           success: true,
@@ -932,6 +946,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
           message: data.message || 'Sync complete',
         };
       }
+      setUserSyncFailures(prev => ({ ...prev, [userId]: true }));
       return {
         success: false,
         syncedCount: 0,
@@ -939,6 +954,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         message: data.error || 'Failed to sync with ClickUp',
       };
     } catch (err: any) {
+      setUserSyncFailures(prev => ({ ...prev, [userId]: true }));
       return {
         success: false,
         syncedCount: 0,
@@ -947,6 +963,57 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       };
     }
   }, [fetchState]);
+
+  const fetchClickupCustomFields = useCallback(async (params: { listId?: string; spaceId?: string; folderId?: string }): Promise<ClickupCustomFieldOption[]> => {
+    const apiKey = currentUserRef.current?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
+    if (!apiKey) return [];
+    setIsLoadingTaskTypes(true);
+    try {
+      const q = new URLSearchParams();
+      if (params.listId) q.set('listId', params.listId);
+      else if (params.spaceId) q.set('spaceId', params.spaceId);
+      else if (params.folderId) q.set('folderId', params.folderId);
+      q.set('apiKey', apiKey);
+
+      const res = await fetch(`/api/clickup/custom-fields?${q.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        const options: ClickupCustomFieldOption[] = data.options || [];
+        setClickupCustomFieldOptions(options);
+        if (data.taskTypeField?.id) {
+          setClickupTaskTypeFieldId(data.taskTypeField.id);
+        }
+        return options;
+      }
+    } catch (err) {
+      console.warn('[DashboardContext] Failed to fetch custom fields:', err);
+    } finally {
+      setIsLoadingTaskTypes(false);
+    }
+    return [];
+  }, []);
+
+  useEffect(() => {
+    if (selectedClickupSpaceId && clickupApiKey) {
+      fetchClickupCustomFields({ spaceId: selectedClickupSpaceId });
+    }
+  }, [selectedClickupSpaceId, clickupApiKey, fetchClickupCustomFields]);
+
+  const getUserSyncState = useCallback((targetUserId: string): 'synced' | 'pending' | 'failed' | 'unmapped' => {
+    const targetUser = usersRef.current.find(u => u.id === targetUserId);
+    if (!targetUser?.clickupUserId) {
+      return 'unmapped';
+    }
+    if (userSyncFailures[targetUserId]) {
+      return 'failed';
+    }
+    const targetTasks = tasksRef.current.filter(t => t.userId === targetUserId);
+    const hasUnsynced = targetTasks.some(t => t.clickupListId && !t.clickupTaskId);
+    if (hasUnsynced) {
+      return 'pending';
+    }
+    return 'synced';
+  }, [userSyncFailures]);
 
   // Authentication Login: takes name, role (content or design), official email address
   const login = useCallback(async (name: string, role: Role, email: string): Promise<User> => {
@@ -1074,6 +1141,9 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     clickupListName?: string;
     clickupSpaceId?: string;
     clickupUrl?: string;
+    clickupTaskType?: string;
+    clickupTaskTypeId?: string;
+    clickupTaskTypeFieldId?: string;
   }): Promise<Task> => {
     const realId = `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const currentTasks = tasksRef.current;
@@ -1109,6 +1179,9 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       clickupListName: data.clickupListName,
       clickupSpaceId: data.clickupSpaceId,
       clickupUrl: data.clickupUrl,
+      clickupTaskType: data.clickupTaskType,
+      clickupTaskTypeId: data.clickupTaskTypeId,
+      clickupTaskTypeFieldId: data.clickupTaskTypeFieldId,
       createdAt: now,
       updatedAt: now,
       activityLog: [initialActivity],
@@ -1677,6 +1750,11 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       createClickupList,
       syncUserTasksWithClickUp,
       assignTaskClickupList,
+      clickupCustomFieldOptions,
+      clickupTaskTypeFieldId,
+      isLoadingTaskTypes,
+      fetchClickupCustomFields,
+      getUserSyncState,
       // Tasks
       createTask,
       updateTask,
@@ -1733,6 +1811,11 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       createClickupList,
       syncUserTasksWithClickUp,
       assignTaskClickupList,
+      clickupCustomFieldOptions,
+      clickupTaskTypeFieldId,
+      isLoadingTaskTypes,
+      fetchClickupCustomFields,
+      getUserSyncState,
       createTask,
       updateTask,
       adjustBillableHours,

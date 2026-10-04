@@ -127,12 +127,17 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     canManageMembers,
     canEditUserTasks,
     setShowClickupPrompt,
+    getUserSyncState,
   } = useDashboard();
 
   const [isSyncingClickUp, setIsSyncingClickUp] = useState(false);
   const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
 
   const canEdit = useMemo(() => canEditUserTasks(user.id), [canEditUserTasks, user.id]);
+
+  const syncState = useMemo(() => {
+    return getUserSyncState(user.id);
+  }, [getUserSyncState, user.id, tasks]);
 
   const handleSyncClickUp = async () => {
     if (!isClickupConnected) {
@@ -694,31 +699,12 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               </div>
             </button>
 
-            {/* Sync tasks with ClickUp button */}
-            {isZensciencesUser && (
-              <button
-                id={`sync-clickup-btn-${user.id}`}
-                type="button"
-                onClick={handleSyncClickUp}
-                disabled={isSyncingClickUp}
-                title="Sync tasks with ClickUp"
-                className="flex items-center gap-1.5 rounded-xl border border-purple-500/30 bg-purple-50/50 dark:bg-purple-950/20 hover:bg-purple-100/50 dark:hover:bg-purple-900/30 text-purple-700 dark:text-purple-300 px-3 py-1.5 text-xs font-semibold transition-all cursor-pointer disabled:opacity-50"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 text-purple-600 dark:text-purple-400 ${isSyncingClickUp ? 'animate-spin' : ''}`} />
-                <span className="hidden sm:inline">
-                  {isSyncingClickUp ? 'Syncing...' : syncFeedback || 'Sync with ClickUp'}
-                </span>
-                <span className="sm:hidden">
-                  {isSyncingClickUp ? '...' : 'Sync'}
-                </span>
-              </button>
-            )}
-
-            {/* Add Task Button for this user */}
+            {/* 2. Add Task Button for this user */}
             {canEdit && (
               <button
                 id={`add-task-btn-${user.id}`}
                 onClick={() => onAddTask(user.id, 'todo')}
+                title="Add new task"
                 className="flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 px-3.5 py-2 text-xs font-semibold text-white shadow-md shadow-blue-900/20 transition-all cursor-pointer"
               >
                 <Plus className="h-3.5 w-3.5" />
@@ -726,7 +712,41 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               </button>
             )}
 
-            {/* Edit User Button - Only Superadmin and CDs */}
+            {/* 3. Sync tasks with ClickUp button (Icon only, 4 color states) */}
+            {isZensciencesUser && (
+              <button
+                id={`sync-clickup-btn-${user.id}`}
+                type="button"
+                onClick={handleSyncClickUp}
+                disabled={isSyncingClickUp || syncState === 'unmapped'}
+                title={
+                  syncState === 'unmapped'
+                    ? 'Member not mapped to ClickUp (edit profile to map)'
+                    : isSyncingClickUp
+                    ? 'Syncing tasks with ClickUp...'
+                    : syncState === 'failed'
+                    ? syncFeedback || 'Sync failed with ClickUp (click to retry)'
+                    : syncState === 'pending'
+                    ? syncFeedback || 'Changes pending sync with ClickUp (click to sync)'
+                    : syncFeedback || 'Tasks synced with ClickUp'
+                }
+                className={`flex items-center justify-center p-2 rounded-xl border transition-all ${
+                  syncState === 'unmapped'
+                    ? 'border-neutral-200 dark:border-white/10 bg-neutral-100/50 dark:bg-white/5 text-neutral-400 dark:text-white/20 opacity-50 cursor-not-allowed'
+                    : syncState === 'failed'
+                    ? 'border-red-500/40 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 cursor-pointer shadow-xs'
+                    : syncState === 'pending'
+                    ? 'border-amber-500/40 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 cursor-pointer shadow-xs'
+                    : 'border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 cursor-pointer shadow-xs'
+                }`}
+              >
+                <RefreshCw
+                  className={`h-3.5 w-3.5 ${isSyncingClickUp ? 'animate-spin' : ''}`}
+                />
+              </button>
+            )}
+
+            {/* 4. Edit User Button - Only Superadmin and CDs */}
             {onEditUser && canManageMembers && (
               <button
                 id={`edit-user-btn-${user.id}`}
@@ -750,7 +770,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               </button>
             )}
 
-            {/* Archived Toggle button if archived tasks exist */}
+            {/* 5. Archived Toggle button if archived tasks exist */}
             {archivedTasks.length > 0 && (
               <button
                 onClick={() => setShowArchived(prev => !prev)}
@@ -766,7 +786,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               </button>
             )}
 
-            {/* Workspace Collapse / Expand Toggle Button */}
+            {/* 6. Workspace Collapse / Expand Toggle Button */}
             <button
               id={`collapse-btn-${user.id}`}
               onClick={toggleCollapse}
