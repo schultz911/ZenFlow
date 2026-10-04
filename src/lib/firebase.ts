@@ -56,17 +56,68 @@ export async function getFirebaseAuth(): Promise<any> {
 export async function signInWithGoogle(): Promise<{ email: string; name: string; photoURL?: string }> {
   const auth = await getFirebaseAuth();
   if (!auth) {
-    throw new Error('Firebase Auth is not initialized');
+    throw new Error('Firebase Auth is not initialized. Please verify your internet connection.');
   }
-  const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
-  const provider = new GoogleAuthProvider();
-  provider.setCustomParameters({ prompt: 'select_account' });
-  const result = await signInWithPopup(auth, provider);
-  return {
-    email: result.user.email || '',
-    name: result.user.displayName || result.user.email?.split('@')[0] || 'Member',
-    photoURL: result.user.photoURL || undefined,
-  };
+
+  // Auto-redirect if user is on 127.0.0.1 instead of localhost (Firebase only authorizes localhost by default)
+  if (typeof window !== 'undefined' && window.location.hostname === '127.0.0.1') {
+    const localhostUrl = window.location.href.replace('127.0.0.1', 'localhost');
+    console.warn(`[Firebase Auth] Domain 127.0.0.1 is not in Firebase authorized domains. Redirecting to ${localhostUrl}`);
+    window.location.href = localhostUrl;
+    throw new Error('Redirecting to http://localhost:3000 for Google OAuth authorization...');
+  }
+
+  try {
+    const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth');
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+    const result = await signInWithPopup(auth, provider);
+    return {
+      email: result.user.email || '',
+      name: result.user.displayName || result.user.email?.split('@')[0] || 'Member',
+      photoURL: result.user.photoURL || undefined,
+    };
+  } catch (err: any) {
+    console.error('[Firebase Auth Error]:', err);
+    const code = err?.code || '';
+    const currentHost = typeof window !== 'undefined' ? window.location.hostname : 'current domain';
+
+    if (code === 'auth/unauthorized-domain') {
+      throw new Error(
+        `Firebase Authorization Error: Domain "${currentHost}" is not in the authorized domains list for project "zen-flow-7173d". Please ensure you are opening http://localhost:3000, or add "${currentHost}" to Firebase Console -> Authentication -> Settings -> Authorized domains.`
+      );
+    }
+    if (code === 'auth/operation-not-allowed') {
+      throw new Error(
+        'Google Sign-In is not enabled for project "zen-flow-7173d". Please enable Google in Firebase Console -> Authentication -> Sign-in method.'
+      );
+    }
+    if (code === 'auth/configuration-not-found') {
+      throw new Error(
+        'Firebase Authentication is not configured for project "zen-flow-7173d". Please check the Firebase console setup.'
+      );
+    }
+    if (code === 'auth/popup-blocked') {
+      throw new Error('Sign-in popup was blocked by your browser. Please allow popups for localhost:3000 and try again.');
+    }
+    if (code === 'auth/popup-closed-by-user') {
+      throw new Error('Sign-in cancelled: The popup window was closed before completing Google login.');
+    }
+    if (code === 'auth/cancelled-popup-request') {
+      throw new Error('Sign-in cancelled: Multiple popup requests were initiated simultaneously.');
+    }
+    throw new Error(err?.message || `Google authentication failed (${code || 'unknown error'}). Please try again.`);
+  }
+}
+
+export async function onFirebaseAuthStateChanged(callback: (user: any) => void): Promise<() => void> {
+  const auth = await getFirebaseAuth();
+  if (!auth) {
+    callback(null);
+    return () => {};
+  }
+  const { onAuthStateChanged } = await import('firebase/auth');
+  return onAuthStateChanged(auth, callback);
 }
 
 export async function signOutFirebase(): Promise<void> {

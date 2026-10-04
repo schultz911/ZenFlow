@@ -14,8 +14,9 @@ import { MarqueeRibbon } from './components/MarqueeRibbon';
 import { UnassignedListRibbon } from './components/UnassignedListRibbon';
 import { ClickupConnectModal } from './components/ClickupConnectModal';
 import { EditUserModal } from './components/EditUserModal';
+import { LoginScreen } from './components/LoginScreen';
 import { User, Task, TaskStatus } from './types';
-import { UserPlus, FileText, Palette } from 'lucide-react';
+import { UserPlus, FileText, Palette, Loader2 } from 'lucide-react';
 import { testConnection } from './lib/firebase';
 
 const EMPTY_TASKS: Task[] = [];
@@ -28,6 +29,7 @@ function DashboardContent() {
 
   const {
     currentUser,
+    isAuthChecking,
     users,
     tasks,
     activeRoleTab,
@@ -348,6 +350,28 @@ function DashboardContent() {
       return nextList;
     });
   }, []);
+
+  if (isAuthChecking) {
+    return (
+      <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center p-4 selection:bg-blue-500/30 selection:text-white">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 shadow-xl shadow-blue-500/20">
+            <span className="font-bold text-2xl text-white tracking-wider">ZF</span>
+            <div className="absolute inset-0 rounded-2xl border border-white/20 animate-pulse" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-white tracking-tight">zenFlow</h1>
+            <p className="text-xs text-white/40 mt-1">Verifying Google authentication session...</p>
+          </div>
+          <Loader2 className="w-5 h-5 text-blue-500 animate-spin mt-2" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return <LoginScreen />;
+  }
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-[#0A0A0A] text-neutral-900 dark:text-[#E5E5E5] font-sans antialiased selection:bg-blue-500/30 selection:text-white transition-colors">

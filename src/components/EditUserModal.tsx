@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { User, Role } from '../types';
-import { X, UserCog, Palette, FileText, Crown, ShieldCheck, Loader2 } from 'lucide-react';
+import { X, UserCog, Palette, FileText, Crown, ShieldCheck, Loader2, Link2, RefreshCw } from 'lucide-react';
 
 interface EditUserModalProps {
   isOpen: boolean;
@@ -20,12 +20,19 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
     isSuperadmin,
     creativeDirectors,
     canManageMembers,
+    clickupMembers,
+    loadClickupMembers,
+    isClickupConnected,
+    clickupApiKey,
   } = useDashboard();
 
   const [name, setName] = useState('');
   const [role, setRole] = useState<Role>('content');
   const [isCD, setIsCD] = useState(false);
   const [selectedCDId, setSelectedCDId] = useState<string>('');
+  const [clickupUserId, setClickupUserId] = useState<string>('');
+  const [clickupUsername, setClickupUsername] = useState<string>('');
+  const [isLoadingMembers, setIsLoadingMembers] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,9 +43,17 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
       setRole(user.role);
       setIsCD(!!user.isCreativeDirector);
       setSelectedCDId(user.creativeDirectorId || '');
+      setClickupUserId(user.clickupUserId || '');
+      setClickupUsername(user.clickupUsername || '');
       setError(null);
+
+      // Auto-load ClickUp members if empty
+      if (clickupMembers.length === 0 && (isClickupConnected || clickupApiKey)) {
+        setIsLoadingMembers(true);
+        loadClickupMembers(clickupApiKey).finally(() => setIsLoadingMembers(false));
+      }
     }
-  }, [user, isOpen]);
+  }, [user, isOpen, clickupMembers.length, isClickupConnected, clickupApiKey, loadClickupMembers]);
 
   // Global Escape key dismissal
   useEffect(() => {
@@ -76,6 +91,8 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
       const updates: Partial<User> = {
         name: cleanName,
         role,
+        clickupUserId: clickupUserId || undefined,
+        clickupUsername: clickupUsername || undefined,
       };
 
       // Only Superadmin can change Creative Director status
@@ -263,6 +280,95 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
               </p>
             </div>
           )}
+
+          {/* ClickUp Member Mapping */}
+          <div className="rounded-xl border border-indigo-500/20 bg-indigo-50/20 dark:bg-indigo-950/10 p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-indigo-500/20 text-indigo-600 dark:text-indigo-400">
+                  <Link2 className="h-3.5 w-3.5" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-900 dark:text-white">
+                    ClickUp Member Mapping
+                  </label>
+                  <p className="text-[10px] text-neutral-500 dark:text-white/40">
+                    Map to ClickUp profile so tasks are assigned to the right person.
+                  </p>
+                </div>
+              </div>
+              {isLoadingMembers && (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-500" />
+              )}
+            </div>
+
+            {clickupMembers.length > 0 ? (
+              <div className="space-y-2">
+                <select
+                  id="clickup-member-select"
+                  value={clickupUserId}
+                  onChange={e => {
+                    const selectedId = e.target.value;
+                    setClickupUserId(selectedId);
+                    const m = clickupMembers.find(mem => mem.id === selectedId);
+                    setClickupUsername(m?.username || '');
+                  }}
+                  className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                >
+                  <option value="">-- No ClickUp Mapping (Unassigned) --</option>
+                  {clickupMembers.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.username} {m.email ? `(${m.email})` : ''}
+                    </option>
+                  ))}
+                </select>
+
+                {clickupUserId && (
+                  <div className="flex items-center justify-between rounded-lg bg-indigo-50 dark:bg-indigo-950/30 px-2.5 py-1.5 border border-indigo-200 dark:border-indigo-800/40 text-[11px]">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-2 w-2 rounded-full bg-emerald-500" />
+                      <span className="font-medium text-indigo-900 dark:text-indigo-200">
+                        Mapped to: <strong className="font-semibold">{clickupUsername || clickupUserId}</strong>
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClickupUserId('');
+                        setClickupUsername('');
+                      }}
+                      className="text-[10px] text-neutral-400 hover:text-red-500 transition-colors cursor-pointer"
+                    >
+                      Clear tag
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-lg bg-neutral-100 dark:bg-white/5 p-2.5 text-xs text-neutral-500 dark:text-white/40 flex items-center justify-between">
+                <span className="text-[11px]">
+                  {isClickupConnected
+                    ? 'No workspace members loaded from ClickUp.'
+                    : 'ClickUp is not connected. Enter ClickUp API key in settings to sync members.'}
+                </span>
+                {isClickupConnected && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setIsLoadingMembers(true);
+                      await loadClickupMembers(clickupApiKey);
+                      setIsLoadingMembers(false);
+                    }}
+                    disabled={isLoadingMembers}
+                    className="text-[10px] font-medium text-indigo-500 hover:text-indigo-400 cursor-pointer flex items-center gap-1"
+                  >
+                    <RefreshCw className={`h-3 w-3 ${isLoadingMembers ? 'animate-spin' : ''}`} />
+                    <span>Load</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Action Buttons */}
           <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-100 dark:border-white/5">

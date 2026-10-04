@@ -17,6 +17,17 @@ export interface User {
   clickupApiKey?: string;
   selectedClickupSpaceId?: string;
   selectedClickupSpaceName?: string;
+  clickupUserId?: string;
+  clickupUsername?: string;
+}
+
+export interface ClickupMember {
+  id: string;
+  username: string;
+  email: string;
+  color?: string;
+  profilePicture?: string;
+  initials?: string;
 }
 
 export interface TaskActivity {

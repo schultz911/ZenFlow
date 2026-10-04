@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { Role } from '../types';
-import { X, Mail, User as UserIcon, Palette, FileText, ArrowRight, ShieldCheck, Crown, Loader2 } from 'lucide-react';
+import { X, Mail, User as UserIcon, Palette, FileText, ArrowRight, ShieldCheck, Crown, Loader2, Link2 } from 'lucide-react';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -22,6 +22,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     isSuperadmin,
     isCreativeDirector,
     creativeDirectors,
+    clickupMembers,
+    loadClickupMembers,
+    clickupApiKey,
   } = useDashboard();
 
   const [name, setName] = useState('');
@@ -32,6 +35,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     if (currentUser?.isCreativeDirector) return currentUser.id;
     return creativeDirectors[0]?.id || '';
   });
+  const [selectedClickupUserId, setSelectedClickupUserId] = useState<string>('');
+
+  useEffect(() => {
+    if (isOpen && isNewAccountOnly && clickupMembers.length === 0 && clickupApiKey) {
+      loadClickupMembers(clickupApiKey);
+    }
+  }, [isOpen, isNewAccountOnly, clickupMembers.length, clickupApiKey, loadClickupMembers]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
@@ -72,12 +82,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     setIsSubmitting(true);
     try {
       if (isNewAccountOnly) {
+        const matchedMember = clickupMembers.find(m => m.id === selectedClickupUserId);
         await createUser({
           name: cleanName,
           email: cleanEmail,
           role,
           isCreativeDirector: isSuperadmin ? isCD : false,
           creativeDirectorId: isCD ? undefined : (selectedCDId || undefined),
+          clickupUserId: selectedClickupUserId || undefined,
+          clickupUsername: matchedMember?.username || undefined,
         });
       } else {
         await login(cleanName, role, cleanEmail);
@@ -323,6 +336,31 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               </div>
               <p className="text-[10px] text-neutral-500 dark:text-white/40 mt-1">
                 This member will appear on this Creative Director's board.
+              </p>
+            </div>
+          )}
+
+          {/* New Account Only: ClickUp Member Mapping */}
+          {isNewAccountOnly && clickupMembers.length > 0 && (
+            <div>
+              <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5 flex items-center gap-1.5">
+                <Link2 className="w-3.5 h-3.5 text-indigo-500" />
+                <span>Map to ClickUp User (Optional)</span>
+              </label>
+              <select
+                value={selectedClickupUserId}
+                onChange={e => setSelectedClickupUserId(e.target.value)}
+                className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white focus:border-indigo-500 focus:outline-none"
+              >
+                <option value="">-- No ClickUp Mapping --</option>
+                {clickupMembers.map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.username} {m.email ? `(${m.email})` : ''}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-neutral-500 dark:text-white/40 mt-1">
+                Automatically assigns tasks created in ZenFlow to this ClickUp member.
               </p>
             </div>
           )}

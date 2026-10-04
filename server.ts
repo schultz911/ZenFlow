@@ -29,6 +29,8 @@ interface User {
   clickupApiKey?: string;
   selectedClickupSpaceId?: string;
   selectedClickupSpaceName?: string;
+  clickupUserId?: string;
+  clickupUsername?: string;
 }
 
 interface TaskActivity {
@@ -800,12 +802,14 @@ function ensureSuperadmin(appStore: AppStore) {
 ensureSuperadmin(store);
 
 async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User) {
-  const token = (apiKey || user?.clickupApiKey || '').trim();
+  const taskUser = user || store.users.find(u => u.id === task.userId);
+  const token = (apiKey || user?.clickupApiKey || taskUser?.clickupApiKey || '').trim();
   if (!token || !task.clickupListId) return;
 
   const targetStatus = ZENFLOW_TO_CLICKUP_STATUS[task.status] || 'to do';
   const estimateMs = COGNITIVE_LOAD_ESTIMATES_MS[task.cognitiveLoad] || COGNITIVE_LOAD_ESTIMATES_MS.medium;
-  const tag = (user?.role === 'design' || (!user && task.userId.includes('design'))) ? 'Design' : 'Content & Copy';
+  const tag = (taskUser?.role === 'design' || (!taskUser && task.userId.includes('design'))) ? 'Design' : 'Content & Copy';
+  const clickupAssigneeId = taskUser?.clickupUserId ? parseInt(taskUser.clickupUserId, 10) : undefined;
 
   // If task already exists in ClickUp, update it
   if (task.clickupTaskId) {
@@ -818,6 +822,9 @@ async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User) {
       if (task.description) updatePayload.description = task.description;
       if (task.dueDate) updatePayload.due_date = new Date(task.dueDate + 'T23:59:59').getTime();
       if (task.inProgressStartedAt) updatePayload.start_date = new Date(task.inProgressStartedAt).getTime();
+      if (clickupAssigneeId && !isNaN(clickupAssigneeId)) {
+        updatePayload.assignees = { add: [clickupAssigneeId] };
+      }
 
       const res = await fetch(`https://api.clickup.com/api/v2/task/${task.clickupTaskId}`, {
         method: 'PUT',
@@ -847,6 +854,9 @@ async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User) {
     if (task.description) createPayload.description = task.description;
     if (task.dueDate) createPayload.due_date = new Date(task.dueDate + 'T23:59:59').getTime();
     if (task.inProgressStartedAt) createPayload.start_date = new Date(task.inProgressStartedAt).getTime();
+    if (clickupAssigneeId && !isNaN(clickupAssigneeId)) {
+      createPayload.assignees = [clickupAssigneeId];
+    }
 
     const res = await fetch(`https://api.clickup.com/api/v2/list/${task.clickupListId}/task`, {
       method: 'POST',
@@ -1115,6 +1125,8 @@ async function startServer() {
       clickupApiKey,
       selectedClickupSpaceId,
       selectedClickupSpaceName,
+      clickupUserId,
+      clickupUsername,
     } = req.body;
 
     if (!name || !email || !role) {
@@ -1136,6 +1148,8 @@ async function startServer() {
       if (isCreativeDirector !== undefined) existingUser.isCreativeDirector = !!isCreativeDirector;
       if (creativeDirectorId !== undefined) existingUser.creativeDirectorId = creativeDirectorId ? sanitizeString(creativeDirectorId) : undefined;
       if (clickupApiKey !== undefined) existingUser.clickupApiKey = clickupApiKey ? sanitizeString(clickupApiKey) : undefined;
+      if (clickupUserId !== undefined) existingUser.clickupUserId = clickupUserId ? sanitizeString(clickupUserId) : undefined;
+      if (clickupUsername !== undefined) existingUser.clickupUsername = clickupUsername ? sanitizeString(clickupUsername) : undefined;
       saveStore(store);
       dbSaveUser(existingUser).catch(e => console.error('Firestore user update err:', e));
       broadcastEvent('user_updated', existingUser);
@@ -1154,6 +1168,8 @@ async function startServer() {
       clickupApiKey: clickupApiKey ? sanitizeString(clickupApiKey) : undefined,
       selectedClickupSpaceId: selectedClickupSpaceId ? sanitizeString(selectedClickupSpaceId) : undefined,
       selectedClickupSpaceName: selectedClickupSpaceName ? sanitizeString(selectedClickupSpaceName) : undefined,
+      clickupUserId: clickupUserId ? sanitizeString(clickupUserId) : undefined,
+      clickupUsername: clickupUsername ? sanitizeString(clickupUsername) : undefined,
       createdAt: new Date().toISOString(),
     };
 
@@ -1183,6 +1199,8 @@ async function startServer() {
       clickupApiKey,
       selectedClickupSpaceId,
       selectedClickupSpaceName,
+      clickupUserId,
+      clickupUsername,
     } = req.body;
 
     if (name !== undefined) {
@@ -1208,6 +1226,12 @@ async function startServer() {
     }
     if (selectedClickupSpaceName !== undefined) {
       current.selectedClickupSpaceName = selectedClickupSpaceName ? sanitizeString(selectedClickupSpaceName) : undefined;
+    }
+    if (clickupUserId !== undefined) {
+      current.clickupUserId = clickupUserId ? sanitizeString(clickupUserId) : undefined;
+    }
+    if (clickupUsername !== undefined) {
+      current.clickupUsername = clickupUsername ? sanitizeString(clickupUsername) : undefined;
     }
 
     saveStore(store);
@@ -1801,6 +1825,59 @@ async function startServer() {
     } catch (err: any) {
       console.error('[ClickUp] Spaces fetch error:', err);
       res.status(500).json({ error: err.message || 'Error fetching ClickUp spaces' });
+    }
+  });
+
+  // API: Get Workspace Members from ClickUp
+  app.get('/api/clickup/members', async (req: Request, res: Response) => {
+    let apiKey = (req.headers['x-clickup-api-key'] as string) || (req.query.apiKey as string);
+
+    if (!apiKey) {
+      const userWithKey = store.users.find(u => u.clickupApiKey);
+      if (userWithKey?.clickupApiKey) {
+        apiKey = userWithKey.clickupApiKey;
+      }
+    }
+
+    if (!apiKey) {
+      return res.status(400).json({ error: 'ClickUp API key is required' });
+    }
+
+    try {
+      const cleanKey = apiKey.trim();
+      const teamRes = await fetch('https://api.clickup.com/api/v2/team', {
+        headers: { Authorization: cleanKey },
+      });
+
+      if (!teamRes.ok) {
+        return res.status(teamRes.status).json({ error: 'Failed to retrieve teams from ClickUp' });
+      }
+
+      const teamData = await teamRes.json();
+      const memberMap = new Map<string, any>();
+
+      for (const team of teamData.teams || []) {
+        for (const m of team.members || []) {
+          if (m?.user && m.user.id) {
+            const uId = String(m.user.id);
+            if (!memberMap.has(uId)) {
+              memberMap.set(uId, {
+                id: uId,
+                username: m.user.username || m.user.email?.split('@')[0] || 'ClickUp User',
+                email: m.user.email || '',
+                color: m.user.color,
+                profilePicture: m.user.profilePicture,
+                initials: m.user.initials,
+              });
+            }
+          }
+        }
+      }
+
+      res.json({ members: Array.from(memberMap.values()) });
+    } catch (err: any) {
+      console.error('[ClickUp] Members fetch error:', err);
+      res.status(500).json({ error: err.message || 'Error fetching ClickUp members' });
     }
   });
 

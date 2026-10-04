@@ -12,10 +12,11 @@ import {
   ClickupSpace,
   ClickupList,
   ClickupFolder,
+  ClickupMember,
 } from '../types';
 import { INITIAL_USERS, INITIAL_TASKS } from '../data/initialData';
 import { compareTasksByDeadline, formatBillableHours, getTaskBillableMs } from '../utils/workload';
-import { signInWithGoogle, signOutFirebase } from '../lib/firebase';
+import { signInWithGoogle, signOutFirebase, onFirebaseAuthStateChanged } from '../lib/firebase';
 
 export interface FirestoreStatus {
   connected: boolean;
@@ -81,6 +82,9 @@ interface DashboardContextType {
   activeDragInfo: DragTaskInfo | null;
   setActiveDragInfo: (info: DragTaskInfo | null) => void;
   refreshFirestoreStatus: () => Promise<void>;
+  isAuthChecking: boolean;
+  authError: string | null;
+  setAuthError: (err: string | null) => void;
   syncWithFirestore: () => Promise<{ success: boolean; message: string }>;
   uploadServiceAccountKey: (keyContent: string) => Promise<{ success: boolean; message: string }>;
   login: (name: string, role: Role, email: string) => Promise<User>;
@@ -93,6 +97,8 @@ interface DashboardContextType {
     role: Role;
     isCreativeDirector?: boolean;
     creativeDirectorId?: string;
+    clickupUserId?: string;
+    clickupUsername?: string;
   }) => Promise<User>;
   updateUserProfile: (userId: string, updates: Partial<User>) => Promise<User>;
   // Role & Permissions
@@ -108,6 +114,8 @@ interface DashboardContextType {
   isZensciencesUser: boolean;
   isClickupConnected: boolean;
   clickupApiKey: string;
+  clickupMembers: ClickupMember[];
+  loadClickupMembers: (apiKey?: string) => Promise<ClickupMember[]>;
   clickupSpaces: ClickupSpace[];
   selectedClickupSpaceId: string;
   clickupFoldersAndLists: { folders: ClickupFolder[]; folderlessLists: ClickupList[] };
@@ -297,6 +305,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       return true;
     }
   });
+
+  const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [clickupMembers, setClickupMembers] = useState<ClickupMember[]>([]);
 
   const [syncStatus, setSyncStatus] = useState<'connected' | 'connecting' | 'offline'>('connecting');
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -698,13 +710,101 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, [isClickupConnected, clickupApiKey, selectedClickupSpaceId, loadClickupFoldersAndLists]);
 
-  useEffect(() => {
-    if (currentUser && isZensciencesUser && !clickupApiKey) {
-      setShowClickupPrompt(true);
-    } else {
-      setShowClickupPrompt(false);
+  const loadClickupMembers = useCallback(async (apiKey?: string): Promise<ClickupMember[]> => {
+    const key = (apiKey || clickupApiKey || '').trim();
+    try {
+      const url = key ? `/api/clickup/members?apiKey=${encodeURIComponent(key)}` : '/api/clickup/members';
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.members)) {
+          setClickupMembers(data.members);
+          return data.members;
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load ClickUp members:', err);
     }
-  }, [currentUser, isZensciencesUser, clickupApiKey]);
+    return [];
+  }, [clickupApiKey]);
+
+  useEffect(() => {
+    if (isClickupConnected && clickupApiKey) {
+      loadClickupMembers(clickupApiKey);
+    }
+  }, [isClickupConnected, clickupApiKey, loadClickupMembers]);
+
+  // Google Auth Session Enforcement
+  // If not logged in via Google Auth, log them out and bring them to login screen
+  useEffect(() => {
+    let isMounted = true;
+    let unsubPromise: Promise<() => void> | null = null;
+
+    unsubPromise = onFirebaseAuthStateChanged(async (fbUser) => {
+      if (!isMounted) return;
+
+      if (!fbUser) {
+        // No Google user session
+        setCurrentUser(null);
+        try {
+          localStorage.removeItem(USER_SESSION_KEY);
+        } catch {}
+        setIsAuthChecking(false);
+        return;
+      }
+
+      // Google user is logged in
+      const email = (fbUser.email || '').toLowerCase().trim();
+      if (!email) {
+        await signOutFirebase();
+        setCurrentUser(null);
+        try {
+          localStorage.removeItem(USER_SESSION_KEY);
+        } catch {}
+        setAuthError('Google Account has no email address.');
+        setIsAuthChecking(false);
+        return;
+      }
+
+      // Check registered users in workspace
+      let matched = usersRef.current.find(u => u.email.toLowerCase().trim() === email);
+      if (!matched) {
+        try {
+          const res = await fetch('/api/auth/verify-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            matched = data.user;
+          }
+        } catch (e) {
+          console.warn('[Auth] Server verify-email failed:', e);
+        }
+      }
+
+      if (matched) {
+        setCurrentUser(matched);
+        setAuthError(null);
+      } else {
+        await signOutFirebase();
+        setCurrentUser(null);
+        try {
+          localStorage.removeItem(USER_SESSION_KEY);
+        } catch {}
+        setAuthError(`Account not registered: ${email}. Only registered ZenFlow team members can view the board. Please contact kiran.s@zensciences.com to be added.`);
+      }
+      setIsAuthChecking(false);
+    });
+
+    return () => {
+      isMounted = false;
+      if (unsubPromise) {
+        unsubPromise.then(unsub => unsub?.()).catch(() => {});
+      }
+    };
+  }, []);
 
   const updateUserProfile = useCallback(async (userId: string, updates: Partial<User>): Promise<User> => {
     setUsers(prev => prev.map(u => (u.id === userId ? { ...u, ...updates } : u)));
@@ -879,6 +979,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, []);
 
   const loginWithGoogle = useCallback(async (): Promise<User> => {
+    setAuthError(null);
     const googleUser = await signInWithGoogle();
     const cleanEmail = googleUser.email.trim().toLowerCase();
 
@@ -906,7 +1007,9 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     if (!existing) {
       await signOutFirebase();
-      throw new Error(`Account not registered: ${cleanEmail}. Only users with existing ZenFlow accounts are authorized to sign in. Please contact kiran.s@zensciences.com to be added.`);
+      const err = `Account not registered: ${cleanEmail}. Only users with existing ZenFlow accounts are authorized to sign in. Please contact kiran.s@zensciences.com to be added.`;
+      setAuthError(err);
+      throw new Error(err);
     }
 
     setCurrentUser(existing);
@@ -919,6 +1022,9 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const logout = useCallback(() => {
     setCurrentUser(null);
+    try {
+      localStorage.removeItem(USER_SESSION_KEY);
+    } catch {}
     signOutFirebase().catch(() => {});
   }, []);
 
@@ -933,6 +1039,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     role: Role;
     isCreativeDirector?: boolean;
     creativeDirectorId?: string;
+    clickupUserId?: string;
+    clickupUsername?: string;
   }): Promise<User> => {
     const res = await fetch('/api/users', {
       method: 'POST',
@@ -1528,6 +1636,9 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       setDarkMode,
       syncStatus,
       isLoading,
+      isAuthChecking,
+      authError,
+      setAuthError,
       firestoreStatus,
       activeDragInfo,
       setActiveDragInfo,
@@ -1553,6 +1664,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       isZensciencesUser,
       isClickupConnected,
       clickupApiKey,
+      clickupMembers,
+      loadClickupMembers,
       clickupSpaces,
       selectedClickupSpaceId,
       clickupFoldersAndLists,
@@ -1584,6 +1697,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       darkMode,
       syncStatus,
       isLoading,
+      isAuthChecking,
+      authError,
       firestoreStatus,
       activeDragInfo,
       refreshFirestoreStatus,
@@ -1606,6 +1721,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       isZensciencesUser,
       isClickupConnected,
       clickupApiKey,
+      clickupMembers,
+      loadClickupMembers,
       clickupSpaces,
       selectedClickupSpaceId,
       clickupFoldersAndLists,
