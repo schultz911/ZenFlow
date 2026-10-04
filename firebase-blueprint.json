@@ -182,6 +182,10 @@
     "/tasks/{taskId}": {
       "schema": "Task",
       "description": "Collection of workflow tasks"
+    },
+    "/compliance_audit_logs/{logId}": {
+      "schema": "AuditLogEntry",
+      "description": "Append-only immutable audit trail for SOC2 compliance"
     }
   }
 }

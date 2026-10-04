@@ -186,3 +186,34 @@ export interface RealtimeEvent {
   payload: any;
   timestamp: number;
 }
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  category: 'task' | 'user' | 'security' | 'webhook' | 'system';
+  action: string;
+  actor?: {
+    id?: string;
+    name?: string;
+    email?: string;
+    ip?: string;
+  };
+  targetId: string;
+  targetType: 'task' | 'user' | 'workspace' | 'webhook';
+  details?: string;
+  from?: any;
+  to?: any;
+  metadata?: Record<string, any>;
+}
+
+export interface ClickupWebhookStatus {
+  listening: boolean;
+  registered: boolean;
+  webhookId?: string;
+  endpointUrl: string;
+  lastEventAt?: string;
+  lastEventAction?: string;
+  totalEventsCount: number;
+  supportedEvents?: string[];
+}
+

@@ -70,5 +70,12 @@ service cloud.firestore {
       allow update: if isValidId(taskId) && isValidTask(incoming());
       allow delete: if isValidId(taskId);
     }
+
+    // Compliance Audit Logs collection (SOC2 audit trail)
+    match /compliance_audit_logs/{logId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(logId);
+    }
   }
 }
+

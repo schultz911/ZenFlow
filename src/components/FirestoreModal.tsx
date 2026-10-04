@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useDashboard } from '../context/DashboardContext';
+import { AuditLogEntry } from '../types';
 import {
   Database,
   AlertCircle,
@@ -13,6 +14,11 @@ import {
   CheckCircle,
   Loader2,
   Layers,
+  Radio,
+  ShieldCheck,
+  Download,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 interface FirestoreModalProps {
@@ -32,6 +38,11 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
     connectClickup,
     disconnectClickup,
     clickupSpaces,
+    clickupWebhookStatus,
+    refreshClickupWebhookStatus,
+    registerClickupWebhook,
+    fetchAuditLogs,
+    downloadAuditLogs,
   } = useDashboard();
 
   // Firestore sync states
@@ -45,28 +56,40 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
   const [clickupError, setClickupError] = useState<string | null>(null);
   const [clickupSuccess, setClickupSuccess] = useState<string | null>(null);
 
+  // ClickUp Webhook states
+  const [isRegisteringWebhook, setIsRegisteringWebhook] = useState(false);
+  const [webhookFeedback, setWebhookFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // SOC2 Compliance Audit states
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [isLoadingAudit, setIsLoadingAudit] = useState(false);
+  const [showAuditFeed, setShowAuditFeed] = useState(false);
+
   // Close on Escape key
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isClickupLoading && !isSyncing) {
+      if (e.key === 'Escape' && !isClickupLoading && !isSyncing && !isRegisteringWebhook) {
         onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, isClickupLoading, isSyncing]);
+  }, [isOpen, onClose, isClickupLoading, isSyncing, isRegisteringWebhook]);
 
   // Refresh status and sync state whenever modal opens
   useEffect(() => {
     if (isOpen) {
       refreshFirestoreStatus();
+      refreshClickupWebhookStatus();
       setFeedback(null);
       setApiKeyInput(clickupApiKey || '');
       setClickupError(null);
       setClickupSuccess(null);
+      setWebhookFeedback(null);
+      setShowAuditFeed(false);
     }
-  }, [isOpen, clickupApiKey, refreshFirestoreStatus]);
+  }, [isOpen, clickupApiKey, refreshFirestoreStatus, refreshClickupWebhookStatus]);
 
   if (!isOpen) return null;
 
@@ -134,6 +157,36 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
     setClickupSuccess('Disconnected from ClickUp.');
   };
 
+  const handleRegisterWebhook = async () => {
+    setIsRegisteringWebhook(true);
+    setWebhookFeedback(null);
+    try {
+      const res = await registerClickupWebhook();
+      if (res.success) {
+        setWebhookFeedback({ type: 'success', message: res.message });
+      } else {
+        setWebhookFeedback({ type: 'error', message: res.message });
+      }
+    } catch (err: any) {
+      setWebhookFeedback({ type: 'error', message: err.message || 'Failed to register webhook' });
+    } finally {
+      setIsRegisteringWebhook(false);
+    }
+  };
+
+  const handleToggleAuditFeed = async () => {
+    if (!showAuditFeed) {
+      setIsLoadingAudit(true);
+      try {
+        const logs = await fetchAuditLogs(30);
+        setAuditLogs(logs);
+      } finally {
+        setIsLoadingAudit(false);
+      }
+    }
+    setShowAuditFeed(prev => !prev);
+  };
+
   const isConnected = firestoreStatus?.connected;
   const displayProject = firestoreStatus?.projectId || 'zen-flow-7173d';
 
@@ -141,7 +194,7 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
     <div
       className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 dark:bg-black/80 backdrop-blur-sm p-4 sm:p-6 animate-in fade-in duration-150"
       onClick={e => {
-        if (e.target === e.currentTarget && !isClickupLoading && !isSyncing) onClose();
+        if (e.target === e.currentTarget && !isClickupLoading && !isSyncing && !isRegisteringWebhook) onClose();
       }}
     >
       <div
@@ -156,10 +209,10 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
             </div>
             <div>
               <h2 className="text-base font-semibold tracking-tight text-neutral-900 dark:text-white">
-                Workspace Connection Status
+                Workspace Connections & Compliance
               </h2>
               <p className="text-xs text-neutral-500 dark:text-white/40">
-                Cloud Database (Firestore) & ClickUp Integration
+                Cloud Database, ClickUp Webhooks & SOC2 Audit Stream
               </p>
             </div>
           </div>
@@ -394,6 +447,197 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                   )}
                 </button>
               </form>
+            )}
+          </div>
+
+          {/* ========================================= */}
+          {/* SECTION 3: ClickUp Real-Time Webhook      */}
+          {/* ========================================= */}
+          <div className="space-y-3 pt-3 border-t border-neutral-100 dark:border-white/5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                <Radio className="h-3.5 w-3.5 text-emerald-500" />
+                <span>Real-Time ClickUp Webhook</span>
+              </span>
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                  clickupWebhookStatus?.listening
+                    ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                    : 'bg-neutral-500/15 text-neutral-600 dark:text-white/50'
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    clickupWebhookStatus?.listening ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-400'
+                  }`}
+                />
+                {clickupWebhookStatus?.registered
+                  ? 'Registered & Active'
+                  : clickupWebhookStatus?.listening
+                  ? 'Listener Standby (Unregistered)'
+                  : 'Inactive'}
+              </span>
+            </div>
+
+            {webhookFeedback && (
+              <div
+                className={`rounded-xl p-3 text-xs flex items-center gap-2.5 ${
+                  webhookFeedback.type === 'success'
+                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                    : 'bg-red-500/10 text-red-500 border border-red-500/20'
+                }`}
+              >
+                {webhookFeedback.type === 'success' ? (
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 shrink-0" />
+                )}
+                <span className="font-medium">{webhookFeedback.message}</span>
+              </div>
+            )}
+
+            <div className="rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#161616] p-4 space-y-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-neutral-500 dark:text-white/40">Inbound Endpoint</span>
+                <span className="font-mono text-[11px] text-neutral-800 dark:text-white/90 truncate max-w-[260px]">
+                  {clickupWebhookStatus?.endpointUrl || '/api/clickup/webhook'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-neutral-500 dark:text-white/40">Events Ingested</span>
+                <span className="font-medium text-neutral-900 dark:text-white">
+                  {clickupWebhookStatus?.totalEventsCount ?? 0} events received
+                </span>
+              </div>
+
+              {clickupWebhookStatus?.lastEventAt && (
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-neutral-500 dark:text-white/40">Last Inbound Event</span>
+                  <span className="text-neutral-600 dark:text-white/60">
+                    {new Date(clickupWebhookStatus.lastEventAt).toLocaleTimeString()} ({clickupWebhookStatus.lastEventAction || 'event'})
+                  </span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between text-xs border-t border-neutral-200/60 dark:border-white/5 pt-2">
+                <span className="text-neutral-500 dark:text-white/40">Propagation Route</span>
+                <span className="text-neutral-600 dark:text-white/60">
+                  Instantaneous SSE via <code className="font-mono text-[10px] bg-neutral-200/50 dark:bg-white/10 px-1 py-0.5 rounded">/api/events</code>
+                </span>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleRegisterWebhook}
+              disabled={isRegisteringWebhook || !isClickupConnected}
+              className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 py-2 px-3 text-xs font-semibold disabled:opacity-50 transition-colors cursor-pointer"
+            >
+              {isRegisteringWebhook ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Registering with ClickUp Team API...</span>
+                </>
+              ) : (
+                <>
+                  <Radio className="w-3.5 h-3.5" />
+                  <span>{clickupWebhookStatus?.registered ? 'Re-sync Webhook with ClickUp' : 'Register Webhook with ClickUp'}</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* ========================================= */}
+          {/* SECTION 4: SOC2 Compliance Audit Stream   */}
+          {/* ========================================= */}
+          <div className="space-y-3 pt-3 border-t border-neutral-100 dark:border-white/5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-wider text-purple-700 dark:text-purple-400 flex items-center gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5 text-purple-500" />
+                <span>SOC2 Compliance Audit Stream</span>
+              </span>
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-purple-500/15 text-purple-700 dark:text-purple-300">
+                <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
+                Append-Only Active
+              </span>
+            </div>
+
+            <div className="rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#161616] p-4 space-y-2.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-neutral-500 dark:text-white/40">Persistence Storage</span>
+                <span className="font-mono text-[11px] text-neutral-800 dark:text-white/90">
+                  data/compliance-audit.jsonl & /compliance_audit_logs
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-neutral-500 dark:text-white/40">Audit Coverage</span>
+                <span className="text-neutral-600 dark:text-white/60">
+                  Reassignments, hours overrides, permissions, deletions & webhooks
+                </span>
+              </div>
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={downloadAuditLogs}
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white py-2 px-3 text-xs font-semibold transition-colors cursor-pointer shadow-xs"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span>Download Audit Stream (NDJSON)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleToggleAuditFeed}
+                disabled={isLoadingAudit}
+                className="flex items-center justify-center gap-1 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-neutral-800/60 text-neutral-700 dark:text-white/80 hover:bg-neutral-50 dark:hover:bg-neutral-800 py-2 px-3 text-xs font-medium transition-colors cursor-pointer"
+              >
+                {isLoadingAudit ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : showAuditFeed ? (
+                  <ChevronUp className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                )}
+                <span>{showAuditFeed ? 'Hide Log' : 'View Log'}</span>
+              </button>
+            </div>
+
+            {/* Expandable Recent Audit Log Feed */}
+            {showAuditFeed && (
+              <div className="rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-900 text-neutral-100 p-3 text-[11px] font-mono space-y-2 max-h-56 overflow-y-auto">
+                <div className="flex items-center justify-between text-[10px] text-neutral-400 border-b border-neutral-800 pb-1">
+                  <span>Recent Audit Events ({auditLogs.length})</span>
+                  <span>Immutable Stream</span>
+                </div>
+                {auditLogs.length === 0 ? (
+                  <div className="text-neutral-500 py-3 text-center font-sans text-xs">No audit records logged yet.</div>
+                ) : (
+                  auditLogs.slice(0, 20).map(entry => (
+                    <div key={entry.id} className="border-b border-neutral-800/50 pb-1.5 last:border-0 last:pb-0">
+                      <div className="flex items-center justify-between text-neutral-400">
+                        <span className="text-purple-400 uppercase text-[9px] font-semibold tracking-wider">
+                          [{entry.category}] {entry.action}
+                        </span>
+                        <span className="text-[9px] text-neutral-500">
+                          {new Date(entry.timestamp).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <div className="text-neutral-300 text-[10px] truncate mt-0.5">
+                        {entry.details || `${entry.targetType}:${entry.targetId}`}
+                      </div>
+                      {entry.actor?.name && (
+                        <div className="text-[9px] text-neutral-500">
+                          Actor: {entry.actor.name} ({entry.actor.email || 'system'})
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
             )}
           </div>
         </div>

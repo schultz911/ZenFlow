@@ -85,6 +85,42 @@ const ZENFLOW_TO_CLICKUP_STATUS: Record<string, string> = {
   archived: 'complete',
 };
 
+const CLICKUP_TO_ZENFLOW_STATUS: Record<string, Task['status']> = {
+  'to do': 'todo',
+  'todo': 'todo',
+  'open': 'todo',
+  'in progress': 'in_progress',
+  'in_progress': 'in_progress',
+  'internal review': 'in_review',
+  'in review': 'in_review',
+  'review': 'in_review',
+  'client review': 'done',
+  'done': 'done',
+  'closed': 'archived',
+  'complete': 'archived',
+  'completed': 'archived',
+  'archived': 'archived',
+};
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  category: 'task' | 'user' | 'security' | 'webhook' | 'system';
+  action: string;
+  actor?: {
+    id?: string;
+    name?: string;
+    email?: string;
+    ip?: string;
+  };
+  targetId: string;
+  targetType: 'task' | 'user' | 'workspace' | 'webhook';
+  details?: string;
+  from?: any;
+  to?: any;
+  metadata?: Record<string, any>;
+}
+
 const COGNITIVE_LOAD_ESTIMATES_MS: Record<string, number> = {
   low: 12 * 3600 * 1000,
   medium: 24 * 3600 * 1000,
@@ -95,6 +131,18 @@ const COGNITIVE_LOAD_ESTIMATES_MS: Record<string, number> = {
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const DATA_DIR = path.join(process.cwd(), 'data');
 const DATA_FILE = path.join(DATA_DIR, 'store.json');
+const AUDIT_LOG_FILE = path.join(DATA_DIR, 'compliance-audit.jsonl');
+
+const recentAuditLogs: AuditLogEntry[] = [];
+const MAX_RECENT_AUDIT_LOGS = 100;
+
+// ClickUp Real-Time Webhook Listener State
+let registeredWebhookId: string | null = null;
+let activeWebhookEndpoint: string | null = null;
+let webhookEventsCount = 0;
+let lastWebhookEventAt: string | null = null;
+let lastWebhookAction: string | null = null;
+
 
 // Auto-detect production mode if running compiled dist artifact or in container environments
 let currentFile = '';
@@ -431,6 +479,63 @@ function cleanDocData<T extends Record<string, any>>(obj: T): Partial<T> {
     }
   }
   return clean;
+}
+
+// Read the tail of the compliance audit log into the in-memory cache for fast sub-millisecond retrieval
+function loadRecentAuditLogs(): void {
+  try {
+    if (fs.existsSync(AUDIT_LOG_FILE)) {
+      const content = fs.readFileSync(AUDIT_LOG_FILE, 'utf-8');
+      const lines = content.trim().split('\n').filter(Boolean);
+      const tail = lines.slice(-MAX_RECENT_AUDIT_LOGS);
+      for (const line of tail) {
+        try {
+          const entry = JSON.parse(line);
+          recentAuditLogs.push(entry);
+        } catch {}
+      }
+    }
+  } catch (err) {
+    console.warn('[Audit Log] Failed to read initial audit logs from disk:', err);
+  }
+}
+
+// Append-only compliance audit logger (SOC2 non-repudiation stream)
+async function appendAuditLog(entry: Omit<AuditLogEntry, 'id' | 'timestamp'> & { id?: string; timestamp?: string }): Promise<void> {
+  const fullEntry: AuditLogEntry = {
+    id: entry.id || `audit-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+    timestamp: entry.timestamp || new Date().toISOString(),
+    ...entry,
+  };
+
+  recentAuditLogs.unshift(fullEntry);
+  if (recentAuditLogs.length > MAX_RECENT_AUDIT_LOGS) {
+    recentAuditLogs.pop();
+  }
+
+  // Non-blocking disk append to compliance-audit.jsonl
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      await fs.promises.mkdir(DATA_DIR, { recursive: true });
+    }
+    const line = JSON.stringify(fullEntry) + '\n';
+    await fs.promises.appendFile(AUDIT_LOG_FILE, line, 'utf-8');
+  } catch (err) {
+    console.error('[Compliance Audit] Failed to append audit log to disk:', err);
+  }
+
+  // Mirror to Cloud Firestore audit collection if active
+  try {
+    if (!adminDb && !webDb) await initFirestore();
+    const payload = cleanDocData(fullEntry);
+    if (adminDb) {
+      adminDb.collection('compliance_audit_logs').doc(fullEntry.id).set(payload, { merge: true }).catch(() => {});
+    } else if (webDb) {
+      setDoc(doc(webDb, 'compliance_audit_logs', fullEntry.id), payload, { merge: true }).catch(() => {});
+    }
+  } catch {
+    // ignore
+  }
 }
 
 // Unified DB helper methods with error tracking & auto-recovery
@@ -1048,6 +1153,16 @@ function autoArchiveDoneTasks(): boolean {
         }
         changed = true;
         newlyArchived.push(task);
+        appendAuditLog({
+          category: 'system',
+          action: 'task_auto_archived',
+          targetId: task.id,
+          targetType: 'task',
+          from: 'done',
+          to: 'archived',
+          details: `Task "${task.title}" auto-archived after 7 days in Done`,
+          metadata: { userId: task.userId },
+        });
       }
     }
   }
@@ -1076,6 +1191,332 @@ function maybeArchive(): void {
   lastArchiveSweepMs = now;
   autoArchiveDoneTasks();
 }
+
+// Process inbound ClickUp webhook events (status updates, assignee reassignments, deadline syncing, deletions)
+async function processClickupWebhookEvent(params: {
+  taskId: string;
+  eventType: string;
+  historyItems: any[];
+  rawBody: any;
+  ip?: string;
+}): Promise<void> {
+  const { taskId, eventType, historyItems, rawBody, ip } = params;
+  if (!taskId) {
+    appendAuditLog({
+      category: 'webhook',
+      action: 'clickup_webhook_ping',
+      actor: { ip },
+      targetId: 'workspace',
+      targetType: 'webhook',
+      details: `ClickUp webhook event received without task_id: ${eventType}`,
+      metadata: { eventType, rawBody },
+    });
+    return;
+  }
+
+  console.log(`[ClickUp Webhook] Processing event "${eventType}" for task ${taskId}`);
+
+  let existingTask = store.tasks.find(t => t.clickupTaskId === taskId);
+
+  // Retrieve full task from ClickUp API if available to ensure robust attribute sync
+  let clickupTaskData: any = null;
+  const userWithKey = store.users.find(u => u.clickupApiKey);
+  const token = userWithKey?.clickupApiKey;
+
+  if (token) {
+    try {
+      const cRes = await fetch(`https://api.clickup.com/api/v2/task/${taskId}`, {
+        headers: { Authorization: token },
+      });
+      if (cRes.ok) {
+        clickupTaskData = await cRes.json();
+      }
+    } catch (e) {
+      console.warn(`[ClickUp Webhook] Could not fetch ClickUp task ${taskId}:`, e);
+    }
+  }
+
+  // Handle task deletion event
+  if (eventType === 'taskDeleted') {
+    if (existingTask) {
+      const deletedTaskTitle = existingTask.title;
+      store.tasks = store.tasks.filter(t => t.id !== existingTask!.id);
+      saveStore(store);
+      dbDeleteTask(existingTask.id).catch(e => console.error('Firestore delete err:', e));
+      broadcastEvent('task_deleted', { id: existingTask.id });
+      appendAuditLog({
+        category: 'webhook',
+        action: 'clickup_task_deleted',
+        actor: { ip },
+        targetId: existingTask.id,
+        targetType: 'task',
+        details: `Task "${deletedTaskTitle}" deleted via ClickUp webhook (${taskId})`,
+        metadata: { clickupTaskId: taskId },
+      });
+    }
+    return;
+  }
+
+  // If task doesn't exist in ZenFlow but exists in ClickUp, auto-import if assigned to a ZenFlow member
+  if (!existingTask && clickupTaskData) {
+    const cuAssignee = clickupTaskData.assignees?.[0];
+    const cuAssigneeId = cuAssignee?.id ? String(cuAssignee.id) : null;
+    const cuAssigneeEmail = cuAssignee?.email?.toLowerCase();
+
+    const targetUser = store.users.find(
+      u => (cuAssigneeId && u.clickupUserId === cuAssigneeId) ||
+           (cuAssigneeEmail && u.email.toLowerCase() === cuAssigneeEmail)
+    ) || userWithKey || store.users[0];
+
+    if (targetUser) {
+      const cuStatusRaw = (clickupTaskData.status?.status || '').toLowerCase().trim();
+      const mappedStatus = CLICKUP_TO_ZENFLOW_STATUS[cuStatusRaw] || 'todo';
+      const maxOrder = store.tasks
+        .filter(t => t.userId === targetUser.id && t.status === mappedStatus)
+        .reduce((max, t) => Math.max(max, t.order), -1);
+
+      let dueDateFormatted: string | undefined;
+      if (clickupTaskData.due_date) {
+        const d = new Date(Number(clickupTaskData.due_date));
+        if (!isNaN(d.getTime())) {
+          dueDateFormatted = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+      }
+
+      existingTask = {
+        id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        userId: targetUser.id,
+        title: sanitizeString(clickupTaskData.name || 'ClickUp Task'),
+        description: clickupTaskData.description ? sanitizeString(clickupTaskData.description) : undefined,
+        dueDate: dueDateFormatted,
+        cognitiveLoad: 'medium',
+        status: mappedStatus,
+        order: maxOrder + 1,
+        clickupTaskId: taskId,
+        clickupUrl: clickupTaskData.url,
+        clickupListId: clickupTaskData.list?.id,
+        clickupListName: clickupTaskData.list?.name,
+        clickupFolderId: clickupTaskData.folder?.id,
+        clickupFolderName: clickupTaskData.folder?.name,
+        clickupSpaceId: clickupTaskData.space?.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        activityLog: [
+          {
+            id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+            timestamp: new Date().toISOString(),
+            action: 'created',
+            details: `Imported from ClickUp via real-time webhook (${clickupTaskData.name})`,
+          },
+        ],
+      };
+
+      store.tasks.push(existingTask);
+      saveStore(store);
+      dbSaveTask(existingTask).catch(e => console.error('Firestore save err:', e));
+      broadcastEvent('task_created', existingTask);
+
+      appendAuditLog({
+        category: 'webhook',
+        action: 'clickup_task_imported',
+        actor: { ip },
+        targetId: existingTask.id,
+        targetType: 'task',
+        details: `Imported new ClickUp task "${existingTask.title}" (${taskId}) for user ${targetUser.name}`,
+        metadata: { clickupTaskId: taskId, status: mappedStatus },
+      });
+      return;
+    }
+  }
+
+  if (!existingTask) {
+    console.log(`[ClickUp Webhook] Task ${taskId} not found in ZenFlow workspace.`);
+    return;
+  }
+
+  let modified = false;
+  const activityEntries: TaskActivity[] = Array.isArray(existingTask.activityLog)
+    ? [...existingTask.activityLog]
+    : [];
+
+  // 1. Check Status Updates
+  let newStatusRaw: string | null = null;
+  const statusItem = historyItems.find((h: any) => h.field === 'status');
+  if (statusItem?.after) {
+    newStatusRaw = typeof statusItem.after === 'string'
+      ? statusItem.after.toLowerCase().trim()
+      : (statusItem.after?.status || '').toLowerCase().trim();
+  } else if (clickupTaskData?.status?.status) {
+    newStatusRaw = (clickupTaskData.status.status || '').toLowerCase().trim();
+  }
+
+  if (newStatusRaw && CLICKUP_TO_ZENFLOW_STATUS[newStatusRaw]) {
+    const targetStatus = CLICKUP_TO_ZENFLOW_STATUS[newStatusRaw];
+    if (targetStatus !== existingTask.status) {
+      const prevStatus = existingTask.status;
+
+      if (prevStatus === 'in_progress' && targetStatus !== 'in_progress') {
+        if (existingTask.inProgressStartedAt) {
+          const sessionMs = Math.max(0, Date.now() - new Date(existingTask.inProgressStartedAt).getTime());
+          existingTask.inProgressDurationMs = (existingTask.inProgressDurationMs || 0) + sessionMs;
+        }
+        existingTask.inProgressStartedAt = undefined;
+      } else if (targetStatus === 'in_progress' && prevStatus !== 'in_progress') {
+        existingTask.inProgressStartedAt = new Date().toISOString();
+      }
+
+      if (targetStatus === 'done' && prevStatus !== 'done') {
+        existingTask.completedAt = new Date().toISOString();
+      } else if (targetStatus !== 'done') {
+        existingTask.completedAt = undefined;
+      }
+
+      existingTask.status = targetStatus;
+      existingTask.updatedAt = new Date().toISOString();
+      activityEntries.unshift({
+        id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        action: 'status_change',
+        from: prevStatus,
+        to: targetStatus,
+        details: `Status synced via ClickUp webhook: ${prevStatus.replace('_', ' ')} → ${targetStatus.replace('_', ' ')}`,
+      });
+      modified = true;
+
+      appendAuditLog({
+        category: 'webhook',
+        action: 'clickup_status_synced',
+        actor: { ip },
+        targetId: existingTask.id,
+        targetType: 'task',
+        from: prevStatus,
+        to: targetStatus,
+        details: `Task "${existingTask.title}" status changed: ${prevStatus} → ${targetStatus} via ClickUp webhook`,
+        metadata: { clickupTaskId: taskId },
+      });
+    }
+  }
+
+  // 2. Check Assignee Updates
+  let newAssigneeId: string | null = null;
+  let newAssigneeEmail: string | null = null;
+  const assigneeItem = historyItems.find((h: any) => h.field === 'assignee');
+  if (assigneeItem?.after) {
+    if (typeof assigneeItem.after === 'object') {
+      newAssigneeId = assigneeItem.after.id ? String(assigneeItem.after.id) : null;
+      newAssigneeEmail = assigneeItem.after.email ? assigneeItem.after.email.toLowerCase() : null;
+    } else {
+      newAssigneeId = String(assigneeItem.after);
+    }
+  } else if (clickupTaskData?.assignees?.[0]) {
+    newAssigneeId = String(clickupTaskData.assignees[0].id);
+    newAssigneeEmail = clickupTaskData.assignees[0].email?.toLowerCase();
+  }
+
+  if (newAssigneeId || newAssigneeEmail) {
+    const matchingUser = store.users.find(
+      u => (newAssigneeId && u.clickupUserId === newAssigneeId) ||
+           (newAssigneeEmail && u.email.toLowerCase() === newAssigneeEmail)
+    );
+    if (matchingUser && matchingUser.id !== existingTask.userId) {
+      const prevUserName = store.users.find(u => u.id === existingTask!.userId)?.name || existingTask.userId;
+      existingTask.userId = matchingUser.id;
+      existingTask.updatedAt = new Date().toISOString();
+      activityEntries.unshift({
+        id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        action: 'reassigned',
+        from: prevUserName,
+        to: matchingUser.name,
+        details: `Reassigned from ${prevUserName} to ${matchingUser.name} via ClickUp webhook`,
+      });
+      modified = true;
+
+      appendAuditLog({
+        category: 'webhook',
+        action: 'clickup_assignee_synced',
+        actor: { ip },
+        targetId: existingTask.id,
+        targetType: 'task',
+        from: existingTask.userId,
+        to: matchingUser.id,
+        details: `Task "${existingTask.title}" reassigned to ${matchingUser.name} via ClickUp webhook`,
+        metadata: { clickupTaskId: taskId, clickupUserId: newAssigneeId },
+      });
+    }
+  }
+
+  // 3. Check Due Date Updates
+  let newDueDateRaw: string | number | null = null;
+  const dueDateItem = historyItems.find((h: any) => h.field === 'due_date');
+  if (dueDateItem?.after !== undefined) {
+    newDueDateRaw = dueDateItem.after;
+  } else if (clickupTaskData?.due_date !== undefined) {
+    newDueDateRaw = clickupTaskData.due_date;
+  }
+
+  if (newDueDateRaw !== null) {
+    let resolvedDueDate: string | undefined;
+    if (newDueDateRaw) {
+      const d = new Date(Number(newDueDateRaw));
+      if (!isNaN(d.getTime())) {
+        resolvedDueDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      }
+    }
+    if (resolvedDueDate !== existingTask.dueDate) {
+      const prevDue = existingTask.dueDate || 'None';
+      existingTask.dueDate = resolvedDueDate;
+      existingTask.updatedAt = new Date().toISOString();
+      activityEntries.unshift({
+        id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        action: 'rescheduled',
+        from: prevDue,
+        to: resolvedDueDate || 'None',
+        details: `Due date changed from ${prevDue} to ${resolvedDueDate || 'None'} via ClickUp webhook`,
+      });
+      modified = true;
+
+      appendAuditLog({
+        category: 'webhook',
+        action: 'clickup_deadline_synced',
+        actor: { ip },
+        targetId: existingTask.id,
+        targetType: 'task',
+        from: prevDue,
+        to: resolvedDueDate || 'None',
+        details: `Task "${existingTask.title}" deadline changed to ${resolvedDueDate || 'None'} via ClickUp webhook`,
+        metadata: { clickupTaskId: taskId },
+      });
+    }
+  }
+
+  // 4. Check Tracked Time Updates
+  const timeItem = historyItems.find((h: any) => h.field === 'time_spent' || h.field === 'time_tracked');
+  if (timeItem?.after !== undefined) {
+    const parsedMs = Number(timeItem.after);
+    if (!isNaN(parsedMs) && parsedMs >= 0 && parsedMs !== existingTask.inProgressDurationMs) {
+      existingTask.inProgressDurationMs = parsedMs;
+      existingTask.updatedAt = new Date().toISOString();
+      activityEntries.unshift({
+        id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        action: 'billable_adjusted',
+        details: `Tracked duration updated to ${formatBillableHoursServer(parsedMs)} via ClickUp webhook`,
+      });
+      modified = true;
+    }
+  }
+
+  if (modified) {
+    existingTask.activityLog = activityEntries.slice(0, 15);
+    saveStore(store);
+    dbSaveTask(existingTask).catch(e => console.error('Firestore save err:', e));
+    broadcastEvent('task_updated', existingTask);
+    console.log(`[ClickUp Webhook] Successfully synchronized task ${existingTask.id} (${existingTask.title})`);
+  }
+}
+
 
 async function startServer() {
   const app = express();
@@ -1143,6 +1584,7 @@ async function startServer() {
   // Initialize and load database records from Firestore
   await syncFromFirestore();
   autoArchiveDoneTasks();
+  loadRecentAuditLogs();
 
   // API: Health check
   app.get('/api/health', (_req: Request, res: Response) => {
@@ -1196,6 +1638,14 @@ async function startServer() {
         dbSaveUser(existingUser).catch(e => console.error('Firestore user update err:', e));
         broadcastEvent('user_updated', existingUser);
       }
+      appendAuditLog({
+        category: 'security',
+        action: 'user_login',
+        actor: { id: existingUser.id, name: existingUser.name, email: existingUser.email, ip: req.ip },
+        targetId: existingUser.id,
+        targetType: 'user',
+        details: `User "${existingUser.name}" logged in successfully (${cleanEmail})`,
+      });
       return res.json({ user: existingUser, isNew: false });
     }
 
@@ -1214,10 +1664,26 @@ async function startServer() {
       saveStore(store);
       dbSaveUser(superadmin).catch(e => console.error('Firestore user create err:', e));
       broadcastEvent('user_created', superadmin);
+      appendAuditLog({
+        category: 'security',
+        action: 'superadmin_bootstrapped',
+        actor: { id: superadmin.id, name: superadmin.name, email: superadmin.email, ip: req.ip },
+        targetId: superadmin.id,
+        targetType: 'user',
+        details: `Superadmin bootstrap account initialized for ${SUPERADMIN_EMAIL}`,
+      });
       return res.status(201).json({ user: superadmin, isNew: true });
     }
 
     // Unregistered accounts cannot log in
+    appendAuditLog({
+      category: 'security',
+      action: 'unauthorized_login_attempt',
+      actor: { email: cleanEmail, ip: req.ip },
+      targetId: 'auth',
+      targetType: 'workspace',
+      details: `Unauthorized login rejected for unregistered email: ${cleanEmail}`,
+    });
     return res.status(403).json({
       error: 'Account not registered. Only team members with an existing ZenFlow account are authorized to log in. Please contact kiran.s@zensciences.com to be added.',
     });
@@ -1289,6 +1755,15 @@ async function startServer() {
       saveStore(store);
       dbSaveUser(existingUser).catch(e => console.error('Firestore user update err:', e));
       broadcastEvent('user_updated', existingUser);
+      appendAuditLog({
+        category: 'user',
+        action: 'user_updated',
+        actor: { ip: req.ip },
+        targetId: existingUser.id,
+        targetType: 'user',
+        details: `User profile / role updated for "${existingUser.name}" (${cleanEmail})`,
+        metadata: { role: cleanRole, isCreativeDirector: existingUser.isCreativeDirector },
+      });
       return res.json(existingUser);
     }
 
@@ -1314,6 +1789,15 @@ async function startServer() {
     dbSaveUser(newUser).catch(e => console.error('Firestore user create err:', e));
 
     broadcastEvent('user_created', newUser);
+    appendAuditLog({
+      category: 'user',
+      action: 'user_created',
+      actor: { ip: req.ip },
+      targetId: newUser.id,
+      targetType: 'user',
+      details: `User account created: ${newUser.name} (${newUser.email}) - Role: ${newUser.role}`,
+      metadata: { isCreativeDirector: newUser.isCreativeDirector, role: newUser.role },
+    });
     res.status(201).json(newUser);
   });
 
@@ -1373,6 +1857,15 @@ async function startServer() {
     saveStore(store);
     dbSaveUser(current).catch(e => console.error('Firestore user update err:', e));
     broadcastEvent('user_updated', current);
+    appendAuditLog({
+      category: 'user',
+      action: 'user_privilege_modified',
+      actor: { ip: req.ip },
+      targetId: current.id,
+      targetType: 'user',
+      details: `User profile / privileges modified for "${current.name}"`,
+      metadata: { role: current.role, isCreativeDirector: current.isCreativeDirector },
+    });
     res.json(current);
   });
 
@@ -1406,6 +1899,15 @@ async function startServer() {
     }
 
     broadcastEvent('user_deleted', { id: removedUser.id, taskIds: deletedTaskIds });
+    appendAuditLog({
+      category: 'user',
+      action: 'user_deleted',
+      actor: { ip: req.ip },
+      targetId: removedUser.id,
+      targetType: 'user',
+      details: `User account "${removedUser.name}" (${removedUser.email}) deleted and ${deletedTaskIds.length} associated task(s) purged`,
+      metadata: { deletedTaskCount: deletedTaskIds.length },
+    });
     res.json({
       success: true,
       deletedUser: removedUser,
@@ -1522,6 +2024,15 @@ async function startServer() {
     dbSaveTask(newTask).catch(e => console.error('Firestore task create err:', e));
 
     broadcastEvent('task_created', newTask);
+    appendAuditLog({
+      category: 'task',
+      action: 'task_created',
+      actor: { ip: req.ip },
+      targetId: newTask.id,
+      targetType: 'task',
+      details: `Task "${newTask.title}" created for user ${userId}`,
+      metadata: { status: newTask.status, cognitiveLoad: newTask.cognitiveLoad, dueDate: newTask.dueDate },
+    });
 
     // Asynchronously push task to ClickUp if a list has been assigned
     const assignedUser = store.users.find(u => u.id === userId);
@@ -1730,6 +2241,17 @@ async function startServer() {
     dbSaveTask(updatedTask).catch(e => console.error('Firestore task update err:', e));
 
     broadcastEvent('task_updated', updatedTask);
+    appendAuditLog({
+      category: 'task',
+      action: activityEntries[0]?.action || 'task_updated',
+      actor: { name: activityEntries[0]?.actorName, ip: req.ip },
+      targetId: updatedTask.id,
+      targetType: 'task',
+      from: activityEntries[0]?.from,
+      to: activityEntries[0]?.to,
+      details: activityEntries[0]?.details || `Task "${updatedTask.title}" updated`,
+      metadata: { taskId: updatedTask.id, title: updatedTask.title },
+    });
 
     // Live Push to ClickUp
     const taskUser = store.users.find(u => u.id === updatedTask.userId);
@@ -1756,6 +2278,15 @@ async function startServer() {
     dbDeleteTask(removed.id).catch(e => console.error('Firestore task delete err:', e));
 
     broadcastEvent('task_deleted', { id: removed.id, userId: removed.userId });
+    appendAuditLog({
+      category: 'task',
+      action: 'task_deleted',
+      actor: { ip: req.ip },
+      targetId: removed.id,
+      targetType: 'task',
+      details: `Task "${removed.title}" (ID: ${removed.id}) deleted`,
+      metadata: { userId: removed.userId, clickupTaskId: removed.clickupTaskId },
+    });
     res.json({ success: true, id: removed.id });
   });
 
@@ -2316,6 +2847,246 @@ async function startServer() {
       syncedCount,
       archivedCount,
       message: `Synced ${syncedCount} task(s), archived ${archivedCount} completed task(s).`,
+    });
+  });
+
+  // =========================================================================
+  // ClickUp Inbound Webhook Listener & Registration Endpoints
+  // =========================================================================
+
+  // API: Inbound ClickUp Webhook Listener (zero-friction status, assignee, and task sync)
+  app.post('/api/clickup/webhook', (req: Request, res: Response) => {
+    // 1. Acknowledge HTTP 200 immediately to adhere to ClickUp Webhook timeout SLA
+    res.status(200).json({ received: true });
+
+    webhookEventsCount++;
+    lastWebhookEventAt = new Date().toISOString();
+    lastWebhookAction = req.body.event || 'webhook_received';
+
+    const taskId = (req.body.task_id || req.body.taskId || req.body.task?.id || '').trim();
+    const eventType = req.body.event || 'unknown';
+    const historyItems = Array.isArray(req.body.history_items) ? req.body.history_items : [];
+
+    // 2. Asynchronously process payload without blocking HTTP connection
+    (async () => {
+      try {
+        await processClickupWebhookEvent({
+          taskId,
+          eventType,
+          historyItems,
+          rawBody: req.body,
+          ip: req.ip,
+        });
+      } catch (err) {
+        console.error('[ClickUp Webhook Error]:', err);
+      }
+    })();
+  });
+
+  // API: Register ClickUp Webhook for Workspace Team
+  app.post('/api/clickup/webhook/register', async (req: Request, res: Response) => {
+    try {
+      let apiKey = (req.headers['x-clickup-api-key'] as string) || (req.body.apiKey as string);
+      if (!apiKey) {
+        const u = store.users.find(usr => usr.clickupApiKey);
+        if (u?.clickupApiKey) apiKey = u.clickupApiKey;
+      }
+
+      if (!apiKey) {
+        return res.status(400).json({ error: 'ClickUp API key is required to register webhook' });
+      }
+
+      const cleanKey = apiKey.trim();
+
+      // Retrieve team id if not provided
+      let teamId = req.body.teamId;
+      if (!teamId) {
+        const teamRes = await fetch('https://api.clickup.com/api/v2/team', {
+          headers: { Authorization: cleanKey },
+        });
+        if (teamRes.ok) {
+          const tData = await teamRes.json();
+          teamId = tData.teams?.[0]?.id;
+        }
+      }
+
+      if (!teamId) {
+        return res.status(400).json({ error: 'Failed to retrieve ClickUp team ID' });
+      }
+
+      // Determine webhook endpoint URL
+      const host = req.get('host') || 'localhost:3000';
+      const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+      const endpoint = req.body.endpoint || `${proto}://${host}/api/clickup/webhook`;
+
+      const webhookPayload = {
+        endpoint,
+        events: [
+          'taskCreated',
+          'taskUpdated',
+          'taskStatusUpdated',
+          'taskAssigneeUpdated',
+          'taskDueDateUpdated',
+          'taskDeleted',
+          'taskTimeTrackedUpdated',
+          'taskMoved',
+        ],
+      };
+
+      const cuRes = await fetch(`https://api.clickup.com/api/v2/team/${teamId}/webhook`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: cleanKey,
+        },
+        body: JSON.stringify(webhookPayload),
+      });
+
+      const responseData = await cuRes.json();
+      if (!cuRes.ok) {
+        return res.status(cuRes.status).json({
+          error: responseData.err || responseData.error || 'Failed to register webhook in ClickUp',
+          details: responseData,
+        });
+      }
+
+      registeredWebhookId = responseData.id || responseData.webhook?.id;
+      activeWebhookEndpoint = endpoint;
+
+      appendAuditLog({
+        category: 'webhook',
+        action: 'clickup_webhook_registered',
+        actor: { ip: req.ip },
+        targetId: registeredWebhookId || 'webhook',
+        targetType: 'webhook',
+        details: `ClickUp webhook successfully registered with endpoint ${endpoint}`,
+        metadata: { teamId, endpoint, webhookId: registeredWebhookId },
+      });
+
+      res.json({
+        success: true,
+        webhookId: registeredWebhookId,
+        endpoint,
+        webhook: responseData.webhook || responseData,
+        message: 'ClickUp real-time webhook registered successfully.',
+      });
+    } catch (err: any) {
+      console.error('[ClickUp Webhook Register Error]:', err);
+      res.status(500).json({ error: err.message || 'Internal server error registering webhook' });
+    }
+  });
+
+  // API: Get ClickUp Webhook Status
+  app.get('/api/clickup/webhook/status', (req: Request, res: Response) => {
+    const host = req.get('host') || 'localhost:3000';
+    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    const defaultEndpoint = `${proto}://${host}/api/clickup/webhook`;
+
+    res.json({
+      listening: true,
+      registered: Boolean(registeredWebhookId),
+      webhookId: registeredWebhookId,
+      endpointUrl: activeWebhookEndpoint || defaultEndpoint,
+      totalEventsCount: webhookEventsCount,
+      lastEventAt: lastWebhookEventAt,
+      lastEventAction: lastWebhookAction,
+      supportedEvents: [
+        'taskCreated',
+        'taskUpdated',
+        'taskStatusUpdated',
+        'taskAssigneeUpdated',
+        'taskDueDateUpdated',
+        'taskDeleted',
+        'taskTimeTrackedUpdated',
+        'taskMoved',
+      ],
+    });
+  });
+
+  // API: Delete ClickUp Webhook
+  app.delete('/api/clickup/webhook/:id', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      let apiKey = (req.headers['x-clickup-api-key'] as string) || (req.query.apiKey as string);
+      if (!apiKey) {
+        const u = store.users.find(usr => usr.clickupApiKey);
+        if (u?.clickupApiKey) apiKey = u.clickupApiKey;
+      }
+      if (!apiKey) return res.status(400).json({ error: 'ClickUp API key required' });
+
+      const cuRes = await fetch(`https://api.clickup.com/api/v2/webhook/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: apiKey.trim() },
+      });
+      if (cuRes.ok) {
+        if (registeredWebhookId === id) {
+          registeredWebhookId = null;
+          activeWebhookEndpoint = null;
+        }
+        appendAuditLog({
+          category: 'webhook',
+          action: 'clickup_webhook_deleted',
+          actor: { ip: req.ip },
+          targetId: id,
+          targetType: 'webhook',
+          details: `ClickUp webhook ${id} deleted`,
+        });
+        return res.json({ success: true, message: `Webhook ${id} deleted` });
+      }
+      const data = await cuRes.json();
+      res.status(cuRes.status).json({ error: data.err || 'Failed to delete webhook from ClickUp' });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Error deleting webhook' });
+    }
+  });
+
+  // =========================================================================
+  // Compliance Activity & Audit Stream Endpoints (SOC2 Ready)
+  // =========================================================================
+
+  // API: Get recent compliance audit log records (in-memory sliding cache)
+  app.get('/api/audit/logs', (req: Request, res: Response) => {
+    const limit = Math.min(200, Math.max(1, parseInt(req.query.limit as string, 10) || 50));
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+      totalInMemory: recentAuditLogs.length,
+      limit,
+      logs: recentAuditLogs.slice(0, limit),
+    });
+  });
+
+  // API: Download complete append-only JSON-lines compliance audit stream
+  app.get('/api/audit/download', (_req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
+    res.setHeader('Content-Disposition', 'attachment; filename="zenflow-compliance-audit.jsonl"');
+    res.setHeader('Cache-Control', 'no-store');
+
+    if (fs.existsSync(AUDIT_LOG_FILE)) {
+      const stream = fs.createReadStream(AUDIT_LOG_FILE);
+      stream.pipe(res);
+    } else {
+      const content = recentAuditLogs.map(l => JSON.stringify(l)).join('\n');
+      res.send(content);
+    }
+  });
+
+  // API: Get compliance audit statistics & storage telemetry
+  app.get('/api/audit/stats', (_req: Request, res: Response) => {
+    let fileSize = 0;
+    try {
+      if (fs.existsSync(AUDIT_LOG_FILE)) {
+        const stat = fs.statSync(AUDIT_LOG_FILE);
+        fileSize = stat.size;
+      }
+    } catch {}
+
+    res.json({
+      filePath: AUDIT_LOG_FILE,
+      fileSizeFormatted: `${(fileSize / 1024).toFixed(1)} KB`,
+      fileSizeBytes: fileSize,
+      inMemoryCount: recentAuditLogs.length,
+      lastRecordedAt: recentAuditLogs[0]?.timestamp || null,
+      status: 'active_streaming',
     });
   });
 

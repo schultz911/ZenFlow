@@ -14,6 +14,8 @@ import {
   ClickupFolder,
   ClickupMember,
   ClickupCustomFieldOption,
+  AuditLogEntry,
+  ClickupWebhookStatus,
 } from '../types';
 import { INITIAL_USERS, INITIAL_TASKS } from '../data/initialData';
 import { compareTasksByDeadline, formatBillableHours, getTaskBillableMs } from '../utils/workload';
@@ -141,6 +143,12 @@ interface DashboardContextType {
   isLoadingTaskTypes: boolean;
   fetchClickupCustomFields: (params: { listId?: string; spaceId?: string; folderId?: string }) => Promise<ClickupCustomFieldOption[]>;
   getUserSyncState: (userId: string) => 'synced' | 'pending' | 'failed' | 'unmapped';
+  // ClickUp Real-Time Webhook & Audit Stream
+  clickupWebhookStatus: ClickupWebhookStatus | null;
+  refreshClickupWebhookStatus: () => Promise<void>;
+  registerClickupWebhook: (customEndpoint?: string) => Promise<{ success: boolean; message: string; webhookId?: string }>;
+  fetchAuditLogs: (limit?: number) => Promise<AuditLogEntry[]>;
+  downloadAuditLogs: () => void;
   // Tasks
   createTask: (data: {
     userId: string;
@@ -333,6 +341,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [clickupTaskTypeFieldId, setClickupTaskTypeFieldId] = useState<string>('');
   const [isLoadingTaskTypes, setIsLoadingTaskTypes] = useState<boolean>(false);
   const [userSyncFailures, setUserSyncFailures] = useState<Record<string, boolean>>({});
+  const [clickupWebhookStatus, setClickupWebhookStatus] = useState<ClickupWebhookStatus | null>(null);
 
   const [syncStatus, setSyncStatus] = useState<'connected' | 'connecting' | 'offline'>('connecting');
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -346,6 +355,18 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         setFirestoreStatus(data);
       }
     } catch (err) {
+      // ignore
+    }
+  }, []);
+
+  const refreshClickupWebhookStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/clickup/webhook/status');
+      if (res.ok) {
+        const data: ClickupWebhookStatus = await res.json();
+        setClickupWebhookStatus(data);
+      }
+    } catch {
       // ignore
     }
   }, []);
@@ -536,7 +557,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   useEffect(() => {
     fetchState();
     refreshFirestoreStatus();
-  }, [fetchState, refreshFirestoreStatus]);
+    refreshClickupWebhookStatus();
+  }, [fetchState, refreshFirestoreStatus, refreshClickupWebhookStatus]);
 
   // Online / Offline network status listener with auto queue replay
   useEffect(() => {
@@ -1055,6 +1077,51 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
     return 'synced';
   }, [userSyncFailures]);
+
+  // ClickUp Real-Time Webhook Registration
+  const registerClickupWebhook = useCallback(async (customEndpoint?: string): Promise<{ success: boolean; message: string; webhookId?: string }> => {
+    try {
+      const key = clickupApiKey || currentUserRef.current?.clickupApiKey || '';
+      const res = await fetch('/api/clickup/webhook/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(key ? { 'x-clickup-api-key': key } : {}),
+        },
+        body: JSON.stringify({ endpoint: customEndpoint }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await refreshClickupWebhookStatus();
+        return {
+          success: true,
+          message: data.message || 'ClickUp real-time webhook registered successfully!',
+          webhookId: data.webhookId,
+        };
+      }
+      return { success: false, message: data.error || 'Failed to register webhook in ClickUp' };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error registering webhook' };
+    }
+  }, [clickupApiKey, refreshClickupWebhookStatus]);
+
+  // SOC2 Compliance Audit Stream Queries & Export
+  const fetchAuditLogs = useCallback(async (limit: number = 50): Promise<AuditLogEntry[]> => {
+    try {
+      const res = await fetch(`/api/audit/logs?limit=${limit}`);
+      if (res.ok) {
+        const data = await res.json();
+        return data.logs || [];
+      }
+    } catch (err) {
+      console.warn('Failed to fetch compliance audit logs:', err);
+    }
+    return [];
+  }, []);
+
+  const downloadAuditLogs = useCallback(() => {
+    window.open('/api/audit/download', '_blank');
+  }, []);
 
   // Authentication Login: takes name, role (content or design), official email address
   const login = useCallback(async (name: string, role: Role, email: string): Promise<User> => {
@@ -1797,6 +1864,12 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       isLoadingTaskTypes,
       fetchClickupCustomFields,
       getUserSyncState,
+      // Real-Time Webhook & Compliance Audit
+      clickupWebhookStatus,
+      refreshClickupWebhookStatus,
+      registerClickupWebhook,
+      fetchAuditLogs,
+      downloadAuditLogs,
       // Tasks
       createTask,
       updateTask,
@@ -1859,6 +1932,11 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       isLoadingTaskTypes,
       fetchClickupCustomFields,
       getUserSyncState,
+      clickupWebhookStatus,
+      refreshClickupWebhookStatus,
+      registerClickupWebhook,
+      fetchAuditLogs,
+      downloadAuditLogs,
       createTask,
       updateTask,
       adjustBillableHours,

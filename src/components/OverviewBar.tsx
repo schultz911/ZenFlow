@@ -10,6 +10,7 @@ import {
   Users,
   ChevronDown,
   Check,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface OverviewBarProps {
@@ -30,6 +31,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
     setActiveBoardId,
     isSuperadmin,
     creativeDirectors,
+    downloadAuditLogs,
   } = useDashboard();
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -302,6 +304,17 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                 >
                   <FileCode className="h-3.5 w-3.5 text-blue-500" />
                   <span>Export JSON Audit</span>
+                </button>
+                <button
+                  id="export-audit-ndjson-btn"
+                  onClick={() => {
+                    setShowExportMenu(false);
+                    downloadAuditLogs();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer border-t border-neutral-100 dark:border-white/5 mt-1 pt-1.5"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5 text-purple-500" />
+                  <span>Compliance Audit (NDJSON)</span>
                 </button>
               </div>
             )}
