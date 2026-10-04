@@ -991,11 +991,16 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const syncUserTasksWithClickUp = useCallback(async (userId: string) => {
     const apiKey = currentUserRef.current?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
+    const callerUserId = currentUserRef.current?.id;
     try {
       const res = await fetch('/api/clickup/sync-user-tasks', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, apiKey }),
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey ? { 'x-clickup-api-key': apiKey } : {}),
+          ...(callerUserId ? { 'x-caller-user-id': callerUserId } : {}),
+        },
+        body: JSON.stringify({ userId, apiKey, callerUserId }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -1306,11 +1311,18 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     const payload = { id: realId, ...data };
 
+    const callerId = currentUserRef.current?.id || '';
+    const clickKey = currentUserRef.current?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
+
     try {
       if (!navigator.onLine) throw new Error('Offline');
       const res = await fetch('/api/tasks', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(clickKey ? { 'x-clickup-api-key': clickKey } : {}),
+          ...(callerId ? { 'x-caller-user-id': callerId } : {}),
+        },
         body: JSON.stringify(payload),
       });
       if (res.ok) {
@@ -1394,11 +1406,18 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       return Array.from(map.values());
     });
 
+    const callerId = currentUserRef.current?.id || '';
+    const clickKey = currentUserRef.current?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
+
     try {
       if (!navigator.onLine) throw new Error('Offline');
       const res = await fetch(`/api/tasks/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(clickKey ? { 'x-clickup-api-key': clickKey } : {}),
+          ...(callerId ? { 'x-caller-user-id': callerId } : {}),
+        },
         body: JSON.stringify(updates),
       });
       if (res.ok) {
@@ -1494,11 +1513,18 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       actorName: currentUserRef.current?.name || undefined,
     };
 
+    const callerId = currentUserRef.current?.id || '';
+    const clickKey = currentUserRef.current?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
+
     try {
       if (!navigator.onLine) throw new Error('Offline');
       const res = await fetch(`/api/tasks/${taskId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(clickKey ? { 'x-clickup-api-key': clickKey } : {}),
+          ...(callerId ? { 'x-caller-user-id': callerId } : {}),
+        },
         body: JSON.stringify(payload),
       });
       if (res.ok) {
@@ -1674,11 +1700,18 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       });
     });
 
+    const callerId = currentUserRef.current?.id || '';
+    const clickKey = currentUserRef.current?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
+
     try {
       if (!navigator.onLine) throw new Error('Offline');
       const res = await fetch('/api/tasks/reorder', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(clickKey ? { 'x-clickup-api-key': clickKey } : {}),
+          ...(callerId ? { 'x-caller-user-id': callerId } : {}),
+        },
         body: JSON.stringify({ updates: batchUpdates }),
       });
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
@@ -1756,11 +1789,18 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       })
     );
 
+    const callerId = currentUserRef.current?.id || '';
+    const clickKey = currentUserRef.current?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
+
     try {
       if (!navigator.onLine) throw new Error('Offline');
       const res = await fetch('/api/tasks/reorder', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(clickKey ? { 'x-clickup-api-key': clickKey } : {}),
+          ...(callerId ? { 'x-caller-user-id': callerId } : {}),
+        },
         body: JSON.stringify({ updates }),
       });
       if (!res.ok) throw new Error(`Server returned ${res.status}`);

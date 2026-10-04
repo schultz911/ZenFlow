@@ -723,12 +723,12 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                   syncState === 'unmapped'
                     ? 'Member not mapped to ClickUp (edit profile to map)'
                     : isSyncingClickUp
-                    ? 'Syncing tasks with ClickUp...'
+                    ? `Syncing tasks with ClickUp for ${user.name}...`
                     : syncState === 'failed'
                     ? syncFeedback || 'Sync failed with ClickUp (click to retry)'
                     : syncState === 'pending'
-                    ? syncFeedback || 'Changes pending sync with ClickUp (click to sync)'
-                    : syncFeedback || 'Tasks synced with ClickUp'
+                    ? syncFeedback || (isCurrentUser ? 'Changes pending sync with ClickUp (click to sync)' : `Changes pending sync with ClickUp for ${user.name}`)
+                    : syncFeedback || (isCurrentUser ? 'Tasks synced with ClickUp' : `Tasks synced with ClickUp for ${user.name}`)
                 }
                 className={`flex items-center justify-center p-2 rounded-xl border transition-all ${
                   syncState === 'unmapped'

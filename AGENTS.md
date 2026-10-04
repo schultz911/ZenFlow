@@ -6,6 +6,16 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
+### Sweep 40: 2026-10-04 (ClickUp Pull Elimination & Board-Member Time Tracking Isolation)
+
+- **INT-07 (Elimination of Inbound ClickUp Task Auto-Import & Board Presence Gating):** Enforced that ZenFlow acts strictly as the authoritative creation origin for tasks. Removed all auto-import routines in `processClickupWebhookEvent()` in `server.ts` that previously pulled ClickUp tasks assigned to ZenFlow workspace members. The inbound webhook now strictly gates processing to tasks already present on the ZenFlow board (`existingTask = store.tasks.find(t => t.clickupTaskId === taskId)`). Unrecognized tasks are immediately ignored with zero extraneous API fetches, guaranteeing that no external tasks are pulled from ClickUp into ZenFlow.
+- **DATA-14 (Board-Member Timesheet Attribution & Cross-User Time Isolation):** Resolved time tracking pollution where syncing or modifying tasks on another user's board logged tracked time under the logged-in caller's ClickUp timesheet. Implemented multi-tier attribution in `postClickupTimeEntry()`:
+  1. *Board Member Personal Key Priority:* If the board member has their own `clickupApiKey`, time entries are authenticated under their token, crediting their personal timesheet.
+  2. *Workspace Admin Assignee Delegation:* If the caller's token is used and the board member has a mapped `clickupUserId`, the entry is posted via ClickUp Time Tracking API `POST /api/v2/team/{team_id}/time_entries` with `assignee: boardUserClickupId`, crediting the board member.
+  3. *Caller Timesheet Protection:* If the task belongs to another member and direct attribution cannot be established (or is rejected by ClickUp), time entry submission is safely skipped, completely preventing caller timesheet cross-contamination while preserving full sync for task title, status, deadline, and custom fields.
+  4. *Caller Attribution Context:* Propagated `x-caller-user-id` and `x-clickup-api-key` headers across task creation, mutation, timer adjustment, reorder, and user sync endpoints in `DashboardContext.tsx` and `server.ts`.
+- **UI-28 (Swimlane Sync Tooltip & State Clarity):** Enhanced the swimlane ClickUp sync icon in `src/components/Swimlane.tsx` to provide clear, member-scoped hover tooltips (`"Syncing tasks with ClickUp for [Name]..."` and `"Tasks synced with ClickUp for [Name]"`).
+
 ### Sweep 39: 2026-10-04 (Loading Screen Authentic Brand Logo & Typography Color Parity)
 
 - **BRAND-02 (Loading Screen Logo & Typography Parity with Main Application):** Replaced the generic placeholder gradient square (`"ZF"`) on the authentication check loading screen in `src/App.tsx` with the authentic zenFlow wave SVG brand mark (`#zenflow-loading-logo`) housed in an identical dark container (`bg-neutral-900 dark:bg-[#1A1A1A] border border-neutral-800 dark:border-white/10 text-blue-500 shadow-xl shadow-blue-500/10`). Synchronized the application name typography and color styling to 100% parity with `<Header>` and `<LoginModal>`: standard bold `zen` (`text-neutral-900 dark:text-white`) paired with script `Flow` (`font-flowy text-blue-600 dark:text-blue-400 select-none`), official subtitle ("Workflow Management System"), and a refined session verification spinner.

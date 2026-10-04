@@ -910,9 +910,165 @@ function ensureSuperadmin(appStore: AppStore) {
 // Ensure superadmin exists and data is deduplicated on startup
 ensureSuperadmin(store);
 
-async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User) {
+let cachedClickupTeamId: string | null = null;
+async function resolveClickupTeamId(token: string): Promise<string | null> {
+  if (cachedClickupTeamId) return cachedClickupTeamId;
+  try {
+    const teamRes = await fetch('https://api.clickup.com/api/v2/team', {
+      headers: { Authorization: token },
+    });
+    if (teamRes.ok) {
+      const teamData = await teamRes.json();
+      const tid = teamData.teams?.[0]?.id ? String(teamData.teams[0].id) : null;
+      if (tid) cachedClickupTeamId = tid;
+      return tid;
+    }
+  } catch (err) {
+    console.warn('[ClickUp] Could not resolve team ID for time tracking:', err);
+  }
+  return null;
+}
+
+// Post time entry ensuring it is credited to the board member (taskUser), never polluting the caller's timesheet
+async function postClickupTimeEntry(params: {
+  clickupTaskId: string;
+  durationMs: number;
+  taskUser: User;
+  callerUserId?: string;
+  callerToken: string;
+}): Promise<boolean> {
+  const { clickupTaskId, durationMs, taskUser, callerUserId, callerToken } = params;
+  const timeMs = Math.round(durationMs);
+  if (timeMs < 1000) return true;
+
+  const isOwnBoard = !callerUserId || callerUserId === taskUser.id;
+  const boardUserToken = taskUser.clickupApiKey?.trim();
+  const boardUserClickupId = taskUser.clickupUserId ? parseInt(taskUser.clickupUserId, 10) : undefined;
+
+  // PRIORITY 1: If board member has their own ClickUp API key, authenticate with it.
+  // This guarantees the entry is credited directly to the board member's personal timesheet.
+  if (boardUserToken) {
+    const teamId = await resolveClickupTeamId(boardUserToken);
+    if (teamId) {
+      try {
+        const timeRes = await fetch(`https://api.clickup.com/api/v2/team/${teamId}/time_entries`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: boardUserToken,
+          },
+          body: JSON.stringify({
+            tid: clickupTaskId,
+            duration: timeMs,
+            start: Date.now() - timeMs,
+            stop: Date.now(),
+            billable: false,
+            ...(boardUserClickupId && !isNaN(boardUserClickupId) ? { assignee: boardUserClickupId } : {}),
+          }),
+        });
+        if (timeRes.ok) {
+          console.log(`[ClickUp Time Sync] Tracked ${timeMs}ms directly to board member's timesheet (${taskUser.name}) via personal API key`);
+          return true;
+        }
+      } catch (err) {
+        console.warn(`[ClickUp Time Sync] Error via board member team time entries:`, err);
+      }
+    }
+
+    try {
+      const timeRes = await fetch(`https://api.clickup.com/api/v2/task/${clickupTaskId}/time`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: boardUserToken,
+        },
+        body: JSON.stringify({
+          time: timeMs,
+          start: Date.now() - timeMs,
+          end: Date.now(),
+        }),
+      });
+      if (timeRes.ok) {
+        console.log(`[ClickUp Time Sync] Tracked ${timeMs}ms to board member's timesheet (${taskUser.name}) via task time endpoint`);
+        return true;
+      }
+    } catch (err) {
+      console.warn(`[ClickUp Time Sync] Error via board member task time endpoint:`, err);
+    }
+  }
+
+  // PRIORITY 2: If caller token is available and board member has a mapped ClickUp User ID,
+  // post via ClickUp Time Tracking API specifying "assignee: boardUserClickupId".
+  // This attributes the time entry to the board member in ClickUp.
+  if (callerToken && boardUserClickupId && !isNaN(boardUserClickupId)) {
+    const teamId = await resolveClickupTeamId(callerToken);
+    if (teamId) {
+      try {
+        const timeRes = await fetch(`https://api.clickup.com/api/v2/team/${teamId}/time_entries`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: callerToken,
+          },
+          body: JSON.stringify({
+            tid: clickupTaskId,
+            duration: timeMs,
+            start: Date.now() - timeMs,
+            stop: Date.now(),
+            billable: false,
+            assignee: boardUserClickupId,
+          }),
+        });
+        if (timeRes.ok) {
+          console.log(`[ClickUp Time Sync] Tracked ${timeMs}ms for assignee ${boardUserClickupId} (${taskUser.name}) on board`);
+          return true;
+        } else {
+          const errText = await timeRes.text();
+          console.warn(`[ClickUp Time Sync] Failed to post time for assignee ${boardUserClickupId}:`, errText);
+        }
+      } catch (err) {
+        console.warn(`[ClickUp Time Sync] Exception posting time for assignee ${boardUserClickupId}:`, err);
+      }
+    }
+  }
+
+  // PRIORITY 3: If this is the logged-in user's OWN board, caller token can log to their own timesheet.
+  if (isOwnBoard && callerToken) {
+    try {
+      const timeRes = await fetch(`https://api.clickup.com/api/v2/task/${clickupTaskId}/time`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: callerToken,
+        },
+        body: JSON.stringify({
+          time: timeMs,
+          start: Date.now() - timeMs,
+          end: Date.now(),
+        }),
+      });
+      if (timeRes.ok) {
+        console.log(`[ClickUp Time Sync] Tracked ${timeMs}ms on logged-in user's own board (${taskUser.name})`);
+        return true;
+      }
+    } catch (err) {
+      console.warn(`[ClickUp Time Sync] Error posting time for own board:`, err);
+    }
+  }
+
+  // GUARANTEE: If syncing another user's board and direct attribution to that user is not possible,
+  // DO NOT log under the caller's token! Skipping protects the caller's timesheet from cross-contamination.
+  if (!isOwnBoard) {
+    console.log(`[ClickUp Time Sync] Protected caller timesheet: Skipped time sync for task on ${taskUser.name}'s board because time could not be attributed directly to ${taskUser.name}.`);
+  }
+  return false;
+}
+
+async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User, callerUserId?: string) {
   const taskUser = user || store.users.find(u => u.id === task.userId);
-  const token = (apiKey || user?.clickupApiKey || taskUser?.clickupApiKey || '').trim();
+  if (!taskUser) return;
+  const callerToken = (apiKey || '').trim();
+  const token = (taskUser.clickupApiKey || callerToken || store.users.find(u => u.clickupApiKey)?.clickupApiKey || '').trim();
   if (!token || !task.clickupListId) return;
 
   const targetStatus = ZENFLOW_TO_CLICKUP_STATUS[task.status] || 'to do';
@@ -945,27 +1101,13 @@ async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User) {
       // Sync tracked time if ZenFlow has more time than recorded in ClickUp
       const timeDiffMs = zenflowTrackedMs - clickupTimeSpent;
       if (timeDiffMs >= 1000) {
-        try {
-          const timeRes = await fetch(`https://api.clickup.com/api/v2/task/${task.clickupTaskId}/time`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: token,
-            },
-            body: JSON.stringify({
-              time: Math.round(timeDiffMs),
-              start: Date.now() - Math.round(timeDiffMs),
-              end: Date.now(),
-            }),
-          });
-          if (timeRes.ok) {
-            console.log(`[ClickUp Sync] Tracked time updated on task ${task.id}: +${Math.round(timeDiffMs)}ms`);
-          } else {
-            console.warn(`[ClickUp Sync] Failed to update tracked time on task ${task.id}:`, await timeRes.text());
-          }
-        } catch (tErr) {
-          console.warn(`[ClickUp Sync] Error posting tracked time to task ${task.id}:`, tErr);
-        }
+        await postClickupTimeEntry({
+          clickupTaskId: task.clickupTaskId,
+          durationMs: timeDiffMs,
+          taskUser,
+          callerUserId,
+          callerToken: callerToken || token,
+        });
       }
 
       // 2. Update task attributes on ClickUp (no tags)
@@ -1078,22 +1220,13 @@ async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User) {
 
       // Sync initial tracked duration if already accumulated
       if (zenflowTrackedMs >= 1000) {
-        try {
-          await fetch(`https://api.clickup.com/api/v2/task/${clickupTask.id}/time`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: token,
-            },
-            body: JSON.stringify({
-              time: Math.round(zenflowTrackedMs),
-              start: Date.now() - Math.round(zenflowTrackedMs),
-              end: Date.now(),
-            }),
-          });
-        } catch (tErr) {
-          console.warn(`[ClickUp Sync] Error adding initial tracked time to task ${task.id}:`, tErr);
-        }
+        await postClickupTimeEntry({
+          clickupTaskId: clickupTask.id,
+          durationMs: zenflowTrackedMs,
+          taskUser,
+          callerUserId,
+          callerToken: callerToken || token,
+        });
       }
 
       // Ensure custom field is set if not accepted in create payload
@@ -1219,9 +1352,35 @@ async function processClickupWebhookEvent(params: {
 
   let existingTask = store.tasks.find(t => t.clickupTaskId === taskId);
 
+  // Requirement: Do NOT pull tasks from ClickUp even if assigned to a user on the app.
+  // Only tasks added on ZenFlow and present on the ZenFlow board should be updated by the live webhook.
+  if (!existingTask) {
+    console.log(`[ClickUp Webhook] Task ${taskId} is not present on the ZenFlow board. Ignoring event "${eventType}".`);
+    return;
+  }
+
+  // Handle task deletion event
+  if (eventType === 'taskDeleted') {
+    const deletedTaskTitle = existingTask.title;
+    store.tasks = store.tasks.filter(t => t.id !== existingTask!.id);
+    saveStore(store);
+    dbDeleteTask(existingTask.id).catch(e => console.error('Firestore delete err:', e));
+    broadcastEvent('task_deleted', { id: existingTask.id });
+    appendAuditLog({
+      category: 'webhook',
+      action: 'clickup_task_deleted',
+      actor: { ip },
+      targetId: existingTask.id,
+      targetType: 'task',
+      details: `Task "${deletedTaskTitle}" deleted via ClickUp webhook (${taskId})`,
+      metadata: { clickupTaskId: taskId },
+    });
+    return;
+  }
+
   // Retrieve full task from ClickUp API if available to ensure robust attribute sync
   let clickupTaskData: any = null;
-  const assignedUser = existingTask ? store.users.find(u => u.id === existingTask!.userId) : null;
+  const assignedUser = store.users.find(u => u.id === existingTask!.userId);
   const userWithKey = store.users.find(u => u.clickupApiKey);
   const token = (assignedUser?.clickupApiKey || userWithKey?.clickupApiKey)?.trim();
 
@@ -1236,104 +1395,6 @@ async function processClickupWebhookEvent(params: {
     } catch (e) {
       console.warn(`[ClickUp Webhook] Could not fetch ClickUp task ${taskId}:`, e);
     }
-  }
-
-  // Handle task deletion event
-  if (eventType === 'taskDeleted') {
-    if (existingTask) {
-      const deletedTaskTitle = existingTask.title;
-      store.tasks = store.tasks.filter(t => t.id !== existingTask!.id);
-      saveStore(store);
-      dbDeleteTask(existingTask.id).catch(e => console.error('Firestore delete err:', e));
-      broadcastEvent('task_deleted', { id: existingTask.id });
-      appendAuditLog({
-        category: 'webhook',
-        action: 'clickup_task_deleted',
-        actor: { ip },
-        targetId: existingTask.id,
-        targetType: 'task',
-        details: `Task "${deletedTaskTitle}" deleted via ClickUp webhook (${taskId})`,
-        metadata: { clickupTaskId: taskId },
-      });
-    }
-    return;
-  }
-
-  // If task doesn't exist in ZenFlow but exists in ClickUp, auto-import if assigned to a ZenFlow member
-  if (!existingTask && clickupTaskData) {
-    const cuAssignee = clickupTaskData.assignees?.[0];
-    const cuAssigneeId = cuAssignee?.id ? String(cuAssignee.id) : null;
-    const cuAssigneeEmail = cuAssignee?.email?.toLowerCase();
-
-    const targetUser = store.users.find(
-      u => (cuAssigneeId && u.clickupUserId === cuAssigneeId) ||
-           (cuAssigneeEmail && u.email.toLowerCase() === cuAssigneeEmail)
-    ) || userWithKey || store.users[0];
-
-    if (targetUser) {
-      const cuStatusRaw = (clickupTaskData.status?.status || '').toLowerCase().trim();
-      const mappedStatus = CLICKUP_TO_ZENFLOW_STATUS[cuStatusRaw] || 'todo';
-      const maxOrder = store.tasks
-        .filter(t => t.userId === targetUser.id && t.status === mappedStatus)
-        .reduce((max, t) => Math.max(max, t.order), -1);
-
-      let dueDateFormatted: string | undefined;
-      if (clickupTaskData.due_date) {
-        const d = new Date(Number(clickupTaskData.due_date));
-        if (!isNaN(d.getTime())) {
-          dueDateFormatted = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-        }
-      }
-
-      existingTask = {
-        id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        userId: targetUser.id,
-        title: sanitizeString(clickupTaskData.name || 'ClickUp Task'),
-        description: clickupTaskData.description ? sanitizeString(clickupTaskData.description) : undefined,
-        dueDate: dueDateFormatted,
-        cognitiveLoad: 'medium',
-        status: mappedStatus,
-        order: maxOrder + 1,
-        clickupTaskId: taskId,
-        clickupUrl: clickupTaskData.url,
-        clickupListId: clickupTaskData.list?.id,
-        clickupListName: clickupTaskData.list?.name,
-        clickupFolderId: clickupTaskData.folder?.id,
-        clickupFolderName: clickupTaskData.folder?.name,
-        clickupSpaceId: clickupTaskData.space?.id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        activityLog: [
-          {
-            id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-            timestamp: new Date().toISOString(),
-            action: 'created',
-            details: `Imported from ClickUp via real-time webhook (${clickupTaskData.name})`,
-          },
-        ],
-      };
-
-      store.tasks.push(existingTask);
-      saveStore(store);
-      dbSaveTask(existingTask).catch(e => console.error('Firestore save err:', e));
-      broadcastEvent('task_created', existingTask);
-
-      appendAuditLog({
-        category: 'webhook',
-        action: 'clickup_task_imported',
-        actor: { ip },
-        targetId: existingTask.id,
-        targetType: 'task',
-        details: `Imported new ClickUp task "${existingTask.title}" (${taskId}) for user ${targetUser.name}`,
-        metadata: { clickupTaskId: taskId, status: mappedStatus },
-      });
-      return;
-    }
-  }
-
-  if (!existingTask) {
-    console.log(`[ClickUp Webhook] Task ${taskId} not found in ZenFlow workspace.`);
-    return;
   }
 
   let modified = false;
@@ -2038,8 +2099,11 @@ async function startServer() {
 
     // Asynchronously push task to ClickUp if a list has been assigned
     const assignedUser = store.users.find(u => u.id === userId);
-    if (newTask.clickupListId && assignedUser?.clickupApiKey) {
-      syncTaskToClickUp(newTask, assignedUser.clickupApiKey, assignedUser).catch(e =>
+    const callerApiKey = (req.headers['x-clickup-api-key'] as string) || (req.body.clickupApiKey as string);
+    const callerId = (req.headers['x-caller-user-id'] as string) || (req.body.callerUserId as string);
+    const syncToken = (assignedUser?.clickupApiKey || callerApiKey || '').trim();
+    if (newTask.clickupListId && syncToken) {
+      syncTaskToClickUp(newTask, syncToken, assignedUser, callerId).catch(e =>
         console.error('[ClickUp] Post-create sync err:', e)
       );
     }
@@ -2257,8 +2321,11 @@ async function startServer() {
 
     // Live Push to ClickUp
     const taskUser = store.users.find(u => u.id === updatedTask.userId);
-    if ((updatedTask.clickupTaskId || updatedTask.clickupListId) && taskUser?.clickupApiKey) {
-      syncTaskToClickUp(updatedTask, taskUser.clickupApiKey, taskUser).catch(e =>
+    const callerApiKey = (req.headers['x-clickup-api-key'] as string) || (req.body.clickupApiKey as string);
+    const callerId = (req.headers['x-caller-user-id'] as string) || (req.body.callerUserId as string);
+    const syncToken = (taskUser?.clickupApiKey || callerApiKey || '').trim();
+    if ((updatedTask.clickupTaskId || updatedTask.clickupListId) && syncToken) {
+      syncTaskToClickUp(updatedTask, syncToken, taskUser, callerId).catch(e =>
         console.error('[ClickUp] Post-update sync err:', e)
       );
     }
@@ -2424,10 +2491,13 @@ async function startServer() {
     broadcastEvent('tasks_reordered', modifiedTasks);
 
     // Live push status/assignee/deadline changed tasks to ClickUp (skip pure internal order updates)
+    const callerApiKey = (req.headers['x-clickup-api-key'] as string) || (req.body.clickupApiKey as string);
+    const callerId = (req.headers['x-caller-user-id'] as string) || (req.body.callerUserId as string);
     for (const modTask of clickupTasksToSync) {
       const modUser = store.users.find(u => u.id === modTask.userId);
-      if (modUser?.clickupApiKey) {
-        syncTaskToClickUp(modTask, modUser.clickupApiKey, modUser).catch(e =>
+      const syncToken = (modUser?.clickupApiKey || callerApiKey || '').trim();
+      if (syncToken) {
+        syncTaskToClickUp(modTask, syncToken, modUser, callerId).catch(e =>
           console.error('[ClickUp] Reorder sync err:', e)
         );
       }
@@ -2785,7 +2855,9 @@ async function startServer() {
     }
 
     const user = store.users.find(u => u.id === userId);
-    const token = ((req.headers['x-clickup-api-key'] as string) || apiKey || user?.clickupApiKey || '').trim();
+    const callerId = (req.body.callerUserId as string) || (req.headers['x-caller-user-id'] as string) || '';
+    const callerToken = ((req.headers['x-clickup-api-key'] as string) || apiKey || '').trim();
+    const token = (user?.clickupApiKey || callerToken || '').trim();
 
     if (!token) {
       return res.status(400).json({ error: 'ClickUp API key is not connected for this user' });
@@ -2833,7 +2905,7 @@ async function startServer() {
 
       // 2. Push active tasks with assigned list to ClickUp
       if (task.clickupListId) {
-        await syncTaskToClickUp(task, token, user);
+        await syncTaskToClickUp(task, callerToken || token, user, callerId);
         syncedCount++;
       }
     }
