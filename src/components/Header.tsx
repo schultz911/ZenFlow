@@ -15,6 +15,7 @@ import {
   Key,
   CheckCircle2,
   ExternalLink,
+  Database,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -153,47 +154,15 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Right Actions: ClickUp Space Dropdown, Realtime status, Theme toggle, User Profile */}
           <div className="flex items-center gap-2">
 
-            {/* ClickUp Settings / Connect Button (only for @zensciences.com users) */}
-            {isZensciencesUser && (
-              <button
-                onClick={() => {
-                  if (onOpenClickupModal) onOpenClickupModal();
-                  else setShowClickupPrompt(true);
-                }}
-                title={isClickupConnected ? 'ClickUp Connected — Click to configure' : 'Connect ClickUp API'}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs font-semibold transition-colors cursor-pointer ${
-                  isClickupConnected
-                    ? 'border-purple-500/20 bg-purple-50/50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-300 hover:bg-purple-100/50'
-                    : 'border-purple-500/40 bg-purple-500/10 text-purple-600 dark:text-purple-400 hover:bg-purple-500/20'
-                }`}
-              >
-                {isClickupConnected ? (
-                  <>
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                    <span className="hidden sm:inline">ClickUp</span>
-                  </>
-                ) : (
-                  <>
-                    <Key className="w-3.5 h-3.5 shrink-0" />
-                    <span className="hidden sm:inline">Connect ClickUp</span>
-                  </>
-                )}
-              </button>
-            )}
-            
-            {/* Real-time cloud sync icon */}
+            {/* Unified Connection Status Button (Firestore & ClickUp) */}
             <button
-              id="firestore-status-button"
+              id="connection-status-button"
               onClick={onOpenFirestoreModal}
-              title={
-                syncStatus === 'connected'
-                  ? 'Firestore Storage Status (Click to view)'
-                  : 'Syncing Firestore...'
-              }
-              className="flex items-center justify-center p-2 rounded-full text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white transition-colors cursor-pointer"
+              title={`Connection Status: Firestore (${syncStatus === 'connected' ? 'Connected' : 'Connecting'}) · ClickUp (${isClickupConnected ? 'Connected' : 'Not Connected'})`}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-100 hover:bg-neutral-200 dark:bg-white/5 dark:hover:bg-white/10 text-xs font-medium text-neutral-700 dark:text-white/80 transition-colors cursor-pointer"
             >
               <Cloud
-                className={`h-4 w-4 ${
+                className={`h-3.5 w-3.5 ${
                   syncStatus === 'connected'
                     ? 'text-blue-500'
                     : syncStatus === 'connecting'
@@ -201,6 +170,22 @@ export const Header: React.FC<HeaderProps> = ({
                     : 'text-neutral-400 dark:text-white/20'
                 }`}
               />
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  syncStatus === 'connected' && (!isZensciencesUser || isClickupConnected)
+                    ? 'bg-emerald-500'
+                    : syncStatus === 'connected'
+                    ? 'bg-blue-500'
+                    : 'bg-amber-500 animate-pulse'
+                }`}
+              />
+              <span className="hidden sm:inline text-[11px]">
+                {syncStatus === 'connected' && (!isZensciencesUser || isClickupConnected)
+                  ? 'Connected'
+                  : syncStatus === 'connected'
+                  ? 'Cloud Sync'
+                  : 'Syncing...'}
+              </span>
             </button>
 
             {/* Dark Mode Toggle */}
@@ -313,19 +298,16 @@ export const Header: React.FC<HeaderProps> = ({
                       </button>
                     )}
 
-                    {isZensciencesUser && (
-                      <button
-                        onClick={() => {
-                          setUserDropdownOpen(false);
-                          if (onOpenClickupModal) onOpenClickupModal();
-                          else setShowClickupPrompt(true);
-                        }}
-                        className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-neutral-700 dark:text-white/80 hover:bg-neutral-50 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white transition-colors"
-                      >
-                        <Key className="h-3.5 w-3.5 text-purple-500" />
-                        <span>ClickUp API Settings</span>
-                      </button>
-                    )}
+                    <button
+                      onClick={() => {
+                        setUserDropdownOpen(false);
+                        onOpenFirestoreModal();
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-neutral-700 dark:text-white/80 hover:bg-neutral-50 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                    >
+                      <Database className="h-3.5 w-3.5 text-blue-500" />
+                      <span>Connection & API Status</span>
+                    </button>
 
                     <button
                       onClick={() => {

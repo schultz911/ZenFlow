@@ -3,8 +3,6 @@ import { useDashboard } from '../context/DashboardContext';
 import { exportWorkspaceXLS, exportWorkspaceJSON, quickWorkloadScore } from '../utils/workload';
 import {
   Search,
-  Plus,
-  UserPlus,
   Download,
   AlertTriangle,
   FileSpreadsheet,
@@ -17,15 +15,13 @@ import {
 interface OverviewBarProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
-  onOpenNewTaskModal: () => void;
-  onOpenNewUserModal: () => void;
+  onOpenNewTaskModal?: () => void;
+  onOpenNewUserModal?: () => void;
 }
 
 export const OverviewBar: React.FC<OverviewBarProps> = ({
   searchQuery,
   onSearchChange,
-  onOpenNewTaskModal,
-  onOpenNewUserModal,
 }) => {
   const {
     activeRoleTab,
@@ -183,27 +179,6 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
             <span className="text-sm font-semibold text-neutral-800 dark:text-white/80">
               {todoCount} tasks
             </span>
-          </div>
-
-          {/* Add member and new task stacked one on top of the other right next to the To Do pill */}
-          <div className="flex flex-col gap-1.5 justify-center">
-            <button
-              id="add-member-top-btn"
-              onClick={onOpenNewUserModal}
-              className="flex items-center justify-center gap-1.5 rounded-lg border border-neutral-200 dark:border-white/10 bg-neutral-100 hover:bg-neutral-200 dark:bg-[#1A1A1A] dark:hover:bg-[#2A2A2A] dark:hover:border-white/20 px-3 py-1 text-xs font-medium text-neutral-800 dark:text-white transition-all shadow-xs cursor-pointer"
-            >
-              <UserPlus className="h-3 w-3 text-neutral-600 dark:text-white/60" />
-              <span className="whitespace-nowrap">Add Member</span>
-            </button>
-
-            <button
-              id="create-task-top-btn"
-              onClick={onOpenNewTaskModal}
-              className="flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 px-3 py-1 text-xs font-semibold text-white shadow-md shadow-blue-900/20 transition-all cursor-pointer"
-            >
-              <Plus className="h-3 w-3" />
-              <span className="whitespace-nowrap">New Task</span>
-            </button>
           </div>
         </div>
       </div>

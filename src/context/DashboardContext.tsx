@@ -120,6 +120,7 @@ interface DashboardContextType {
   clickupSpaces: ClickupSpace[];
   selectedClickupSpaceId: string;
   clickupFoldersAndLists: { folders: ClickupFolder[]; folderlessLists: ClickupList[] };
+  spaceFoldersMap: Record<string, string[]>;
   showClickupPrompt: boolean;
   setShowClickupPrompt: (val: boolean) => void;
   connectClickup: (apiKey: string) => Promise<{ success: boolean; error?: string }>;
@@ -304,6 +305,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     folders: ClickupFolder[];
     folderlessLists: ClickupList[];
   }>({ folders: [], folderlessLists: [] });
+  const [spaceFoldersMap, setSpaceFoldersMap] = useState<Record<string, string[]>>({});
 
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     try {
@@ -688,6 +690,24 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
             setSelectedClickupSpaceIdState(firstId);
             localStorage.setItem('zenflow_clickup_space_id', firstId);
           }
+          // Preload folder names for all spaces in background
+          data.spaces.forEach(async (sp: ClickupSpace) => {
+            try {
+              const fRes = await fetch(
+                `/api/clickup/folders-and-lists?spaceId=${encodeURIComponent(sp.id)}&apiKey=${encodeURIComponent(apiKey)}`
+              );
+              if (fRes.ok) {
+                const fData = await fRes.json();
+                const folderNames = (fData.folders || []).map((f: ClickupFolder) => f.name);
+                setSpaceFoldersMap(prev => ({
+                  ...prev,
+                  [sp.id]: folderNames,
+                }));
+              }
+            } catch {
+              // ignore
+            }
+          });
         }
       }
     } catch (err) {
@@ -705,6 +725,11 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
           folders: data.folders || [],
           folderlessLists: data.folderlessLists || [],
         });
+        const folderNames = (data.folders || []).map((f: ClickupFolder) => f.name);
+        setSpaceFoldersMap(prev => ({
+          ...prev,
+          [spaceId]: folderNames,
+        }));
       }
     } catch (err) {
       console.warn('Failed to load ClickUp folders & lists:', err);
@@ -1742,6 +1767,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       clickupSpaces,
       selectedClickupSpaceId,
       clickupFoldersAndLists,
+      spaceFoldersMap,
       showClickupPrompt,
       setShowClickupPrompt,
       connectClickup,
@@ -1804,6 +1830,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       clickupSpaces,
       selectedClickupSpaceId,
       clickupFoldersAndLists,
+      spaceFoldersMap,
       showClickupPrompt,
       connectClickup,
       disconnectClickup,

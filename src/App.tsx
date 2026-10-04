@@ -12,7 +12,6 @@ import { BillableHoursModal } from './components/BillableHoursModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MarqueeRibbon } from './components/MarqueeRibbon';
 import { UnassignedListRibbon } from './components/UnassignedListRibbon';
-import { ClickupConnectModal } from './components/ClickupConnectModal';
 import { EditUserModal } from './components/EditUserModal';
 import { User, Task, TaskStatus } from './types';
 import { UserPlus, FileText, Palette, Loader2 } from 'lucide-react';
@@ -378,7 +377,7 @@ function DashboardContent() {
         onOpenLoginModal={handleOpenLogin}
         onOpenNewUserModal={handleOpenNewUser}
         onOpenFirestoreModal={() => setFirestoreModalOpen(true)}
-        onOpenClickupModal={() => setShowClickupPrompt(true)}
+        onOpenClickupModal={() => setFirestoreModalOpen(true)}
       />
 
       {/* Pinned Ribbons — sticky just below the header */}
@@ -504,13 +503,11 @@ function DashboardContent() {
       />
 
       <FirestoreModal
-        isOpen={firestoreModalOpen}
-        onClose={() => setFirestoreModalOpen(false)}
-      />
-
-      <ClickupConnectModal
-        isOpen={showClickupPrompt}
-        onClose={() => setShowClickupPrompt(false)}
+        isOpen={firestoreModalOpen || showClickupPrompt}
+        onClose={() => {
+          setFirestoreModalOpen(false);
+          setShowClickupPrompt(false);
+        }}
       />
 
       <EditUserModal

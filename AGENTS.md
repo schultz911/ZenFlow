@@ -6,6 +6,13 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
+### Sweep 33: 2026-10-04 (Unified Connection Status Modal, Overview Header Bar Streamlining, End of Month Quick Template & In-Dropdown ClickUp Folder Preview)
+
+- **UI-22 (Unified Connection Status Modal & Consolidated Header Indicator):** Consolidated the separate ClickUp connection modal and Firestore sync modal into a single unified `<FirestoreModal>` (`#workspace-connections-modal`). Provides full visual oversight and management across both Cloud Database (Firestore live sync, collections, manual sync verification) and ClickUp API Integration (Personal API Token configuration, live connected badge, space count, disconnect). Replaced separate header buttons with a single connection indicator button in `<Header>` reflecting real-time multi-service connection health.
+- **UI-23 (Overview Header Bar Streamlining):** Removed the stacked "Add Member" and "New Task" buttons from `<OverviewBar>`, focusing the top banner purely on aggregate team capacity metrics (`Avg Workload`, `In Progress`, `To Do`) and leaving creation actions localized to user swimlanes.
+- **UX-19 (End of Month Quick Due Date Preset in TaskModal):** Integrated the "End of month" quick template button alongside Today, Tomorrow, +3d, and +1w in `<TaskModal>`, leveraging `getLastDayOfMonth` from `workload.ts` for immediate deadline alignment.
+- **UI-24 (In-Dropdown Space Folder Preview):** Eliminated the separate folder preview text line above the ClickUp Destination space select in `<TaskModal>`. Integrated folder listings directly against each space name inside `<option>` dropdown items (`Space Name | (Folder 1, Folder 2)`), backed by preloaded `spaceFoldersMap` in `DashboardContext`.
+
 ### Sweep 32: 2026-10-04 (ClickUp Custom Field Task Type, Time Tracking Sync, Searchable Member Picker, Header Dropdown Relocation & Swimlane Action Bar Optimization)
 
 - **INT-03 (Searchable ClickUp Member Picker with In-Line Search Filtering):** Created `<ClickupMemberPicker>`, replacing native select inputs with a rich dropdown featuring real-time in-line search filtering across username and email, user avatars, keyboard/click outside dismissal, and clear action. Integrated across `<EditUserModal>` and `<LoginModal>`.

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { Task, CognitiveLoad, TaskStatus } from '../types';
-import { getTaskBillableMs, formatBillableDetailed } from '../utils/workload';
+import { getTaskBillableMs, formatBillableDetailed, getLastDayOfMonth } from '../utils/workload';
 import { X, Calendar, Brain, Trash2, History, Clock, ArrowRight, CheckCircle2, UserCheck, PlusCircle, Timer, ChevronDown } from 'lucide-react';
 
 function formatActivityTime(isoString: string): string {
@@ -61,6 +61,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     setSelectedClickupSpaceId,
     clickupSpaces,
     clickupFoldersAndLists,
+    spaceFoldersMap,
     createClickupList,
     canEditUserTasks,
     clickupCustomFieldOptions,
@@ -168,17 +169,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     }
     return list;
   }, [clickupCustomFieldOptions, clickupTaskType, clickupTaskTypeId]);
-
-  // In-line preview of folders inside selected space
-  const folderPreviewText = useMemo(() => {
-    const space = clickupSpaces.find(s => s.id === selectedClickupSpaceId);
-    const sName = space?.name || 'Selected Space';
-    const folders = clickupFoldersAndLists?.folders || [];
-    if (folders.length > 0) {
-      return `(${sName} | ${folders.map(f => f.name).join(', ')})`;
-    }
-    return `(${sName} | Folderless Space)`;
-  }, [clickupSpaces, selectedClickupSpaceId, clickupFoldersAndLists]);
 
   const activities = useMemo(() => {
     return taskToEdit?.activityLog || [];
@@ -589,6 +579,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 >
                   +1w
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setDueDate(getLastDayOfMonth())}
+                  className="rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:text-white/40 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
+                >
+                  End of month
+                </button>
                 {status === 'pipeline' && dueDate && (
                   <button
                     type="button"
@@ -636,18 +633,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 </button>
               </div>
 
-              {/* Space Selection with in-line preview */}
+              {/* Space Selection with folders against each space name */}
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-[10px] uppercase font-semibold text-neutral-500 dark:text-white/40">
-                    Space
-                  </label>
-                  {folderPreviewText && (
-                    <span className="text-[10px] text-purple-600 dark:text-purple-300 font-mono truncate max-w-[280px]">
-                      {folderPreviewText}
-                    </span>
-                  )}
-                </div>
+                <label className="block text-[10px] uppercase font-semibold text-neutral-500 dark:text-white/40 mb-1">
+                  Space
+                </label>
                 <div className="relative">
                   <select
                     value={selectedClickupSpaceId}
@@ -661,11 +651,24 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     {clickupSpaces.length === 0 ? (
                       <option value="">No spaces available</option>
                     ) : (
-                      clickupSpaces.map(s => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))
+                      clickupSpaces.map(s => {
+                        const folders =
+                          spaceFoldersMap[s.id] ||
+                          (s.id === selectedClickupSpaceId
+                            ? clickupFoldersAndLists?.folders?.map(f => f.name)
+                            : undefined);
+                        const folderListStr =
+                          folders && folders.length > 0
+                            ? `(${folders.join(', ')})`
+                            : folders
+                            ? '(Folderless)'
+                            : '';
+                        return (
+                          <option key={s.id} value={s.id}>
+                            {s.name} {folderListStr ? `| ${folderListStr}` : ''}
+                          </option>
+                        );
+                      })
                     )}
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
