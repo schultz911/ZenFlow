@@ -488,9 +488,10 @@ function loadRecentAuditLogs(): void {
       const content = fs.readFileSync(AUDIT_LOG_FILE, 'utf-8');
       const lines = content.trim().split('\n').filter(Boolean);
       const tail = lines.slice(-MAX_RECENT_AUDIT_LOGS);
-      for (const line of tail) {
+      // Iterate reverse chronological so recentAuditLogs[0] is strictly the newest event
+      for (let i = tail.length - 1; i >= 0; i--) {
         try {
-          const entry = JSON.parse(line);
+          const entry = JSON.parse(tail[i]);
           recentAuditLogs.push(entry);
         } catch {}
       }
@@ -1220,8 +1221,9 @@ async function processClickupWebhookEvent(params: {
 
   // Retrieve full task from ClickUp API if available to ensure robust attribute sync
   let clickupTaskData: any = null;
+  const assignedUser = existingTask ? store.users.find(u => u.id === existingTask!.userId) : null;
   const userWithKey = store.users.find(u => u.clickupApiKey);
-  const token = userWithKey?.clickupApiKey;
+  const token = (assignedUser?.clickupApiKey || userWithKey?.clickupApiKey)?.trim();
 
   if (token) {
     try {
@@ -3065,7 +3067,7 @@ async function startServer() {
       const stream = fs.createReadStream(AUDIT_LOG_FILE);
       stream.pipe(res);
     } else {
-      const content = recentAuditLogs.map(l => JSON.stringify(l)).join('\n');
+      const content = [...recentAuditLogs].reverse().map(l => JSON.stringify(l)).join('\n');
       res.send(content);
     }
   });

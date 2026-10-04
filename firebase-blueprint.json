@@ -172,6 +172,53 @@
         }
       },
       "required": ["id", "userId", "title", "cognitiveLoad", "status", "order", "createdAt", "updatedAt"]
+    },
+    "AuditLogEntry": {
+      "title": "AuditLogEntry",
+      "description": "SOC2 append-only immutable audit trail record",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique audit entry ID"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO timestamp when the audit event occurred"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["task", "user", "security", "webhook", "system"],
+          "description": "Event classification category"
+        },
+        "action": {
+          "type": "string",
+          "description": "Specific action identifier"
+        },
+        "targetId": {
+          "type": "string",
+          "description": "ID of the target entity"
+        },
+        "targetType": {
+          "type": "string",
+          "enum": ["task", "user", "workspace", "webhook"],
+          "description": "Type of the target entity"
+        },
+        "details": {
+          "type": "string",
+          "description": "Human-readable narrative description of the event"
+        },
+        "actor": {
+          "type": "object",
+          "description": "User or service entity performing the action"
+        },
+        "metadata": {
+          "type": "object",
+          "description": "Structured contextual metadata payload"
+        }
+      },
+      "required": ["id", "timestamp", "category", "action", "targetId", "targetType"]
     }
   },
   "firestore": {
