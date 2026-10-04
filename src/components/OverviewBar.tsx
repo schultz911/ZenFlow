@@ -15,8 +15,6 @@ import {
 interface OverviewBarProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
-  onOpenNewTaskModal?: () => void;
-  onOpenNewUserModal?: () => void;
 }
 
 export const OverviewBar: React.FC<OverviewBarProps> = ({

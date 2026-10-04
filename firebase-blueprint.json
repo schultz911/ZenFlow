@@ -51,6 +51,14 @@
         "selectedClickupSpaceName": {
           "type": "string",
           "description": "Active ClickUp space name"
+        },
+        "clickupUserId": {
+          "type": "string",
+          "description": "Mapped ClickUp Member ID"
+        },
+        "clickupUsername": {
+          "type": "string",
+          "description": "Mapped ClickUp Username"
         }
       },
       "required": ["id", "name", "email", "role", "createdAt"]
@@ -139,6 +147,18 @@
         "clickupUrl": {
           "type": "string",
           "description": "URL to the task on ClickUp"
+        },
+        "clickupTaskType": {
+          "type": "string",
+          "description": "Selected ClickUp Task Type name"
+        },
+        "clickupTaskTypeId": {
+          "type": "string",
+          "description": "Selected ClickUp Task Type custom field option ID"
+        },
+        "clickupTaskTypeFieldId": {
+          "type": "string",
+          "description": "ClickUp Task Type custom field ID"
         },
         "createdAt": {
           "type": "string",

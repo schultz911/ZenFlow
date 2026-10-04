@@ -9,12 +9,8 @@ import {
   Palette,
   FileText,
   Cloud,
-  Layers,
   Crown,
   Shield,
-  Key,
-  CheckCircle2,
-  ExternalLink,
   Database,
 } from 'lucide-react';
 
@@ -22,14 +18,12 @@ interface HeaderProps {
   onOpenLoginModal: () => void;
   onOpenNewUserModal: () => void;
   onOpenFirestoreModal: () => void;
-  onOpenClickupModal?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   onOpenLoginModal,
   onOpenNewUserModal,
   onOpenFirestoreModal,
-  onOpenClickupModal,
 }) => {
   const {
     currentUser,
@@ -43,13 +37,8 @@ export const Header: React.FC<HeaderProps> = ({
     isSuperadmin,
     isCreativeDirector,
     canManageMembers,
-    canSwitchBoards,
-    creativeDirectors,
-    activeBoardId,
-    setActiveBoardId,
     isZensciencesUser,
     isClickupConnected,
-    setShowClickupPrompt,
   } = useDashboard();
 
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);

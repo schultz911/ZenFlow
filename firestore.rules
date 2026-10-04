@@ -21,7 +21,9 @@ service cloud.firestore {
              (!('creativeDirectorId' in data) || (data.creativeDirectorId is string && data.creativeDirectorId.size() <= 128)) &&
              (!('clickupApiKey' in data) || (data.clickupApiKey is string && data.clickupApiKey.size() <= 200)) &&
              (!('selectedClickupSpaceId' in data) || (data.selectedClickupSpaceId is string && data.selectedClickupSpaceId.size() <= 100)) &&
-             (!('selectedClickupSpaceName' in data) || (data.selectedClickupSpaceName is string && data.selectedClickupSpaceName.size() <= 200));
+             (!('selectedClickupSpaceName' in data) || (data.selectedClickupSpaceName is string && data.selectedClickupSpaceName.size() <= 200)) &&
+             (!('clickupUserId' in data) || (data.clickupUserId is string && data.clickupUserId.size() <= 64)) &&
+             (!('clickupUsername' in data) || (data.clickupUsername is string && data.clickupUsername.size() <= 100));
     }
 
     function isValidTask(data) {
@@ -45,7 +47,10 @@ service cloud.firestore {
              (!('clickupListId' in data) || (data.clickupListId is string && data.clickupListId.size() <= 100)) &&
              (!('clickupListName' in data) || (data.clickupListName is string && data.clickupListName.size() <= 200)) &&
              (!('clickupSpaceId' in data) || (data.clickupSpaceId is string && data.clickupSpaceId.size() <= 100)) &&
-             (!('clickupUrl' in data) || (data.clickupUrl is string && data.clickupUrl.size() <= 500));
+             (!('clickupUrl' in data) || (data.clickupUrl is string && data.clickupUrl.size() <= 500)) &&
+             (!('clickupTaskType' in data) || (data.clickupTaskType is string && data.clickupTaskType.size() <= 100)) &&
+             (!('clickupTaskTypeId' in data) || (data.clickupTaskTypeId is string && data.clickupTaskTypeId.size() <= 64)) &&
+             (!('clickupTaskTypeFieldId' in data) || (data.clickupTaskTypeFieldId is string && data.clickupTaskTypeFieldId.size() <= 64));
     }
 
     // Users collection

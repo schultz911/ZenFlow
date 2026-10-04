@@ -301,6 +301,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [selectedClickupSpaceId, setSelectedClickupSpaceIdState] = useState<string>(() => {
     return currentUser?.selectedClickupSpaceId || localStorage.getItem('zenflow_clickup_space_id') || '';
   });
+  const selectedClickupSpaceIdRef = useRef<string>(selectedClickupSpaceId);
+  selectedClickupSpaceIdRef.current = selectedClickupSpaceId;
   const [clickupFoldersAndLists, setClickupFoldersAndLists] = useState<{
     folders: ClickupFolder[];
     folderlessLists: ClickupList[];
@@ -680,12 +682,14 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   const loadClickupSpaces = useCallback(async (apiKey: string) => {
     if (!apiKey) return;
     try {
-      const res = await fetch(`/api/clickup/spaces?apiKey=${encodeURIComponent(apiKey)}`);
+      const res = await fetch('/api/clickup/spaces', {
+        headers: { 'x-clickup-api-key': apiKey },
+      });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.spaces)) {
           setClickupSpaces(data.spaces);
-          if (data.spaces.length > 0 && !selectedClickupSpaceId) {
+          if (data.spaces.length > 0 && !selectedClickupSpaceIdRef.current) {
             const firstId = data.spaces[0].id;
             setSelectedClickupSpaceIdState(firstId);
             localStorage.setItem('zenflow_clickup_space_id', firstId);
@@ -694,7 +698,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
           data.spaces.forEach(async (sp: ClickupSpace) => {
             try {
               const fRes = await fetch(
-                `/api/clickup/folders-and-lists?spaceId=${encodeURIComponent(sp.id)}&apiKey=${encodeURIComponent(apiKey)}`
+                `/api/clickup/folders-and-lists?spaceId=${encodeURIComponent(sp.id)}`,
+                { headers: { 'x-clickup-api-key': apiKey } }
               );
               if (fRes.ok) {
                 const fData = await fRes.json();
@@ -713,12 +718,14 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     } catch (err) {
       console.warn('Failed to load ClickUp spaces:', err);
     }
-  }, [selectedClickupSpaceId]);
+  }, []);
 
   const loadClickupFoldersAndLists = useCallback(async (spaceId: string, apiKey: string) => {
     if (!spaceId || !apiKey) return;
     try {
-      const res = await fetch(`/api/clickup/folders-and-lists?spaceId=${encodeURIComponent(spaceId)}&apiKey=${encodeURIComponent(apiKey)}`);
+      const res = await fetch(`/api/clickup/folders-and-lists?spaceId=${encodeURIComponent(spaceId)}`, {
+        headers: { 'x-clickup-api-key': apiKey },
+      });
       if (res.ok) {
         const data = await res.json();
         setClickupFoldersAndLists({
@@ -751,8 +758,9 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   const loadClickupMembers = useCallback(async (apiKey?: string): Promise<ClickupMember[]> => {
     const key = (apiKey || clickupApiKey || '').trim();
     try {
-      const url = key ? `/api/clickup/members?apiKey=${encodeURIComponent(key)}` : '/api/clickup/members';
-      const res = await fetch(url);
+      const headers: Record<string, string> = {};
+      if (key) headers['x-clickup-api-key'] = key;
+      const res = await fetch('/api/clickup/members', { headers });
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.members)) {

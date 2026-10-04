@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { Task, CognitiveLoad, TaskStatus } from '../types';
 import { getTaskBillableMs, formatBillableDetailed, getLastDayOfMonth } from '../utils/workload';
-import { X, Calendar, Brain, Trash2, History, Clock, ArrowRight, CheckCircle2, UserCheck, PlusCircle, Timer, ChevronDown } from 'lucide-react';
+import { X, Calendar, Brain, Trash2, History, Clock, ArrowRight, CheckCircle2, UserCheck, PlusCircle, Timer, ChevronDown, Check } from 'lucide-react';
 
 function formatActivityTime(isoString: string): string {
   try {
@@ -90,6 +90,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [isSpaceDropdownOpen, setIsSpaceDropdownOpen] = useState(false);
+  const spaceDropdownRef = useRef<HTMLDivElement>(null);
+  const isDraggingSpaceRef = useRef(false);
+  const mouseDownPosRef = useRef({ x: 0, y: 0 });
 
   const canEdit = useMemo(() => {
     if (!taskToEdit) return true;
@@ -139,6 +143,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     setIsCreatingList(false);
     setNewListName('');
     setNewListError(null);
+    setIsSpaceDropdownOpen(false);
   }, [
     taskToEdit,
     defaultUserId,
@@ -210,6 +215,48 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     }
     return folderlessLists;
   }, [clickupFolderId, clickupFoldersAndLists]);
+
+  // Click outside and Escape key handler for Space dropdown
+  useEffect(() => {
+    if (!isSpaceDropdownOpen) return;
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (spaceDropdownRef.current && !spaceDropdownRef.current.contains(e.target as Node)) {
+        setIsSpaceDropdownOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsSpaceDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isSpaceDropdownOpen]);
+
+  // Currently selected space display label
+  const selectedSpaceInfo = useMemo(() => {
+    if (!selectedClickupSpaceId) return null;
+    const s = clickupSpaces.find(space => space.id === selectedClickupSpaceId);
+    if (!s) return null;
+    const folders =
+      spaceFoldersMap[s.id] ||
+      (s.id === selectedClickupSpaceId ? clickupFoldersAndLists?.folders?.map(f => f.name) : undefined);
+    const folderListStr =
+      folders && folders.length > 0
+        ? `(${folders.join(', ')})`
+        : folders
+        ? '(Folderless)'
+        : '';
+    return {
+      name: s.name,
+      folderListStr,
+      fullText: folderListStr ? `${s.name} | ${folderListStr}` : s.name,
+    };
+  }, [clickupSpaces, selectedClickupSpaceId, spaceFoldersMap, clickupFoldersAndLists]);
 
   if (!isOpen) return null;
 
@@ -638,20 +685,34 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 <label className="block text-[10px] uppercase font-semibold text-neutral-500 dark:text-white/40 mb-1">
                   Space
                 </label>
-                <div className="relative">
-                  <select
-                    value={selectedClickupSpaceId}
-                    onChange={e => {
-                      setSelectedClickupSpaceId(e.target.value);
-                      setClickupFolderId('');
-                      setClickupListId('');
-                    }}
-                    className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-1.5 pl-2.5 pr-8 text-xs text-neutral-900 dark:text-white focus:border-purple-500 focus:outline-none"
+                <div className="relative" ref={spaceDropdownRef}>
+                  <button
+                    type="button"
+                    disabled={clickupSpaces.length === 0}
+                    onClick={() => setIsSpaceDropdownOpen(prev => !prev)}
+                    className={`w-full flex items-center justify-between rounded-xl border bg-white dark:bg-[#141414] py-1.5 pl-2.5 pr-2.5 text-xs text-neutral-900 dark:text-white transition-colors disabled:opacity-50 ${
+                      isSpaceDropdownOpen
+                        ? 'border-purple-500 ring-1 ring-purple-500/20'
+                        : 'border-neutral-300 dark:border-white/10 hover:border-neutral-400 dark:hover:border-white/20'
+                    }`}
                   >
-                    {clickupSpaces.length === 0 ? (
-                      <option value="">No spaces available</option>
-                    ) : (
-                      clickupSpaces.map(s => {
+                    <span className="truncate text-left flex-1 min-w-0 mr-1.5" title={selectedSpaceInfo?.fullText}>
+                      {selectedSpaceInfo
+                        ? selectedSpaceInfo.fullText
+                        : clickupSpaces.length === 0
+                        ? 'No spaces available'
+                        : 'Select Space'}
+                    </span>
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 shrink-0 text-neutral-400 dark:text-white/40 transition-transform duration-200 ${
+                        isSpaceDropdownOpen ? 'rotate-180' : ''
+                      }`}
+                    />
+                  </button>
+
+                  {isSpaceDropdownOpen && clickupSpaces.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 w-full max-w-full z-50 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414] shadow-xl py-1 max-h-60 overflow-y-auto overflow-x-hidden">
+                      {clickupSpaces.map(s => {
                         const folders =
                           spaceFoldersMap[s.id] ||
                           (s.id === selectedClickupSpaceId
@@ -663,15 +724,53 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                             : folders
                             ? '(Folderless)'
                             : '';
+                        const fullText = folderListStr ? `${s.name} | ${folderListStr}` : s.name;
+                        const isSelected = s.id === selectedClickupSpaceId;
+
                         return (
-                          <option key={s.id} value={s.id}>
-                            {s.name} {folderListStr ? `| ${folderListStr}` : ''}
-                          </option>
+                          <div
+                            key={s.id}
+                            onMouseDown={e => {
+                              mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
+                              isDraggingSpaceRef.current = false;
+                            }}
+                            onMouseMove={e => {
+                              if (Math.abs(e.clientX - mouseDownPosRef.current.x) > 6) {
+                                isDraggingSpaceRef.current = true;
+                              }
+                            }}
+                            onClick={() => {
+                              if (isDraggingSpaceRef.current) return;
+                              setSelectedClickupSpaceId(s.id, s.name);
+                              setClickupFolderId('');
+                              setClickupListId('');
+                              setIsSpaceDropdownOpen(false);
+                            }}
+                            className={`group w-full max-w-full px-2.5 py-1.5 text-xs cursor-pointer flex items-center justify-between transition-colors ${
+                              isSelected
+                                ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-medium'
+                                : 'text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-white/5'
+                            }`}
+                          >
+                            <div
+                              className="flex-1 min-w-0 overflow-x-auto whitespace-nowrap py-0.5 text-left scroll-smooth"
+                              title={fullText}
+                            >
+                              <span className="font-medium">{s.name}</span>
+                              {folderListStr && (
+                                <span className="text-neutral-500 dark:text-white/45 ml-1.5 font-normal">
+                                  | {folderListStr}
+                                </span>
+                              )}
+                            </div>
+                            {isSelected && (
+                              <Check className="h-3.5 w-3.5 shrink-0 ml-2 text-purple-600 dark:text-purple-400" />
+                            )}
+                          </div>
                         );
-                      })
-                    )}
-                  </select>
-                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
 

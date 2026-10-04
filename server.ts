@@ -1777,11 +1777,13 @@ async function startServer() {
     }
 
     const modifiedTasks: Task[] = [];
+    const clickupTasksToSync: Task[] = [];
 
     for (const update of updates) {
       if (!update || typeof update !== 'object' || !update.id) continue;
       const task = taskMap.get(update.id);
       if (task) {
+        let hasClickupAttributeChanged = false;
         if (!task.activityLog) task.activityLog = [];
 
         if (update.userId && typeof update.userId === 'string' && userMap.has(update.userId) && update.userId !== task.userId) {
@@ -1796,6 +1798,7 @@ async function startServer() {
             details: `Reassigned from ${oldUser} to ${newUser}`,
           });
           task.userId = update.userId;
+          hasClickupAttributeChanged = true;
         }
 
         if (update.status && ['pipeline', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(update.status)) {
@@ -1829,6 +1832,7 @@ async function startServer() {
             }
 
             task.status = update.status;
+            hasClickupAttributeChanged = true;
           }
         }
 
@@ -1848,6 +1852,7 @@ async function startServer() {
               details: 'Deadline removed upon moving to pipeline',
             });
             task.dueDate = undefined;
+            hasClickupAttributeChanged = true;
           }
         } else if (update.dueDate !== undefined) {
           const newDate = update.dueDate ? sanitizeString(update.dueDate) : undefined;
@@ -1861,6 +1866,7 @@ async function startServer() {
               details: newDate ? `Due date set to ${newDate}` : 'Deadline removed',
             });
             task.dueDate = newDate;
+            hasClickupAttributeChanged = true;
           }
         }
 
@@ -1870,6 +1876,10 @@ async function startServer() {
 
         task.updatedAt = new Date().toISOString();
         modifiedTasks.push(task);
+
+        if (hasClickupAttributeChanged && (task.clickupTaskId || task.clickupListId)) {
+          clickupTasksToSync.push(task);
+        }
       }
     }
 
@@ -1880,15 +1890,13 @@ async function startServer() {
 
     broadcastEvent('tasks_reordered', modifiedTasks);
 
-    // Live push reordered/status-changed tasks to ClickUp
-    for (const modTask of modifiedTasks) {
-      if (modTask.clickupTaskId || modTask.clickupListId) {
-        const modUser = store.users.find(u => u.id === modTask.userId);
-        if (modUser?.clickupApiKey) {
-          syncTaskToClickUp(modTask, modUser.clickupApiKey, modUser).catch(e =>
-            console.error('[ClickUp] Reorder sync err:', e)
-          );
-        }
+    // Live push status/assignee/deadline changed tasks to ClickUp (skip pure internal order updates)
+    for (const modTask of clickupTasksToSync) {
+      const modUser = store.users.find(u => u.id === modTask.userId);
+      if (modUser?.clickupApiKey) {
+        syncTaskToClickUp(modTask, modUser.clickupApiKey, modUser).catch(e =>
+          console.error('[ClickUp] Reorder sync err:', e)
+        );
       }
     }
 
@@ -1898,6 +1906,44 @@ async function startServer() {
   // ==========================================
   // CLICKUP INTEGRATION ENDPOINTS
   // ==========================================
+
+  // In-memory sliding TTL cache for ClickUp proxy endpoints (120s TTL)
+  interface ClickupCacheEntry {
+    data: any;
+    expiresAt: number;
+  }
+  const clickupCache = new Map<string, ClickupCacheEntry>();
+  const CLICKUP_CACHE_TTL_MS = 120 * 1000;
+
+  function getFromClickupCache(key: string): any | null {
+    const entry = clickupCache.get(key);
+    if (!entry) return null;
+    if (Date.now() > entry.expiresAt) {
+      clickupCache.delete(key);
+      return null;
+    }
+    return entry.data;
+  }
+
+  function setClickupCache(key: string, data: any, ttlMs: number = CLICKUP_CACHE_TTL_MS) {
+    clickupCache.set(key, { data, expiresAt: Date.now() + ttlMs });
+    if (clickupCache.size > 200) {
+      const now = Date.now();
+      for (const [k, e] of clickupCache.entries()) {
+        if (now > e.expiresAt) clickupCache.delete(k);
+      }
+    }
+  }
+
+  function invalidateClickupCache(prefix?: string) {
+    if (!prefix) {
+      clickupCache.clear();
+      return;
+    }
+    for (const k of clickupCache.keys()) {
+      if (k.includes(prefix)) clickupCache.delete(k);
+    }
+  }
 
   // API: Verify Personal ClickUp API Token & retrieve teams
   app.post('/api/clickup/verify', async (req: Request, res: Response) => {
@@ -1942,8 +1988,14 @@ async function startServer() {
       return res.status(400).json({ error: 'ClickUp API key is required' });
     }
 
+    const cleanKey = apiKey.trim();
+    const cacheKey = `spaces:${cleanKey.slice(-10)}:${teamId || 'default'}`;
+    const cached = getFromClickupCache(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     try {
-      const cleanKey = apiKey.trim();
       let targetTeamId = teamId;
 
       if (!targetTeamId) {
@@ -1969,7 +2021,9 @@ async function startServer() {
       }
 
       const data = await spacesRes.json();
-      res.json({ spaces: data.spaces || [], teamId: targetTeamId });
+      const result = { spaces: data.spaces || [], teamId: targetTeamId };
+      setClickupCache(cacheKey, result);
+      res.json(result);
     } catch (err: any) {
       console.error('[ClickUp] Spaces fetch error:', err);
       res.status(500).json({ error: err.message || 'Error fetching ClickUp spaces' });
@@ -1991,8 +2045,14 @@ async function startServer() {
       return res.status(400).json({ error: 'ClickUp API key is required' });
     }
 
+    const cleanKey = apiKey.trim();
+    const cacheKey = `members:${cleanKey.slice(-10)}`;
+    const cached = getFromClickupCache(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     try {
-      const cleanKey = apiKey.trim();
       const teamRes = await fetch('https://api.clickup.com/api/v2/team', {
         headers: { Authorization: cleanKey },
       });
@@ -2022,7 +2082,9 @@ async function startServer() {
         }
       }
 
-      res.json({ members: Array.from(memberMap.values()) });
+      const result = { members: Array.from(memberMap.values()) };
+      setClickupCache(cacheKey, result);
+      res.json(result);
     } catch (err: any) {
       console.error('[ClickUp] Members fetch error:', err);
       res.status(500).json({ error: err.message || 'Error fetching ClickUp members' });
@@ -2038,8 +2100,14 @@ async function startServer() {
       return res.status(400).json({ error: 'apiKey and spaceId are required' });
     }
 
+    const cleanKey = apiKey.trim();
+    const cacheKey = `folders-lists:${cleanKey.slice(-10)}:${spaceId}`;
+    const cached = getFromClickupCache(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     try {
-      const cleanKey = apiKey.trim();
       const [foldersRes, listsRes] = await Promise.all([
         fetch(`https://api.clickup.com/api/v2/space/${spaceId}/folder`, {
           headers: { Authorization: cleanKey },
@@ -2052,10 +2120,12 @@ async function startServer() {
       const foldersData = foldersRes.ok ? await foldersRes.json() : { folders: [] };
       const listsData = listsRes.ok ? await listsRes.json() : { lists: [] };
 
-      res.json({
+      const result = {
         folders: foldersData.folders || [],
         folderlessLists: listsData.lists || [],
-      });
+      };
+      setClickupCache(cacheKey, result);
+      res.json(result);
     } catch (err: any) {
       console.error('[ClickUp] Folders & Lists fetch error:', err);
       res.status(500).json({ error: err.message || 'Error fetching folders and lists' });
@@ -2080,8 +2150,14 @@ async function startServer() {
       return res.status(400).json({ error: 'ClickUp API key is required' });
     }
 
+    const cleanKey = apiKey.trim();
+    const cacheKey = `cf:${cleanKey.slice(-10)}:${listId || spaceId || folderId}`;
+    const cached = getFromClickupCache(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     try {
-      const cleanKey = apiKey.trim();
       let url = '';
       if (listId) {
         url = `https://api.clickup.com/api/v2/list/${listId}/field`;
@@ -2111,7 +2187,7 @@ async function startServer() {
 
       const options = taskTypeField?.type_config?.options || [];
 
-      res.json({
+      const result = {
         fields,
         taskTypeField: taskTypeField ? {
           id: taskTypeField.id,
@@ -2120,7 +2196,9 @@ async function startServer() {
           options,
         } : null,
         options,
-      });
+      };
+      setClickupCache(cacheKey, result);
+      res.json(result);
     } catch (err: any) {
       console.error('[ClickUp] Custom fields error:', err);
       res.status(500).json({ error: err.message || 'Error fetching custom fields' });
@@ -2150,6 +2228,8 @@ async function startServer() {
         },
         body: JSON.stringify({ name: cleanName }),
       });
+
+      if (spaceId) invalidateClickupCache(spaceId);
 
       if (!response.ok) {
         const text = await response.text();

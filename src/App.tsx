@@ -377,7 +377,6 @@ function DashboardContent() {
         onOpenLoginModal={handleOpenLogin}
         onOpenNewUserModal={handleOpenNewUser}
         onOpenFirestoreModal={() => setFirestoreModalOpen(true)}
-        onOpenClickupModal={() => setFirestoreModalOpen(true)}
       />
 
       {/* Pinned Ribbons — sticky just below the header */}
@@ -403,8 +402,6 @@ function DashboardContent() {
         <OverviewBar
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
-          onOpenNewTaskModal={() => handleOpenAddTask()}
-          onOpenNewUserModal={handleOpenNewUser}
         />
 
         {/* User Swimlanes List */}

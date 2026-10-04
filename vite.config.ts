@@ -31,6 +31,9 @@ export default defineConfig(() => {
             if (id.includes('node_modules/firebase/firestore') || id.includes('node_modules/@firebase/firestore')) {
               return 'vendor-firebase-firestore';
             }
+            if (id.includes('node_modules/firebase/auth') || id.includes('node_modules/@firebase/auth')) {
+              return 'vendor-firebase-auth';
+            }
           },
         },
       },
