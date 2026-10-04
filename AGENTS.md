@@ -6,6 +6,12 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
+### Sweep 31: 2026-10-04 (Board-Preserved Frosted Modal Login Experience & Authentic Brand Alignment)
+
+- **UX-18 (Frosted Board Gating & Centered Sign-In Modal):** Replaced the separate standalone `<LoginScreen>` page with an in-place frosted blur presentation over the live board. When unauthenticated (`!currentUser`), the full board structure remains rendered underneath with a backdrop blur overlay (`backdrop-blur-md bg-black/50 dark:bg-black/70`), pointer interaction gating (`pointer-events-none select-none`), and the `<LoginModal>` centered in the viewport.
+- **BRAND-01 (Authentic zenFlow Brand Identity Parity):** Preserved the canonical `zenFlow` logo (curved wave SVG mark), `zen` + `Flow` custom typography, and the official tagline ("Workflow Management System") on the login modal, maintaining exact brand continuity across both modal and header.
+- **SAN-09 (LoginScreen Component Retirement):** Safely retired and deleted `src/components/LoginScreen.tsx` after unifying Google authentication and member onboarding into the modernized `<LoginModal>`.
+
 ### Sweep 30: 2026-10-04 (Firebase Project zen-flow-7173d Alignment, Strict Google Auth Board Gating & ClickUp Member Tagging)
 
 - **AUTH-03 (Firebase Project zen-flow-7173d Configuration & 127.0.0.1 Auto-Redirect):** Configured and verified Firebase project strictly for `zen-flow-7173d` across `firebase-applet-config.json` and client SDKs. Hardened `src/lib/firebase.ts` with automatic hostname redirect from `127.0.0.1` to `localhost` to eliminate `auth/unauthorized-domain` OAuth rejection, and added explicit error diagnostics.

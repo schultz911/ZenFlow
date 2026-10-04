@@ -14,7 +14,6 @@ import { MarqueeRibbon } from './components/MarqueeRibbon';
 import { UnassignedListRibbon } from './components/UnassignedListRibbon';
 import { ClickupConnectModal } from './components/ClickupConnectModal';
 import { EditUserModal } from './components/EditUserModal';
-import { LoginScreen } from './components/LoginScreen';
 import { User, Task, TaskStatus } from './types';
 import { UserPlus, FileText, Palette, Loader2 } from 'lucide-react';
 import { testConnection } from './lib/firebase';
@@ -369,14 +368,13 @@ function DashboardContent() {
     );
   }
 
-  if (!currentUser) {
-    return <LoginScreen />;
-  }
+  const isLoginOpen = !currentUser || loginModalOpen;
 
   return (
-    <div className="min-h-screen bg-neutral-50 dark:bg-[#0A0A0A] text-neutral-900 dark:text-[#E5E5E5] font-sans antialiased selection:bg-blue-500/30 selection:text-white transition-colors">
-      {/* Sticky Header */}
-      <Header
+    <>
+      <div className={`min-h-screen bg-neutral-50 dark:bg-[#0A0A0A] text-neutral-900 dark:text-[#E5E5E5] font-sans antialiased selection:bg-blue-500/30 selection:text-white transition-colors relative ${!currentUser ? 'overflow-hidden pointer-events-none select-none filter blur-[2px]' : ''}`}>
+        {/* Sticky Header */}
+        <Header
         onOpenLoginModal={handleOpenLogin}
         onOpenNewUserModal={handleOpenNewUser}
         onOpenFirestoreModal={() => setFirestoreModalOpen(true)}
@@ -473,13 +471,7 @@ function DashboardContent() {
         )}
       </main>
 
-      {/* Modals */}
-      <LoginModal
-        isOpen={loginModalOpen}
-        onClose={() => setLoginModalOpen(false)}
-        isNewAccountOnly={isNewAccountModal}
-      />
-
+      {/* Workspace Modals */}
       <TaskModal
         isOpen={taskModalOpen}
         onClose={() => setTaskModalOpen(false)}
@@ -527,6 +519,14 @@ function DashboardContent() {
         onClose={() => setEditingUser(null)}
       />
     </div>
+
+    {/* Login & Auth Modal — always rendered crisp on top of the frosted board */}
+    <LoginModal
+      isOpen={isLoginOpen}
+      onClose={() => setLoginModalOpen(false)}
+      isNewAccountOnly={currentUser ? isNewAccountModal : false}
+    />
+    </>
   );
 }
 

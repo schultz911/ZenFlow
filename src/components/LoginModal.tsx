@@ -25,6 +25,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     clickupMembers,
     loadClickupMembers,
     clickupApiKey,
+    authError,
+    setAuthError,
   } = useDashboard();
 
   const [name, setName] = useState('');
@@ -47,14 +49,17 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const displayError = error || authError;
+
   if (!isOpen) return null;
 
   const handleGoogleSignIn = async () => {
     setError(null);
+    setAuthError(null);
     setIsGoogleSigningIn(true);
     try {
       await loginWithGoogle();
-      onClose();
+      if (onClose) onClose();
     } catch (err: any) {
       setError(err.message || 'Google sign-in failed. Please verify your account is registered.');
     } finally {
@@ -108,9 +113,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+      className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-300 ${
+        isNewAccountOnly
+          ? 'bg-black/60 dark:bg-black/80 backdrop-blur-sm'
+          : 'bg-black/50 dark:bg-black/70 backdrop-blur-md'
+      }`}
       onClick={e => {
-        if (e.target === e.currentTarget && !isSubmitting && !isGoogleSigningIn) onClose();
+        if (e.target === e.currentTarget && !isSubmitting && !isGoogleSigningIn && isNewAccountOnly && onClose) {
+          onClose();
+        }
       }}
     >
       <div
@@ -118,82 +129,117 @@ export const LoginModal: React.FC<LoginModalProps> = ({
         className="w-full max-w-md rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] p-6 shadow-2xl transition-all text-neutral-900 dark:text-white"
       >
         <div className="flex items-center justify-between pb-3 border-b border-neutral-100 dark:border-white/5">
-          <div>
-            <h2 className="text-lg font-semibold tracking-tight text-neutral-900 dark:text-white">
-              {isNewAccountOnly ? 'Add Team Member' : 'Sign In to ZenFlow'}
-            </h2>
-            <p className="text-xs text-neutral-500 dark:text-white/40 mt-0.5">
-              {isNewAccountOnly
-                ? 'Provision a new team member and assign their Creative Director.'
-                : 'Sign in with your registered account to modify the board.'}
-            </p>
-          </div>
-          <button
-            onClick={onClose}
-            disabled={isSubmitting || isGoogleSigningIn}
-            className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {error && (
-          <div className="my-3 rounded-xl bg-red-500/10 p-3 text-xs text-red-500 border border-red-500/20 font-medium">
-            {error}
-          </div>
-        )}
-
-        {/* In Sign In Mode: Emphasize Google Sign-In */}
-        {!isNewAccountOnly && (
-          <div className="pt-4 pb-2 space-y-3">
-            <button
-              type="button"
-              onClick={handleGoogleSignIn}
-              disabled={isGoogleSigningIn}
-              className="flex w-full items-center justify-center gap-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-zinc-800/80 hover:bg-neutral-50 dark:hover:bg-zinc-700 py-2.5 px-4 text-xs font-semibold text-neutral-800 dark:text-white shadow-sm transition-all active:scale-[0.98] disabled:opacity-50"
-            >
-              {isGoogleSigningIn ? (
-                <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-              ) : (
-                <svg className="h-4 w-4" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.14z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.27 21.36 7.34 24 12 24z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.26C.46 8.17 0 9.97 0 12s.46 3.83 1.26 5.42l4.02-3.15z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.27 2.64 1.26 6.58l4.02 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
-                  />
+          <div className="flex items-center gap-3">
+            {!isNewAccountOnly && (
+              <div
+                id="zenflow-login-logo"
+                className="flex h-9 w-9 items-center justify-center rounded-xl bg-neutral-900 dark:bg-[#1A1A1A] border border-neutral-800 dark:border-white/10 text-blue-500 shadow-sm shrink-0"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M 4.5 7.2 C 8.5 4.8, 14 9.6, 19.5 7 L 4.5 17 C 10 14.4, 15.5 19.2, 19.5 16.8" />
                 </svg>
-              )}
-              <span>{isGoogleSigningIn ? 'Verifying account...' : 'Continue with Google'}</span>
-            </button>
-
-            <div className="relative flex items-center justify-center my-3">
-              <div className="border-t border-neutral-200 dark:border-neutral-800 w-full" />
-              <span className="bg-white dark:bg-[#0D0D0D] px-2 text-[10px] uppercase tracking-wider text-neutral-400">
-                Or sign in with email
-              </span>
+              </div>
+            )}
+            <div>
+              <div className="flex items-baseline leading-none">
+                <span className="text-lg font-bold tracking-tight text-neutral-900 dark:text-white">
+                  {isNewAccountOnly ? 'Add Team Member' : 'zen'}
+                </span>
+                {!isNewAccountOnly && (
+                  <span className="font-flowy text-xl font-bold text-blue-600 dark:text-blue-400 ml-0.5 select-none">
+                    Flow
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-neutral-500 dark:text-white/40 mt-0.5">
+                {isNewAccountOnly
+                  ? 'Provision a new team member and assign their Creative Director.'
+                  : 'Workflow Management System'}
+              </p>
             </div>
           </div>
+          {isNewAccountOnly && onClose && (
+            <button
+              onClick={onClose}
+              disabled={isSubmitting || isGoogleSigningIn}
+              className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+
+        {displayError && (
+          <div className="my-3 rounded-xl bg-red-500/10 p-3 text-xs text-red-500 border border-red-500/20 font-medium">
+            {displayError}
+          </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
-          {/* Name Field */}
-          <div>
-            <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
-              Full Name
-            </label>
-            <div className="relative">
-              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-neutral-400 dark:text-white/40">
+        {/* In Sign In Mode: Google Sign-In Only */}
+        {!isNewAccountOnly ? (
+          <div className="pt-4 pb-2 space-y-4">
+            <p className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed text-center">
+              Sign in with your authorized Google account to view and manage team workflows.
+            </p>
+
+            <button
+              type="button"
+              id="google-signin-modal-btn"
+              onClick={handleGoogleSignIn}
+              disabled={isGoogleSigningIn}
+              className="flex w-full items-center justify-center gap-3 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-zinc-800/80 hover:bg-neutral-50 dark:hover:bg-zinc-700 py-3 px-4 text-xs font-semibold text-neutral-800 dark:text-white shadow-sm transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer"
+            >
+              {isGoogleSigningIn ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                  <span>Connecting to Google...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="h-4 w-4" viewBox="0 0 24 24">
+                    <path
+                      fill="#4285F4"
+                      d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.14z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.26v3.15C3.27 21.36 7.34 24 12 24z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.26C.46 8.17 0 9.97 0 12s.46 3.83 1.26 5.42l4.02-3.15z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.34 0 3.27 2.64 1.26 6.58l4.02 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+                    />
+                  </svg>
+                  <span>Sign In with Google</span>
+                </>
+              )}
+            </button>
+
+            <div className="rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-white/[0.02] p-3 text-[11px] text-neutral-500 dark:text-neutral-400 text-center leading-relaxed">
+              Access is restricted to pre-registered accounts (<strong className="text-neutral-700 dark:text-neutral-200">@zensciences.com</strong> or authorized team members).
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+            {/* Name Field */}
+            <div>
+              <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                Full Name
+              </label>
+              <div className="relative">
+                <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-neutral-400 dark:text-white/40">
                 <UserIcon className="h-4 w-4" />
               </div>
               <input
@@ -369,18 +415,19 @@ export const LoginModal: React.FC<LoginModalProps> = ({
             type="submit"
             id="login-submit-button"
             disabled={isSubmitting || isGoogleSigningIn}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-xs font-semibold text-white shadow-md shadow-blue-900/20 hover:bg-blue-500 focus:outline-none transition-all disabled:opacity-50"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-xs font-semibold text-white shadow-md shadow-blue-900/20 hover:bg-blue-500 focus:outline-none transition-all disabled:opacity-50 cursor-pointer"
           >
             {isSubmitting ? (
               <span>Processing...</span>
             ) : (
               <>
-                <span>{isNewAccountOnly ? 'Create Account & Assign Board' : 'Sign In'}</span>
+                <span>Create Account & Assign Board</span>
                 <ArrowRight className="h-3.5 w-3.5" />
               </>
             )}
           </button>
         </form>
+        )}
       </div>
     </div>
   );
