@@ -58,6 +58,18 @@
   animation-play-state: paused;
 }
 
+@keyframes auto-scroll-hover {
+  0%, 15% {
+    transform: translateX(0);
+  }
+  65%, 85% {
+    transform: translateX(var(--scroll-dist, 0px));
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
 /* Custom dropdown reset - eliminate native browser arrow hover/focus outlines */
 select {
   appearance: none;

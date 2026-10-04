@@ -6,9 +6,9 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
-### Sweep 35: 2026-10-04 (ClickUp Space Dropdown Bounded Box Width & Horizontal Scrolling Item Text)
+### Sweep 35: 2026-10-04 (ClickUp Space Dropdown Bounded Box Width & Hover Auto-Scroll Animation)
 
-- **UI-25 (ClickUp Space Dropdown Container Width Parity & Horizontal Item Scrolling):** Replaced native `<select>` in `src/components/TaskModal.tsx` with a custom dropdown. Constrained the popup dropdown list strictly to the width of the trigger box (`w-full max-w-full overflow-x-hidden`) to eliminate viewport blowout caused by long folder lists. Configured individual item rows with `flex-1 min-w-0 overflow-x-auto whitespace-nowrap`, allowing long space and folder list strings to scroll horizontally cleanly with native trackpad, Shift+wheel, or custom scrollbars while keeping selection checkmarks pinned. Integrated outside-click and Escape key dismissal alongside drag-detection guards.
+- **UI-25 (ClickUp Space Dropdown Container Width Parity & Hover Auto-Scroll):** Replaced native `<select>` in `src/components/TaskModal.tsx` with a custom dropdown constrained strictly to the trigger box width (`w-full max-w-full overflow-x-hidden`). Completely eliminated horizontal scroll bars by applying `overflow-hidden no-scrollbar` across all item rows. Built `<SpaceDropdownRow>` with dynamically measured overflow distance and GPU-accelerated CSS keyframe animation (`@keyframes auto-scroll-hover` in `src/index.css`) that smoothly auto-scrolls long space and folder list strings on hover (with a gentle initial pause, comfortable ~35px/s glide, and an end-reading pause) while resetting seamlessly on mouse leave.
 
 ### Sweep 34: 2026-10-04 (Orphaned Component Purge, Space Switch Avalanche Elimination, ClickUp Reorder Throttling, Proxy TTL Cache & Firestore Schema Parity)
 

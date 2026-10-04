@@ -41,6 +41,93 @@ interface TaskModalProps {
   onAdjustBillableHours?: (task: Task) => void;
 }
 
+interface SpaceDropdownRowProps {
+  space: { id: string; name: string };
+  folderListStr: string;
+  fullText: string;
+  isSelected: boolean;
+  onSelect: () => void;
+}
+
+const SpaceDropdownRow: React.FC<SpaceDropdownRowProps> = ({
+  space,
+  folderListStr,
+  fullText,
+  isSelected,
+  onSelect,
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLDivElement>(null);
+  const [isHovered, setIsHovered] = useState(false);
+  const [overflowDistance, setOverflowDistance] = useState(0);
+
+  const measureOverflow = () => {
+    if (containerRef.current && textRef.current) {
+      const diff = Math.ceil(textRef.current.offsetWidth - containerRef.current.clientWidth);
+      setOverflowDistance(diff > 4 ? diff : 0);
+    }
+  };
+
+  useEffect(() => {
+    measureOverflow();
+  }, [fullText]);
+
+  const totalDuration = useMemo(() => {
+    if (overflowDistance <= 0) return 0;
+    return Math.max(3.5, Math.min(10, overflowDistance / 25 + 2));
+  }, [overflowDistance]);
+
+  return (
+    <div
+      onClick={onSelect}
+      onMouseEnter={() => {
+        measureOverflow();
+        setIsHovered(true);
+      }}
+      onMouseLeave={() => {
+        setIsHovered(false);
+      }}
+      className={`group w-full max-w-full px-2.5 py-1.5 text-xs cursor-pointer flex items-center justify-between transition-colors ${
+        isSelected
+          ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-medium'
+          : 'text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-white/5'
+      }`}
+    >
+      <div
+        ref={containerRef}
+        className="flex-1 min-w-0 overflow-hidden no-scrollbar py-0.5 text-left"
+        title={fullText}
+      >
+        <div
+          ref={textRef}
+          style={
+            isHovered && overflowDistance > 0
+              ? ({
+                  '--scroll-dist': `-${overflowDistance}px`,
+                  animation: `auto-scroll-hover ${totalDuration}s ease-in-out infinite`,
+                } as React.CSSProperties)
+              : {
+                  transform: 'translateX(0)',
+                  transition: 'transform 0.3s ease-out',
+                }
+          }
+          className="inline-block whitespace-nowrap"
+        >
+          <span className="font-medium">{space.name}</span>
+          {folderListStr && (
+            <span className="text-neutral-500 dark:text-white/45 ml-1.5 font-normal">
+              | {folderListStr}
+            </span>
+          )}
+        </div>
+      </div>
+      {isSelected && (
+        <Check className="h-3.5 w-3.5 shrink-0 ml-2 text-purple-600 dark:text-purple-400" />
+      )}
+    </div>
+  );
+};
+
 export const TaskModal: React.FC<TaskModalProps> = ({
   isOpen,
   onClose,
@@ -92,8 +179,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [isSpaceDropdownOpen, setIsSpaceDropdownOpen] = useState(false);
   const spaceDropdownRef = useRef<HTMLDivElement>(null);
-  const isDraggingSpaceRef = useRef(false);
-  const mouseDownPosRef = useRef({ x: 0, y: 0 });
 
   const canEdit = useMemo(() => {
     if (!taskToEdit) return true;
@@ -728,45 +813,19 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                         const isSelected = s.id === selectedClickupSpaceId;
 
                         return (
-                          <div
+                          <SpaceDropdownRow
                             key={s.id}
-                            onMouseDown={e => {
-                              mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
-                              isDraggingSpaceRef.current = false;
-                            }}
-                            onMouseMove={e => {
-                              if (Math.abs(e.clientX - mouseDownPosRef.current.x) > 6) {
-                                isDraggingSpaceRef.current = true;
-                              }
-                            }}
-                            onClick={() => {
-                              if (isDraggingSpaceRef.current) return;
+                            space={s}
+                            folderListStr={folderListStr}
+                            fullText={fullText}
+                            isSelected={isSelected}
+                            onSelect={() => {
                               setSelectedClickupSpaceId(s.id, s.name);
                               setClickupFolderId('');
                               setClickupListId('');
                               setIsSpaceDropdownOpen(false);
                             }}
-                            className={`group w-full max-w-full px-2.5 py-1.5 text-xs cursor-pointer flex items-center justify-between transition-colors ${
-                              isSelected
-                                ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-medium'
-                                : 'text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-white/5'
-                            }`}
-                          >
-                            <div
-                              className="flex-1 min-w-0 overflow-x-auto whitespace-nowrap py-0.5 text-left scroll-smooth"
-                              title={fullText}
-                            >
-                              <span className="font-medium">{s.name}</span>
-                              {folderListStr && (
-                                <span className="text-neutral-500 dark:text-white/45 ml-1.5 font-normal">
-                                  | {folderListStr}
-                                </span>
-                              )}
-                            </div>
-                            {isSelected && (
-                              <Check className="h-3.5 w-3.5 shrink-0 ml-2 text-purple-600 dark:text-purple-400" />
-                            )}
-                          </div>
+                          />
                         );
                       })}
                     </div>
