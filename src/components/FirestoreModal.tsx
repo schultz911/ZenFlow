@@ -3,7 +3,6 @@ import { createPortal } from 'react-dom';
 import { useDashboard } from '../context/DashboardContext';
 import {
   Database,
-  ShieldCheck,
   AlertCircle,
   CheckCircle2,
   RefreshCw,
@@ -28,7 +27,6 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
     syncWithFirestore,
     users,
     tasks,
-    isZensciencesUser,
     isClickupConnected,
     clickupApiKey,
     connectClickup,

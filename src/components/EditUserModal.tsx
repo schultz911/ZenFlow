@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { User, Role } from '../types';
-import { X, UserCog, Palette, FileText, Crown, ShieldCheck, Loader2, Link2, RefreshCw } from 'lucide-react';
+import { X, UserCog, Palette, FileText, Crown, ShieldCheck, Loader2, Link2 } from 'lucide-react';
 import { ClickupMemberPicker } from './ClickupMemberPicker';
 
 interface EditUserModalProps {
@@ -17,7 +17,6 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
 }) => {
   const {
     updateUserProfile,
-    currentUser,
     isSuperadmin,
     creativeDirectors,
     canManageMembers,

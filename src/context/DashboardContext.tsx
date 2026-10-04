@@ -58,15 +58,22 @@ function saveMutationQueue(queue: QueuedMutation[]) {
   }
 }
 
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_QUEUE_SIZE = 100;
+
 function enqueueMutation(mutation: Omit<QueuedMutation, 'id' | 'timestamp' | 'retryCount'>) {
-  const queue = loadMutationQueue();
+  const now = Date.now();
+  // Filter out stale mutations older than 7 days
+  const queue = loadMutationQueue().filter(m => now - m.timestamp < SEVEN_DAYS_MS);
   queue.push({
     ...mutation,
-    id: `mut-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-    timestamp: Date.now(),
+    id: `mut-${now}-${Math.random().toString(36).substring(2, 6)}`,
+    timestamp: now,
     retryCount: 0,
   });
-  saveMutationQueue(queue);
+  // Cap queue to latest 100 mutations to prevent unbounded local storage growth
+  const boundedQueue = queue.length > MAX_QUEUE_SIZE ? queue.slice(-MAX_QUEUE_SIZE) : queue;
+  saveMutationQueue(boundedQueue);
 }
 
 interface DashboardContextType {
@@ -1006,9 +1013,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       if (params.listId) q.set('listId', params.listId);
       else if (params.spaceId) q.set('spaceId', params.spaceId);
       else if (params.folderId) q.set('folderId', params.folderId);
-      q.set('apiKey', apiKey);
 
-      const res = await fetch(`/api/clickup/custom-fields?${q.toString()}`);
+      const res = await fetch(`/api/clickup/custom-fields?${q.toString()}`, {
+        headers: { 'x-clickup-api-key': apiKey },
+      });
       if (res.ok) {
         const data = await res.json();
         const options: ClickupCustomFieldOption[] = data.options || [];

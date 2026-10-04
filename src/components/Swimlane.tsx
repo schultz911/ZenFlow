@@ -1201,6 +1201,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     if (prev.onAdjustBillableHours !== next.onAdjustBillableHours) return false;
     if (prev.onUpdateTaskTitle !== next.onUpdateTaskTitle) return false;
     if (prev.onDeleteTask !== next.onDeleteTask) return false;
+    if (prev.onEditUser !== next.onEditUser) return false;
     if (prev.onDeleteUser !== next.onDeleteUser) return false;
     if (prev.onMoveTask !== next.onMoveTask) return false;
     if (prev.onOpenWorkloadModal !== next.onOpenWorkloadModal) return false;

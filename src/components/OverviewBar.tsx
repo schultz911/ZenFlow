@@ -82,11 +82,14 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
     return () => clearTimeout(timer);
   }, [localSearch, onSearchChange, searchQuery]);
 
-  // Filter users by active tab
-  const displayedUsers = useMemo(
-    () => users.filter(u => u.role === activeRoleTab),
-    [users, activeRoleTab]
-  );
+  // Filter users by active tab and active team board
+  const displayedUsers = useMemo(() => {
+    let boardUsers = users;
+    if (activeBoardId !== 'all') {
+      boardUsers = users.filter(u => u.id === activeBoardId || u.creativeDirectorId === activeBoardId);
+    }
+    return boardUsers.filter(u => u.role === activeRoleTab);
+  }, [users, activeRoleTab, activeBoardId]);
 
   // Calculate workload analytics & overload counts using indexed lookup (O(U+T))
   const { avgWorkload, overloadedMembersCount } = useMemo(() => {
@@ -110,19 +113,19 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
     return { avgWorkload: avg, overloadedMembersCount: overloaded };
   }, [displayedUsers, tasks]);
 
-  // Single-pass computation for in_progress and todo counts filtered by active team role tab (O(U+T))
+  // Single-pass computation for in_progress and todo counts filtered by active board and team role tab (O(U+T))
   const { inProgressCount, todoCount } = useMemo(() => {
-    const userRoleMap = new Map(users.map(u => [u.id, u.role]));
+    const displayedUserIds = new Set(displayedUsers.map(u => u.id));
     let inProgress = 0;
     let todo = 0;
     for (const t of tasks) {
-      if (userRoleMap.get(t.userId) === activeRoleTab) {
+      if (displayedUserIds.has(t.userId)) {
         if (t.status === 'in_progress') inProgress++;
         else if (t.status === 'todo') todo++;
       }
     }
     return { inProgressCount: inProgress, todoCount: todo };
-  }, [users, tasks, activeRoleTab]);
+  }, [displayedUsers, tasks]);
 
   return (
     <div className="mb-6 space-y-4">

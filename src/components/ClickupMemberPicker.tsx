@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { ClickupMember } from '../types';
-import { Search, X, Check, User, Loader2, Link2, RefreshCw } from 'lucide-react';
+import { Search, X, Check, Loader2, RefreshCw } from 'lucide-react';
 
 interface ClickupMemberPickerProps {
   members: ClickupMember[];

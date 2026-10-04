@@ -254,6 +254,10 @@ function DashboardContent() {
     setLoginModalOpen(true);
   }, []);
 
+  const handleOpenFirestore = useCallback(() => {
+    setFirestoreModalOpen(true);
+  }, []);
+
   const handleOpenWorkloadModal = useCallback((u: User) => {
     setWorkloadModalUser(u);
   }, []);
@@ -376,7 +380,7 @@ function DashboardContent() {
         <Header
         onOpenLoginModal={handleOpenLogin}
         onOpenNewUserModal={handleOpenNewUser}
-        onOpenFirestoreModal={() => setFirestoreModalOpen(true)}
+        onOpenFirestoreModal={handleOpenFirestore}
       />
 
       {/* Pinned Ribbons — sticky just below the header */}

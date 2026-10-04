@@ -20,7 +20,7 @@ interface HeaderProps {
   onOpenFirestoreModal: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({
+const HeaderComponent: React.FC<HeaderProps> = ({
   onOpenLoginModal,
   onOpenNewUserModal,
   onOpenFirestoreModal,
@@ -346,3 +346,6 @@ export const Header: React.FC<HeaderProps> = ({
     </header>
   );
 };
+
+export const Header = React.memo(HeaderComponent);
+Header.displayName = 'Header';

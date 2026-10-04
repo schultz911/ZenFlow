@@ -2252,7 +2252,7 @@ async function startServer() {
     }
 
     const user = store.users.find(u => u.id === userId);
-    const token = (apiKey || user?.clickupApiKey || '').trim();
+    const token = ((req.headers['x-clickup-api-key'] as string) || apiKey || user?.clickupApiKey || '').trim();
 
     if (!token) {
       return res.status(400).json({ error: 'ClickUp API key is not connected for this user' });

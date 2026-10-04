@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { Role } from '../types';
-import { X, Mail, User as UserIcon, Palette, FileText, ArrowRight, ShieldCheck, Crown, Loader2, Link2 } from 'lucide-react';
+import { X, Mail, User as UserIcon, Palette, FileText, ArrowRight, Crown, Loader2, Link2 } from 'lucide-react';
 import { ClickupMemberPicker } from './ClickupMemberPicker';
 
 interface LoginModalProps {
