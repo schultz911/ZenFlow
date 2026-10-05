@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { User, Task } from '../types';
 import { calculateUserWorkload, formatDueDate, getCognitiveLoadLabel, calculateWeeklyVelocity } from '../utils/workload';
 import { X, TrendingUp, Clock, CheckCircle2 } from 'lucide-react';
@@ -33,23 +34,44 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
     return calculateWeeklyVelocity(userTasks);
   }, [isOpen, user, userTasks]);
 
-  if (!isOpen || !user || !workload || !velocity) return null;
+  // Escape key dismissal
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   const maxBarHeight = 65;
-  const maxCountScale = Math.max(3, velocity.maxDayCount);
-  const activeHoverDay = velocity.days.find(d => d.dateStr === hoveredDate);
+  const maxCountScale = Math.max(3, velocity?.maxDayCount || 3);
+  const activeHoverDay = velocity?.days.find(d => d.dateStr === hoveredDate);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 backdrop-blur-sm p-4"
-      onClick={e => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div
-        id="workload-breakdown-modal"
-        className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] p-6 shadow-2xl transition-all animate-in fade-in zoom-in-95 duration-200 text-neutral-900 dark:text-white"
-      >
+    <AnimatePresence>
+      {isOpen && user && workload && velocity && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs overflow-y-auto"
+          onClick={e => {
+            if (e.target === e.currentTarget) onClose();
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            onClick={e => e.stopPropagation()}
+            id="workload-breakdown-modal"
+            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] p-6 shadow-2xl transition-all text-neutral-900 dark:text-white"
+          >
         {/* Header */}
         <div className="flex items-start justify-between border-b border-neutral-100 dark:border-white/5 pb-4">
           <div className="flex items-center gap-3">
@@ -390,7 +412,9 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
             Close Breakdown
           </button>
         </div>
-      </div>
-    </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

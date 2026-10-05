@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { User, Task } from '../types';
 import { AlertTriangle, Trash2, X, Loader2 } from 'lucide-react';
 
@@ -45,8 +46,6 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({
     return { userTasks: list, counts: c };
   }, [tasks, user]);
 
-  if (!isOpen || !user) return null;
-
   const pipelineCount = counts.pipeline;
   const todoCount = counts.todo;
   const inProgressCount = counts.in_progress;
@@ -55,6 +54,7 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({
   const archivedCount = counts.archived;
 
   const handleDelete = async () => {
+    if (!user) return;
     try {
       setIsDeleting(true);
       await onConfirmDelete(user.id);
@@ -67,16 +67,27 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200"
-      onClick={e => {
-        if (e.target === e.currentTarget && !isDeleting) onClose();
-      }}
-    >
-      <div
-        id="delete-user-modal"
-        className="w-full max-w-md rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] p-6 shadow-2xl transition-all text-neutral-900 dark:text-white"
-      >
+    <AnimatePresence>
+      {isOpen && user && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs overflow-y-auto"
+          onClick={e => {
+            if (e.target === e.currentTarget && !isDeleting) onClose();
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            onClick={e => e.stopPropagation()}
+            id="delete-user-modal"
+            className="w-full max-w-md rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] p-6 shadow-2xl transition-all text-neutral-900 dark:text-white"
+          >
         {/* Header */}
         <div className="flex items-start justify-between pb-4 border-b border-neutral-100 dark:border-white/5">
           <div className="flex items-center gap-3">
@@ -214,7 +225,9 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({
             )}
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
+  )}
+</AnimatePresence>
   );
 };

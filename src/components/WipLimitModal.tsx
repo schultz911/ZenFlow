@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, CheckCircle2, ArrowLeft, Layers } from 'lucide-react';
 import { Task, User } from '../types';
@@ -20,27 +20,39 @@ export const WipLimitModal: React.FC<WipLimitModalProps> = ({
   onMoveToDone,
   onMoveToTodo,
 }) => {
+  // Escape key dismissal
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   return (
     <AnimatePresence>
       {isOpen && user && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          onClick={onClose}
-          className="fixed inset-0 bg-black/60 backdrop-blur-xs"
-        />
-
-        {/* Modal Dialog */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          transition={{ duration: 0.18, ease: 'easeOut' }}
-          className="relative w-full max-w-md rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#121212] p-6 shadow-2xl z-10 space-y-4"
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs overflow-y-auto"
+          onClick={e => {
+            if (e.target === e.currentTarget) onClose();
+          }}
         >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            onClick={e => e.stopPropagation()}
+            className="relative w-full max-w-md rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#121212] p-6 shadow-2xl space-y-4 text-neutral-900 dark:text-white"
+          >
           {/* Close button */}
           <button
             onClick={onClose}
@@ -136,7 +148,7 @@ export const WipLimitModal: React.FC<WipLimitModalProps> = ({
             </button>
           </div>
         </motion.div>
-      </div>
+      </motion.div>
     )}
   </AnimatePresence>
   );

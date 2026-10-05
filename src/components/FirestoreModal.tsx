@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
 import { AuditLogEntry } from '../types';
 import {
@@ -211,16 +212,27 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
   const displayProject = firestoreStatus?.projectId || 'zen-flow-7173d';
 
   const modalContent = (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/60 dark:bg-black/80 backdrop-blur-sm p-4 sm:p-6 animate-in fade-in duration-150"
-      onClick={e => {
-        if (e.target === e.currentTarget && !isClickupLoading && !isSyncing && !isRegisteringWebhook) onClose();
-      }}
-    >
-      <div
-        id="workspace-connections-modal"
-        className="w-full max-w-xl max-h-[90vh] my-auto flex flex-col rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#111111] shadow-2xl transition-all text-neutral-900 dark:text-white overflow-hidden"
-      >
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/65 backdrop-blur-xs overflow-y-auto"
+          onClick={e => {
+            if (e.target === e.currentTarget && !isClickupLoading && !isSyncing && !isRegisteringWebhook) onClose();
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            onClick={e => e.stopPropagation()}
+            id="workspace-connections-modal"
+            className="w-full max-w-xl max-h-[90vh] my-auto flex flex-col rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#111111] shadow-2xl transition-all text-neutral-900 dark:text-white overflow-hidden"
+          >
         {/* Fixed Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 dark:border-white/5 shrink-0 bg-white dark:bg-[#111111]">
           <div className="flex items-center gap-2.5">
@@ -776,8 +788,10 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
             Close
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
+  )}
+</AnimatePresence>
   );
 
   if (typeof document !== 'undefined') {

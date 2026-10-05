@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Task, User } from '../types';
 import { AlertTriangle, Trash2, X, Loader2, CornerDownRight, ExternalLink } from 'lucide-react';
 
@@ -30,11 +31,10 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, isDeleting, onClose]);
 
-  if (!isOpen || !task) return null;
-
-  const owner = users.find(u => u.id === task.userId);
+  const owner = task ? users.find(u => u.id === task.userId) : null;
 
   const handleDelete = async () => {
+    if (!task) return;
     try {
       setIsDeleting(true);
       await onConfirmDelete(task.id);
@@ -47,16 +47,27 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-150"
-      onClick={e => {
-        if (e.target === e.currentTarget && !isDeleting) onClose();
-      }}
-    >
-      <div
-        id="delete-task-modal"
-        className="w-full max-w-md rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] p-6 shadow-2xl transition-all text-neutral-900 dark:text-white"
-      >
+    <AnimatePresence>
+      {isOpen && task && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs overflow-y-auto"
+          onClick={e => {
+            if (e.target === e.currentTarget && !isDeleting) onClose();
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            onClick={e => e.stopPropagation()}
+            id="delete-task-modal"
+            className="w-full max-w-md rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] p-6 shadow-2xl transition-all text-neutral-900 dark:text-white"
+          >
         {/* Header */}
         <div className="flex items-start justify-between pb-4 border-b border-neutral-100 dark:border-white/5">
           <div className="flex items-center gap-3">
@@ -156,7 +167,9 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
             )}
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
+  )}
+</AnimatePresence>
   );
 };

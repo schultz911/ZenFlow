@@ -619,7 +619,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 e.stopPropagation();
                 onMoveStatus(task.id, 'archived');
               }}
-              title="Mark Completed"
+              title="Mark as complete"
               className="inline-flex items-center gap-1 rounded-md bg-neutral-100 dark:bg-white/5 hover:bg-neutral-200 dark:hover:bg-white/10 border border-neutral-200 dark:border-white/10 px-1.5 py-0.5 text-[10px] text-neutral-500 dark:text-white/40 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
             >
               <Archive className="h-2.5 w-2.5" />

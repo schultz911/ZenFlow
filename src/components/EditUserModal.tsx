@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
 import { User, Role } from '../types';
 import {
@@ -97,16 +98,9 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, isSubmitting, isRemapping, onClose]);
 
-  if (!isOpen || !user) return null;
-
-  // Authorization check: Only Superadmins and Creative Directors can edit member information
-  if (!canManageMembers) {
-    return null;
-  }
-
-  const isTargetSuperadmin = user.email.toLowerCase() === 'kiran.s@zensciences.com';
+  const isTargetSuperadmin = user?.email.toLowerCase() === 'kiran.s@zensciences.com';
   const cleanCurrentEmail = email.trim().toLowerCase();
-  const isEmailChanged = isSuperadmin && !isTargetSuperadmin && cleanCurrentEmail !== user.email.toLowerCase();
+  const isEmailChanged = Boolean(user && isSuperadmin && !isTargetSuperadmin && cleanCurrentEmail !== user.email.toLowerCase());
   const duplicateTarget = isEmailChanged
     ? users.find(u => u.id !== user.id && u.email.toLowerCase().trim() === cleanCurrentEmail)
     : null;
@@ -192,16 +186,27 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200"
-      onClick={e => {
-        if (e.target === e.currentTarget && !isSubmitting && !isRemapping) onClose();
-      }}
-    >
-      <div
-        id="edit-user-modal"
-        className="w-full max-w-md max-h-[92vh] overflow-y-auto rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#111111] shadow-2xl p-6 text-neutral-900 dark:text-white transition-all animate-in zoom-in-95 duration-200"
-      >
+    <AnimatePresence>
+      {isOpen && user && canManageMembers && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs overflow-y-auto"
+          onClick={e => {
+            if (e.target === e.currentTarget && !isSubmitting && !isRemapping) onClose();
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            onClick={e => e.stopPropagation()}
+            id="edit-user-modal"
+            className="w-full max-w-md max-h-[92vh] overflow-y-auto rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#111111] shadow-2xl p-6 text-neutral-900 dark:text-white transition-all"
+          >
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-neutral-100 dark:border-white/5">
           <div className="flex items-center gap-2.5">
@@ -573,7 +578,9 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
             </button>
           </div>
         </form>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

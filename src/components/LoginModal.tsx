@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
 import { Role } from '../types';
 import { X, Mail, User as UserIcon, Palette, FileText, ArrowRight, Crown, Loader2, Link2 } from 'lucide-react';
@@ -52,7 +53,17 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
   const displayError = error || authError;
 
-  if (!isOpen) return null;
+  // Escape key dismissal
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && (isNewAccountOnly || Boolean(currentUser)) && !isSubmitting && !isGoogleSigningIn) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, isNewAccountOnly, currentUser, isSubmitting, isGoogleSigningIn, onClose]);
 
   const handleGoogleSignIn = async () => {
     setError(null);
@@ -113,22 +124,29 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   };
 
   return (
-    <div
-      className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-all duration-300 ${
-        isNewAccountOnly
-          ? 'bg-black/60 dark:bg-black/80 backdrop-blur-sm'
-          : 'bg-black/50 dark:bg-black/70 backdrop-blur-md'
-      }`}
-      onClick={e => {
-        if (e.target === e.currentTarget && !isSubmitting && !isGoogleSigningIn && isNewAccountOnly && onClose) {
-          onClose();
-        }
-      }}
-    >
-      <div
-        id="login-modal"
-        className="w-full max-w-md rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] p-6 shadow-2xl transition-all text-neutral-900 dark:text-white"
-      >
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs overflow-y-auto"
+          onClick={e => {
+            if (e.target === e.currentTarget && !isSubmitting && !isGoogleSigningIn && (isNewAccountOnly || Boolean(currentUser))) {
+              onClose();
+            }
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            onClick={e => e.stopPropagation()}
+            id="login-modal"
+            className="w-full max-w-md rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] p-6 shadow-2xl transition-all text-neutral-900 dark:text-white"
+          >
         <div className="flex items-center justify-between pb-3 border-b border-neutral-100 dark:border-white/5">
           <div className="flex items-center gap-3">
             {!isNewAccountOnly && (
@@ -424,7 +442,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           </button>
         </form>
         )}
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
+  )}
+</AnimatePresence>
   );
 };

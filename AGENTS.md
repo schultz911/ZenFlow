@@ -6,6 +6,34 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
+### Sweep 44: 2026-10-05 (Universal Modal Appear/Exit Animation Alignment & Dismissal Standards)
+
+- **UI-37 (Universal Motion Appear & Exit Transition Parity):** Standardized all 11 modal dialogs across the workspace to match the fluid appear animation established by `<DuplicateTaskModal>`:
+  - Card Entrance & Exit Motion:
+    ```tsx
+    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+    animate={{ opacity: 1, scale: 1, y: 0 }}
+    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+    transition={{ duration: 0.18, ease: 'easeOut' }}
+    ```
+  - Backdrop Motion & Styling: Standardized to `<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>` with unified styling `fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs overflow-y-auto`.
+  - Conditional Wrapping in `<AnimatePresence>`: Wrapped modal trees (`isOpen && (...)`) within `<AnimatePresence>` so exit transitions render smoothly without abrupt unmounting.
+  - Components Unified:
+    1. [`DuplicateTaskModal`](file:///c:/ZenFlow/src/components/DuplicateTaskModal.tsx)
+    2. [`TaskModal`](file:///c:/ZenFlow/src/components/TaskModal.tsx)
+    3. [`DeleteTaskModal`](file:///c:/ZenFlow/src/components/DeleteTaskModal.tsx)
+    4. [`DeleteUserModal`](file:///c:/ZenFlow/src/components/DeleteUserModal.tsx)
+    5. [`EditUserModal`](file:///c:/ZenFlow/src/components/EditUserModal.tsx)
+    6. [`FirestoreModal`](file:///c:/ZenFlow/src/components/FirestoreModal.tsx)
+    7. [`WorkloadModal`](file:///c:/ZenFlow/src/components/WorkloadModal.tsx)
+    8. [`BillableHoursModal`](file:///c:/ZenFlow/src/components/BillableHoursModal.tsx)
+    9. [`DeadlineDemandModal`](file:///c:/ZenFlow/src/components/DeadlineDemandModal.tsx)
+    10. [`WipLimitModal`](file:///c:/ZenFlow/src/components/WipLimitModal.tsx)
+    11. [`LoginModal`](file:///c:/ZenFlow/src/components/LoginModal.tsx)
+- **UI-38 (Universal Escape Key & Click-Outside Dismissal Standards):**
+  - Standardized Escape key listeners (`keydown` event listener attached while `isOpen === true`) across every modal dialog with safety guards during async submission.
+  - Standardized click-outside dismissal on backdrops (`onClick={e => { if (e.target === e.currentTarget) onClose(); }}`) combined with inner card event isolation (`onClick={e => e.stopPropagation()}`) to prevent accidental dismissal during form interaction.
+
 ### Sweep 43: 2026-10-05 (Connections & Compliance Accordion UX, Board Status Relabeling, Deadline Indicator Integration & Drag-to-Delete Lifecycle)
 
 - **UI-32 (Connections & Compliance Terminology & Default-Collapsed Accordion Architecture):**

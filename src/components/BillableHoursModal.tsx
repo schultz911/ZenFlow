@@ -111,26 +111,24 @@ export const BillableHoursModal: React.FC<BillableHoursModalProps> = ({
   return (
     <AnimatePresence>
       {isOpen && task && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-          {/* Backdrop */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={e => {
-              if (e.target === e.currentTarget && !isSubmitting) onClose();
-            }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-xs"
-          />
-
-        {/* Modal Dialog */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          transition={{ duration: 0.18, ease: 'easeOut' }}
-          className="relative w-full max-w-lg rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#121212] p-6 shadow-2xl z-10 space-y-5 text-neutral-900 dark:text-white"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs overflow-y-auto"
+          onClick={e => {
+            if (e.target === e.currentTarget && !isSubmitting) onClose();
+          }}
         >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
+            onClick={e => e.stopPropagation()}
+            className="w-full max-w-lg rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#121212] p-6 shadow-2xl space-y-5 text-neutral-900 dark:text-white"
+          >
           {/* Close button */}
           <button
             type="button"
@@ -303,7 +301,7 @@ export const BillableHoursModal: React.FC<BillableHoursModalProps> = ({
             </div>
           </form>
         </motion.div>
-      </div>
+      </motion.div>
       )}
     </AnimatePresence>
   );
