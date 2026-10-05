@@ -277,6 +277,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
             <button
               id="export-workspace-btn"
               onClick={() => setShowExportMenu(prev => !prev)}
+              title="Export workspace reports (Excel, CSV, and Compliance Audit)"
               className="flex items-center gap-1.5 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414] hover:bg-neutral-50 dark:hover:bg-white/5 px-3 py-2 text-xs font-medium text-neutral-700 dark:text-white/70 transition-colors shadow-xs cursor-pointer"
             >
               <Download className="h-3.5 w-3.5" />

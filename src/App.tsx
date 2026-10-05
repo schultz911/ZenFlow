@@ -14,8 +14,9 @@ import { MarqueeRibbon } from './components/MarqueeRibbon';
 import { UnassignedListRibbon } from './components/UnassignedListRibbon';
 import { EditUserModal } from './components/EditUserModal';
 import { DuplicateTaskModal } from './components/DuplicateTaskModal';
+import { DeleteTaskModal } from './components/DeleteTaskModal';
 import { User, Task, TaskStatus } from './types';
-import { UserPlus, FileText, Palette, Loader2 } from 'lucide-react';
+import { UserPlus, FileText, Palette, Loader2, Trash2 } from 'lucide-react';
 import { testConnection } from './lib/firebase';
 
 const EMPTY_TASKS: Task[] = [];
@@ -59,6 +60,8 @@ function DashboardContent() {
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [taskToDuplicate, setTaskToDuplicate] = useState<Task | null>(null);
+  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+  const [isHoveringDeleteZone, setIsHoveringDeleteZone] = useState(false);
 
   // Stable refs for currentUser and users — allow keyboard effect and task modal handler to have empty dep arrays
   const currentUserRef = useRef(currentUser);
@@ -292,7 +295,22 @@ function DashboardContent() {
 
   const handleDragTaskEnd = useCallback(() => {
     setActiveDragInfo(null);
+    setIsHoveringDeleteZone(false);
   }, [setActiveDragInfo]);
+
+  const handleRequestDeleteTask = useCallback((taskIdOrTask: string | Task) => {
+    if (typeof taskIdOrTask === 'string') {
+      const found = tasks.find(t => t.id === taskIdOrTask);
+      if (found) setTaskToDelete(found);
+    } else {
+      setTaskToDelete(taskIdOrTask);
+    }
+  }, [tasks]);
+
+  const handleConfirmDeleteTask = useCallback(async (taskId: string) => {
+    await deleteTask(taskId);
+    setTaskToDelete(null);
+  }, [deleteTask]);
 
   const handleQuickAddTask = useCallback(
     async (
@@ -433,8 +451,23 @@ function DashboardContent() {
         </div>
       </div>
 
-      {/* Main Container */}
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+      {/* Main Container with drop-outside-board deletion support */}
+      <main
+        onDragOver={e => {
+          if (activeDragInfo) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+          }
+        }}
+        onDrop={e => {
+          if (e.target === e.currentTarget && activeDragInfo?.task) {
+            e.preventDefault();
+            handleRequestDeleteTask(activeDragInfo.task);
+            setActiveDragInfo(null);
+          }
+        }}
+        className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8"
+      >
 
         {/* Overview Bar */}
         <OverviewBar
@@ -488,7 +521,7 @@ function DashboardContent() {
                   onRescheduleTask={handleRescheduleTask}
                   onAdjustBillableHours={handleOpenAdjustBillableHours}
                   onUpdateTaskTitle={handleUpdateTaskTitle}
-                  onDeleteTask={deleteTask}
+                  onDeleteTask={handleRequestDeleteTask}
                   onEditUser={setEditingUser}
                   onDeleteUser={handleOpenDeleteUser}
                   onMoveTask={moveTask}
@@ -558,6 +591,42 @@ function DashboardContent() {
         task={taskToDuplicate}
         onClose={handleCloseDuplicateTask}
       />
+
+      <DeleteTaskModal
+        isOpen={Boolean(taskToDelete)}
+        task={taskToDelete}
+        users={users}
+        onClose={() => setTaskToDelete(null)}
+        onConfirmDelete={handleConfirmDeleteTask}
+      />
+
+      {/* Floating Drag-to-Delete Zone: Shown when a card is being dragged */}
+      {activeDragInfo && (
+        <div
+          onDragOver={e => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+            setIsHoveringDeleteZone(true);
+          }}
+          onDragLeave={() => setIsHoveringDeleteZone(false)}
+          onDrop={e => {
+            e.preventDefault();
+            setIsHoveringDeleteZone(false);
+            if (activeDragInfo?.task) {
+              handleRequestDeleteTask(activeDragInfo.task);
+              setActiveDragInfo(null);
+            }
+          }}
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-6 py-3 rounded-2xl border shadow-2xl transition-all cursor-pointer select-none ${
+            isHoveringDeleteZone
+              ? 'bg-red-600 text-white border-red-500 scale-105 shadow-red-900/40 ring-4 ring-red-500/30'
+              : 'bg-red-50/95 dark:bg-[#1f1212]/95 text-red-600 dark:text-red-400 border-red-300 dark:border-red-900/50 backdrop-blur-md hover:bg-red-100 dark:hover:bg-[#281515]'
+          }`}
+        >
+          <Trash2 className={`h-4 w-4 ${isHoveringDeleteZone ? 'animate-bounce' : ''}`} />
+          <span className="text-xs font-semibold">Drop here or outside board to delete task</span>
+        </div>
+      )}
     </div>
 
     {/* Login & Auth Modal — always rendered crisp on top of the frosted board */}

@@ -167,6 +167,7 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
             setNewTitle('');
             setNewLoad('medium');
           }}
+          title={isAdding ? 'Cancel adding task' : 'Add task to pipeline'}
           className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
             isAdding
               ? 'bg-neutral-200 dark:bg-white/10 text-neutral-700 dark:text-white'

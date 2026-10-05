@@ -14,7 +14,6 @@ import {
   ArrowRight,
   Shield,
   UserCheck,
-  CornerDownRight,
   GitFork,
 } from 'lucide-react';
 
@@ -250,7 +249,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
               </div>
               <div>
                 <h3 className="text-base font-bold text-neutral-900 dark:text-white flex items-center gap-2">
-                  <span>Duplicate as Subtask to Another Board</span>
+                  <span>Create and assign subtask</span>
                   <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-500/20 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400">
                     <Shield className="h-2.5 w-2.5" />
                     CD & Superadmin
@@ -271,18 +270,6 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
 
           {/* Form */}
           <form onSubmit={handleDuplicate} className="space-y-4 pt-4">
-            {/* Architecture Explanation Card */}
-            <div className="flex items-start gap-2.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-500/20 p-3 text-xs text-blue-800 dark:text-blue-300">
-              <CornerDownRight className="h-4 w-4 shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />
-              <div className="space-y-1">
-                <p className="font-semibold text-neutral-900 dark:text-white">
-                  Independent Subtask Workflow
-                </p>
-                <p className="text-[11px] text-neutral-600 dark:text-neutral-300 leading-relaxed">
-                  The original task remains owned by <strong>{sourceUser?.name || 'its current owner'}</strong>. The new card is an independent subtask owned by the recipient. Column moves, status changes, and timers on either card will <strong>never affect the other</strong>.
-                </p>
-              </div>
-            </div>
 
             {/* Source Parent Task Summary Card */}
             <div className="rounded-xl border border-neutral-200/80 dark:border-white/10 bg-neutral-50 dark:bg-[#1A1A1A] p-3.5 space-y-2.5">
@@ -627,12 +614,12 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                   {isSubmitting ? (
                     <>
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      <span>Creating Independent Subtask...</span>
+                      <span>Creating...</span>
                     </>
                   ) : (
                     <>
                       <CopyPlus className="h-3.5 w-3.5" />
-                      <span>Create Independent Subtask</span>
+                      <span>Create</span>
                     </>
                   )}
                 </button>

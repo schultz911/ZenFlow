@@ -182,7 +182,8 @@ const HeaderComponent: React.FC<HeaderProps> = ({
               id="theme-toggle"
               onClick={() => setDarkMode(prev => !prev)}
               aria-label="Toggle dark mode"
-              className="rounded-full p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white transition-colors"
+              title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              className="rounded-full p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white transition-colors cursor-pointer"
             >
               {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </button>
@@ -295,7 +296,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                       className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-neutral-700 dark:text-white/80 hover:bg-neutral-50 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
                     >
                       <Database className="h-3.5 w-3.5 text-blue-500" />
-                      <span>Connection & API Status</span>
+                      <span>Connections & Compliance</span>
                     </button>
 
                     <button

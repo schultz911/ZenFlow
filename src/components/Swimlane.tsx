@@ -91,7 +91,7 @@ const COLUMNS: ColumnConfig[] = [
   },
   {
     status: 'done',
-    title: 'Done',
+    title: 'Sent',
     icon: <CheckCircle2 className="h-3 w-3 text-green-600 dark:text-green-400" />,
     headerColor: 'text-green-600 dark:text-green-400',
     dotColor: 'bg-green-600 dark:bg-green-400',
@@ -772,14 +772,14 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               </button>
             )}
 
-            {/* 5. Archived Toggle button if archived tasks exist */}
+            {/* 5. Completed / Archived Toggle button if completed tasks exist */}
             {archivedTasks.length > 0 && (
               <button
                 onClick={() => setShowArchived(prev => !prev)}
                 className="flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-900 dark:text-white/50 dark:hover:text-white px-2.5 py-1.5 rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-[#141414] transition-colors cursor-pointer"
               >
                 <Archive className="h-3.5 w-3.5" />
-                <span>Archived ({archivedTasks.length})</span>
+                <span>Completed ({archivedTasks.length})</span>
                 {showArchived ? (
                   <ChevronDown className="h-3.5 w-3.5" />
                 ) : (
@@ -1109,7 +1109,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                         <div className="flex items-center gap-1.5 text-neutral-500 dark:text-white/40">
                           <Archive className="h-3 w-3" />
                           <h4 className="text-[11px] uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40">
-                            Archived
+                            Completed
                           </h4>
                           <span className="rounded-full bg-neutral-200 dark:bg-white/5 px-1.5 py-0.2 text-[10px] text-neutral-600 dark:text-white/40 border border-neutral-300 dark:border-white/5">
                             {archivedTasks.length}
@@ -1117,7 +1117,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                         </div>
                       </div>
 
-                      {/* Archived Tasks List (aligned with 3-task max height) */}
+                      {/* Completed / Archived Tasks List (aligned with 3-task max height) */}
                       <div className="flex-1 space-y-2.5 max-h-[385px] overflow-y-auto pt-1.5 pb-1.5 px-1 pr-1.5">
                         <AnimatePresence mode="popLayout">
                           {archivedTasks.length === 0 ? (
@@ -1128,7 +1128,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                               exit={{ opacity: 0 }}
                               className="flex h-28 flex-col items-center justify-center rounded-lg border border-dashed border-neutral-300 dark:border-white/10 p-3 text-center text-[11px] text-neutral-400 dark:text-white/30"
                             >
-                              <p>No archived tasks</p>
+                              <p>No completed tasks</p>
                             </motion.div>
                           ) : (
                             archivedTasks.map(task => (

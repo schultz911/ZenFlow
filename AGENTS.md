@@ -6,6 +6,25 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
+### Sweep 43: 2026-10-05 (Connections & Compliance Accordion UX, Board Status Relabeling, Deadline Indicator Integration & Drag-to-Delete Lifecycle)
+
+- **UI-32 (Connections & Compliance Terminology & Default-Collapsed Accordion Architecture):**
+  1. *Terminology Parity:* Updated modal title in `<FirestoreModal>` (`#workspace-connections-modal`) and user dropdown menu item in `<Header>` to "Connections & Compliance".
+  2. *Default-Collapsed Card Accordion:* Refactored `<FirestoreModal>` to collapse all four configuration bodies by default (`firestore`, `clickup`, `webhook`, `audit`). Each section now renders as an interactive card displaying its service icon, title, concise metadata summary, live status badge, and chevron toggle. Clicking any row expands its comprehensive configuration, forms, NDJSON stream downloads, and audit logs.
+- **UI-33 (Board Status Terminology Parity):**
+  - Relabeled board column "Done" to "Sent" across `<Swimlane>` column definitions and `<TaskCard>` quick status stepper progression.
+  - Relabeled board column "Archived" to "Completed" across toggle chips, column headers, and empty-state placeholders while preserving underlying `'archived'` data schema compatibility.
+- **UI-34 (Inline Circle Deadline Indicator Integration):**
+  - Moved the circle deadline badge (with its color-coded status styling, overdue indicators, and clock icon) directly into the bottom-left date chip of `<TaskCard>` replacing the generic calendar icon.
+  - Removed the redundant top-row standalone clock button, decluttering the top metadata strip while keeping deadline status directly bound to the scheduled date string.
+- **UI-35 (Task Deletion Confirmation Modal & Drag-to-Delete Outside Board):**
+  - Built `<DeleteTaskModal>` (`src/components/DeleteTaskModal.tsx`) prompting for confirmation with task details, owner, status, subtask hierarchy, and ClickUp linkage warnings before execution.
+  - Added an animated floating delete drop zone ("Drop here or outside board to delete task") appearing whenever a card is dragged.
+  - Configured drop-outside-board handling on the board viewport background to capture card releases outside swimlanes and trigger the delete confirmation modal.
+- **UI-36 (Subtask Delegation Modal & Footer Button Refinements):**
+  - `<TaskModal>`: Updated footer button to "Create subtask".
+  - `<DuplicateTaskModal>`: Updated header title to "Create and assign subtask", updated submit button to "Create", and pruned the explanatory callout card for a cleaner interface.
+
 ### Sweep 42: 2026-10-05 (Cross-Board Independent Subtask Delegation & ClickUp Subtask Nesting Lifecycle)
 
 - **AUTH-06 (Creative Director & Superadmin Cross-Board Delegation Governance):** Gated cross-board task duplication and subtask delegation strictly to Creative Directors (`isCreativeDirector === true`) and Superadmins (`isSuperadmin === true` / `kiran.s@zensciences.com`), returning HTTP 403 Forbidden for non-privileged callers. Regular team members cannot delegate tasks across boards, preventing unauthorized board cross-assignment.

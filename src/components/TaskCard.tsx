@@ -7,7 +7,6 @@ import { getDuePillInfo, formatDateOnly, formatCompletedDate, getCognitiveLoadLa
 import {
   GripVertical,
   Clock,
-  Calendar,
   CheckCircle2,
   Edit2,
   Trash2,
@@ -282,21 +281,6 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             </div>
           )}
 
-          {/* Due Clock Icon Badge (color-coded, compact micro size) - hidden in done/archived columns */}
-          {!isDoneOrArchived && (
-            <button
-              type="button"
-              onClick={e => {
-                e.stopPropagation();
-                setShowSnoozeFlyout(prev => !prev);
-              }}
-              title={`${pillInfo.label} — Click to quick-reschedule`}
-              className={`inline-flex items-center justify-center rounded-full p-1 border cursor-pointer transition-transform hover:scale-110 ${pillInfo.badgeClass}`}
-            >
-              <Clock className={`h-2.5 w-2.5 ${pillInfo.iconClass} shrink-0`} />
-            </button>
-          )}
-
           {/* Cognitive Load Dot Badge (compact micro size) */}
           <span
             title={`Cognitive Load: ${cognitiveLabel}`}
@@ -502,10 +486,15 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   return next;
                 });
               }}
-              title="Click to adjust deadline"
+              title={`${pillInfo.label} — Click to adjust deadline`}
               className="inline-flex items-center gap-1.5 text-[10px] font-medium text-neutral-500 dark:text-white/40 hover:text-neutral-800 dark:hover:text-white/90 transition-colors cursor-pointer py-0.5"
             >
-              <Calendar className="h-3 w-3 text-neutral-400 dark:text-white/30 shrink-0" />
+              <span
+                className={`inline-flex items-center justify-center rounded-full p-0.5 border shrink-0 ${pillInfo.badgeClass}`}
+                title={pillInfo.label}
+              >
+                <Clock className={`h-2.5 w-2.5 ${pillInfo.iconClass} shrink-0`} />
+              </span>
               <span>{formatDateOnly(task.dueDate)}</span>
             </button>
           )}
@@ -623,10 +612,10 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 e.stopPropagation();
                 onMoveStatus(task.id, nextStatus);
               }}
-              title={`Advance to ${nextStatus.replace('_', ' ')}`}
+              title={`Advance to ${nextStatus === 'done' ? 'Sent' : nextStatus.replace('_', ' ')}`}
               className="inline-flex items-center gap-1 rounded-md bg-neutral-100 dark:bg-white/5 hover:bg-neutral-200 dark:hover:bg-white/10 border border-neutral-200 dark:border-white/10 px-1.5 py-0.5 text-[10px] font-medium text-neutral-700 dark:text-white/70 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
             >
-              <span className="capitalize">{nextStatus.replace('_', ' ')}</span>
+              <span className="capitalize">{nextStatus === 'done' ? 'Sent' : nextStatus.replace('_', ' ')}</span>
               <ChevronRight className="h-2.5 w-2.5" />
             </button>
           ) : task.status === 'done' ? (
@@ -635,11 +624,11 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 e.stopPropagation();
                 onMoveStatus(task.id, 'archived');
               }}
-              title="Archive now"
+              title="Mark Completed"
               className="inline-flex items-center gap-1 rounded-md bg-neutral-100 dark:bg-white/5 hover:bg-neutral-200 dark:hover:bg-white/10 border border-neutral-200 dark:border-white/10 px-1.5 py-0.5 text-[10px] text-neutral-500 dark:text-white/40 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
             >
               <Archive className="h-2.5 w-2.5" />
-              <span>Archive</span>
+              <span>Complete</span>
             </button>
           ) : null}
         </div>
