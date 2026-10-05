@@ -249,7 +249,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
               </div>
               <div>
                 <h3 className="text-base font-bold text-neutral-900 dark:text-white flex items-center gap-2">
-                  <span>Create and assign subtask</span>
+                  <span>Create and Assign Subtask</span>
                   <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-500/20 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400">
                     <Shield className="h-2.5 w-2.5" />
                     CD & Superadmin
@@ -283,22 +283,20 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                   </h4>
                 </div>
                 <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium border ${
-                    task.cognitiveLoad === 'high'
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium border ${task.cognitiveLoad === 'high'
                       ? 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20'
                       : task.cognitiveLoad === 'medium'
-                      ? 'bg-yellow-50 dark:bg-yellow-950/30 text-yellow-600 dark:text-yellow-400 border-yellow-200 dark:border-yellow-500/20'
-                      : 'bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400 border-green-200 dark:border-green-500/20'
-                  }`}
+                        ? 'bg-yellow-50 dark:bg-yellow-950/30 text-yellow-600 dark:text-yellow-400 border-yellow-200 dark:border-yellow-500/20'
+                        : 'bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400 border-green-200 dark:border-green-500/20'
+                    }`}
                 >
                   <span
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      task.cognitiveLoad === 'high'
+                    className={`h-1.5 w-1.5 rounded-full ${task.cognitiveLoad === 'high'
                         ? 'bg-red-500'
                         : task.cognitiveLoad === 'medium'
-                        ? 'bg-yellow-500'
-                        : 'bg-green-500'
-                    }`}
+                          ? 'bg-yellow-500'
+                          : 'bg-green-500'
+                      }`}
                   />
                   <span className="capitalize">{task.cognitiveLoad} load</span>
                 </span>
@@ -398,9 +396,8 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                       <div className="flex items-center justify-between rounded-lg bg-neutral-100 dark:bg-white/5 px-2.5 py-1.5 text-[11px] border border-neutral-200/60 dark:border-white/5">
                         <div className="flex items-center gap-2">
                           <div
-                            className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold text-white bg-gradient-to-br ${
-                              selectedTargetUser.avatarColor || 'from-blue-600 to-indigo-600'
-                            }`}
+                            className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold text-white bg-gradient-to-br ${selectedTargetUser.avatarColor || 'from-blue-600 to-indigo-600'
+                              }`}
                           >
                             {selectedTargetUser.name.charAt(0).toUpperCase()}
                           </div>
@@ -549,11 +546,10 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
             {/* Feedback Message */}
             {feedback && (
               <div
-                className={`rounded-xl p-3 text-xs border ${
-                  feedback.type === 'success'
+                className={`rounded-xl p-3 text-xs border ${feedback.type === 'success'
                     ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-500/20 text-emerald-700 dark:text-emerald-300'
                     : 'bg-red-50 dark:bg-red-950/20 border-red-500/20 text-red-700 dark:text-red-300'
-                }`}
+                  }`}
               >
                 <div className="flex items-start gap-2">
                   {feedback.type === 'success' ? (

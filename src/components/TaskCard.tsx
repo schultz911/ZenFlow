@@ -259,15 +259,13 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       draggable={effectivelyDraggable && !isEditingTitle}
       onDragStartCapture={handleDragStart}
       onDragEndCapture={handleDragEnd}
-      className={`group relative rounded-xl border p-3 select-none transform-gpu transition-all duration-150 shadow-xs hover:shadow-md ${
-        showSnoozeFlyout ? 'z-40' : 'z-0'
-      } ${
-        isDragging
+      className={`group relative rounded-xl border p-3 select-none transform-gpu transition-all duration-150 shadow-xs hover:shadow-md ${showSnoozeFlyout ? 'z-40' : 'z-0'
+        } ${isDragging
           ? 'border-blue-500/60 bg-blue-50/50 dark:bg-blue-950/20 shadow-lg ring-2 ring-blue-500/20'
           : task.status === 'done'
-          ? 'bg-neutral-50/80 dark:bg-[#141414] opacity-80 border-neutral-200 dark:border-white/5 hover:border-neutral-300 dark:hover:border-white/10'
-          : 'bg-white dark:bg-[#1A1A1A] border-neutral-200 dark:border-white/5 hover:border-neutral-300 dark:hover:border-white/15 hover:bg-neutral-50/50 dark:hover:bg-[#202020]'
-      }`}
+            ? 'bg-neutral-50/80 dark:bg-[#141414] opacity-80 border-neutral-200 dark:border-white/5 hover:border-neutral-300 dark:hover:border-white/10'
+            : 'bg-white dark:bg-[#1A1A1A] border-neutral-200 dark:border-white/5 hover:border-neutral-300 dark:hover:border-white/15 hover:bg-neutral-50/50 dark:hover:bg-[#202020]'
+        }`}
     >
       {/* Top row: Drag grip, Due Clock icon badge & Cognitive load badge on same line, and Quick actions */}
       <div className="flex items-center justify-between gap-1.5 mb-2">
@@ -287,13 +285,12 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             className="inline-flex items-center gap-1 rounded-full bg-neutral-100 dark:bg-white/5 px-1.5 py-0.5 text-[9px] font-medium text-neutral-600 dark:text-white/60 border border-neutral-200 dark:border-white/5"
           >
             <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                task.cognitiveLoad === 'high'
-                  ? 'bg-red-500'
-                  : task.cognitiveLoad === 'medium'
+              className={`h-1.5 w-1.5 rounded-full ${task.cognitiveLoad === 'high'
+                ? 'bg-red-500'
+                : task.cognitiveLoad === 'medium'
                   ? 'bg-yellow-500'
                   : 'bg-green-500'
-              }`}
+                }`}
             />
             <span className="capitalize">{task.cognitiveLoad}</span>
           </span>
@@ -309,7 +306,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   e.stopPropagation();
                   onDuplicateToBoard(task);
                 }}
-                title="Duplicate as subtask to another board (Creative Director / Superadmin)"
+                title="Create and assign subtask"
                 className="rounded p-1 text-neutral-400 dark:text-white/40 hover:bg-blue-50 dark:hover:bg-blue-500/20 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
               >
                 <CopyPlus className="h-3 w-3" />
@@ -320,7 +317,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 e.stopPropagation();
                 onEdit(task);
               }}
-              title="Open Details Modal"
+              title="Edit task details"
               className="rounded p-1 text-neutral-400 dark:text-white/40 hover:bg-neutral-100 dark:hover:bg-white/10 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
             >
               <Edit2 className="h-3 w-3" />
@@ -330,7 +327,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 e.stopPropagation();
                 onDelete(task.id);
               }}
-              title="Delete Task"
+              title="Delete task"
               className="rounded p-1 text-neutral-400 dark:text-white/40 hover:bg-red-50 dark:hover:bg-red-500/20 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer"
             >
               <Trash2 className="h-3 w-3" />
@@ -346,11 +343,10 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 onAdjustBillableHours?.(task);
               }}
               title={`Billable Duration: ${formatBillableDetailed(billableMs)} · Click to correct hours`}
-              className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium border select-none transition-all cursor-pointer shrink-0 group/timer ${
-                task.status === 'in_progress'
-                  ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30 shadow-2xs hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:border-blue-400'
-                  : 'bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border-neutral-200/60 dark:border-white/5 hover:bg-neutral-200/80 dark:hover:bg-white/10 hover:text-neutral-800 dark:hover:text-white hover:border-neutral-300 dark:hover:border-white/20'
-              }`}
+              className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium border select-none transition-all cursor-pointer shrink-0 group/timer ${task.status === 'in_progress'
+                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30 shadow-2xs hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:border-blue-400'
+                : 'bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border-neutral-200/60 dark:border-white/5 hover:bg-neutral-200/80 dark:hover:bg-white/10 hover:text-neutral-800 dark:hover:text-white hover:border-neutral-300 dark:hover:border-white/20'
+                }`}
             >
               <Timer className={`h-2.5 w-2.5 ${task.status === 'in_progress' ? 'text-blue-500 animate-pulse' : 'text-neutral-400 dark:text-white/30 group-hover/timer:text-blue-500'}`} />
               <span>{formatBillableHours(billableMs)}</span>
@@ -415,11 +411,10 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             setIsEditingTitle(true);
           }}
           title="Click to edit task title directly"
-          className={`text-xs font-medium leading-snug cursor-text rounded px-1 -mx-1 py-0.5 hover:bg-neutral-100/80 dark:hover:bg-white/5 transition-colors group/title flex items-center justify-between gap-1.5 ${
-            task.status === 'done'
-              ? 'line-through text-neutral-400 dark:text-white/30'
-              : 'text-neutral-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400'
-          }`}
+          className={`text-xs font-medium leading-snug cursor-text rounded px-1 -mx-1 py-0.5 hover:bg-neutral-100/80 dark:hover:bg-white/5 transition-colors group/title flex items-center justify-between gap-1.5 ${task.status === 'done'
+            ? 'line-through text-neutral-400 dark:text-white/30'
+            : 'text-neutral-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400'
+            }`}
         >
           <span className="break-words">{task.title}</span>
           <Edit2 className="h-2.5 w-2.5 opacity-0 group-hover/title:opacity-60 shrink-0 text-neutral-400 dark:text-white/40" />
@@ -462,10 +457,10 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               title={
                 task.completedAt
                   ? `Completed on ${new Date(task.completedAt).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      year: 'numeric',
-                    })}`
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })}`
                   : 'Completed'
               }
               className="inline-flex items-center gap-1.5 text-[10px] font-medium text-neutral-500 dark:text-white/40 py-0.5 select-none"

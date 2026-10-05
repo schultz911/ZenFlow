@@ -356,7 +356,7 @@ function DashboardContent() {
       nextList[idx] = temp;
       try {
         localStorage.setItem('zenflow_user_order_v1', JSON.stringify(nextList));
-      } catch {}
+      } catch { }
       return nextList;
     });
   }, []);
@@ -376,7 +376,7 @@ function DashboardContent() {
       nextList[idx] = temp;
       try {
         localStorage.setItem('zenflow_user_order_v1', JSON.stringify(nextList));
-      } catch {}
+      } catch { }
       return nextList;
     });
   }, []);
@@ -430,211 +430,210 @@ function DashboardContent() {
       <div className={`min-h-screen bg-neutral-50 dark:bg-[#0A0A0A] text-neutral-900 dark:text-[#E5E5E5] font-sans antialiased selection:bg-blue-500/30 selection:text-white transition-colors relative ${!currentUser ? 'overflow-hidden pointer-events-none select-none filter blur-[2px]' : ''}`}>
         {/* Sticky Header */}
         <Header
-        onOpenLoginModal={handleOpenLogin}
-        onOpenNewUserModal={handleOpenNewUser}
-        onOpenFirestoreModal={handleOpenFirestore}
-      />
-
-      {/* Pinned Ribbons — sticky just below the header */}
-      <div className="sticky top-16 sm:top-20 z-20 w-full">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-2 space-y-1.5">
-          <MarqueeRibbon
-            tasks={tasks}
-            users={users}
-            onTaskClick={handleEditTask}
-          />
-          <UnassignedListRibbon
-            tasks={tasks}
-            users={users}
-            onTaskClick={handleEditTask}
-          />
-        </div>
-      </div>
-
-      {/* Main Container with drop-outside-board deletion support */}
-      <main
-        onDragOver={e => {
-          if (activeDragInfo) {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-          }
-        }}
-        onDrop={e => {
-          if (e.target === e.currentTarget && activeDragInfo?.task) {
-            e.preventDefault();
-            handleRequestDeleteTask(activeDragInfo.task);
-            setActiveDragInfo(null);
-          }
-        }}
-        className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8"
-      >
-
-        {/* Overview Bar */}
-        <OverviewBar
-          searchQuery={searchQuery}
-          onSearchChange={setSearchQuery}
+          onOpenLoginModal={handleOpenLogin}
+          onOpenNewUserModal={handleOpenNewUser}
+          onOpenFirestoreModal={handleOpenFirestore}
         />
 
-        {/* User Swimlanes List */}
-        {roleFilteredUsers.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#0D0D0D] p-12 text-center shadow-sm dark:shadow-2xl">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-[#141414] border border-neutral-200 dark:border-white/5 text-neutral-500 dark:text-white/50 mb-3">
-              {activeRoleTab === 'content' ? (
-                <FileText className="h-6 w-6 text-blue-500" />
-              ) : (
-                <Palette className="h-6 w-6 text-indigo-500" />
-              )}
-            </div>
-            <h3 className="text-sm font-semibold text-neutral-900 dark:text-white capitalize">
-              No members in {activeRoleTab} yet
-            </h3>
-            <p className="mt-1 text-xs text-neutral-500 dark:text-white/40 max-w-sm">
-              Add a new member with the {activeRoleTab} role to generate their dedicated swimlane.
-            </p>
-            <button
-              onClick={handleOpenNewUser}
-              className="mt-4 flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 transition-colors shadow-md shadow-blue-900/20"
-            >
-              <UserPlus className="h-3.5 w-3.5" />
-              <span className="capitalize">Add {activeRoleTab} Member</span>
-            </button>
+        {/* Pinned Ribbons — sticky just below the header */}
+        <div className="sticky top-16 sm:top-20 z-20 w-full">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-2 space-y-1.5">
+            <MarqueeRibbon
+              tasks={tasks}
+              users={users}
+              onTaskClick={handleEditTask}
+            />
+            <UnassignedListRibbon
+              tasks={tasks}
+              users={users}
+              onTaskClick={handleEditTask}
+            />
           </div>
-        ) : (
-          <div className="space-y-6">
-            {roleFilteredUsers.map((user, index) => {
-              const isCurrent = currentUser?.id === user.id;
-              const hasPinnedTop = roleFilteredUsers[0]?.id === currentUser?.id;
-              const canMoveUp = !isCurrent && (hasPinnedTop ? index > 1 : index > 0);
-              const canMoveDown = !isCurrent && index < roleFilteredUsers.length - 1;
+        </div>
 
-              return (
-                <Swimlane
-                  key={user.id}
-                  user={user}
-                  tasks={tasksByUserId.get(user.id) || EMPTY_TASKS}
-                  activeDragInfo={activeDragInfo}
-                  onDragTaskStart={handleDragTaskStart}
-                  onDragTaskEnd={handleDragTaskEnd}
-                  onAddTask={handleOpenAddTask}
-                  onQuickAddTask={handleQuickAddTask}
-                  onEditTask={handleEditTask}
-                  onRescheduleTask={handleRescheduleTask}
-                  onAdjustBillableHours={handleOpenAdjustBillableHours}
-                  onUpdateTaskTitle={handleUpdateTaskTitle}
-                  onDeleteTask={handleRequestDeleteTask}
-                  onEditUser={setEditingUser}
-                  onDeleteUser={handleOpenDeleteUser}
-                  onMoveTask={moveTask}
-                  onDuplicateTask={handleOpenDuplicateTask}
-                  onOpenWorkloadModal={handleOpenWorkloadModal}
-                  isCurrentUser={isCurrent}
-                  onMoveUserUp={handleMoveUserUp}
-                  onMoveUserDown={handleMoveUserDown}
-                  canMoveUp={canMoveUp}
-                  canMoveDown={canMoveDown}
-                />
-              );
-            })}
-          </div>
-        )}
-      </main>
-
-      {/* Workspace Modals */}
-      <TaskModal
-        isOpen={taskModalOpen}
-        onClose={() => setTaskModalOpen(false)}
-        taskToEdit={currentTaskToEdit}
-        defaultUserId={defaultTaskUserId}
-        defaultStatus={defaultTaskStatus}
-        onAdjustBillableHours={handleOpenAdjustBillableHours}
-        onDuplicateTask={handleOpenDuplicateTask}
-      />
-
-      <BillableHoursModal
-        isOpen={Boolean(adjustBillableTask)}
-        task={currentAdjustBillableTask}
-        onClose={() => setAdjustBillableTask(null)}
-        onSave={handleSaveBillableHours}
-      />
-
-      <WorkloadModal
-        isOpen={Boolean(workloadModalUser)}
-        user={workloadModalUser}
-        tasks={tasks}
-        onClose={() => setWorkloadModalUser(null)}
-      />
-
-      <DeleteUserModal
-        isOpen={Boolean(userToDelete)}
-        user={userToDelete}
-        tasks={tasks}
-        onClose={() => setUserToDelete(null)}
-        onConfirmDelete={deleteUser}
-      />
-
-      <FirestoreModal
-        isOpen={firestoreModalOpen || showClickupPrompt}
-        onClose={() => {
-          setFirestoreModalOpen(false);
-          setShowClickupPrompt(false);
-        }}
-      />
-
-      <EditUserModal
-        isOpen={Boolean(editingUser)}
-        user={editingUser}
-        onClose={() => setEditingUser(null)}
-      />
-
-      <DuplicateTaskModal
-        isOpen={Boolean(taskToDuplicate)}
-        task={taskToDuplicate}
-        onClose={handleCloseDuplicateTask}
-      />
-
-      <DeleteTaskModal
-        isOpen={Boolean(taskToDelete)}
-        task={taskToDelete}
-        users={users}
-        onClose={() => setTaskToDelete(null)}
-        onConfirmDelete={handleConfirmDeleteTask}
-      />
-
-      {/* Floating Drag-to-Delete Zone: Shown when a card is being dragged */}
-      {activeDragInfo && (
-        <div
+        {/* Main Container with drop-outside-board deletion support */}
+        <main
           onDragOver={e => {
-            e.preventDefault();
-            e.dataTransfer.dropEffect = 'move';
-            setIsHoveringDeleteZone(true);
+            if (activeDragInfo) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+            }
           }}
-          onDragLeave={() => setIsHoveringDeleteZone(false)}
           onDrop={e => {
-            e.preventDefault();
-            setIsHoveringDeleteZone(false);
-            if (activeDragInfo?.task) {
+            if (e.target === e.currentTarget && activeDragInfo?.task) {
+              e.preventDefault();
               handleRequestDeleteTask(activeDragInfo.task);
               setActiveDragInfo(null);
             }
           }}
-          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-6 py-3 rounded-2xl border shadow-2xl transition-all cursor-pointer select-none ${
-            isHoveringDeleteZone
-              ? 'bg-red-600 text-white border-red-500 scale-105 shadow-red-900/40 ring-4 ring-red-500/30'
-              : 'bg-red-50/95 dark:bg-[#1f1212]/95 text-red-600 dark:text-red-400 border-red-300 dark:border-red-900/50 backdrop-blur-md hover:bg-red-100 dark:hover:bg-[#281515]'
-          }`}
+          className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8"
         >
-          <Trash2 className={`h-4 w-4 ${isHoveringDeleteZone ? 'animate-bounce' : ''}`} />
-          <span className="text-xs font-semibold">Drop here or outside board to delete task</span>
-        </div>
-      )}
-    </div>
 
-    {/* Login & Auth Modal — always rendered crisp on top of the frosted board */}
-    <LoginModal
-      isOpen={isLoginOpen}
-      onClose={() => setLoginModalOpen(false)}
-      isNewAccountOnly={currentUser ? isNewAccountModal : false}
-    />
+          {/* Overview Bar */}
+          <OverviewBar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+          />
+
+          {/* User Swimlanes List */}
+          {roleFilteredUsers.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#0D0D0D] p-12 text-center shadow-sm dark:shadow-2xl">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-[#141414] border border-neutral-200 dark:border-white/5 text-neutral-500 dark:text-white/50 mb-3">
+                {activeRoleTab === 'content' ? (
+                  <FileText className="h-6 w-6 text-blue-500" />
+                ) : (
+                  <Palette className="h-6 w-6 text-indigo-500" />
+                )}
+              </div>
+              <h3 className="text-sm font-semibold text-neutral-900 dark:text-white capitalize">
+                No members in {activeRoleTab} yet
+              </h3>
+              <p className="mt-1 text-xs text-neutral-500 dark:text-white/40 max-w-sm">
+                Add a new member with the {activeRoleTab} role to generate their dedicated swimlane.
+              </p>
+              <button
+                onClick={handleOpenNewUser}
+                className="mt-4 flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 transition-colors shadow-md shadow-blue-900/20"
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                <span className="capitalize">Add {activeRoleTab} Member</span>
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {roleFilteredUsers.map((user, index) => {
+                const isCurrent = currentUser?.id === user.id;
+                const hasPinnedTop = roleFilteredUsers[0]?.id === currentUser?.id;
+                const canMoveUp = !isCurrent && (hasPinnedTop ? index > 1 : index > 0);
+                const canMoveDown = !isCurrent && index < roleFilteredUsers.length - 1;
+
+                return (
+                  <Swimlane
+                    key={user.id}
+                    user={user}
+                    tasks={tasksByUserId.get(user.id) || EMPTY_TASKS}
+                    activeDragInfo={activeDragInfo}
+                    onDragTaskStart={handleDragTaskStart}
+                    onDragTaskEnd={handleDragTaskEnd}
+                    onAddTask={handleOpenAddTask}
+                    onQuickAddTask={handleQuickAddTask}
+                    onEditTask={handleEditTask}
+                    onRescheduleTask={handleRescheduleTask}
+                    onAdjustBillableHours={handleOpenAdjustBillableHours}
+                    onUpdateTaskTitle={handleUpdateTaskTitle}
+                    onDeleteTask={handleRequestDeleteTask}
+                    onEditUser={setEditingUser}
+                    onDeleteUser={handleOpenDeleteUser}
+                    onMoveTask={moveTask}
+                    onDuplicateTask={handleOpenDuplicateTask}
+                    onOpenWorkloadModal={handleOpenWorkloadModal}
+                    isCurrentUser={isCurrent}
+                    onMoveUserUp={handleMoveUserUp}
+                    onMoveUserDown={handleMoveUserDown}
+                    canMoveUp={canMoveUp}
+                    canMoveDown={canMoveDown}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </main>
+
+        {/* Workspace Modals */}
+        <TaskModal
+          isOpen={taskModalOpen}
+          onClose={() => setTaskModalOpen(false)}
+          taskToEdit={currentTaskToEdit}
+          defaultUserId={defaultTaskUserId}
+          defaultStatus={defaultTaskStatus}
+          onAdjustBillableHours={handleOpenAdjustBillableHours}
+          onDuplicateTask={handleOpenDuplicateTask}
+        />
+
+        <BillableHoursModal
+          isOpen={Boolean(adjustBillableTask)}
+          task={currentAdjustBillableTask}
+          onClose={() => setAdjustBillableTask(null)}
+          onSave={handleSaveBillableHours}
+        />
+
+        <WorkloadModal
+          isOpen={Boolean(workloadModalUser)}
+          user={workloadModalUser}
+          tasks={tasks}
+          onClose={() => setWorkloadModalUser(null)}
+        />
+
+        <DeleteUserModal
+          isOpen={Boolean(userToDelete)}
+          user={userToDelete}
+          tasks={tasks}
+          onClose={() => setUserToDelete(null)}
+          onConfirmDelete={deleteUser}
+        />
+
+        <FirestoreModal
+          isOpen={firestoreModalOpen || showClickupPrompt}
+          onClose={() => {
+            setFirestoreModalOpen(false);
+            setShowClickupPrompt(false);
+          }}
+        />
+
+        <EditUserModal
+          isOpen={Boolean(editingUser)}
+          user={editingUser}
+          onClose={() => setEditingUser(null)}
+        />
+
+        <DuplicateTaskModal
+          isOpen={Boolean(taskToDuplicate)}
+          task={taskToDuplicate}
+          onClose={handleCloseDuplicateTask}
+        />
+
+        <DeleteTaskModal
+          isOpen={Boolean(taskToDelete)}
+          task={taskToDelete}
+          users={users}
+          onClose={() => setTaskToDelete(null)}
+          onConfirmDelete={handleConfirmDeleteTask}
+        />
+
+        {/* Floating Drag-to-Delete Zone: Shown when a card is being dragged */}
+        {activeDragInfo && (
+          <div
+            onDragOver={e => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+              setIsHoveringDeleteZone(true);
+            }}
+            onDragLeave={() => setIsHoveringDeleteZone(false)}
+            onDrop={e => {
+              e.preventDefault();
+              setIsHoveringDeleteZone(false);
+              if (activeDragInfo?.task) {
+                handleRequestDeleteTask(activeDragInfo.task);
+                setActiveDragInfo(null);
+              }
+            }}
+            className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-6 py-3 rounded-2xl border shadow-2xl transition-all cursor-pointer select-none ${isHoveringDeleteZone
+                ? 'bg-red-600 text-white border-red-500 scale-105 shadow-red-900/40 ring-4 ring-red-500/30'
+                : 'bg-red-50/95 dark:bg-[#1f1212]/95 text-red-600 dark:text-red-400 border-red-300 dark:border-red-900/50 backdrop-blur-md hover:bg-red-100 dark:hover:bg-[#281515]'
+              }`}
+          >
+            <Trash2 className={`h-4 w-4 ${isHoveringDeleteZone ? 'animate-bounce' : ''}`} />
+            <span className="text-xs font-semibold">Drop here to delete task</span>
+          </div>
+        )}
+      </div>
+
+      {/* Login & Auth Modal — always rendered crisp on top of the frosted board */}
+      <LoginModal
+        isOpen={isLoginOpen}
+        onClose={() => setLoginModalOpen(false)}
+        isNewAccountOnly={currentUser ? isNewAccountModal : false}
+      />
     </>
   );
 }
