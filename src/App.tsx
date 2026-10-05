@@ -13,6 +13,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { MarqueeRibbon } from './components/MarqueeRibbon';
 import { UnassignedListRibbon } from './components/UnassignedListRibbon';
 import { EditUserModal } from './components/EditUserModal';
+import { DuplicateTaskModal } from './components/DuplicateTaskModal';
 import { User, Task, TaskStatus } from './types';
 import { UserPlus, FileText, Palette, Loader2 } from 'lucide-react';
 import { testConnection } from './lib/firebase';
@@ -57,6 +58,7 @@ function DashboardContent() {
   const [firestoreModalOpen, setFirestoreModalOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [taskToDuplicate, setTaskToDuplicate] = useState<Task | null>(null);
 
   // Stable refs for currentUser and users — allow keyboard effect and task modal handler to have empty dep arrays
   const currentUserRef = useRef(currentUser);
@@ -264,6 +266,14 @@ function DashboardContent() {
 
   const handleOpenDeleteUser = useCallback((u: User) => {
     setUserToDelete(u);
+  }, []);
+
+  const handleOpenDuplicateTask = useCallback((task: Task) => {
+    setTaskToDuplicate(task);
+  }, []);
+
+  const handleCloseDuplicateTask = useCallback(() => {
+    setTaskToDuplicate(null);
   }, []);
 
   const handleDragTaskStart = useCallback(
@@ -482,6 +492,7 @@ function DashboardContent() {
                   onEditUser={setEditingUser}
                   onDeleteUser={handleOpenDeleteUser}
                   onMoveTask={moveTask}
+                  onDuplicateTask={handleOpenDuplicateTask}
                   onOpenWorkloadModal={handleOpenWorkloadModal}
                   isCurrentUser={isCurrent}
                   onMoveUserUp={handleMoveUserUp}
@@ -503,6 +514,7 @@ function DashboardContent() {
         defaultUserId={defaultTaskUserId}
         defaultStatus={defaultTaskStatus}
         onAdjustBillableHours={handleOpenAdjustBillableHours}
+        onDuplicateTask={handleOpenDuplicateTask}
       />
 
       <BillableHoursModal
@@ -539,6 +551,12 @@ function DashboardContent() {
         isOpen={Boolean(editingUser)}
         user={editingUser}
         onClose={() => setEditingUser(null)}
+      />
+
+      <DuplicateTaskModal
+        isOpen={Boolean(taskToDuplicate)}
+        task={taskToDuplicate}
+        onClose={handleCloseDuplicateTask}
       />
     </div>
 

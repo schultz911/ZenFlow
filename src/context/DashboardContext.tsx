@@ -178,6 +178,12 @@ interface DashboardContextType {
   reassignTask: (taskId: string, targetUserId: string) => Promise<void>;
   moveTaskStatus: (taskId: string, newStatus: TaskStatus, newIndex?: number, targetUserId?: string, newDueDate?: string | null) => Promise<void>;
   reorderTasks: (updates: Array<TaskOrderUpdate>) => Promise<void>;
+  duplicateTaskToBoard: (params: {
+    taskId: string;
+    targetUserId: string;
+    targetStatus?: TaskStatus;
+    targetDueDate?: string;
+  }) => Promise<{ task: Task; clickupAssigneeAdded: boolean; warning?: string; message?: string }>;
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -1818,6 +1824,59 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     await moveTask(taskId, destUser, newStatus, newIndex, newDueDate);
   }, [moveTask]);
 
+  // Duplicate task to another board (Creative Directors and Superadmins)
+  const duplicateTaskToBoard = useCallback(async (params: {
+    taskId: string;
+    targetUserId: string;
+    targetStatus?: TaskStatus;
+    targetDueDate?: string;
+  }): Promise<{ task: Task; clickupAssigneeAdded: boolean; warning?: string; message?: string }> => {
+    const { taskId, targetUserId, targetStatus, targetDueDate } = params;
+    const sourceTask = tasksRef.current.find(t => t.id === taskId);
+    if (!sourceTask) {
+      throw new Error('Source task not found');
+    }
+
+    const callerId = currentUserRef.current?.id || '';
+    const clickKey = currentUserRef.current?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
+    const isSuper = Boolean(isSuperadmin || currentUserRef.current?.email?.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase());
+
+    const res = await fetch(`/api/tasks/${taskId}/duplicate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(callerId ? { 'x-caller-user-id': callerId } : {}),
+        ...(clickKey ? { 'x-clickup-api-key': clickKey } : {}),
+        ...(isSuper ? { 'isSuperadmin': 'true', 'x-is-superadmin': 'true' } : {}),
+      },
+      body: JSON.stringify({
+        targetUserId,
+        targetStatus,
+        targetDueDate,
+      }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      throw new Error(data.error || 'Failed to duplicate task to board');
+    }
+
+    const newTask: Task = data.task;
+    setTasks(prev => {
+      if (prev.some(t => t.id === newTask.id)) {
+        return prev.map(t => (t.id === newTask.id ? newTask : t));
+      }
+      return [...prev, newTask];
+    });
+
+    return {
+      task: newTask,
+      clickupAssigneeAdded: Boolean(data.clickupAssigneeAdded),
+      warning: data.warning,
+      message: data.message,
+    };
+  }, [isSuperadmin]);
+
   // Reorder tasks batch with offline queuing
   const reorderTasks = useCallback(async (updates: Array<TaskOrderUpdate>): Promise<void> => {
     const updateMap = new Map(updates.map(u => [u.id, u]));
@@ -1992,6 +2051,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       reassignTask,
       moveTaskStatus,
       reorderTasks,
+      duplicateTaskToBoard,
     }),
     [
       currentUser,
@@ -2059,6 +2119,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       reassignTask,
       moveTaskStatus,
       reorderTasks,
+      duplicateTaskToBoard,
     ]
   );
 

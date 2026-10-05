@@ -33,6 +33,8 @@ interface User {
   clickupUsername?: string;
 }
 
+type TaskStatus = 'pipeline' | 'todo' | 'in_progress' | 'in_review' | 'done' | 'archived';
+
 interface TaskActivity {
   id: string;
   timestamp: string;
@@ -50,7 +52,7 @@ interface Task {
   description?: string;
   dueDate?: string;
   cognitiveLoad: 'low' | 'medium' | 'high';
-  status: 'pipeline' | 'todo' | 'in_progress' | 'in_review' | 'done' | 'archived';
+  status: TaskStatus;
   order: number;
   completedAt?: string;
   inProgressStartedAt?: string;
@@ -1350,37 +1352,42 @@ async function processClickupWebhookEvent(params: {
 
   console.log(`[ClickUp Webhook] Processing event "${eventType}" for task ${taskId}`);
 
-  let existingTask = store.tasks.find(t => t.clickupTaskId === taskId);
+  const matchingTasks = store.tasks.filter(t => t.clickupTaskId === taskId);
 
   // Requirement: Do NOT pull tasks from ClickUp even if assigned to a user on the app.
   // Only tasks added on ZenFlow and present on the ZenFlow board should be updated by the live webhook.
-  if (!existingTask) {
+  if (matchingTasks.length === 0) {
     console.log(`[ClickUp Webhook] Task ${taskId} is not present on the ZenFlow board. Ignoring event "${eventType}".`);
     return;
   }
 
+  const existingTask = matchingTasks[0];
+
   // Handle task deletion event
   if (eventType === 'taskDeleted') {
     const deletedTaskTitle = existingTask.title;
-    store.tasks = store.tasks.filter(t => t.id !== existingTask!.id);
+    const deletedIds = matchingTasks.map(t => t.id);
+    store.tasks = store.tasks.filter(t => !deletedIds.includes(t.id));
     saveStore(store);
-    dbDeleteTask(existingTask.id).catch(e => console.error('Firestore delete err:', e));
-    broadcastEvent('task_deleted', { id: existingTask.id });
+    for (const mt of matchingTasks) {
+      dbDeleteTask(mt.id).catch(e => console.error('Firestore delete err:', e));
+      broadcastEvent('task_deleted', { id: mt.id, userId: mt.userId });
+    }
     appendAuditLog({
       category: 'webhook',
       action: 'clickup_task_deleted',
       actor: { ip },
       targetId: existingTask.id,
       targetType: 'task',
-      details: `Task "${deletedTaskTitle}" deleted via ClickUp webhook (${taskId})`,
-      metadata: { clickupTaskId: taskId },
+      details: `Task "${deletedTaskTitle}" deleted via ClickUp webhook (${taskId}) across ${matchingTasks.length} board(s)`,
+      metadata: { clickupTaskId: taskId, deletedTaskIds: deletedIds },
     });
     return;
   }
 
   // Retrieve full task from ClickUp API if available to ensure robust attribute sync
   let clickupTaskData: any = null;
-  const assignedUser = store.users.find(u => u.id === existingTask!.userId);
+  const assignedUser = store.users.find(u => u.id === existingTask.userId);
   const userWithKey = store.users.find(u => u.clickupApiKey);
   const token = (assignedUser?.clickupApiKey || userWithKey?.clickupApiKey)?.trim();
 
@@ -1577,6 +1584,31 @@ async function processClickupWebhookEvent(params: {
     dbSaveTask(existingTask).catch(e => console.error('Firestore save err:', e));
     broadcastEvent('task_updated', existingTask);
     console.log(`[ClickUp Webhook] Successfully synchronized task ${existingTask.id} (${existingTask.title})`);
+
+    // Synchronize status and due date across sibling tasks duplicated across boards
+    if (matchingTasks.length > 1) {
+      for (const sibling of matchingTasks.slice(1)) {
+        let siblingModified = false;
+        if (newStatusRaw && existingTask.status !== sibling.status) {
+          sibling.status = existingTask.status;
+          sibling.completedAt = existingTask.completedAt;
+          sibling.inProgressStartedAt = existingTask.inProgressStartedAt;
+          sibling.updatedAt = new Date().toISOString();
+          siblingModified = true;
+        }
+        if (newDueDateRaw !== null && existingTask.dueDate !== sibling.dueDate) {
+          sibling.dueDate = existingTask.dueDate;
+          sibling.updatedAt = new Date().toISOString();
+          siblingModified = true;
+        }
+        if (siblingModified) {
+          saveStore(store);
+          dbSaveTask(sibling).catch(e => console.error('Firestore save sibling err:', e));
+          broadcastEvent('task_updated', sibling);
+          console.log(`[ClickUp Webhook] Synchronized sibling task ${sibling.id} on user ${sibling.userId}'s board`);
+        }
+      }
+    }
   }
 }
 
@@ -2386,6 +2418,222 @@ async function startServer() {
     }
 
     res.status(201).json(newTask);
+  });
+
+  // API: Duplicate a task to another board (Creative Directors and Superadmins only)
+  // Preserves ClickUp linkage and adds the new user as a secondary assignee on ClickUp
+  app.post('/api/tasks/:id/duplicate', async (req: Request, res: Response) => {
+    const { id } = req.params;
+    const sourceTask = store.tasks.find(t => t.id === id);
+    if (!sourceTask) {
+      return res.status(404).json({ error: 'Source task not found' });
+    }
+
+    const callerId = (req.headers['x-caller-user-id'] as string) || (req.body.callerUserId as string);
+    const callerApiKey = (req.headers['x-clickup-api-key'] as string) || (req.body.clickupApiKey as string);
+    const callerEmail = ((req.headers['x-caller-email'] as string) || (req.body.callerEmail as string) || '').toLowerCase();
+
+    let caller = callerId ? store.users.find(u => u.id === callerId) : undefined;
+    if (!caller && callerEmail) {
+      caller = store.users.find(u => u.email.toLowerCase() === callerEmail);
+    }
+
+    const isCallerSuperadmin = callerEmail === SUPERADMIN_EMAIL.toLowerCase() ||
+      caller?.email?.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase() ||
+      req.headers['issuperadmin'] === 'true' ||
+      req.headers['x-is-superadmin'] === 'true';
+
+    const isCallerCreativeDirector = isCallerSuperadmin || Boolean(caller?.isCreativeDirector);
+
+    if (!isCallerCreativeDirector) {
+      return res.status(403).json({ error: 'Only Creative Directors and Superadmins can duplicate tasks to another board' });
+    }
+
+    const { targetUserId, targetStatus, targetDueDate } = req.body;
+    if (!targetUserId || typeof targetUserId !== 'string') {
+      return res.status(400).json({ error: 'targetUserId is required' });
+    }
+
+    const targetUser = store.users.find(u => u.id === targetUserId);
+    if (!targetUser) {
+      return res.status(400).json({ error: 'Target user does not exist in workspace' });
+    }
+
+    if (targetUser.id === sourceTask.userId) {
+      return res.status(400).json({ error: 'Cannot duplicate task to the same user. Please select a user on another board.' });
+    }
+
+    const resolvedStatus: TaskStatus = targetStatus && ['pipeline', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(targetStatus)
+      ? targetStatus
+      : sourceTask.status;
+
+    const resolvedDueDate = targetDueDate !== undefined
+      ? (targetDueDate ? sanitizeString(targetDueDate) : undefined)
+      : sourceTask.dueDate;
+
+    if (resolvedStatus !== 'pipeline' && !resolvedDueDate) {
+      return res.status(400).json({ error: 'A deadline is required when adding tasks to active workflow lanes' });
+    }
+
+    const newTaskId = `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const now = new Date().toISOString();
+    const sourceUser = store.users.find(u => u.id === sourceTask.userId);
+    const actorDisplayName = caller?.name || (isCallerSuperadmin ? 'Superadmin' : 'Creative Director');
+
+    // Determine order: place at end of that status for target user
+    const existingInStatus = store.tasks.filter(
+      t => t.userId === targetUser.id && t.status === resolvedStatus
+    );
+    const maxOrder = existingInStatus.reduce((max, t) => Math.max(max, t.order ?? 0), -1);
+
+    const initialActivity: TaskActivity = {
+      id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: now,
+      action: 'created',
+      to: resolvedStatus,
+      actorName: actorDisplayName,
+      details: `Duplicated from ${sourceUser?.name || 'previous board'} to ${targetUser.name}'s board by ${actorDisplayName}`,
+    };
+
+    const newTask: Task = {
+      id: newTaskId,
+      userId: targetUser.id,
+      title: sourceTask.title,
+      description: sourceTask.description,
+      dueDate: resolvedDueDate,
+      cognitiveLoad: sourceTask.cognitiveLoad,
+      status: resolvedStatus,
+      order: maxOrder + 1,
+      completedAt: resolvedStatus === 'done' ? now : undefined,
+      inProgressStartedAt: resolvedStatus === 'in_progress' ? now : undefined,
+      inProgressDurationMs: 0,
+      clickupTaskId: sourceTask.clickupTaskId,
+      clickupFolderId: sourceTask.clickupFolderId,
+      clickupFolderName: sourceTask.clickupFolderName,
+      clickupListId: sourceTask.clickupListId,
+      clickupListName: sourceTask.clickupListName,
+      clickupSpaceId: sourceTask.clickupSpaceId,
+      clickupUrl: sourceTask.clickupUrl,
+      clickupTaskType: sourceTask.clickupTaskType,
+      clickupTaskTypeId: sourceTask.clickupTaskTypeId,
+      clickupTaskTypeFieldId: sourceTask.clickupTaskTypeFieldId,
+      createdAt: now,
+      updatedAt: now,
+      activityLog: [initialActivity],
+    };
+
+    store.tasks.push(newTask);
+    saveStore(store);
+    dbSaveTask(newTask).catch(e => console.error('Firestore save task err:', e));
+    broadcastEvent('task_created', newTask);
+
+    appendAuditLog({
+      category: 'task',
+      action: 'task_duplicated_to_board',
+      actor: { ip: req.ip, id: caller?.id, name: actorDisplayName, email: caller?.email },
+      targetId: newTask.id,
+      targetType: 'task',
+      from: sourceTask.userId,
+      to: targetUser.id,
+      details: `Task "${sourceTask.title}" duplicated from ${sourceUser?.name || sourceTask.userId} to ${targetUser.name} by ${actorDisplayName}`,
+      metadata: {
+        sourceTaskId: sourceTask.id,
+        newTaskId: newTask.id,
+        clickupTaskId: sourceTask.clickupTaskId,
+        targetBoardId: targetUser.creativeDirectorId || targetUser.id,
+      },
+    });
+
+    // ClickUp Secondary Assignee Addition
+    let clickupAssigneeAdded = false;
+    let clickupWarning: string | undefined;
+
+    if (sourceTask.clickupTaskId) {
+      const syncToken = (callerApiKey || caller?.clickupApiKey || targetUser.clickupApiKey || store.users.find(u => u.clickupApiKey)?.clickupApiKey || '').trim();
+
+      let targetClickupUserId = targetUser.clickupUserId ? parseInt(targetUser.clickupUserId, 10) : undefined;
+
+      // Auto-resolve ClickUp member ID by email if not set
+      if ((!targetClickupUserId || isNaN(targetClickupUserId)) && syncToken && targetUser.email) {
+        try {
+          const teamRes = await fetch('https://api.clickup.com/api/v2/team', {
+            headers: { Authorization: syncToken },
+          });
+          if (teamRes.ok) {
+            const teamData = await teamRes.json();
+            for (const team of teamData.teams || []) {
+              for (const m of team.members || []) {
+                if (m?.user?.email && m.user.email.toLowerCase() === targetUser.email.toLowerCase()) {
+                  targetClickupUserId = parseInt(String(m.user.id), 10);
+                  targetUser.clickupUserId = String(m.user.id);
+                  if (m.user.username) targetUser.clickupUsername = m.user.username;
+                  saveStore(store);
+                  dbSaveUser(targetUser).catch(e => console.error('Firestore save user err:', e));
+                  broadcastEvent('user_updated', targetUser);
+                  break;
+                }
+              }
+              if (targetClickupUserId) break;
+            }
+          }
+        } catch (memErr) {
+          console.warn('[Duplicate Task] Error auto-resolving ClickUp member by email:', memErr);
+        }
+      }
+
+      // Add secondary assignee to ClickUp task
+      if (targetClickupUserId && !isNaN(targetClickupUserId) && syncToken) {
+        try {
+          const cuRes = await fetch(`https://api.clickup.com/api/v2/task/${sourceTask.clickupTaskId}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: syncToken,
+            },
+            body: JSON.stringify({
+              assignees: {
+                add: [targetClickupUserId],
+              },
+            }),
+          });
+
+          if (cuRes.ok) {
+            clickupAssigneeAdded = true;
+            console.log(`[ClickUp Duplicate] Added ${targetUser.name} (${targetClickupUserId}) as secondary assignee on ClickUp task ${sourceTask.clickupTaskId}`);
+
+            appendAuditLog({
+              category: 'task',
+              action: 'clickup_secondary_assignee_added',
+              actor: { ip: req.ip, id: caller?.id, name: actorDisplayName, email: caller?.email },
+              targetId: sourceTask.id,
+              targetType: 'task',
+              details: `Added ${targetUser.name} as secondary assignee on ClickUp task #${sourceTask.clickupTaskId}`,
+              metadata: { clickupTaskId: sourceTask.clickupTaskId, clickupUserId: targetClickupUserId, newTaskId: newTask.id },
+            });
+          } else {
+            const errText = await cuRes.text();
+            console.warn(`[ClickUp Duplicate] Failed to add secondary assignee on task ${sourceTask.clickupTaskId}:`, errText);
+            clickupWarning = `Could not add ClickUp assignee: ${errText}`;
+          }
+        } catch (err: any) {
+          console.warn(`[ClickUp Duplicate] Error adding secondary assignee on ClickUp:`, err);
+          clickupWarning = err.message || 'Network error reaching ClickUp';
+        }
+      } else if (!targetClickupUserId) {
+        clickupWarning = `User ${targetUser.name} is not mapped to a ClickUp account.`;
+      } else if (!syncToken) {
+        clickupWarning = 'No ClickUp API key configured in workspace to sync assignee.';
+      }
+    }
+
+    res.status(201).json({
+      task: newTask,
+      clickupAssigneeAdded,
+      warning: clickupWarning,
+      message: clickupAssigneeAdded
+        ? `Task duplicated to ${targetUser.name}'s board and secondary assignee added on ClickUp.`
+        : `Task duplicated to ${targetUser.name}'s board.`,
+    });
   });
 
   // API: Update a task

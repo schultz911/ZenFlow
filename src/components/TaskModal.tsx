@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { Task, CognitiveLoad, TaskStatus } from '../types';
 import { getTaskBillableMs, formatBillableDetailed, getLastDayOfMonth } from '../utils/workload';
-import { X, Calendar, Brain, Trash2, History, Clock, ArrowRight, CheckCircle2, UserCheck, PlusCircle, Timer, ChevronDown, Check } from 'lucide-react';
+import { X, Calendar, Brain, Trash2, History, Clock, ArrowRight, CheckCircle2, UserCheck, PlusCircle, Timer, ChevronDown, Check, CopyPlus } from 'lucide-react';
 
 function formatActivityTime(isoString: string): string {
   try {
@@ -39,6 +39,7 @@ interface TaskModalProps {
   defaultUserId?: string;
   defaultStatus?: TaskStatus;
   onAdjustBillableHours?: (task: Task) => void;
+  onDuplicateTask?: (task: Task) => void;
 }
 
 interface SpaceDropdownRowProps {
@@ -135,6 +136,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   defaultUserId,
   defaultStatus = 'todo',
   onAdjustBillableHours,
+  onDuplicateTask,
 }) => {
   const {
     users,
@@ -153,7 +155,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     canEditUserTasks,
     clickupCustomFieldOptions,
     clickupTaskTypeFieldId: ctxClickupTaskTypeFieldId,
+    isSuperadmin,
+    isCreativeDirector,
   } = useDashboard();
+
+  const canDuplicate = Boolean(isSuperadmin || isCreativeDirector);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -1040,14 +1046,30 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     </button>
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => setShowConfirmDelete(true)}
-                    className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-600 p-1.5 rounded-xl hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    <span>Delete Task</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmDelete(true)}
+                      className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-600 p-1.5 rounded-xl hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Delete Task</span>
+                    </button>
+                    {canDuplicate && onDuplicateTask && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onDuplicateTask(taskToEdit);
+                        }}
+                        className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 p-1.5 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors cursor-pointer"
+                        title="Duplicate this task to another team board and add secondary assignee on ClickUp"
+                      >
+                        <CopyPlus className="h-3.5 w-3.5" />
+                        <span>Duplicate to Board</span>
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             ) : (

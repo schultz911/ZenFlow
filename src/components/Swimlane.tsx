@@ -51,6 +51,7 @@ interface SwimlaneProps {
   onDeleteUser?: (user: User) => void;
   onMoveTask: (taskId: string, targetUserId: string, newStatus: TaskStatus, newIndex?: number, newDueDate?: string | null) => void;
   onOpenWorkloadModal: (user: User) => void;
+  onDuplicateTask?: (task: Task) => void;
   isCurrentUser: boolean;
   onMoveUserUp?: (userId: string) => void;
   onMoveUserDown?: (userId: string) => void;
@@ -113,6 +114,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   onEditUser,
   onDeleteUser,
   onMoveTask,
+  onDuplicateTask,
   onOpenWorkloadModal,
   isCurrentUser,
   onMoveUserUp,
@@ -1077,6 +1079,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                     onMoveStatus={handleMoveStatus}
                                     onReschedule={onRescheduleTask}
                                     onAdjustBillableHours={onAdjustBillableHours}
+                                    onDuplicateToBoard={onDuplicateTask}
                                     onDragStart={handleTaskDragStart}
                                     onDragEnd={handleTaskDragEnd}
                                   />
@@ -1147,6 +1150,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                   onMoveStatus={handleMoveStatus}
                                   onReschedule={onRescheduleTask}
                                   onAdjustBillableHours={onAdjustBillableHours}
+                                  onDuplicateToBoard={onDuplicateTask}
                                   onDragStart={handleTaskDragStart}
                                   onDragEnd={handleTaskDragEnd}
                                 />
@@ -1205,6 +1209,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     if (prev.onDeleteUser !== next.onDeleteUser) return false;
     if (prev.onMoveTask !== next.onMoveTask) return false;
     if (prev.onOpenWorkloadModal !== next.onOpenWorkloadModal) return false;
+    if (prev.onDuplicateTask !== next.onDuplicateTask) return false;
     if (prev.onDragTaskStart !== next.onDragTaskStart) return false;
     if (prev.onDragTaskEnd !== next.onDragTaskEnd) return false;
     if (prev.onMoveUserUp !== next.onMoveUserUp) return false;

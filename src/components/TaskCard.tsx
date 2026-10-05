@@ -16,6 +16,7 @@ import {
   Archive,
   Timer,
   Folder,
+  CopyPlus,
 } from 'lucide-react';
 
 interface TaskCardProps {
@@ -29,6 +30,7 @@ interface TaskCardProps {
   onAdjustBillableHours?: (task: Task) => void;
   onDragStart?: (task: Task) => void;
   onDragEnd?: () => void;
+  onDuplicateToBoard?: (task: Task) => void;
   isDraggable?: boolean;
 }
 
@@ -45,10 +47,12 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   onAdjustBillableHours,
   onDragStart,
   onDragEnd,
+  onDuplicateToBoard,
   isDraggable = true,
 }) => {
-  const { canEditUserTasks, isZensciencesUser } = useDashboard();
+  const { canEditUserTasks, isZensciencesUser, isSuperadmin, isCreativeDirector } = useDashboard();
   const canEdit = canEditUserTasks(task.userId);
+  const canDuplicateToBoard = isSuperadmin || isCreativeDirector;
   const effectivelyDraggable = isDraggable && canEdit;
 
   const [isDragging, setIsDragging] = useState(false);
@@ -312,8 +316,20 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 
         {/* Top Right: Actions & Billable Hours Badge */}
         <div className="flex items-center gap-1.5 shrink-0">
-          {/* Quick Edit (Modal) & Delete icons */}
+          {/* Quick Edit (Modal), Duplicate & Delete icons */}
           <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-0.5 shrink-0">
+            {canDuplicateToBoard && onDuplicateToBoard && (
+              <button
+                onClick={e => {
+                  e.stopPropagation();
+                  onDuplicateToBoard(task);
+                }}
+                title="Duplicate to another board (Creative Director / Superadmin)"
+                className="rounded p-1 text-neutral-400 dark:text-white/40 hover:bg-blue-50 dark:hover:bg-blue-500/20 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+              >
+                <CopyPlus className="h-3 w-3" />
+              </button>
+            )}
             <button
               onClick={e => {
                 e.stopPropagation();
