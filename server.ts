@@ -1864,8 +1864,8 @@ async function startServer() {
     res.status(201).json(newUser);
   });
 
-  // API: Update user settings / profile
-  app.put('/api/users/:id', (req: Request, res: Response) => {
+  // API: Update user settings / profile (Superadmin can also correct email addresses)
+  app.put('/api/users/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     const userIndex = store.users.findIndex(u => u.id === id);
 
@@ -1876,6 +1876,7 @@ async function startServer() {
     const current = store.users[userIndex];
     const {
       name,
+      email,
       role,
       isCreativeDirector,
       creativeDirectorId,
@@ -1885,6 +1886,178 @@ async function startServer() {
       clickupUserId,
       clickupUsername,
     } = req.body;
+
+    const callerId = (req.headers['x-caller-user-id'] as string || '').trim();
+    const callerEmail = (req.headers['x-caller-email'] as string || '').trim().toLowerCase();
+    const caller = store.users.find(u => u.id === callerId || u.email.toLowerCase() === callerEmail);
+    const isCallerSuperadmin = callerEmail === SUPERADMIN_EMAIL.toLowerCase() ||
+      caller?.email?.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase() ||
+      req.headers['x-is-superadmin'] === 'true';
+
+    // Handle email correction & task remapping
+    if (email !== undefined) {
+      const cleanEmail = sanitizeString(email).toLowerCase().trim();
+      const currentEmail = current.email.toLowerCase().trim();
+
+      if (cleanEmail !== currentEmail) {
+        if (!isCallerSuperadmin) {
+          return res.status(403).json({ error: 'Only the Superadmin can edit user email addresses' });
+        }
+
+        if (currentEmail === SUPERADMIN_EMAIL.toLowerCase()) {
+          return res.status(400).json({ error: 'The primary Superadmin email address cannot be modified' });
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!cleanEmail || !emailRegex.test(cleanEmail)) {
+          return res.status(400).json({ error: 'A valid email address is required' });
+        }
+
+        // Check if an existing account already exists with the new email
+        const existingTargetUser = store.users.find(
+          u => u.id !== current.id && u.email.toLowerCase().trim() === cleanEmail
+        );
+
+        if (existingTargetUser) {
+          // CASE 1: Profile Merge & Task Remapping to existing user with this email
+          console.log(`[User Email Remap & Merge] Merging "${current.email}" (${current.id}) into "${existingTargetUser.email}" (${existingTargetUser.id})...`);
+          const oldUserId = current.id;
+          const oldEmail = current.email;
+
+          // Collect all tasks mapped to the wrong account ID or old email or target email
+          const tasksToRemap = store.tasks.filter(
+            t => t.userId === oldUserId ||
+                 t.userId.toLowerCase() === oldEmail.toLowerCase() ||
+                 t.userId.toLowerCase() === cleanEmail
+          );
+
+          tasksToRemap.forEach(task => {
+            task.userId = existingTargetUser.id;
+            task.updatedAt = new Date().toISOString();
+            if (!task.activityLog) task.activityLog = [];
+            task.activityLog.unshift({
+              id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              timestamp: new Date().toISOString(),
+              action: 'reassigned',
+              from: `${current.name} (${oldEmail})`,
+              to: `${existingTargetUser.name} (${cleanEmail})`,
+              details: `Task automatically remapped from wrong email (${oldEmail}) to correct email (${cleanEmail}) by Superadmin`,
+            });
+          });
+
+          if (tasksToRemap.length > 0) {
+            await dbBatchSaveTasks(tasksToRemap);
+          }
+
+          // Merge profile fields into existingTargetUser
+          if (name !== undefined) {
+            const cleanName = sanitizeString(name);
+            if (cleanName) existingTargetUser.name = cleanName;
+          }
+          if (role !== undefined && (role === 'content' || role === 'design')) {
+            existingTargetUser.role = role;
+          }
+          if (isCreativeDirector !== undefined) {
+            existingTargetUser.isCreativeDirector = !!isCreativeDirector;
+          }
+          if (creativeDirectorId !== undefined) {
+            existingTargetUser.creativeDirectorId = creativeDirectorId ? sanitizeString(creativeDirectorId) : undefined;
+          }
+          if (clickupApiKey !== undefined) {
+            existingTargetUser.clickupApiKey = clickupApiKey ? sanitizeString(clickupApiKey) : undefined;
+          } else if (!existingTargetUser.clickupApiKey && current.clickupApiKey) {
+            existingTargetUser.clickupApiKey = current.clickupApiKey;
+          }
+          if (selectedClickupSpaceId !== undefined) {
+            existingTargetUser.selectedClickupSpaceId = selectedClickupSpaceId ? sanitizeString(selectedClickupSpaceId) : undefined;
+          } else if (!existingTargetUser.selectedClickupSpaceId && current.selectedClickupSpaceId) {
+            existingTargetUser.selectedClickupSpaceId = current.selectedClickupSpaceId;
+          }
+          if (selectedClickupSpaceName !== undefined) {
+            existingTargetUser.selectedClickupSpaceName = selectedClickupSpaceName ? sanitizeString(selectedClickupSpaceName) : undefined;
+          } else if (!existingTargetUser.selectedClickupSpaceName && current.selectedClickupSpaceName) {
+            existingTargetUser.selectedClickupSpaceName = current.selectedClickupSpaceName;
+          }
+          if (clickupUserId !== undefined) {
+            existingTargetUser.clickupUserId = clickupUserId ? sanitizeString(clickupUserId) : undefined;
+          } else if (!existingTargetUser.clickupUserId && current.clickupUserId) {
+            existingTargetUser.clickupUserId = current.clickupUserId;
+          }
+          if (clickupUsername !== undefined) {
+            existingTargetUser.clickupUsername = clickupUsername ? sanitizeString(clickupUsername) : undefined;
+          } else if (!existingTargetUser.clickupUsername && current.clickupUsername) {
+            existingTargetUser.clickupUsername = current.clickupUsername;
+          }
+
+          // Remove the obsolete user record
+          store.users = store.users.filter(u => u.id !== oldUserId);
+          await dbDeleteUser(oldUserId);
+
+          saveStore(store);
+          await dbSaveUser(existingTargetUser);
+
+          appendAuditLog({
+            category: 'user',
+            action: 'user_merged_and_tasks_remapped',
+            actor: { ip: req.ip, email: callerEmail },
+            targetId: existingTargetUser.id,
+            targetType: 'user',
+            details: `Superadmin corrected email from "${oldEmail}" to "${cleanEmail}". Merged profile into "${existingTargetUser.name}" and remapped ${tasksToRemap.length} task(s).`,
+            metadata: {
+              fromUserId: oldUserId,
+              toUserId: existingTargetUser.id,
+              fromEmail: oldEmail,
+              toEmail: cleanEmail,
+              remappedTasksCount: tasksToRemap.length,
+            },
+          });
+
+          broadcastEvent('user_deleted', { id: oldUserId });
+          broadcastEvent('user_updated', existingTargetUser);
+          if (tasksToRemap.length > 0) {
+            broadcastEvent('tasks_reordered', tasksToRemap);
+          }
+          broadcastEvent('sync_all', { users: store.users, tasks: store.tasks });
+
+          return res.json({
+            ...existingTargetUser,
+            merged: true,
+            deletedUserId: oldUserId,
+            remappedTasksCount: tasksToRemap.length,
+            remappedToUserId: existingTargetUser.id,
+          });
+        }
+
+        // CASE 2: No conflicting account exists. Update email & remap any orphan tasks
+        const oldEmail = current.email;
+        current.email = cleanEmail;
+
+        const orphanTasks = store.tasks.filter(
+          t => t.userId.toLowerCase() === cleanEmail || t.userId.toLowerCase() === oldEmail.toLowerCase()
+        );
+        orphanTasks.forEach(task => {
+          task.userId = current.id;
+          task.updatedAt = new Date().toISOString();
+        });
+        if (orphanTasks.length > 0) {
+          await dbBatchSaveTasks(orphanTasks);
+        }
+
+        appendAuditLog({
+          category: 'user',
+          action: 'user_email_corrected',
+          actor: { ip: req.ip, email: callerEmail },
+          targetId: current.id,
+          targetType: 'user',
+          details: `Superadmin corrected email for "${current.name}" from ${oldEmail} to ${cleanEmail}. (Remapped orphan tasks: ${orphanTasks.length})`,
+          metadata: { oldEmail, newEmail: cleanEmail, remappedTasksCount: orphanTasks.length },
+        });
+
+        if (orphanTasks.length > 0) {
+          broadcastEvent('tasks_reordered', orphanTasks);
+        }
+      }
+    }
 
     if (name !== undefined) {
       const cleanName = sanitizeString(name);
@@ -1930,6 +2103,110 @@ async function startServer() {
       metadata: { role: current.role, isCreativeDirector: current.isCreativeDirector },
     });
     res.json(current);
+  });
+
+  // API: Explicit task remapping tool (Superadmin only)
+  app.post('/api/users/remap-tasks', async (req: Request, res: Response) => {
+    const callerId = (req.headers['x-caller-user-id'] as string || '').trim();
+    const callerEmail = (req.headers['x-caller-email'] as string || '').trim().toLowerCase();
+    const caller = store.users.find(u => u.id === callerId || u.email.toLowerCase() === callerEmail);
+    const isCallerSuperadmin = callerEmail === SUPERADMIN_EMAIL.toLowerCase() ||
+      caller?.email?.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase() ||
+      req.headers['x-is-superadmin'] === 'true';
+
+    if (!isCallerSuperadmin) {
+      return res.status(403).json({ error: 'Only the Superadmin can remap user tasks' });
+    }
+
+    const { fromUserId, fromEmail, toUserId, deleteSourceUser } = req.body;
+
+    if (!toUserId) {
+      return res.status(400).json({ error: 'Target user ID (toUserId) is required' });
+    }
+
+    const targetUser = store.users.find(u => u.id === toUserId);
+    if (!targetUser) {
+      return res.status(404).json({ error: 'Target user not found' });
+    }
+
+    const cleanFromEmail = fromEmail ? sanitizeString(fromEmail).toLowerCase().trim() : '';
+    const cleanFromUserId = fromUserId ? sanitizeString(fromUserId).trim() : '';
+
+    if (!cleanFromUserId && !cleanFromEmail) {
+      return res.status(400).json({ error: 'Either fromUserId or fromEmail must be provided' });
+    }
+
+    const sourceUser = store.users.find(
+      u => (cleanFromUserId && u.id === cleanFromUserId) || (cleanFromEmail && u.email.toLowerCase() === cleanFromEmail)
+    );
+    const effectiveFromId = sourceUser ? sourceUser.id : cleanFromUserId;
+    const effectiveFromEmail = sourceUser ? sourceUser.email.toLowerCase() : cleanFromEmail;
+
+    if (targetUser.id === effectiveFromId) {
+      return res.status(400).json({ error: 'Source and target users cannot be the same' });
+    }
+
+    const tasksToRemap = store.tasks.filter(
+      t => (effectiveFromId && t.userId === effectiveFromId) ||
+           (effectiveFromEmail && t.userId.toLowerCase() === effectiveFromEmail)
+    );
+
+    const fromLabel = sourceUser ? `${sourceUser.name} (${sourceUser.email})` : (effectiveFromEmail || effectiveFromId);
+
+    tasksToRemap.forEach(task => {
+      task.userId = targetUser.id;
+      task.updatedAt = new Date().toISOString();
+      if (!task.activityLog) task.activityLog = [];
+      task.activityLog.unshift({
+        id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        action: 'reassigned',
+        from: fromLabel,
+        to: `${targetUser.name} (${targetUser.email})`,
+        details: `Task manually remapped from ${fromLabel} to ${targetUser.name} by Superadmin`,
+      });
+    });
+
+    if (tasksToRemap.length > 0) {
+      await dbBatchSaveTasks(tasksToRemap);
+    }
+
+    if (deleteSourceUser && sourceUser && sourceUser.email.toLowerCase() !== SUPERADMIN_EMAIL.toLowerCase()) {
+      store.users = store.users.filter(u => u.id !== sourceUser.id);
+      await dbDeleteUser(sourceUser.id);
+      broadcastEvent('user_deleted', { id: sourceUser.id });
+    }
+
+    saveStore(store);
+
+    appendAuditLog({
+      category: 'user',
+      action: 'tasks_manually_remapped',
+      actor: { ip: req.ip, email: callerEmail },
+      targetId: targetUser.id,
+      targetType: 'user',
+      details: `Superadmin remapped ${tasksToRemap.length} task(s) from ${fromLabel} to ${targetUser.name} (${targetUser.email})`,
+      metadata: {
+        fromUserId: effectiveFromId,
+        fromEmail: effectiveFromEmail,
+        toUserId: targetUser.id,
+        toEmail: targetUser.email,
+        remappedCount: tasksToRemap.length,
+        deletedSourceUser: !!(deleteSourceUser && sourceUser),
+      },
+    });
+
+    if (tasksToRemap.length > 0) {
+      broadcastEvent('tasks_reordered', tasksToRemap);
+    }
+    broadcastEvent('sync_all', { users: store.users, tasks: store.tasks });
+
+    res.json({
+      success: true,
+      remappedCount: tasksToRemap.length,
+      targetUser,
+      deletedSourceUserId: (deleteSourceUser && sourceUser) ? sourceUser.id : undefined,
+    });
   });
 
   // API: Delete a user and all tasks associated with them

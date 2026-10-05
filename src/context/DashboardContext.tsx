@@ -111,6 +111,7 @@ interface DashboardContextType {
     clickupUsername?: string;
   }) => Promise<User>;
   updateUserProfile: (userId: string, updates: Partial<User>) => Promise<User>;
+  remapUserTasks: (fromUserIdOrEmail: string, toUserId: string, deleteSourceUser?: boolean) => Promise<{ success: boolean; remappedCount: number; error?: string }>;
   // Role & Permissions
   isSuperadmin: boolean;
   isCreativeDirector: boolean;
@@ -889,22 +890,91 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     try {
       const res = await fetch(`/api/users/${userId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-caller-user-id': currentUserRef.current?.id || '',
+          'x-caller-email': currentUserRef.current?.email || '',
+          'x-is-superadmin': isSuperadmin ? 'true' : 'false',
+        },
         body: JSON.stringify(updates),
       });
       if (res.ok) {
-        const updatedUser: User = await res.json();
-        setUsers(prev => prev.map(u => (u.id === userId ? updatedUser : u)));
-        if (currentUserRef.current?.id === userId) {
-          setCurrentUser(updatedUser);
+        const data = await res.json();
+        const updatedUser: User = data.user || data;
+        if (data.merged && data.deletedUserId) {
+          setUsers(prev => prev.filter(u => u.id !== data.deletedUserId).map(u => (u.id === updatedUser.id ? updatedUser : u)));
+          setTasks(prev => prev.map(t => (t.userId === data.deletedUserId ? { ...t, userId: updatedUser.id } : t)));
+          if (currentUserRef.current?.id === data.deletedUserId) {
+            setCurrentUser(updatedUser);
+          }
+        } else {
+          setUsers(prev => prev.map(u => (u.id === userId ? updatedUser : u)));
+          if (currentUserRef.current?.id === userId) {
+            setCurrentUser(updatedUser);
+          }
         }
         return updatedUser;
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Failed to update user profile');
       }
     } catch (err) {
       console.warn('Update user profile offline/failed:', err);
+      throw err;
     }
-    return { ...(usersRef.current.find(u => u.id === userId) || {}), ...updates } as User;
-  }, []);
+  }, [isSuperadmin]);
+
+  const remapUserTasks = useCallback(async (
+    fromUserIdOrEmail: string,
+    toUserId: string,
+    deleteSourceUser: boolean = false
+  ): Promise<{ success: boolean; remappedCount: number; error?: string }> => {
+    try {
+      const isEmail = fromUserIdOrEmail.includes('@');
+      const payload = {
+        fromUserId: isEmail ? undefined : fromUserIdOrEmail,
+        fromEmail: isEmail ? fromUserIdOrEmail : undefined,
+        toUserId,
+        deleteSourceUser,
+      };
+
+      const res = await fetch('/api/users/remap-tasks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-caller-user-id': currentUserRef.current?.id || '',
+          'x-caller-email': currentUserRef.current?.email || '',
+          'x-is-superadmin': isSuperadmin ? 'true' : 'false',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        return { success: false, remappedCount: 0, error: data.error || 'Failed to remap tasks' };
+      }
+
+      // Optimistically update local tasks
+      const effectiveFromUser = usersRef.current.find(
+        u => (!isEmail && u.id === fromUserIdOrEmail) || (isEmail && u.email.toLowerCase() === fromUserIdOrEmail.toLowerCase())
+      );
+      const effectiveFromId = effectiveFromUser ? effectiveFromUser.id : fromUserIdOrEmail;
+
+      setTasks(prev => prev.map(t => {
+        const matches = (effectiveFromId && t.userId === effectiveFromId) ||
+          (isEmail && t.userId.toLowerCase() === fromUserIdOrEmail.toLowerCase());
+        return matches ? { ...t, userId: toUserId } : t;
+      }));
+
+      if (deleteSourceUser && data.deletedSourceUserId) {
+        setUsers(prev => prev.filter(u => u.id !== data.deletedSourceUserId));
+      }
+
+      return { success: true, remappedCount: data.remappedCount || 0 };
+    } catch (err: any) {
+      return { success: false, remappedCount: 0, error: err.message || 'Network error remapping tasks' };
+    }
+  }, [isSuperadmin]);
 
   const connectClickup = useCallback(async (apiKey: string): Promise<{ success: boolean; error?: string }> => {
     const cleanKey = apiKey.trim();
@@ -1872,6 +1942,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       switchUser,
       createUser,
       updateUserProfile,
+      remapUserTasks,
       // Role & Permissions
       isSuperadmin,
       isCreativeDirector,
@@ -1943,6 +2014,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       switchUser,
       createUser,
       updateUserProfile,
+      remapUserTasks,
       isSuperadmin,
       isCreativeDirector,
       canManageMembers,
