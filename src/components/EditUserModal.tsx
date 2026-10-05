@@ -98,25 +98,25 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, isSubmitting, isRemapping, onClose]);
 
-  const isTargetSuperadmin = user?.email.toLowerCase() === 'kiran.s@zensciences.com';
+  const isTargetSuperadmin = Boolean(user?.email && user.email.toLowerCase() === 'kiran.s@zensciences.com');
   const cleanCurrentEmail = email.trim().toLowerCase();
-  const isEmailChanged = Boolean(user && isSuperadmin && !isTargetSuperadmin && cleanCurrentEmail !== user.email.toLowerCase());
-  const duplicateTarget = isEmailChanged
+  const isEmailChanged = Boolean(user && isSuperadmin && !isTargetSuperadmin && cleanCurrentEmail !== (user.email || '').toLowerCase());
+  const duplicateTarget = (isEmailChanged && user)
     ? users.find(u => u.id !== user.id && u.email.toLowerCase().trim() === cleanCurrentEmail)
     : null;
-  const userTasksCount = tasks.filter(t => t.userId === user.id).length;
+  const userTasksCount = user ? tasks.filter(t => t.userId === user.id).length : 0;
   const duplicateUserTasksCount = duplicateTarget
     ? tasks.filter(t => t.userId === duplicateTarget.id).length
     : 0;
 
   // Other users for explicit task remapping
-  const otherUsers = users.filter(u => u.id !== user.id);
+  const otherUsers = user ? users.filter(u => u.id !== user.id) : [];
   const selectedSourceTaskCount = remapSourceUserId
     ? tasks.filter(t => t.userId === remapSourceUserId).length
     : 0;
 
   const handleExecuteRemap = async () => {
-    if (!remapSourceUserId) return;
+    if (!remapSourceUserId || !user) return;
     setIsRemapping(true);
     setRemapStatusMessage(null);
     setError(null);
@@ -137,6 +137,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!user) return;
     setError(null);
 
     const cleanName = name.trim();

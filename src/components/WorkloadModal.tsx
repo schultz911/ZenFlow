@@ -48,7 +48,7 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
 
   const maxBarHeight = 65;
   const maxCountScale = Math.max(3, velocity?.maxDayCount || 3);
-  const activeHoverDay = velocity?.days.find(d => d.dateStr === hoveredDate);
+  const activeHoverDay = velocity?.days?.find(d => d.dateStr === hoveredDate);
 
   return (
     <AnimatePresence>

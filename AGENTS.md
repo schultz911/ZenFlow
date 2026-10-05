@@ -6,16 +6,25 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
+### Sweep 45: 2026-10-05 (Modal Null-State Defensive Guarding & Unmounted Render Exception Resolution)
+
+- **BUG-12 (Fatal Component Render Exception in EditUserModal & WorkloadModal):** Resolved fatal application crash caught by global `<ErrorBoundary>` on application boot:
+  - *Root Cause:* In Sweep 44, top-level short-circuit returns (`if (!isOpen || !user) return null;`) were removed from modal components to enable smooth exit animations within `<AnimatePresence>`. However, `<EditUserModal>` is mounted unconditionally in `src/App.tsx` with initial state `user = null`. During the initial render cycle, lines 107 and 113 directly evaluated `tasks.filter(t => t.userId === user.id)` and `users.filter(u => u.id !== user.id)`. Accessing `user.id` on `null` threw an uncaught `TypeError: Cannot read properties of null (reading 'id')`, crashing the entire component tree into `<ErrorBoundary>`.
+  - *Surgical Resolution:* Guarded all property accesses on `user` across [`EditUserModal`](file:///c:/ZenFlow/src/components/EditUserModal.tsx) (`user ? tasks.filter(...) : 0`, `user ? users.filter(...) : []`, `Boolean(user?.email && ...)`, and early `if (!user) return;` in remap/submit handlers). Defensively hardened [`WorkloadModal`](file:///c:/ZenFlow/src/components/WorkloadModal.tsx) with optional chaining (`velocity?.days?.find(...)`).
+  - *Outcome:* Eliminated application boot crash entirely; verified clean production compilation and flawless component mounting.
+
 ### Sweep 44: 2026-10-05 (Universal Modal Appear/Exit Animation Alignment & Dismissal Standards)
 
 - **UI-37 (Universal Motion Appear & Exit Transition Parity):** Standardized all 11 modal dialogs across the workspace to match the fluid appear animation established by `<DuplicateTaskModal>`:
   - Card Entrance & Exit Motion:
+
     ```tsx
     initial={{ opacity: 0, scale: 0.95, y: 10 }}
     animate={{ opacity: 1, scale: 1, y: 0 }}
     exit={{ opacity: 0, scale: 0.95, y: 10 }}
     transition={{ duration: 0.18, ease: 'easeOut' }}
     ```
+
   - Backdrop Motion & Styling: Standardized to `<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }}>` with unified styling `fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs overflow-y-auto`.
   - Conditional Wrapping in `<AnimatePresence>`: Wrapped modal trees (`isOpen && (...)`) within `<AnimatePresence>` so exit transitions render smoothly without abrupt unmounting.
   - Components Unified:
