@@ -65,6 +65,10 @@ export interface Task {
   clickupTaskType?: string;
   clickupTaskTypeId?: string;
   clickupTaskTypeFieldId?: string;
+  parentTaskId?: string;
+  parentTaskTitle?: string;
+  clickupParentTaskId?: string;
+  isSubtask?: boolean;
 }
 
 export interface ClickupCustomFieldOption {

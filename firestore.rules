@@ -50,7 +50,11 @@ service cloud.firestore {
              (!('clickupUrl' in data) || (data.clickupUrl is string && data.clickupUrl.size() <= 500)) &&
              (!('clickupTaskType' in data) || (data.clickupTaskType is string && data.clickupTaskType.size() <= 100)) &&
              (!('clickupTaskTypeId' in data) || (data.clickupTaskTypeId is string && data.clickupTaskTypeId.size() <= 64)) &&
-             (!('clickupTaskTypeFieldId' in data) || (data.clickupTaskTypeFieldId is string && data.clickupTaskTypeFieldId.size() <= 64));
+             (!('clickupTaskTypeFieldId' in data) || (data.clickupTaskTypeFieldId is string && data.clickupTaskTypeFieldId.size() <= 64)) &&
+             (!('parentTaskId' in data) || (data.parentTaskId is string && data.parentTaskId.size() <= 100)) &&
+             (!('parentTaskTitle' in data) || (data.parentTaskTitle is string && data.parentTaskTitle.size() <= 300)) &&
+             (!('clickupParentTaskId' in data) || (data.clickupParentTaskId is string && data.clickupParentTaskId.size() <= 100)) &&
+             (!('isSubtask' in data) || (data.isSubtask is bool));
     }
 
     // Users collection

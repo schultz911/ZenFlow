@@ -181,9 +181,10 @@ interface DashboardContextType {
   duplicateTaskToBoard: (params: {
     taskId: string;
     targetUserId: string;
+    title?: string;
     targetStatus?: TaskStatus;
     targetDueDate?: string;
-  }) => Promise<{ task: Task; clickupAssigneeAdded: boolean; warning?: string; message?: string }>;
+  }) => Promise<{ task: Task; clickupSubtaskCreated: boolean; warning?: string; message?: string }>;
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -1824,14 +1825,15 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     await moveTask(taskId, destUser, newStatus, newIndex, newDueDate);
   }, [moveTask]);
 
-  // Duplicate task to another board (Creative Directors and Superadmins)
+  // Duplicate task as subtask to another board (Creative Directors and Superadmins)
   const duplicateTaskToBoard = useCallback(async (params: {
     taskId: string;
     targetUserId: string;
+    title?: string;
     targetStatus?: TaskStatus;
     targetDueDate?: string;
-  }): Promise<{ task: Task; clickupAssigneeAdded: boolean; warning?: string; message?: string }> => {
-    const { taskId, targetUserId, targetStatus, targetDueDate } = params;
+  }): Promise<{ task: Task; clickupSubtaskCreated: boolean; warning?: string; message?: string }> => {
+    const { taskId, targetUserId, title, targetStatus, targetDueDate } = params;
     const sourceTask = tasksRef.current.find(t => t.id === taskId);
     if (!sourceTask) {
       throw new Error('Source task not found');
@@ -1851,6 +1853,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       },
       body: JSON.stringify({
         targetUserId,
+        title,
         targetStatus,
         targetDueDate,
       }),
@@ -1858,7 +1861,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data.error || 'Failed to duplicate task to board');
+      throw new Error(data.error || 'Failed to duplicate task as subtask to board');
     }
 
     const newTask: Task = data.task;
@@ -1871,7 +1874,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     return {
       task: newTask,
-      clickupAssigneeAdded: Boolean(data.clickupAssigneeAdded),
+      clickupSubtaskCreated: Boolean(data.clickupSubtaskCreated),
       warning: data.warning,
       message: data.message,
     };

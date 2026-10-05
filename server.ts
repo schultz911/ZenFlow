@@ -70,6 +70,10 @@ interface Task {
   clickupTaskType?: string;
   clickupTaskTypeId?: string;
   clickupTaskTypeFieldId?: string;
+  parentTaskId?: string;
+  parentTaskTitle?: string;
+  clickupParentTaskId?: string;
+  isSubtask?: boolean;
 }
 
 interface AppStore {
@@ -1584,31 +1588,6 @@ async function processClickupWebhookEvent(params: {
     dbSaveTask(existingTask).catch(e => console.error('Firestore save err:', e));
     broadcastEvent('task_updated', existingTask);
     console.log(`[ClickUp Webhook] Successfully synchronized task ${existingTask.id} (${existingTask.title})`);
-
-    // Synchronize status and due date across sibling tasks duplicated across boards
-    if (matchingTasks.length > 1) {
-      for (const sibling of matchingTasks.slice(1)) {
-        let siblingModified = false;
-        if (newStatusRaw && existingTask.status !== sibling.status) {
-          sibling.status = existingTask.status;
-          sibling.completedAt = existingTask.completedAt;
-          sibling.inProgressStartedAt = existingTask.inProgressStartedAt;
-          sibling.updatedAt = new Date().toISOString();
-          siblingModified = true;
-        }
-        if (newDueDateRaw !== null && existingTask.dueDate !== sibling.dueDate) {
-          sibling.dueDate = existingTask.dueDate;
-          sibling.updatedAt = new Date().toISOString();
-          siblingModified = true;
-        }
-        if (siblingModified) {
-          saveStore(store);
-          dbSaveTask(sibling).catch(e => console.error('Firestore save sibling err:', e));
-          broadcastEvent('task_updated', sibling);
-          console.log(`[ClickUp Webhook] Synchronized sibling task ${sibling.id} on user ${sibling.userId}'s board`);
-        }
-      }
-    }
   }
 }
 
@@ -2498,7 +2477,7 @@ async function startServer() {
     const newTask: Task = {
       id: newTaskId,
       userId: targetUser.id,
-      title: sourceTask.title,
+      title: req.body.title ? sanitizeString(req.body.title) : sourceTask.title,
       description: sourceTask.description,
       dueDate: resolvedDueDate,
       cognitiveLoad: sourceTask.cognitiveLoad,
@@ -2507,13 +2486,15 @@ async function startServer() {
       completedAt: resolvedStatus === 'done' ? now : undefined,
       inProgressStartedAt: resolvedStatus === 'in_progress' ? now : undefined,
       inProgressDurationMs: 0,
-      clickupTaskId: sourceTask.clickupTaskId,
+      isSubtask: true,
+      parentTaskId: sourceTask.id,
+      parentTaskTitle: sourceTask.title,
+      clickupParentTaskId: sourceTask.clickupTaskId,
       clickupFolderId: sourceTask.clickupFolderId,
       clickupFolderName: sourceTask.clickupFolderName,
       clickupListId: sourceTask.clickupListId,
       clickupListName: sourceTask.clickupListName,
       clickupSpaceId: sourceTask.clickupSpaceId,
-      clickupUrl: sourceTask.clickupUrl,
       clickupTaskType: sourceTask.clickupTaskType,
       clickupTaskTypeId: sourceTask.clickupTaskTypeId,
       clickupTaskTypeFieldId: sourceTask.clickupTaskTypeFieldId,
@@ -2522,30 +2503,8 @@ async function startServer() {
       activityLog: [initialActivity],
     };
 
-    store.tasks.push(newTask);
-    saveStore(store);
-    dbSaveTask(newTask).catch(e => console.error('Firestore save task err:', e));
-    broadcastEvent('task_created', newTask);
-
-    appendAuditLog({
-      category: 'task',
-      action: 'task_duplicated_to_board',
-      actor: { ip: req.ip, id: caller?.id, name: actorDisplayName, email: caller?.email },
-      targetId: newTask.id,
-      targetType: 'task',
-      from: sourceTask.userId,
-      to: targetUser.id,
-      details: `Task "${sourceTask.title}" duplicated from ${sourceUser?.name || sourceTask.userId} to ${targetUser.name} by ${actorDisplayName}`,
-      metadata: {
-        sourceTaskId: sourceTask.id,
-        newTaskId: newTask.id,
-        clickupTaskId: sourceTask.clickupTaskId,
-        targetBoardId: targetUser.creativeDirectorId || targetUser.id,
-      },
-    });
-
-    // ClickUp Secondary Assignee Addition
-    let clickupAssigneeAdded = false;
+    // ClickUp Subtask Creation: creates a dedicated subtask under the parent task assigned to targetUser
+    let clickupSubtaskCreated = false;
     let clickupWarning: string | undefined;
 
     if (sourceTask.clickupTaskId) {
@@ -2577,62 +2536,145 @@ async function startServer() {
             }
           }
         } catch (memErr) {
-          console.warn('[Duplicate Task] Error auto-resolving ClickUp member by email:', memErr);
+          console.warn('[Duplicate Subtask] Error auto-resolving ClickUp member by email:', memErr);
         }
       }
 
-      // Add secondary assignee to ClickUp task
-      if (targetClickupUserId && !isNaN(targetClickupUserId) && syncToken) {
-        try {
-          const cuRes = await fetch(`https://api.clickup.com/api/v2/task/${sourceTask.clickupTaskId}`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: syncToken,
-            },
-            body: JSON.stringify({
-              assignees: {
-                add: [targetClickupUserId],
-              },
-            }),
-          });
-
-          if (cuRes.ok) {
-            clickupAssigneeAdded = true;
-            console.log(`[ClickUp Duplicate] Added ${targetUser.name} (${targetClickupUserId}) as secondary assignee on ClickUp task ${sourceTask.clickupTaskId}`);
-
-            appendAuditLog({
-              category: 'task',
-              action: 'clickup_secondary_assignee_added',
-              actor: { ip: req.ip, id: caller?.id, name: actorDisplayName, email: caller?.email },
-              targetId: sourceTask.id,
-              targetType: 'task',
-              details: `Added ${targetUser.name} as secondary assignee on ClickUp task #${sourceTask.clickupTaskId}`,
-              metadata: { clickupTaskId: sourceTask.clickupTaskId, clickupUserId: targetClickupUserId, newTaskId: newTask.id },
+      if (syncToken) {
+        let listId = sourceTask.clickupListId;
+        if (!listId) {
+          try {
+            const pRes = await fetch(`https://api.clickup.com/api/v2/task/${sourceTask.clickupTaskId}`, {
+              headers: { Authorization: syncToken },
             });
-          } else {
-            const errText = await cuRes.text();
-            console.warn(`[ClickUp Duplicate] Failed to add secondary assignee on task ${sourceTask.clickupTaskId}:`, errText);
-            clickupWarning = `Could not add ClickUp assignee: ${errText}`;
+            if (pRes.ok) {
+              const pData = await pRes.json();
+              if (pData.list?.id) {
+                listId = String(pData.list.id);
+                newTask.clickupListId = listId;
+                if (pData.list.name) newTask.clickupListName = pData.list.name;
+                if (pData.space?.id) newTask.clickupSpaceId = String(pData.space.id);
+                if (pData.folder?.id) newTask.clickupFolderId = String(pData.folder.id);
+                if (pData.folder?.name) newTask.clickupFolderName = pData.folder.name;
+              }
+            }
+          } catch (pErr) {
+            console.warn('[Duplicate Subtask] Could not resolve parent list ID:', pErr);
           }
-        } catch (err: any) {
-          console.warn(`[ClickUp Duplicate] Error adding secondary assignee on ClickUp:`, err);
-          clickupWarning = err.message || 'Network error reaching ClickUp';
         }
-      } else if (!targetClickupUserId) {
-        clickupWarning = `User ${targetUser.name} is not mapped to a ClickUp account.`;
-      } else if (!syncToken) {
-        clickupWarning = 'No ClickUp API key configured in workspace to sync assignee.';
+
+        if (listId) {
+          const targetStatusCu = ZENFLOW_TO_CLICKUP_STATUS[resolvedStatus] || 'to do';
+          const estimateMs = COGNITIVE_LOAD_ESTIMATES_MS[newTask.cognitiveLoad] || COGNITIVE_LOAD_ESTIMATES_MS.medium;
+          const subtaskPayload: Record<string, any> = {
+            name: newTask.title,
+            description: newTask.description || '',
+            parent: sourceTask.clickupTaskId,
+            status: targetStatusCu,
+            time_estimate: estimateMs,
+          };
+          if (resolvedDueDate) {
+            subtaskPayload.due_date = new Date(resolvedDueDate + 'T23:59:59').getTime();
+          }
+          if (targetClickupUserId && !isNaN(targetClickupUserId)) {
+            subtaskPayload.assignees = [targetClickupUserId];
+          }
+          if (newTask.clickupTaskTypeFieldId && newTask.clickupTaskTypeId) {
+            subtaskPayload.custom_fields = [{ id: newTask.clickupTaskTypeFieldId, value: newTask.clickupTaskTypeId }];
+          }
+
+          try {
+            const cuRes = await fetch(`https://api.clickup.com/api/v2/list/${listId}/task`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: syncToken,
+              },
+              body: JSON.stringify(subtaskPayload),
+            });
+
+            if (cuRes.ok) {
+              const cuSubtask = await cuRes.json();
+              newTask.clickupTaskId = cuSubtask.id; // Distinct subtask ClickUp task ID!
+              newTask.clickupUrl = cuSubtask.url;
+              newTask.clickupListId = listId;
+              clickupSubtaskCreated = true;
+              console.log(`[ClickUp Subtask] Created subtask ${cuSubtask.id} under parent ${sourceTask.clickupTaskId} assigned to ${targetUser.name}`);
+
+              appendAuditLog({
+                category: 'task',
+                action: 'clickup_subtask_created',
+                actor: { ip: req.ip, id: caller?.id, name: actorDisplayName, email: caller?.email },
+                targetId: newTask.id,
+                targetType: 'task',
+                details: `Created ClickUp subtask #${cuSubtask.id} under parent #${sourceTask.clickupTaskId} assigned to ${targetUser.name}`,
+                metadata: {
+                  parentClickupTaskId: sourceTask.clickupTaskId,
+                  subtaskClickupTaskId: cuSubtask.id,
+                  targetClickupUserId,
+                  newTaskId: newTask.id,
+                },
+              });
+            } else {
+              const errText = await cuRes.text();
+              console.warn(`[ClickUp Subtask] Failed to create subtask under ${sourceTask.clickupTaskId}:`, errText);
+              clickupWarning = `Could not create ClickUp subtask: ${errText}`;
+            }
+          } catch (cuErr: any) {
+            console.warn('[ClickUp Subtask] Network error creating subtask:', cuErr);
+            clickupWarning = cuErr.message || 'Network error reaching ClickUp';
+          }
+        } else {
+          clickupWarning = 'Could not resolve ClickUp list ID for subtask.';
+        }
+      } else {
+        clickupWarning = 'No ClickUp API key configured in workspace to create subtask.';
       }
     }
 
+    // Save and broadcast subtask card in ZenFlow
+    store.tasks.push(newTask);
+    saveStore(store);
+    dbSaveTask(newTask).catch(e => console.error('Firestore save subtask err:', e));
+    broadcastEvent('task_created', newTask);
+
+    // Update parent task activity log
+    sourceTask.activityLog = Array.isArray(sourceTask.activityLog) ? sourceTask.activityLog : [];
+    sourceTask.activityLog.unshift({
+      id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: now,
+      action: 'updated',
+      actorName: actorDisplayName,
+      details: `Subtask delegated to ${targetUser.name}'s board by ${actorDisplayName}`,
+    });
+    dbSaveTask(sourceTask).catch(e => console.error('Firestore save parent err:', e));
+    broadcastEvent('task_updated', sourceTask);
+
+    appendAuditLog({
+      category: 'task',
+      action: 'task_subtask_delegated_to_board',
+      actor: { ip: req.ip, id: caller?.id, name: actorDisplayName, email: caller?.email },
+      targetId: newTask.id,
+      targetType: 'task',
+      from: sourceTask.userId,
+      to: targetUser.id,
+      details: `Subtask of "${sourceTask.title}" created on ${targetUser.name}'s board by ${actorDisplayName}`,
+      metadata: {
+        sourceTaskId: sourceTask.id,
+        newTaskId: newTask.id,
+        clickupParentTaskId: sourceTask.clickupTaskId,
+        subtaskClickupTaskId: newTask.clickupTaskId,
+        targetBoardId: targetUser.creativeDirectorId || targetUser.id,
+      },
+    });
+
     res.status(201).json({
       task: newTask,
-      clickupAssigneeAdded,
+      clickupSubtaskCreated,
       warning: clickupWarning,
-      message: clickupAssigneeAdded
-        ? `Task duplicated to ${targetUser.name}'s board and secondary assignee added on ClickUp.`
-        : `Task duplicated to ${targetUser.name}'s board.`,
+      message: clickupSubtaskCreated
+        ? `Subtask created under "${sourceTask.title}" on ${targetUser.name}'s board and synced with ClickUp.`
+        : `Subtask created on ${targetUser.name}'s board.`,
     });
   });
 

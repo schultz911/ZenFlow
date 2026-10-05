@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import { Task, CognitiveLoad, TaskStatus } from '../types';
 import { getTaskBillableMs, formatBillableDetailed, getLastDayOfMonth } from '../utils/workload';
-import { X, Calendar, Brain, Trash2, History, Clock, ArrowRight, CheckCircle2, UserCheck, PlusCircle, Timer, ChevronDown, Check, CopyPlus } from 'lucide-react';
+import { X, Calendar, Brain, Trash2, History, Clock, ArrowRight, CheckCircle2, UserCheck, PlusCircle, Timer, ChevronDown, Check, CopyPlus, CornerDownRight } from 'lucide-react';
 
 function formatActivityTime(isoString: string): string {
   try {
@@ -139,6 +139,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   onDuplicateTask,
 }) => {
   const {
+    tasks,
     users,
     currentUser,
     createTask,
@@ -160,6 +161,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   } = useDashboard();
 
   const canDuplicate = Boolean(isSuperadmin || isCreativeDirector);
+
+  // Delegated subtasks (if this task is a parent task with child subtasks)
+  const delegatedSubtasks = useMemo(() => {
+    if (!taskToEdit) return [];
+    return tasks.filter(t => t.parentTaskId === taskToEdit.id);
+  }, [tasks, taskToEdit]);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -497,6 +504,63 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          {/* Subtask Breadcrumb if editing a delegated subtask */}
+          {taskToEdit?.isSubtask && (
+            <div className="flex items-center gap-2 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-500/20 px-3 py-2 text-xs text-blue-700 dark:text-blue-300">
+              <CornerDownRight className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+              <div className="truncate">
+                <span className="font-semibold text-neutral-900 dark:text-white">Subtask of: </span>
+                <span className="font-medium">{taskToEdit.parentTaskTitle || 'Parent Task'}</span>
+                <span className="text-[10px] text-blue-600 dark:text-blue-400 ml-1.5">(Independent workflow)</span>
+              </div>
+            </div>
+          )}
+
+          {/* Delegated Subtasks list if parent task has subtasks */}
+          {delegatedSubtasks.length > 0 && (
+            <div className="rounded-xl border border-neutral-200/80 dark:border-white/10 bg-neutral-50 dark:bg-[#1A1A1A] p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5">
+                  <CornerDownRight className="h-3.5 w-3.5 text-blue-500" />
+                  <span>Delegated Subtasks ({delegatedSubtasks.length})</span>
+                </span>
+                <span className="text-[10px] text-neutral-400 dark:text-white/40">
+                  Independent on team boards
+                </span>
+              </div>
+              <div className="space-y-1.5 max-h-32 overflow-y-auto">
+                {delegatedSubtasks.map(st => {
+                  const assignee = users.find(u => u.id === st.userId);
+                  return (
+                    <div
+                      key={st.id}
+                      className="flex items-center justify-between gap-2 rounded-lg bg-white dark:bg-black/30 border border-neutral-200/60 dark:border-white/5 px-2.5 py-1.5 text-xs"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div
+                          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[8px] font-bold text-white bg-gradient-to-br ${
+                            assignee?.avatarColor || 'from-blue-600 to-indigo-600'
+                          }`}
+                        >
+                          {assignee?.name.charAt(0).toUpperCase() || '?'}
+                        </div>
+                        <span className="font-medium text-neutral-800 dark:text-neutral-200 truncate">
+                          {assignee?.name || 'Unassigned'}
+                        </span>
+                        <span className="text-neutral-400 dark:text-white/40 truncate">
+                          — {st.title}
+                        </span>
+                      </div>
+                      <span className="text-[10px] font-semibold capitalize px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-white/10 text-neutral-600 dark:text-neutral-300 shrink-0">
+                        {st.status.replace('_', ' ')}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Task Name & Task Type */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="sm:col-span-2">
@@ -1063,10 +1127,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                           onDuplicateTask(taskToEdit);
                         }}
                         className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 p-1.5 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors cursor-pointer"
-                        title="Duplicate this task to another team board and add secondary assignee on ClickUp"
+                        title="Duplicate as an independent subtask on another board"
                       >
                         <CopyPlus className="h-3.5 w-3.5" />
-                        <span>Duplicate to Board</span>
+                        <span>Duplicate as Subtask</span>
                       </button>
                     )}
                   </div>

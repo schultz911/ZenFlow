@@ -160,6 +160,22 @@
           "type": "string",
           "description": "ClickUp Task Type custom field ID"
         },
+        "parentTaskId": {
+          "type": "string",
+          "description": "Source parent task ID if this task is a subtask"
+        },
+        "parentTaskTitle": {
+          "type": "string",
+          "description": "Source parent task title for display"
+        },
+        "clickupParentTaskId": {
+          "type": "string",
+          "description": "Associated parent ClickUp task ID"
+        },
+        "isSubtask": {
+          "type": "boolean",
+          "description": "Whether this task is a subtask of another task"
+        },
         "createdAt": {
           "type": "string",
           "format": "date-time",

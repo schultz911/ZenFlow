@@ -17,6 +17,7 @@ import {
   Timer,
   Folder,
   CopyPlus,
+  CornerDownRight,
 } from 'lucide-react';
 
 interface TaskCardProps {
@@ -324,7 +325,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   e.stopPropagation();
                   onDuplicateToBoard(task);
                 }}
-                title="Duplicate to another board (Creative Director / Superadmin)"
+                title="Duplicate as subtask to another board (Creative Director / Superadmin)"
                 className="rounded p-1 text-neutral-400 dark:text-white/40 hover:bg-blue-50 dark:hover:bg-blue-500/20 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
               >
                 <CopyPlus className="h-3 w-3" />
@@ -386,6 +387,17 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           )}
         </div>
       </div>
+
+      {/* Subtask Hierarchy Indicator */}
+      {task.isSubtask && (
+        <div
+          className="mb-1 flex items-center gap-1 text-[10px] text-blue-600 dark:text-blue-400 font-medium truncate"
+          title={`Subtask of: ${task.parentTaskTitle || 'Parent Task'}`}
+        >
+          <CornerDownRight className="h-2.5 w-2.5 shrink-0" />
+          <span className="truncate">Subtask of: {task.parentTaskTitle || 'Parent Task'}</span>
+        </div>
+      )}
 
       {/* Task Title (Inline Editable on click without modal) */}
       {isEditingTitle ? (

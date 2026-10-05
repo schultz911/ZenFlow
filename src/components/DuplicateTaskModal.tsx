@@ -7,7 +7,6 @@ import {
   X,
   CopyPlus,
   CheckCircle2,
-  Calendar,
   Layers,
   Loader2,
   AlertCircle,
@@ -15,6 +14,8 @@ import {
   ArrowRight,
   Shield,
   UserCheck,
+  CornerDownRight,
+  GitFork,
 } from 'lucide-react';
 
 interface DuplicateTaskModalProps {
@@ -89,13 +90,14 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
   // Selection states
   const [selectedBoardId, setSelectedBoardId] = useState<string>('');
   const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [subtaskTitle, setSubtaskTitle] = useState<string>('');
   const [targetStatus, setTargetStatus] = useState<TaskStatus>('todo');
   const [targetDueDate, setTargetDueDate] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: 'success' | 'error';
     message: string;
-    clickupAssigneeAdded?: boolean;
+    clickupSubtaskCreated?: boolean;
     warning?: string;
     targetBoardId?: string;
     targetBoardName?: string;
@@ -115,6 +117,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
     const defaultBoardId = otherBoard ? otherBoard.id : (availableBoards[0]?.id || 'all');
 
     setSelectedBoardId(defaultBoardId);
+    setSubtaskTitle(task.title);
     setTargetStatus(task.status);
     setTargetDueDate(task.dueDate || '');
     setFeedback(null);
@@ -170,7 +173,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
     setTargetDueDate(getLastDayOfMonth());
   }, []);
 
-  // Submit duplication
+  // Submit duplication as subtask
   const handleDuplicate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!task || !selectedUserId || isSubmitting) return;
@@ -178,7 +181,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
     if (targetStatus !== 'pipeline' && !targetDueDate.trim()) {
       setFeedback({
         type: 'error',
-        message: 'A deadline is required when placing tasks into active workflow lanes.',
+        message: 'A deadline is required when placing subtasks into active workflow lanes.',
       });
       return;
     }
@@ -190,6 +193,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
       const res = await duplicateTaskToBoard({
         taskId: task.id,
         targetUserId: selectedUserId,
+        title: subtaskTitle.trim() || undefined,
         targetStatus,
         targetDueDate: targetDueDate.trim() || undefined,
       });
@@ -199,8 +203,8 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
 
       setFeedback({
         type: 'success',
-        message: `Task successfully duplicated to ${targetUserName}'s board!`,
-        clickupAssigneeAdded: res.clickupAssigneeAdded,
+        message: `Subtask created under "${task.title}" on ${targetUserName}'s board!`,
+        clickupSubtaskCreated: res.clickupSubtaskCreated,
         warning: res.warning,
         targetBoardId: selectedBoardId,
         targetBoardName: boardName,
@@ -212,7 +216,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
     } catch (err: any) {
       setFeedback({
         type: 'error',
-        message: err.message || 'Failed to duplicate task to target board.',
+        message: err.message || 'Failed to create subtask on target board.',
       });
     } finally {
       setIsSubmitting(false);
@@ -246,14 +250,14 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
               </div>
               <div>
                 <h3 className="text-base font-bold text-neutral-900 dark:text-white flex items-center gap-2">
-                  <span>Duplicate Task to Another Board</span>
+                  <span>Duplicate as Subtask to Another Board</span>
                   <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-500/20 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400">
                     <Shield className="h-2.5 w-2.5" />
                     CD & Superadmin
                   </span>
                 </h3>
                 <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-                  Clone task to another team member&apos;s board and link them as secondary assignee on ClickUp.
+                  Creates an independent subtask under this task on the recipient&apos;s board.
                 </p>
               </div>
             </div>
@@ -267,12 +271,25 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
 
           {/* Form */}
           <form onSubmit={handleDuplicate} className="space-y-4 pt-4">
-            {/* Source Task Summary Card */}
+            {/* Architecture Explanation Card */}
+            <div className="flex items-start gap-2.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-500/20 p-3 text-xs text-blue-800 dark:text-blue-300">
+              <CornerDownRight className="h-4 w-4 shrink-0 mt-0.5 text-blue-600 dark:text-blue-400" />
+              <div className="space-y-1">
+                <p className="font-semibold text-neutral-900 dark:text-white">
+                  Independent Subtask Workflow
+                </p>
+                <p className="text-[11px] text-neutral-600 dark:text-neutral-300 leading-relaxed">
+                  The original task remains owned by <strong>{sourceUser?.name || 'its current owner'}</strong>. The new card is an independent subtask owned by the recipient. Column moves, status changes, and timers on either card will <strong>never affect the other</strong>.
+                </p>
+              </div>
+            </div>
+
+            {/* Source Parent Task Summary Card */}
             <div className="rounded-xl border border-neutral-200/80 dark:border-white/10 bg-neutral-50 dark:bg-[#1A1A1A] p-3.5 space-y-2.5">
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-white/40">
-                    Source Task
+                    Parent Task
                   </span>
                   <h4 className="text-xs font-bold text-neutral-900 dark:text-white mt-0.5 line-clamp-1">
                     {task.title}
@@ -303,13 +320,13 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
               {/* Source Owner & Board metadata */}
               <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-neutral-200/50 dark:border-white/5">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-neutral-400 dark:text-white/40 shrink-0">Current Owner:</span>
+                  <span className="text-neutral-400 dark:text-white/40 shrink-0">Parent Owner:</span>
                   <span className="font-semibold text-neutral-800 dark:text-white truncate">
                     {sourceUser?.name || 'Unassigned'}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-neutral-400 dark:text-white/40 shrink-0">Current Board:</span>
+                  <span className="text-neutral-400 dark:text-white/40 shrink-0">Parent Board:</span>
                   <span className="font-semibold text-neutral-800 dark:text-white truncate">
                     {sourceBoard ? `${sourceBoard.name}'s Team` : 'Direct / Independent'}
                   </span>
@@ -320,23 +337,23 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
               <div className="pt-1 border-t border-neutral-200/50 dark:border-white/5">
                 {task.clickupTaskId ? (
                   <div className="flex items-center justify-between gap-2 text-[11px]">
-                    <div className="flex items-center gap-1.5 text-purple-600 dark:text-purple-400 font-medium">
+                    <div className="flex items-center gap-1.5 text-purple-600 dark:text-purple-400 font-medium truncate">
                       <ExternalLink className="h-3 w-3 shrink-0" />
-                      <span>Linked ClickUp Task #{task.clickupTaskId}</span>
+                      <span className="truncate">Parent ClickUp Task #{task.clickupTaskId}</span>
                       {task.clickupListName && (
-                        <span className="text-neutral-400 dark:text-white/40 text-[10px]">
+                        <span className="text-neutral-400 dark:text-white/40 text-[10px] shrink-0">
                           ({task.clickupFolderName ? `${task.clickupFolderName} / ` : ''}{task.clickupListName})
                         </span>
                       )}
                     </div>
-                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold bg-emerald-50 dark:bg-emerald-950/30 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-500/20">
-                      Multi-Assignee Ready
+                    <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold bg-purple-50 dark:bg-purple-950/30 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-500/20 shrink-0">
+                      Creates ClickUp Subtask
                     </span>
                   </div>
                 ) : (
                   <p className="text-[11px] text-neutral-500 dark:text-neutral-400 flex items-center gap-1.5">
                     <span className="h-1.5 w-1.5 rounded-full bg-neutral-400" />
-                    <span>Task is local to ZenFlow. It will be duplicated without ClickUp assignee sync.</span>
+                    <span>Parent task is local to ZenFlow. Subtask will be created on ZenFlow board.</span>
                   </p>
                 )}
               </div>
@@ -368,7 +385,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
               <div>
                 <label className="block text-xs font-semibold text-neutral-900 dark:text-white mb-1.5 flex items-center gap-1.5">
                   <UserCheck className="h-3.5 w-3.5 text-blue-500" />
-                  <span>2. Select Assignee on Destination Board</span>
+                  <span>2. Select Subtask Owner on Destination Board</span>
                 </label>
                 {availableUsers.length > 0 ? (
                   <div className="space-y-1.5">
@@ -429,7 +446,35 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                 )}
               </div>
 
-              {/* Step 3: Workflow Initial Status & Due Date */}
+              {/* Step 3: Subtask Title */}
+              <div>
+                <label className="block text-xs font-semibold text-neutral-900 dark:text-white mb-1.5 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <GitFork className="h-3.5 w-3.5 text-blue-500" />
+                    <span>3. Subtask Title</span>
+                  </span>
+                  {subtaskTitle !== task.title && (
+                    <button
+                      type="button"
+                      onClick={() => setSubtaskTitle(task.title)}
+                      className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                    >
+                      Reset to parent title
+                    </button>
+                  )}
+                </label>
+                <input
+                  type="text"
+                  value={subtaskTitle}
+                  onChange={e => setSubtaskTitle(e.target.value)}
+                  placeholder={task.title}
+                  disabled={isSubmitting || feedback?.type === 'success'}
+                  className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#1A1A1A] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors disabled:opacity-50"
+                  required
+                />
+              </div>
+
+              {/* Step 4: Workflow Initial Status & Due Date */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <div>
                   <label className="block text-xs font-semibold text-neutral-900 dark:text-white mb-1.5">
@@ -531,9 +576,9 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                   )}
                   <div className="flex-1 space-y-1">
                     <p className="font-semibold">{feedback.message}</p>
-                    {feedback.clickupAssigneeAdded && (
+                    {feedback.clickupSubtaskCreated && (
                       <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
-                        ✓ {selectedTargetUser?.name} was linked as a secondary assignee on ClickUp task #{task.clickupTaskId}.
+                        ✓ Dedicated subtask created under parent #{task.clickupTaskId} on ClickUp and assigned to {selectedTargetUser?.name}.
                       </p>
                     )}
                     {feedback.warning && (
@@ -548,7 +593,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                 {feedback.type === 'success' && feedback.targetBoardId && (
                   <div className="mt-3 pt-2 border-t border-emerald-200/50 dark:border-emerald-500/20 flex items-center justify-between">
                     <span className="text-[11px] text-neutral-600 dark:text-neutral-400">
-                      Jump to view the duplicated task on destination board:
+                      Jump to view the subtask on destination board:
                     </span>
                     <button
                       type="button"
@@ -582,12 +627,12 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                   {isSubmitting ? (
                     <>
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      <span>Duplicating & Syncing Assignee...</span>
+                      <span>Creating Independent Subtask...</span>
                     </>
                   ) : (
                     <>
                       <CopyPlus className="h-3.5 w-3.5" />
-                      <span>Duplicate Task & Add Assignee</span>
+                      <span>Create Independent Subtask</span>
                     </>
                   )}
                 </button>
