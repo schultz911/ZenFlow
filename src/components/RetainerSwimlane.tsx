@@ -367,11 +367,11 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ duration: 0.15 }}
-                className="group relative flex items-center gap-2 shrink-0 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#1A1A1A] px-3 py-2 shadow-2xs hover:shadow-md hover:border-emerald-400/50 dark:hover:border-emerald-500/30 transition-all select-none max-w-[340px]"
+                className="group relative flex items-center gap-2 shrink-0 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#1A1A1A] px-2.5 py-1.5 shadow-2xs hover:shadow-md hover:border-emerald-400/50 dark:hover:border-emerald-500/30 transition-all select-none w-48 sm:w-52 max-w-[220px]"
               >
                 {/* Fixed Retainer Indicator */}
                 <div
-                  title="Retainer task stays in this column. Create subtasks to place actionable items in To Do."
+                  title="Retainer task (ongoing)"
                   className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0"
                 >
                   <Repeat className="h-3 w-3" />
@@ -405,7 +405,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                           }
                           setEditingTaskId(null);
                         }}
-                        className="w-32 rounded border border-emerald-500 bg-white dark:bg-[#121212] px-1.5 py-0.5 text-xs text-neutral-900 dark:text-white focus:outline-none"
+                        className="w-full rounded border border-emerald-500 bg-white dark:bg-[#121212] px-1 py-0.5 text-xs text-neutral-900 dark:text-white focus:outline-none"
                       />
                     </div>
                   ) : (
@@ -415,16 +415,16 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                         setEditingTaskId(task.id);
                         setEditingTitle(task.title);
                       }}
-                      title="Click to edit name directly"
-                      className="text-xs font-medium text-neutral-900 dark:text-white truncate hover:text-emerald-600 dark:hover:text-emerald-400 cursor-text"
+                      title={task.title}
+                      className="text-xs font-medium text-neutral-900 dark:text-white truncate hover:text-emerald-600 dark:hover:text-emerald-400 cursor-text leading-tight"
                     >
                       {task.title}
                     </h5>
                   )}
 
-                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  <div className="flex items-center gap-1.5 mt-0.5">
                     {/* Cognitive Load Indicator */}
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 shrink-0">
                       <span
                         className={`h-1.5 w-1.5 rounded-full shrink-0 ${
                           task.cognitiveLoad === 'high'
@@ -436,7 +436,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                       />
                       <span
                         title={`Cognitive Load: ${cognitiveLabel}`}
-                        className="text-[10px] text-neutral-500 dark:text-white/40 capitalize truncate"
+                        className="text-[9px] text-neutral-500 dark:text-white/40 capitalize"
                       >
                         {task.cognitiveLoad}
                       </span>
@@ -452,11 +452,11 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                             window.open(task.clickupUrl, '_blank', 'noopener,noreferrer');
                           }
                         }}
-                        className={`inline-flex items-center gap-1 text-[9px] px-1.5 py-0.2 rounded bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/40 font-medium truncate max-w-[120px] ${
+                        className={`inline-flex items-center gap-1 text-[8.5px] px-1 py-0.2 rounded bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/40 font-medium truncate max-w-[85px] ${
                           task.clickupUrl ? 'hover:underline cursor-pointer' : ''
                         }`}
                       >
-                        <span className="h-1.5 w-1.5 rounded-full bg-purple-500 shrink-0" />
+                        <span className="h-1 w-1 rounded-full bg-purple-500 shrink-0" />
                         <span className="truncate">{task.clickupListName}</span>
                         {task.clickupUrl && <ExternalLink className="h-2 w-2 shrink-0 opacity-70" />}
                       </span>
@@ -464,22 +464,19 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                   </div>
                 </div>
 
-                {/* Prominent Create Subtask Button */}
-                <button
-                  type="button"
-                  onClick={e => {
-                    e.stopPropagation();
-                    onCreateSubtask(task);
-                  }}
-                  title="Create a subtask from this retainer to place in To Do"
-                  className="flex items-center gap-1 rounded-md bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 px-2 py-1 text-[10px] font-semibold border border-emerald-300/60 dark:border-emerald-600/30 transition-all cursor-pointer shadow-2xs shrink-0"
-                >
-                  <CopyPlus className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
-                  <span>+ Subtask</span>
-                </button>
-
                 {/* Quick actions on hover */}
-                <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-0.5 shrink-0 ml-0.5">
+                <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-0.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={e => {
+                      e.stopPropagation();
+                      onCreateSubtask(task);
+                    }}
+                    title="Create subtask from this retainer"
+                    className="rounded p-1 text-neutral-400 hover:text-emerald-600 dark:text-white/40 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors cursor-pointer"
+                  >
+                    <CopyPlus className="h-3 w-3" />
+                  </button>
                   <button
                     type="button"
                     onClick={e => {
@@ -487,9 +484,9 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                       onEditTask(task);
                     }}
                     title="Open retainer task details"
-                    className="rounded p-0.5 text-neutral-400 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 transition-colors"
+                    className="rounded p-1 text-neutral-400 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
                   >
-                    <Edit2 className="h-2.5 w-2.5" />
+                    <Edit2 className="h-3 w-3" />
                   </button>
                   <button
                     type="button"
@@ -498,9 +495,9 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                       onDeleteTask(task.id);
                     }}
                     title="Delete retainer task"
-                    className="rounded p-0.5 text-neutral-400 hover:text-red-500 dark:text-white/40 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors"
+                    className="rounded p-1 text-neutral-400 hover:text-red-500 dark:text-white/40 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
                   >
-                    <Trash2 className="h-2.5 w-2.5" />
+                    <Trash2 className="h-3 w-3" />
                   </button>
                 </div>
               </motion.div>
