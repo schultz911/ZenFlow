@@ -867,7 +867,6 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                   onUpdateTitle={onUpdateTaskTitle}
                   onDeleteTask={onDeleteTask}
                   onCreateSubtask={onDuplicateTask || onEditTask}
-                  onOpenFullAdd={() => onAddTask(user.id, 'retainer')}
                 />
               </div>
 

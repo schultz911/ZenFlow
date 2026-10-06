@@ -295,10 +295,10 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
                   onDragStart?.(task);
                 }}
                 onDragEndCapture={() => onDragEnd?.()}
-                className="group relative flex items-center gap-2 shrink-0 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#1A1A1A] px-3 py-2 shadow-2xs hover:shadow-md hover:border-indigo-400/50 dark:hover:border-indigo-500/30 transition-all select-none cursor-grab active:cursor-grabbing max-w-[260px]"
+                className="group relative flex items-start gap-2 shrink-0 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#1A1A1A] px-2.5 py-1.5 shadow-2xs hover:shadow-md hover:border-indigo-400/50 dark:hover:border-indigo-500/30 transition-all select-none cursor-grab active:cursor-grabbing w-48 sm:w-52 max-w-[220px]"
               >
                 {/* Drag Grip */}
-                <div className="text-neutral-400 dark:text-white/20 group-hover:text-neutral-700 dark:group-hover:text-white/60 shrink-0">
+                <div className="text-neutral-400 dark:text-white/20 group-hover:text-neutral-700 dark:group-hover:text-white/60 shrink-0 pt-0.5">
                   <GripVertical className="h-3.5 w-3.5" />
                 </div>
 
@@ -330,7 +330,7 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
                           }
                           setEditingTaskId(null);
                         }}
-                        className="w-32 rounded border border-indigo-500 bg-white dark:bg-[#121212] px-1.5 py-0.5 text-xs text-neutral-900 dark:text-white focus:outline-none"
+                        className="w-full rounded border border-indigo-500 bg-white dark:bg-[#121212] px-1 py-0.5 text-xs text-neutral-900 dark:text-white focus:outline-none"
                       />
                     </div>
                   ) : (
@@ -341,7 +341,7 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
                         setEditingTitle(task.title);
                       }}
                       title="Click to edit name directly"
-                      className="text-xs font-medium text-neutral-900 dark:text-white truncate hover:text-indigo-600 dark:hover:text-indigo-400 cursor-text"
+                      className="text-xs font-medium text-neutral-900 dark:text-white break-words whitespace-normal hover:text-indigo-600 dark:hover:text-indigo-400 cursor-text leading-tight"
                     >
                       {task.title}
                     </h5>

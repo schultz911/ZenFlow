@@ -10,7 +10,6 @@ import {
   Trash2,
   X,
   CopyPlus,
-  ExternalLink,
 } from 'lucide-react';
 
 interface RetainerSwimlaneProps {
@@ -32,7 +31,6 @@ interface RetainerSwimlaneProps {
   onUpdateTitle?: (taskId: string, newTitle: string) => void;
   onDeleteTask: (taskId: string) => void;
   onCreateSubtask: (task: Task) => void;
-  onOpenFullAdd?: () => void;
 }
 
 const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
@@ -43,7 +41,6 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
   onUpdateTitle,
   onDeleteTask,
   onCreateSubtask,
-  onOpenFullAdd,
 }) => {
   const {
     isClickupConnected,
@@ -186,17 +183,6 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5">
-          {onOpenFullAdd && !isAdding && (
-            <button
-              type="button"
-              onClick={onOpenFullAdd}
-              title="Open full task modal with status prefilled to Retainer"
-              className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-neutral-500 hover:text-emerald-600 dark:text-white/40 dark:hover:text-emerald-400 hover:bg-neutral-200/60 dark:hover:bg-white/5 transition-colors cursor-pointer"
-            >
-              <span>+ Details</span>
-            </button>
-          )}
-
           <button
             ref={toggleBtnRef}
             type="button"
@@ -316,19 +302,6 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
             </div>
 
             <div className="flex items-center gap-2">
-              {onOpenFullAdd && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsAdding(false);
-                    onOpenFullAdd();
-                  }}
-                  className="text-[10px] font-medium text-neutral-500 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white hover:underline cursor-pointer"
-                  title="Open full task modal with space selection, custom fields, and description"
-                >
-                  + Full Details
-                </button>
-              )}
               <button
                 type="button"
                 disabled={!newTitle.trim() || isSubmitting}
@@ -367,12 +340,12 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ duration: 0.15 }}
-                className="group relative flex items-center gap-2 shrink-0 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#1A1A1A] px-2.5 py-1.5 shadow-2xs hover:shadow-md hover:border-emerald-400/50 dark:hover:border-emerald-500/30 transition-all select-none w-48 sm:w-52 max-w-[220px]"
+                className="group relative flex items-start gap-2 shrink-0 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#1A1A1A] px-2.5 py-1.5 shadow-2xs hover:shadow-md hover:border-emerald-400/50 dark:hover:border-emerald-500/30 transition-all select-none w-48 sm:w-52 max-w-[220px]"
               >
                 {/* Fixed Retainer Indicator */}
                 <div
                   title="Retainer task (ongoing)"
-                  className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0"
+                  className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5"
                 >
                   <Repeat className="h-3 w-3" />
                 </div>
@@ -416,7 +389,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                         setEditingTitle(task.title);
                       }}
                       title={task.title}
-                      className="text-xs font-medium text-neutral-900 dark:text-white truncate hover:text-emerald-600 dark:hover:text-emerald-400 cursor-text leading-tight"
+                      className="text-xs font-medium text-neutral-900 dark:text-white break-words whitespace-normal hover:text-emerald-600 dark:hover:text-emerald-400 cursor-text leading-tight"
                     >
                       {task.title}
                     </h5>
@@ -442,23 +415,14 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                       </span>
                     </div>
 
-                    {/* ClickUp List & Link Indicator */}
+                    {/* ClickUp List Badge */}
                     {task.clickupListName && (
                       <span
-                        title={task.clickupUrl ? 'Open parent task in ClickUp' : `ClickUp List: ${task.clickupListName}`}
-                        onClick={e => {
-                          if (task.clickupUrl) {
-                            e.stopPropagation();
-                            window.open(task.clickupUrl, '_blank', 'noopener,noreferrer');
-                          }
-                        }}
-                        className={`inline-flex items-center gap-1 text-[8.5px] px-1 py-0.2 rounded bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/40 font-medium truncate max-w-[85px] ${
-                          task.clickupUrl ? 'hover:underline cursor-pointer' : ''
-                        }`}
+                        title={`ClickUp List: ${task.clickupListName}`}
+                        className="inline-flex items-center gap-1 text-[8.5px] px-1 py-0.2 rounded bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/40 font-medium truncate max-w-[85px]"
                       >
                         <span className="h-1 w-1 rounded-full bg-purple-500 shrink-0" />
                         <span className="truncate">{task.clickupListName}</span>
-                        {task.clickupUrl && <ExternalLink className="h-2 w-2 shrink-0 opacity-70" />}
                       </span>
                     )}
                   </div>
@@ -516,7 +480,6 @@ function areRetainerPropsEqual(prev: RetainerSwimlaneProps, next: RetainerSwimla
   if (prev.onUpdateTitle !== next.onUpdateTitle) return false;
   if (prev.onDeleteTask !== next.onDeleteTask) return false;
   if (prev.onCreateSubtask !== next.onCreateSubtask) return false;
-  if (prev.onOpenFullAdd !== next.onOpenFullAdd) return false;
 
   const prevTasks = prev.tasks;
   const nextTasks = next.tasks;
