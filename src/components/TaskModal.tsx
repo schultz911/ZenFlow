@@ -367,8 +367,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     };
   }, [clickupSpaces, selectedClickupSpaceId, spaceFoldersMap, clickupFoldersAndLists]);
 
-  if (!isOpen) return null;
-
   const selectedUser = users.find(u => u.id === userId);
   const role = selectedUser?.role || 'content';
 

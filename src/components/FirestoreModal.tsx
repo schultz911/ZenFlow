@@ -112,8 +112,6 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
     }
   }, [isOpen, clickupApiKey, refreshFirestoreStatus, refreshClickupWebhookStatus]);
 
-  if (!isOpen) return null;
-
   const handleManualSync = async () => {
     setIsSyncing(true);
     setFeedback(null);
