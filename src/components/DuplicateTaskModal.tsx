@@ -75,16 +75,14 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
       });
     }
 
-    if (isSuperadmin) {
-      list.push({
-        id: 'all',
-        name: 'All Workspace Members',
-        memberCount: users.length,
-      });
-    }
+    list.push({
+      id: 'all',
+      name: 'All Workspace Members',
+      memberCount: users.length,
+    });
 
     return list;
-  }, [creativeDirectors, users, isSuperadmin]);
+  }, [creativeDirectors, users]);
 
   // Selection states
   const [selectedBoardId, setSelectedBoardId] = useState<string>('');
@@ -117,7 +115,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
 
     setSelectedBoardId(defaultBoardId);
     setSubtaskTitle(task.title);
-    setTargetStatus(task.status);
+    setTargetStatus(task.status === 'retainer' || task.status === 'pipeline' ? 'todo' : task.status);
     setTargetDueDate(task.dueDate || '');
     setFeedback(null);
   }, [isOpen, task, sourceBoard, availableBoards]);
@@ -135,8 +133,8 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
       boardUsers = users.filter(u => u.id === selectedBoardId || u.creativeDirectorId === selectedBoardId);
     }
 
-    // Exclude current task owner so they can't duplicate to themselves
-    return boardUsers.filter(u => u.id !== task.userId);
+    // Return all eligible members on the board
+    return boardUsers;
   }, [users, selectedBoardId, task]);
 
   // Synchronize selected user when available users list changes
@@ -177,7 +175,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
     e.preventDefault();
     if (!task || !selectedUserId || isSubmitting) return;
 
-    if (targetStatus !== 'pipeline' && !targetDueDate.trim()) {
+    if (targetStatus !== 'pipeline' && targetStatus !== 'retainer' && !targetDueDate.trim()) {
       setFeedback({
         type: 'error',
         message: 'A deadline is required when placing subtasks into active workflow lanes.',
@@ -493,7 +491,9 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                     disabled={isSubmitting || feedback?.type === 'success'}
                     className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#1A1A1A] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer capitalize disabled:opacity-50"
                   >
-                    <option value={task.status}>Keep Original ({task.status.replace('_', ' ')})</option>
+                    {task.status !== 'retainer' && (
+                      <option value={task.status}>Keep Original ({task.status.replace('_', ' ')})</option>
+                    )}
                     <option value="pipeline">Pipeline</option>
                     <option value="todo">To Do</option>
                     <option value="in_progress">In Progress</option>

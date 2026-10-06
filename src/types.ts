@@ -2,7 +2,7 @@ export type Role = 'content' | 'design';
 
 export type CognitiveLoad = 'low' | 'medium' | 'high';
 
-export type TaskStatus = 'pipeline' | 'todo' | 'in_progress' | 'in_review' | 'done' | 'archived';
+export type TaskStatus = 'pipeline' | 'retainer' | 'todo' | 'in_progress' | 'in_review' | 'done' | 'archived';
 
 export interface User {
   id: string;

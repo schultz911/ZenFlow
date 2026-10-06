@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
 import { Task, CognitiveLoad, TaskStatus } from '../types';
 import { getTaskBillableMs, formatBillableDetailed, getLastDayOfMonth } from '../utils/workload';
-import { X, Calendar, Brain, Trash2, History, Clock, ArrowRight, CheckCircle2, UserCheck, PlusCircle, Timer, ChevronDown, Check, CopyPlus, CornerDownRight } from 'lucide-react';
+import { X, Calendar, Brain, Trash2, History, Clock, ArrowRight, CheckCircle2, UserCheck, PlusCircle, Timer, ChevronDown, Check, CopyPlus, CornerDownRight, AlertCircle } from 'lucide-react';
 
 function formatActivityTime(isoString: string): string {
   try {
@@ -161,7 +161,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     isCreativeDirector,
   } = useDashboard();
 
-  const canDuplicate = Boolean(isSuperadmin || isCreativeDirector);
+  const canDuplicate = Boolean(onDuplicateTask);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Delegated subtasks (if this task is a parent task with child subtasks)
   const delegatedSubtasks = useMemo(() => {
@@ -227,7 +228,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       const userObj = users.find(u => u.id === defaultUser);
       const roleName = userObj?.role === 'content' ? 'Content & Copy' : 'Design';
       const matchedOption = clickupCustomFieldOptions?.find(
-        o => o.name.toLowerCase() === roleName.toLowerCase()
+        o => (o?.name || '').toLowerCase() === roleName.toLowerCase()
       );
       if (matchedOption) {
         setClickupTaskType(matchedOption.name);
@@ -242,6 +243,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     setIsCreatingList(false);
     setNewListName('');
     setNewListError(null);
+    setSubmitError(null);
     setIsSpaceDropdownOpen(false);
   }, [
     taskToEdit,
@@ -266,7 +268,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     if (
       clickupTaskType &&
       !list.some(
-        o => o.name.toLowerCase() === clickupTaskType.toLowerCase() || o.id === clickupTaskTypeId
+        o => (o?.name || '').toLowerCase() === (clickupTaskType || '').toLowerCase() || o?.id === clickupTaskTypeId
       )
     ) {
       list.unshift({ id: clickupTaskTypeId || clickupTaskType, name: clickupTaskType });
@@ -403,11 +405,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const isDeadlineRequired = status !== 'pipeline';
+    const isDeadlineRequired = status !== 'pipeline' && status !== 'retainer';
     if (!title.trim() || !userId || (isDeadlineRequired && !dueDate.trim()) || !canEdit) return;
 
     setIsSubmitting(true);
-    const finalDueDate = status === 'pipeline' ? undefined : (dueDate.trim() || undefined);
+    setSubmitError(null);
+    const finalDueDate = (status === 'pipeline' || status === 'retainer') ? undefined : (dueDate.trim() || undefined);
 
     // Resolve folder and list names
     let folderName: string | undefined;
@@ -461,8 +464,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         });
       }
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setSubmitError(err?.message || 'Failed to save task');
     } finally {
       setIsSubmitting(false);
     }
@@ -528,6 +532,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          {submitError && (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{submitError}</span>
+            </div>
+          )}
           {/* Subtask Breadcrumb if editing a delegated subtask */}
           {taskToEdit?.isSubtask && (
             <div className="flex items-center gap-2 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-500/20 px-3 py-2 text-xs text-blue-700 dark:text-blue-300">
@@ -576,7 +586,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                         </span>
                       </div>
                       <span className="text-[10px] font-semibold capitalize px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-white/10 text-neutral-600 dark:text-neutral-300 shrink-0">
-                        {st.status.replace('_', ' ')}
+                        {st.status?.replace?.('_', ' ') || 'todo'}
                       </span>
                     </div>
                   );
@@ -684,6 +694,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 pl-3 pr-8 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none focus:ring-0 transition-colors capitalize cursor-pointer hover:border-neutral-400 dark:hover:border-white/20"
                 >
                   <option value="pipeline" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">Pipeline (Backlog)</option>
+                  <option value="retainer" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">Retainer (Ongoing)</option>
                   <option value="todo" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">To Do</option>
                   <option value="in_progress" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">In Progress</option>
                   <option value="in_review" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">In Review</option>
@@ -770,7 +781,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               <label className="text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 flex items-center gap-1.5">
                 <Calendar className="h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
                 <span>Due Date</span>
-                {status !== 'pipeline' && (
+                {status !== 'pipeline' && status !== 'retainer' && (
                   <span className="text-red-500 font-semibold text-[11px] normal-case ml-0.5">
                     * (Required)
                   </span>
@@ -812,7 +823,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 >
                   End of month
                 </button>
-                {status === 'pipeline' && dueDate && (
+                {(status === 'pipeline' || status === 'retainer') && dueDate && (
                   <button
                     type="button"
                     onClick={() => setQuickDate(null)}
@@ -827,16 +838,16 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             <input
               id="task-due-date-input"
               type="date"
-              required={status !== 'pipeline'}
+              required={status !== 'pipeline' && status !== 'retainer'}
               value={dueDate}
               onChange={e => setDueDate(e.target.value)}
               className={`w-full rounded-xl border bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white focus:outline-none transition-colors ${
-                status !== 'pipeline' && !dueDate
+                status !== 'pipeline' && status !== 'retainer' && !dueDate
                   ? 'border-amber-400 dark:border-amber-500/50 focus:border-amber-500'
                   : 'border-neutral-300 dark:border-white/10 focus:border-blue-500'
               }`}
             />
-            {status !== 'pipeline' && !dueDate && (
+            {status !== 'pipeline' && status !== 'retainer' && !dueDate && (
               <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-400">
                 A deadline is required to add tasks directly into active workflow lanes.
               </p>

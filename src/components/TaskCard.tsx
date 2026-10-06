@@ -52,7 +52,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 }) => {
   const { canEditUserTasks, isZensciencesUser, isSuperadmin, isCreativeDirector } = useDashboard();
   const canEdit = canEditUserTasks(task.userId);
-  const canDuplicateToBoard = isSuperadmin || isCreativeDirector;
+  const canDuplicateToBoard = Boolean(onDuplicateToBoard);
   const effectivelyDraggable = isDraggable && canEdit;
 
   const [isDragging, setIsDragging] = useState(false);

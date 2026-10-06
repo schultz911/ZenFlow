@@ -1355,7 +1355,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       userId: data.userId,
       title: data.title.trim(),
       description: data.description ? data.description.trim() : undefined,
-      dueDate: data.dueDate,
+      dueDate: (data.status === 'pipeline' || data.status === 'retainer') ? undefined : data.dueDate,
       cognitiveLoad: data.cognitiveLoad,
       status: data.status,
       order: currentTasks.filter(t => t.userId === data.userId && t.status === data.status).length,
@@ -1460,7 +1460,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
               inProgressStartedAt = undefined;
             }
           }
-          const finalDueDate = updates.status === 'pipeline'
+          const finalDueDate = (updates.status === 'pipeline' || updates.status === 'retainer')
             ? undefined
             : updates.dueDate !== undefined
             ? (updates.dueDate || undefined)
@@ -1692,13 +1692,13 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     const isSameUser = task.userId === targetUserId;
     const isSameStatus = task.status === newStatus;
-    const isDueDateUnchanged = newDueDate === undefined && (newStatus !== 'pipeline' || !task.dueDate);
+    const isDueDateUnchanged = newDueDate === undefined && ((newStatus !== 'pipeline' && newStatus !== 'retainer') || !task.dueDate);
 
     if (isSameUser && isSameStatus && newIndex === undefined && isDueDateUnchanged) return;
 
-    // Automatic pipeline deadline removal: pipeline tasks strictly possess no deadline
+    // Automatic pipeline & retainer deadline removal: pipeline & retainer tasks strictly possess no deadline
     const resolvedDueDate =
-      newStatus === 'pipeline'
+      (newStatus === 'pipeline' || newStatus === 'retainer')
         ? undefined
         : newDueDate !== undefined
         ? (newDueDate || undefined)

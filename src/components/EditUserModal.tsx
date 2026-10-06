@@ -102,7 +102,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
   const cleanCurrentEmail = email.trim().toLowerCase();
   const isEmailChanged = Boolean(user && isSuperadmin && !isTargetSuperadmin && cleanCurrentEmail !== (user.email || '').toLowerCase());
   const duplicateTarget = (isEmailChanged && user)
-    ? users.find(u => u.id !== user.id && u.email.toLowerCase().trim() === cleanCurrentEmail)
+    ? users.find(u => u.id !== user.id && (u.email || '').toLowerCase().trim() === cleanCurrentEmail)
     : null;
   const userTasksCount = user ? tasks.filter(t => t.userId === user.id).length : 0;
   const duplicateUserTasksCount = duplicateTarget
@@ -288,7 +288,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
             )}
 
             {/* Real-time Email Change / Conflict Indicator */}
-            {isSuperadmin && !isTargetSuperadmin && cleanCurrentEmail !== user.email.toLowerCase() && (
+            {isSuperadmin && !isTargetSuperadmin && user && cleanCurrentEmail !== (user.email || '').toLowerCase() && (
               <div className="mt-2.5">
                 {duplicateTarget ? (
                   <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200 space-y-1 animate-in fade-in duration-150">

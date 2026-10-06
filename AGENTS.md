@@ -6,7 +6,24 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
-### Sweep 45: 2026-10-05 (Modal Null-State Defensive Guarding & Unmounted Render Exception Resolution)
+### Sweep 46: 2026-10-06 (Single Source of Truth Enforcement, ClickUp Assignee Replacement, Retainer Workflow, Universal Subtasks & Modal Hardening)
+
+- **DATA-18 (ClickUp Assignee Replacement & Elimination of Task Reassignment Bounceback):**
+  - *Root Cause Analysis:* When tasks were moved or swapped between users, `syncTaskToClickUp` previously dispatched additive assignee mutations (`assignees: { add: [newAssignee] }`) without stripping the previous owner (`existingClickupAssignees`). When ClickUp fired a webhook back to ZenFlow (`taskAssigneeUpdated` or `taskUpdated`), `processClickupWebhookEvent` read the ClickUp assignees array where the original assignee was still at index 0, reassigning the task back to the original user via SSE `task_updated`. This forced users to move cards twice to achieve reassignment.
+  - *Surgical Resolution:* In `server.ts` `syncTaskToClickUp`, implemented atomic assignee replacement payload: `assignees: { ...(add.length ? { add } : {}), ...(rem.length ? { rem } : {}) }`.
+  - *ZenFlow Authoritative Source of Truth:* Hardened `processClickupWebhookEvent` so ZenFlow strictly acts as the immutable single source of truth. Webhooks from ClickUp never overwrite ZenFlow task ownership, status, due dates, or deletions. When divergence is detected between ClickUp and ZenFlow, ZenFlow immediately re-syncs its authoritative state back to ClickUp (`zenflow_source_of_truth_asserted`).
+- **AUTH-07 (Universal Subtask Delegation for All Workspace Members):**
+  - Gating of subtask delegation to Creative Directors and Superadmins was removed across the stack.
+  - Server endpoint `POST /api/tasks/:id/duplicate` now accepts subtask creation from all authenticated members.
+  - UI components [`TaskCard`](file:///c:/ZenFlow/src/components/TaskCard.tsx), [`TaskModal`](file:///c:/ZenFlow/src/components/TaskModal.tsx), and [`DuplicateTaskModal`](file:///c:/ZenFlow/src/components/DuplicateTaskModal.tsx) now expose subtask creation to all members, allow delegation across all boards including self-assignment, and prefill destination status to "To Do".
+- **WORKFLOW-01 (Retainer Tasks Column Architecture):**
+  - Added dedicated `'retainer'` task status to [`src/types.ts`](file:///c:/ZenFlow/src/types.ts), [`server.ts`](file:///c:/ZenFlow/server.ts), [`firestore.rules`](file:///c:/ZenFlow/firestore.rules), and [`firebase-blueprint.json`](file:///c:/ZenFlow/firebase-blueprint.json).
+  - Built [`RetainerSwimlane`](file:///c:/ZenFlow/src/components/RetainerSwimlane.tsx), rendered side-by-side next to Pipeline in [`Swimlane`](file:///c:/ZenFlow/src/components/Swimlane.tsx) using responsive grid layout.
+  - Retainer tasks stay in ClickUp "in progress" (`ZENFLOW_TO_CLICKUP_STATUS.retainer = 'in progress'`), require zero deadlines, do not contribute to workload scoring or WIP limit checks, cannot be dragged into main swimlanes (`todo`, `in_progress`, etc.), and feature a direct `+ Subtask` button to spawn actionable work items into the "To Do" lane.
+- **BUG-13 (Edit Details Modal Crash & Undefined Property Safeguards):**
+  - Resolved `TypeError: Cannot read properties of undefined (reading 'toLowerCase')` and `Cannot read properties of null (reading 'email')` in [`EditUserModal`](file:///c:/ZenFlow/src/components/EditUserModal.tsx), [`TaskModal`](file:///c:/ZenFlow/src/components/TaskModal.tsx), and [`ClickupMemberPicker`](file:///c:/ZenFlow/src/components/ClickupMemberPicker.tsx).
+  - Protected all email, username, and custom field option strings with fallback guards (`(val || '').toLowerCase()`).
+  - Added explicit user-facing error banners in `TaskModal` for failed saves.
 
 - **BUG-12 (Fatal Component Render Exception in EditUserModal & WorkloadModal):** Resolved fatal application crash caught by global `<ErrorBoundary>` on application boot:
   - *Root Cause:* In Sweep 44, top-level short-circuit returns (`if (!isOpen || !user) return null;`) were removed from modal components to enable smooth exit animations within `<AnimatePresence>`. However, `<EditUserModal>` is mounted unconditionally in `src/App.tsx` with initial state `user = null`. During the initial render cycle, lines 107 and 113 directly evaluated `tasks.filter(t => t.userId === user.id)` and `users.filter(u => u.id !== user.id)`. Accessing `user.id` on `null` threw an uncaught `TypeError: Cannot read properties of null (reading 'id')`, crashing the entire component tree into `<ErrorBoundary>`.

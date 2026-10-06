@@ -95,7 +95,7 @@
         },
         "status": {
           "type": "string",
-          "enum": ["pipeline", "todo", "in_progress", "in_review", "done", "archived"],
+          "enum": ["pipeline", "retainer", "todo", "in_progress", "in_review", "done", "archived"],
           "description": "Current status in the workflow"
         },
         "order": {

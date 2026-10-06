@@ -35,8 +35,8 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
     if (!q) return members;
     return members.filter(
       m =>
-        m.username.toLowerCase().includes(q) ||
-        (m.email && m.email.toLowerCase().includes(q))
+        (m.username || '').toLowerCase().includes(q) ||
+        Boolean(m.email && m.email.toLowerCase().includes(q))
     );
   }, [members, searchQuery]);
 
@@ -68,7 +68,7 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
                 style={{ backgroundColor: selectedMember.color || '#6366f1' }}
                 className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold text-white shrink-0 shadow-xs"
               >
-                {selectedMember.initials || selectedMember.username.slice(0, 2).toUpperCase()}
+                {selectedMember.initials || (selectedMember.username ? selectedMember.username.slice(0, 2).toUpperCase() : '??')}
               </div>
             )}
             <div className="min-w-0">
@@ -202,7 +202,7 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
                             style={{ backgroundColor: m.color || '#6366f1' }}
                             className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white shrink-0"
                           >
-                            {m.initials || m.username.slice(0, 2).toUpperCase()}
+                            {m.initials || (m.username ? m.username.slice(0, 2).toUpperCase() : '??')}
                           </div>
                         )}
                         <div className="text-left min-w-0">

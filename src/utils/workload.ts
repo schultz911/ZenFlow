@@ -71,7 +71,7 @@ export function getLastDayOfMonth(fromDate: Date = new Date()): string {
 export function quickWorkloadScore(userTasks: Task[]): number {
   let score = 0;
   for (const t of userTasks) {
-    if (t.status === 'pipeline' || t.status === 'done' || t.status === 'archived') continue;
+    if (t.status === 'pipeline' || t.status === 'retainer' || t.status === 'done' || t.status === 'archived') continue;
     if (t.status === 'in_review') {
       const rate = IN_REVIEW_HOURLY_RATES[t.cognitiveLoad] ?? 0.15;
       const billableHours = getTaskBillableMs(t) / (1000 * 60 * 60);
@@ -190,8 +190,8 @@ export function formatCompletedDate(completedAtStr?: string): string {
 export function compareTasksByDeadline(a: Task, b: Task, status?: string): number {
   const currentStatus = status || a.status;
 
-  // Pipeline tasks have no deadline; sort strictly by order
-  if (currentStatus === 'pipeline') {
+  // Pipeline and retainer tasks have no mandatory deadline; sort strictly by order
+  if (currentStatus === 'pipeline' || currentStatus === 'retainer') {
     return (a.order ?? 0) - (b.order ?? 0);
   }
 
@@ -409,9 +409,9 @@ export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
   const items: TaskScoreItem[] = [];
 
   for (const task of userTasks) {
-    // Pipeline tasks do not have deadlines and do not contribute to workload score
-    if (task.status === 'pipeline') {
-      pipelineCount++;
+    // Pipeline and retainer tasks do not have deadlines and do not contribute to workload score
+    if (task.status === 'pipeline' || task.status === 'retainer') {
+      if (task.status === 'pipeline') pipelineCount++;
       continue;
     }
     if (task.status === 'done') {

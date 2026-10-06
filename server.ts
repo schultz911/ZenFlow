@@ -33,7 +33,7 @@ interface User {
   clickupUsername?: string;
 }
 
-type TaskStatus = 'pipeline' | 'todo' | 'in_progress' | 'in_review' | 'done' | 'archived';
+type TaskStatus = 'pipeline' | 'retainer' | 'todo' | 'in_progress' | 'in_review' | 'done' | 'archived';
 
 interface TaskActivity {
   id: string;
@@ -84,6 +84,8 @@ interface AppStore {
 const SUPERADMIN_EMAIL = 'kiran.s@zensciences.com';
 
 const ZENFLOW_TO_CLICKUP_STATUS: Record<string, string> = {
+  pipeline: 'open',
+  retainer: 'in progress',
   todo: 'to do',
   in_progress: 'in progress',
   in_review: 'internal review',
@@ -1092,6 +1094,7 @@ async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User, calle
     try {
       // 1. Fetch current task on ClickUp to inspect time_spent and sync tracked time accurately
       let clickupTimeSpent = 0;
+      let existingClickupAssignees: number[] = [];
       try {
         const getRes = await fetch(`https://api.clickup.com/api/v2/task/${task.clickupTaskId}`, {
           headers: { Authorization: token },
@@ -1099,6 +1102,11 @@ async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User, calle
         if (getRes.ok) {
           const cuTask = await getRes.json();
           clickupTimeSpent = typeof cuTask.time_spent === 'number' ? cuTask.time_spent : 0;
+          if (Array.isArray(cuTask.assignees)) {
+            existingClickupAssignees = cuTask.assignees
+              .map((a: any) => (typeof a === 'object' && a?.id ? parseInt(String(a.id), 10) : parseInt(String(a), 10)))
+              .filter((id: number) => !isNaN(id));
+          }
         }
       } catch (err) {
         console.warn(`[ClickUp Sync] Error reading task ${task.id} details:`, err);
@@ -1116,7 +1124,7 @@ async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User, calle
         });
       }
 
-      // 2. Update task attributes on ClickUp (no tags)
+      // 2. Update task attributes on ClickUp (replace assignees, not add)
       const updatePayload: Record<string, any> = {
         name: task.title,
         status: targetStatus,
@@ -1125,8 +1133,17 @@ async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User, calle
       if (task.description) updatePayload.description = task.description;
       if (task.dueDate) updatePayload.due_date = new Date(task.dueDate + 'T23:59:59').getTime();
       if (task.inProgressStartedAt) updatePayload.start_date = new Date(task.inProgressStartedAt).getTime();
+
+      // Replace assignee: remove previous assignees, add new assignee
       if (clickupAssigneeId && !isNaN(clickupAssigneeId)) {
-        updatePayload.assignees = { add: [clickupAssigneeId] };
+        const rem = existingClickupAssignees.filter(id => id !== clickupAssigneeId);
+        const add = existingClickupAssignees.includes(clickupAssigneeId) ? [] : [clickupAssigneeId];
+        updatePayload.assignees = {
+          ...(add.length > 0 ? { add } : {}),
+          ...(rem.length > 0 ? { rem } : {}),
+        };
+      } else if (existingClickupAssignees.length > 0) {
+        updatePayload.assignees = { rem: existingClickupAssignees };
       }
 
       const res = await fetch(`https://api.clickup.com/api/v2/task/${task.clickupTaskId}`, {
@@ -1367,29 +1384,23 @@ async function processClickupWebhookEvent(params: {
 
   const existingTask = matchingTasks[0];
 
-  // Handle task deletion event
+  // ZenFlow Single Source of Truth Enforcement:
+  // If task was deleted on ClickUp, do NOT delete from ZenFlow. Re-assert ZenFlow task state.
   if (eventType === 'taskDeleted') {
-    const deletedTaskTitle = existingTask.title;
-    const deletedIds = matchingTasks.map(t => t.id);
-    store.tasks = store.tasks.filter(t => !deletedIds.includes(t.id));
-    saveStore(store);
-    for (const mt of matchingTasks) {
-      dbDeleteTask(mt.id).catch(e => console.error('Firestore delete err:', e));
-      broadcastEvent('task_deleted', { id: mt.id, userId: mt.userId });
-    }
     appendAuditLog({
       category: 'webhook',
-      action: 'clickup_task_deleted',
+      action: 'clickup_task_deleted_preserved',
       actor: { ip },
       targetId: existingTask.id,
       targetType: 'task',
-      details: `Task "${deletedTaskTitle}" deleted via ClickUp webhook (${taskId}) across ${matchingTasks.length} board(s)`,
-      metadata: { clickupTaskId: taskId, deletedTaskIds: deletedIds },
+      details: `ClickUp deleted task "${existingTask.title}" (${taskId}), but ZenFlow remains authoritative. Task preserved in ZenFlow.`,
+      metadata: { clickupTaskId: taskId },
     });
+    console.log(`[ClickUp Webhook] Task ${taskId} was deleted in ClickUp. Preserving in ZenFlow (authoritative source of truth).`);
     return;
   }
 
-  // Retrieve full task from ClickUp API if available to ensure robust attribute sync
+  // Retrieve full task from ClickUp API if available to inspect divergence
   let clickupTaskData: any = null;
   const assignedUser = store.users.find(u => u.id === existingTask.userId);
   const userWithKey = store.users.find(u => u.clickupApiKey);
@@ -1408,186 +1419,93 @@ async function processClickupWebhookEvent(params: {
     }
   }
 
-  let modified = false;
-  const activityEntries: TaskActivity[] = Array.isArray(existingTask.activityLog)
-    ? [...existingTask.activityLog]
-    : [];
+  // Detect if ClickUp task diverges from ZenFlow authoritative state
+  let hasDivergence = false;
+  let divergenceReason = '';
 
-  // 1. Check Status Updates
-  let newStatusRaw: string | null = null;
+  // 1. Inspect Status Divergence
+  const expectedClickupStatus = ZENFLOW_TO_CLICKUP_STATUS[existingTask.status] || 'to do';
+  let cuStatusRaw: string | null = null;
   const statusItem = historyItems.find((h: any) => h.field === 'status');
   if (statusItem?.after) {
-    newStatusRaw = typeof statusItem.after === 'string'
+    cuStatusRaw = typeof statusItem.after === 'string'
       ? statusItem.after.toLowerCase().trim()
       : (statusItem.after?.status || '').toLowerCase().trim();
   } else if (clickupTaskData?.status?.status) {
-    newStatusRaw = (clickupTaskData.status.status || '').toLowerCase().trim();
+    cuStatusRaw = (clickupTaskData.status.status || '').toLowerCase().trim();
+  }
+  if (cuStatusRaw && cuStatusRaw !== expectedClickupStatus.toLowerCase()) {
+    hasDivergence = true;
+    divergenceReason = `Status on ClickUp ("${cuStatusRaw}") differs from ZenFlow ("${existingTask.status}")`;
   }
 
-  if (newStatusRaw && CLICKUP_TO_ZENFLOW_STATUS[newStatusRaw]) {
-    const targetStatus = CLICKUP_TO_ZENFLOW_STATUS[newStatusRaw];
-    if (targetStatus !== existingTask.status) {
-      const prevStatus = existingTask.status;
-
-      if (prevStatus === 'in_progress' && targetStatus !== 'in_progress') {
-        if (existingTask.inProgressStartedAt) {
-          const sessionMs = Math.max(0, Date.now() - new Date(existingTask.inProgressStartedAt).getTime());
-          existingTask.inProgressDurationMs = (existingTask.inProgressDurationMs || 0) + sessionMs;
-        }
-        existingTask.inProgressStartedAt = undefined;
-      } else if (targetStatus === 'in_progress' && prevStatus !== 'in_progress') {
-        existingTask.inProgressStartedAt = new Date().toISOString();
-      }
-
-      if (targetStatus === 'done' && prevStatus !== 'done') {
-        existingTask.completedAt = new Date().toISOString();
-      } else if (targetStatus !== 'done') {
-        existingTask.completedAt = undefined;
-      }
-
-      existingTask.status = targetStatus;
-      existingTask.updatedAt = new Date().toISOString();
-      activityEntries.unshift({
-        id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        timestamp: new Date().toISOString(),
-        action: 'status_change',
-        from: prevStatus,
-        to: targetStatus,
-        details: `Status synced via ClickUp webhook: ${prevStatus.replace('_', ' ')} → ${targetStatus.replace('_', ' ')}`,
-      });
-      modified = true;
-
-      appendAuditLog({
-        category: 'webhook',
-        action: 'clickup_status_synced',
-        actor: { ip },
-        targetId: existingTask.id,
-        targetType: 'task',
-        from: prevStatus,
-        to: targetStatus,
-        details: `Task "${existingTask.title}" status changed: ${prevStatus} → ${targetStatus} via ClickUp webhook`,
-        metadata: { clickupTaskId: taskId },
-      });
-    }
-  }
-
-  // 2. Check Assignee Updates
-  let newAssigneeId: string | null = null;
-  let newAssigneeEmail: string | null = null;
+  // 2. Inspect Assignee Divergence
+  const expectedClickupUserId = assignedUser?.clickupUserId ? String(assignedUser.clickupUserId) : null;
+  let cuAssigneeId: string | null = null;
   const assigneeItem = historyItems.find((h: any) => h.field === 'assignee');
   if (assigneeItem?.after) {
     if (typeof assigneeItem.after === 'object') {
-      newAssigneeId = assigneeItem.after.id ? String(assigneeItem.after.id) : null;
-      newAssigneeEmail = assigneeItem.after.email ? assigneeItem.after.email.toLowerCase() : null;
+      cuAssigneeId = assigneeItem.after.id ? String(assigneeItem.after.id) : null;
     } else {
-      newAssigneeId = String(assigneeItem.after);
+      cuAssigneeId = String(assigneeItem.after);
     }
   } else if (clickupTaskData?.assignees?.[0]) {
-    newAssigneeId = String(clickupTaskData.assignees[0].id);
-    newAssigneeEmail = clickupTaskData.assignees[0].email?.toLowerCase();
+    cuAssigneeId = String(clickupTaskData.assignees[0].id);
+  }
+  if (expectedClickupUserId && cuAssigneeId && cuAssigneeId !== expectedClickupUserId) {
+    hasDivergence = true;
+    divergenceReason = `Assignee on ClickUp (${cuAssigneeId}) differs from ZenFlow assignee (${expectedClickupUserId})`;
   }
 
-  if (newAssigneeId || newAssigneeEmail) {
-    const matchingUser = store.users.find(
-      u => (newAssigneeId && u.clickupUserId === newAssigneeId) ||
-           (newAssigneeEmail && u.email.toLowerCase() === newAssigneeEmail)
+  // 3. Inspect Due Date Divergence
+  if (existingTask.dueDate && clickupTaskData?.due_date !== undefined) {
+    const expectedDueMs = new Date(existingTask.dueDate + 'T23:59:59').getTime();
+    const actualDueMs = Number(clickupTaskData.due_date);
+    // Tolerate timezone shift under 24h
+    if (!isNaN(actualDueMs) && Math.abs(expectedDueMs - actualDueMs) > 86400000) {
+      hasDivergence = true;
+      divergenceReason = `Due date on ClickUp differs from ZenFlow (${existingTask.dueDate})`;
+    }
+  }
+
+  // If any divergence is detected, assert ZenFlow as source of truth and update ClickUp
+  if (hasDivergence && token) {
+    console.log(`[ClickUp Webhook] Divergence detected (${divergenceReason}). Re-syncing ZenFlow authoritative state to ClickUp for task "${existingTask.title}" (${taskId}).`);
+    syncTaskToClickUp(existingTask, token, assignedUser).catch(e =>
+      console.error('[ClickUp Webhook] Error pushing authoritative state to ClickUp:', e)
     );
-    if (matchingUser && matchingUser.id !== existingTask.userId) {
-      const prevUserName = store.users.find(u => u.id === existingTask!.userId)?.name || existingTask.userId;
-      existingTask.userId = matchingUser.id;
-      existingTask.updatedAt = new Date().toISOString();
-      activityEntries.unshift({
-        id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        timestamp: new Date().toISOString(),
-        action: 'reassigned',
-        from: prevUserName,
-        to: matchingUser.name,
-        details: `Reassigned from ${prevUserName} to ${matchingUser.name} via ClickUp webhook`,
-      });
-      modified = true;
 
-      appendAuditLog({
-        category: 'webhook',
-        action: 'clickup_assignee_synced',
-        actor: { ip },
-        targetId: existingTask.id,
-        targetType: 'task',
-        from: existingTask.userId,
-        to: matchingUser.id,
-        details: `Task "${existingTask.title}" reassigned to ${matchingUser.name} via ClickUp webhook`,
-        metadata: { clickupTaskId: taskId, clickupUserId: newAssigneeId },
-      });
-    }
+    appendAuditLog({
+      category: 'webhook',
+      action: 'zenflow_source_of_truth_asserted',
+      actor: { ip },
+      targetId: existingTask.id,
+      targetType: 'task',
+      details: `ClickUp diverged from ZenFlow (${divergenceReason}). ZenFlow authoritative state pushed to ClickUp.`,
+      metadata: { clickupTaskId: taskId, divergenceReason },
+    });
+    return;
   }
 
-  // 3. Check Due Date Updates
-  let newDueDateRaw: string | number | null = null;
-  const dueDateItem = historyItems.find((h: any) => h.field === 'due_date');
-  if (dueDateItem?.after !== undefined) {
-    newDueDateRaw = dueDateItem.after;
-  } else if (clickupTaskData?.due_date !== undefined) {
-    newDueDateRaw = clickupTaskData.due_date;
-  }
-
-  if (newDueDateRaw !== null) {
-    let resolvedDueDate: string | undefined;
-    if (newDueDateRaw) {
-      const d = new Date(Number(newDueDateRaw));
-      if (!isNaN(d.getTime())) {
-        resolvedDueDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      }
-    }
-    if (resolvedDueDate !== existingTask.dueDate) {
-      const prevDue = existingTask.dueDate || 'None';
-      existingTask.dueDate = resolvedDueDate;
-      existingTask.updatedAt = new Date().toISOString();
-      activityEntries.unshift({
-        id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        timestamp: new Date().toISOString(),
-        action: 'rescheduled',
-        from: prevDue,
-        to: resolvedDueDate || 'None',
-        details: `Due date changed from ${prevDue} to ${resolvedDueDate || 'None'} via ClickUp webhook`,
-      });
-      modified = true;
-
-      appendAuditLog({
-        category: 'webhook',
-        action: 'clickup_deadline_synced',
-        actor: { ip },
-        targetId: existingTask.id,
-        targetType: 'task',
-        from: prevDue,
-        to: resolvedDueDate || 'None',
-        details: `Task "${existingTask.title}" deadline changed to ${resolvedDueDate || 'None'} via ClickUp webhook`,
-        metadata: { clickupTaskId: taskId },
-      });
-    }
-  }
-
-  // 4. Check Tracked Time Updates
+  // If time tracked on ClickUp changed and ZenFlow has less tracked time, record duration
   const timeItem = historyItems.find((h: any) => h.field === 'time_spent' || h.field === 'time_tracked');
   if (timeItem?.after !== undefined) {
     const parsedMs = Number(timeItem.after);
-    if (!isNaN(parsedMs) && parsedMs >= 0 && parsedMs !== existingTask.inProgressDurationMs) {
+    if (!isNaN(parsedMs) && parsedMs > (existingTask.inProgressDurationMs || 0)) {
       existingTask.inProgressDurationMs = parsedMs;
       existingTask.updatedAt = new Date().toISOString();
+      const activityEntries = Array.isArray(existingTask.activityLog) ? [...existingTask.activityLog] : [];
       activityEntries.unshift({
         id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         timestamp: new Date().toISOString(),
         action: 'billable_adjusted',
-        details: `Tracked duration updated to ${formatBillableHoursServer(parsedMs)} via ClickUp webhook`,
+        details: `Tracked duration synced to ${formatBillableHoursServer(parsedMs)} from ClickUp`,
       });
-      modified = true;
+      existingTask.activityLog = activityEntries.slice(0, 15);
+      saveStore(store);
+      dbSaveTask(existingTask).catch(e => console.error('Firestore save err:', e));
+      broadcastEvent('task_updated', existingTask);
     }
-  }
-
-  if (modified) {
-    existingTask.activityLog = activityEntries.slice(0, 15);
-    saveStore(store);
-    dbSaveTask(existingTask).catch(e => console.error('Firestore save err:', e));
-    broadcastEvent('task_updated', existingTask);
-    console.log(`[ClickUp Webhook] Successfully synchronized task ${existingTask.id} (${existingTask.title})`);
   }
 }
 
@@ -2326,9 +2244,9 @@ async function startServer() {
     );
     const maxOrder = existingInStatus.reduce((max, t) => Math.max(max, t.order ?? 0), -1);
 
-    const cleanStatus = ['pipeline', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : 'todo';
+    const cleanStatus = ['pipeline', 'retainer', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : 'todo';
     const cleanDueDate = dueDate ? sanitizeString(dueDate) : undefined;
-    if (cleanStatus !== 'pipeline' && !cleanDueDate) {
+    if (cleanStatus !== 'pipeline' && cleanStatus !== 'retainer' && !cleanDueDate) {
       return res.status(400).json({ error: 'A deadline is required when adding tasks to active workflow lanes' });
     }
     const isDone = cleanStatus === 'done';
@@ -2424,10 +2342,6 @@ async function startServer() {
 
     const isCallerCreativeDirector = isCallerSuperadmin || Boolean(caller?.isCreativeDirector);
 
-    if (!isCallerCreativeDirector) {
-      return res.status(403).json({ error: 'Only Creative Directors and Superadmins can duplicate tasks to another board' });
-    }
-
     const { targetUserId, targetStatus, targetDueDate } = req.body;
     if (!targetUserId || typeof targetUserId !== 'string') {
       return res.status(400).json({ error: 'targetUserId is required' });
@@ -2436,10 +2350,6 @@ async function startServer() {
     const targetUser = store.users.find(u => u.id === targetUserId);
     if (!targetUser) {
       return res.status(400).json({ error: 'Target user does not exist in workspace' });
-    }
-
-    if (targetUser.id === sourceTask.userId) {
-      return res.status(400).json({ error: 'Cannot duplicate task to the same user. Please select a user on another board.' });
     }
 
     const resolvedStatus: TaskStatus = targetStatus && ['pipeline', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(targetStatus)
@@ -2727,7 +2637,7 @@ async function startServer() {
       }
     }
 
-    const targetStatus = status && ['pipeline', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : currentTask.status;
+    const targetStatus = status && ['pipeline', 'retainer', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : currentTask.status;
 
     let completedAt = reqCompletedAt !== undefined ? (reqCompletedAt ? sanitizeString(reqCompletedAt) : undefined) : currentTask.completedAt;
     let inProgressStartedAt = currentTask.inProgressStartedAt;
@@ -2824,7 +2734,7 @@ async function startServer() {
       });
     }
 
-    const resolvedDueDate = targetStatus === 'pipeline'
+    const resolvedDueDate = targetStatus === 'pipeline' || targetStatus === 'retainer'
       ? undefined
       : dueDate !== undefined
       ? (dueDate ? sanitizeString(dueDate) : undefined)
@@ -2968,7 +2878,7 @@ async function startServer() {
           hasClickupAttributeChanged = true;
         }
 
-        if (update.status && ['pipeline', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(update.status)) {
+        if (update.status && ['pipeline', 'retainer', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(update.status)) {
           if (update.status !== task.status) {
             task.activityLog.unshift({
               id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -3007,8 +2917,8 @@ async function startServer() {
           task.order = update.order;
         }
 
-        // Handle deadline updates & pipeline deadline stripping
-        if (task.status === 'pipeline') {
+        // Handle deadline updates & pipeline/retainer deadline stripping
+        if (task.status === 'pipeline' || task.status === 'retainer') {
           if (task.dueDate) {
             task.activityLog.unshift({
               id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,

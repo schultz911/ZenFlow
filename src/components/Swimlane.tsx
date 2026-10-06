@@ -4,6 +4,7 @@ import { User, Task, TaskStatus, DragTaskInfo, CognitiveLoad } from '../types';
 import { calculateUserWorkload, compareTasksByDeadline } from '../utils/workload';
 import { TaskCard } from './TaskCard';
 import { PipelineSwimlane } from './PipelineSwimlane';
+import { RetainerSwimlane } from './RetainerSwimlane';
 import { DeadlineDemandModal } from './DeadlineDemandModal';
 import { WipLimitModal } from './WipLimitModal';
 import {
@@ -289,6 +290,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   const tasksByColumn = useMemo(() => {
     const grouped: Record<TaskStatus, Task[]> = {
       pipeline: [],
+      retainer: [],
       todo: [],
       in_progress: [],
       in_review: [],
@@ -321,6 +323,11 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
         (activeDragInfo?.taskId === taskId ? activeDragInfo.task : undefined) ||
         fallbackTask;
       if (!task) return;
+
+      // Retainer task cards cannot be moved to main swimlanes and cards cannot be moved into retainer
+      if (task.status === 'retainer' || targetStatus === 'retainer') {
+        return;
+      }
 
       // When moving any task to pipeline: clear its deadline immediately from its data
       if (targetStatus === 'pipeline') {
@@ -397,6 +404,15 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     async (targetUserId: string, title: string, cognitiveLoad: CognitiveLoad) => {
       if (onQuickAddTask) {
         await onQuickAddTask(targetUserId, title, 'pipeline', cognitiveLoad);
+      }
+    },
+    [onQuickAddTask]
+  );
+
+  const handleQuickAddRetainer = useCallback(
+    async (targetUserId: string, title: string, cognitiveLoad: CognitiveLoad) => {
+      if (onQuickAddTask) {
+        await onQuickAddTask(targetUserId, title, 'retainer', cognitiveLoad);
       }
     },
     [onQuickAddTask]
@@ -811,18 +827,30 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               transition={{ duration: 0.2, ease: 'easeInOut' }}
               className="overflow-hidden"
             >
-              {/* Horizontal Pipeline Swimlane at the top */}
-              <PipelineSwimlane
-                user={user}
-                tasks={tasksByColumn.pipeline}
-                onQuickAdd={handleQuickAddPipeline}
-                onDragStart={handleTaskDragStart}
-                onDragEnd={handleTaskDragEnd}
-                onMoveTask={handleMoveStatus}
-                onEditTask={onEditTask}
-                onUpdateTitle={onUpdateTaskTitle}
-                onDeleteTask={onDeleteTask}
-              />
+              {/* Horizontal Pipeline & Retainer Swimlanes side-by-side */}
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 mx-4 sm:mx-6 mt-3 mb-1">
+                <PipelineSwimlane
+                  className=""
+                  user={user}
+                  tasks={tasksByColumn.pipeline}
+                  onQuickAdd={handleQuickAddPipeline}
+                  onDragStart={handleTaskDragStart}
+                  onDragEnd={handleTaskDragEnd}
+                  onMoveTask={handleMoveStatus}
+                  onEditTask={onEditTask}
+                  onUpdateTitle={onUpdateTaskTitle}
+                  onDeleteTask={onDeleteTask}
+                />
+                <RetainerSwimlane
+                  user={user}
+                  tasks={tasksByColumn.retainer}
+                  onQuickAdd={handleQuickAddRetainer}
+                  onEditTask={onEditTask}
+                  onUpdateTitle={onUpdateTaskTitle}
+                  onDeleteTask={onDeleteTask}
+                  onCreateSubtask={onDuplicateTask || onEditTask}
+                />
+              </div>
 
               {/* Sections sorted by status columns */}
               <div className="p-4 sm:p-6 overflow-x-auto">

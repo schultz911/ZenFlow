@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 
 interface PipelineSwimlaneProps {
+  className?: string;
   user: User;
   tasks: Task[];
   onQuickAdd: (userId: string, title: string, cognitiveLoad: CognitiveLoad) => Promise<void>;
@@ -24,6 +25,7 @@ interface PipelineSwimlaneProps {
 }
 
 const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
+  className,
   user,
   tasks,
   onQuickAdd,
@@ -136,11 +138,11 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`relative mx-4 sm:mx-6 mt-3 mb-1 rounded-xl border p-2.5 sm:p-3 transition-all ${
+      className={`relative rounded-xl border p-2.5 sm:p-3 transition-all ${
         isDragOver
           ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20 ring-2 ring-indigo-500/30'
           : 'border-neutral-200/80 dark:border-white/5 bg-neutral-100/60 dark:bg-[#111111]'
-      }`}
+      } ${className !== undefined ? className : 'mx-4 sm:mx-6 mt-3 mb-1'}`}
     >
       {/* Pipeline Header */}
       <div className="flex items-center justify-between gap-2 mb-2 px-1">
@@ -400,6 +402,7 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
 };
 
 function arePipelinePropsEqual(prev: PipelineSwimlaneProps, next: PipelineSwimlaneProps): boolean {
+  if (prev.className !== next.className) return false;
   if (prev.user !== next.user) return false;
   if (prev.onQuickAdd !== next.onQuickAdd) return false;
   if (prev.onDragStart !== next.onDragStart) return false;
