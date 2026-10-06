@@ -845,29 +845,33 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               transition={{ duration: 0.2, ease: 'easeInOut' }}
               className="overflow-hidden"
             >
-              {/* Horizontal Pipeline & Retainer Swimlanes side-by-side */}
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 mx-4 sm:mx-6 mt-3 mb-1">
-                <PipelineSwimlane
-                  className=""
-                  user={user}
-                  tasks={tasksByColumn.pipeline}
-                  onQuickAdd={handleQuickAddPipeline}
-                  onDragStart={handleTaskDragStart}
-                  onDragEnd={handleTaskDragEnd}
-                  onMoveTask={handleMoveStatus}
-                  onEditTask={onEditTask}
-                  onUpdateTitle={onUpdateTaskTitle}
-                  onDeleteTask={onDeleteTask}
-                />
-                <RetainerSwimlane
-                  user={user}
-                  tasks={tasksByColumn.retainer}
-                  onQuickAdd={handleQuickAddRetainer}
-                  onEditTask={onEditTask}
-                  onUpdateTitle={onUpdateTaskTitle}
-                  onDeleteTask={onDeleteTask}
-                  onCreateSubtask={onDuplicateTask || onEditTask}
-                />
+              {/* Horizontal Pipeline & Retainer Swimlanes side-by-side (3:5 ratio) */}
+              <div className="grid grid-cols-1 xl:grid-cols-8 gap-3 mx-4 sm:mx-6 mt-3 mb-1">
+                <div className="xl:col-span-3 min-w-0">
+                  <PipelineSwimlane
+                    className=""
+                    user={user}
+                    tasks={tasksByColumn.pipeline}
+                    onQuickAdd={handleQuickAddPipeline}
+                    onDragStart={handleTaskDragStart}
+                    onDragEnd={handleTaskDragEnd}
+                    onMoveTask={handleMoveStatus}
+                    onEditTask={onEditTask}
+                    onUpdateTitle={onUpdateTaskTitle}
+                    onDeleteTask={onDeleteTask}
+                  />
+                </div>
+                <div className="xl:col-span-5 min-w-0">
+                  <RetainerSwimlane
+                    user={user}
+                    tasks={tasksByColumn.retainer}
+                    onQuickAdd={handleQuickAddRetainer}
+                    onEditTask={onEditTask}
+                    onUpdateTitle={onUpdateTaskTitle}
+                    onDeleteTask={onDeleteTask}
+                    onCreateSubtask={onDuplicateTask || onEditTask}
+                  />
+                </div>
               </div>
 
               {/* Sections sorted by status columns */}
