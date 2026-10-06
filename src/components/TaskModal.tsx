@@ -164,8 +164,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
   // Delegated subtasks (if this task is a parent task with child subtasks)
   const delegatedSubtasks = useMemo(() => {
-    if (!taskToEdit) return [];
-    return tasks.filter(t => t.parentTaskId === taskToEdit.id);
+    if (!taskToEdit?.id) return [];
+    return Array.isArray(tasks) ? tasks.filter(t => t && t.parentTaskId === taskToEdit.id) : [];
   }, [tasks, taskToEdit]);
 
   const [title, setTitle] = useState('');
@@ -200,12 +200,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
   useEffect(() => {
     if (taskToEdit) {
-      setTitle(taskToEdit.title);
+      setTitle(taskToEdit.title || '');
       setDescription(taskToEdit.description || '');
-      setUserId(taskToEdit.userId);
+      setUserId(taskToEdit.userId || '');
       setDueDate(taskToEdit.dueDate || '');
-      setCognitiveLoad(taskToEdit.cognitiveLoad);
-      setStatus(taskToEdit.status);
+      setCognitiveLoad(taskToEdit.cognitiveLoad || 'medium');
+      setStatus(taskToEdit.status || 'todo');
       setClickupFolderId(taskToEdit.clickupFolderId || '');
       setClickupListId(taskToEdit.clickupListId || '');
       setClickupTaskType(taskToEdit.clickupTaskType || '');
@@ -225,7 +225,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       // If user has a role, match default task type if options available
       const userObj = users.find(u => u.id === defaultUser);
       const roleName = userObj?.role === 'content' ? 'Content & Copy' : 'Design';
-      const matchedOption = clickupCustomFieldOptions?.find(
+      const matchedOption = (clickupCustomFieldOptions || []).find(
         o => (o?.name || '').toLowerCase() === roleName.toLowerCase()
       );
       if (matchedOption) {
@@ -275,42 +275,48 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   }, [clickupCustomFieldOptions, clickupTaskType, clickupTaskTypeId]);
 
   const activities = useMemo(() => {
-    return taskToEdit?.activityLog || [];
+    return Array.isArray(taskToEdit?.activityLog) ? taskToEdit.activityLog : [];
   }, [taskToEdit]);
 
   const cycleMetrics = useMemo(() => {
     if (!taskToEdit) return null;
-    const startMs = taskToEdit.createdAt ? new Date(taskToEdit.createdAt).getTime() : 0;
-    const endMs = taskToEdit.completedAt
-      ? new Date(taskToEdit.completedAt).getTime()
-      : (taskToEdit.status === 'done' ? Date.now() : Date.now());
+    try {
+      const startMs = taskToEdit.createdAt ? new Date(taskToEdit.createdAt).getTime() : 0;
+      const endMs = taskToEdit.completedAt
+        ? new Date(taskToEdit.completedAt).getTime()
+        : (taskToEdit.status === 'done' ? Date.now() : Date.now());
 
-    const totalLeadTimeMs = startMs > 0 ? Math.max(0, endMs - startMs) : 0;
+      const totalLeadTimeMs = startMs > 0 && !isNaN(startMs) && !isNaN(endMs) ? Math.max(0, endMs - startMs) : 0;
 
-    // Time in current status: find latest activity that changed status or created task
-    const statusChangeAct = activities.find(a => a.action === 'status_change' || a.action === 'created');
-    const statusStartMs = statusChangeAct ? new Date(statusChangeAct.timestamp).getTime() : startMs;
-    const currentStatusMs = statusStartMs > 0 ? Math.max(0, Date.now() - statusStartMs) : 0;
+      // Time in current status: find latest activity that changed status or created task
+      const statusChangeAct = Array.isArray(activities)
+        ? activities.find(a => a && (a.action === 'status_change' || a.action === 'created'))
+        : undefined;
+      const statusStartMs = statusChangeAct?.timestamp ? new Date(statusChangeAct.timestamp).getTime() : startMs;
+      const currentStatusMs = statusStartMs > 0 && !isNaN(statusStartMs) ? Math.max(0, Date.now() - statusStartMs) : 0;
 
-    const billableMs = getTaskBillableMs(taskToEdit);
-    const billableDetailedStr = formatBillableDetailed(billableMs);
+      const billableMs = getTaskBillableMs(taskToEdit);
+      const billableDetailedStr = formatBillableDetailed(billableMs);
 
-    return {
-      isDone: taskToEdit.status === 'done',
-      totalLeadTimeStr: totalLeadTimeMs > 0 ? formatDuration(totalLeadTimeMs) : '< 1m',
-      currentStatusStr: currentStatusMs > 0 ? formatDuration(currentStatusMs) : '< 1m',
-      billableDetailedStr,
-      revisionCount: activities.length,
-    };
+      return {
+        isDone: taskToEdit.status === 'done',
+        totalLeadTimeStr: totalLeadTimeMs > 0 ? formatDuration(totalLeadTimeMs) : '< 1m',
+        currentStatusStr: currentStatusMs > 0 ? formatDuration(currentStatusMs) : '< 1m',
+        billableDetailedStr,
+        revisionCount: Array.isArray(activities) ? activities.length : 0,
+      };
+    } catch {
+      return null;
+    }
   }, [taskToEdit, activities]);
 
   // Available lists for the selected folder
   const availableLists = useMemo(() => {
-    const folders = clickupFoldersAndLists?.folders || [];
-    const folderlessLists = clickupFoldersAndLists?.folderlessLists || [];
+    const folders = Array.isArray(clickupFoldersAndLists?.folders) ? clickupFoldersAndLists.folders : [];
+    const folderlessLists = Array.isArray(clickupFoldersAndLists?.folderlessLists) ? clickupFoldersAndLists.folderlessLists : [];
     if (clickupFolderId) {
-      const folder = folders.find(f => f.id === clickupFolderId);
-      return folder?.lists || [];
+      const folder = folders.find(f => f && f.id === clickupFolderId);
+      return Array.isArray(folder?.lists) ? folder.lists : [];
     }
     return folderlessLists;
   }, [clickupFolderId, clickupFoldersAndLists]);
@@ -339,11 +345,15 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   // Currently selected space display label
   const selectedSpaceInfo = useMemo(() => {
     if (!selectedClickupSpaceId) return null;
-    const s = clickupSpaces.find(space => space.id === selectedClickupSpaceId);
+    const spaces = Array.isArray(clickupSpaces) ? clickupSpaces : [];
+    const s = spaces.find(space => space && space.id === selectedClickupSpaceId);
     if (!s) return null;
-    const folders =
-      spaceFoldersMap[s.id] ||
-      (s.id === selectedClickupSpaceId ? clickupFoldersAndLists?.folders?.map(f => f.name) : undefined);
+    const rawFolders =
+      spaceFoldersMap?.[s.id] ||
+      (s.id === selectedClickupSpaceId && Array.isArray(clickupFoldersAndLists?.folders)
+        ? clickupFoldersAndLists.folders.map(f => f?.name).filter(Boolean)
+        : undefined);
+    const folders = Array.isArray(rawFolders) ? rawFolders : undefined;
     const folderListStr =
       folders && folders.length > 0
         ? `(${folders.join(', ')})`
@@ -574,7 +584,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                             assignee?.avatarColor || 'from-blue-600 to-indigo-600'
                           }`}
                         >
-                          {assignee?.name.charAt(0).toUpperCase() || '?'}
+                          {(assignee?.name || '?').charAt(0).toUpperCase()}
                         </div>
                         <span className="font-medium text-neutral-800 dark:text-neutral-200 truncate">
                           {assignee?.name || 'Unassigned'}
@@ -584,7 +594,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                         </span>
                       </div>
                       <span className="text-[10px] font-semibold capitalize px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-white/10 text-neutral-600 dark:text-neutral-300 shrink-0">
-                        {st.status?.replace?.('_', ' ') || 'todo'}
+                        {typeof st.status === 'string' ? st.status.replace('_', ' ') : 'todo'}
                       </span>
                     </div>
                   );
@@ -898,14 +908,15 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     />
                   </button>
 
-                  {isSpaceDropdownOpen && clickupSpaces.length > 0 && (
+                  {isSpaceDropdownOpen && (Array.isArray(clickupSpaces) ? clickupSpaces.length > 0 : false) && (
                     <div className="absolute left-0 right-0 top-full mt-1 w-full max-w-full z-50 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414] shadow-xl py-1 max-h-60 overflow-y-auto overflow-x-hidden">
-                      {clickupSpaces.map(s => {
-                        const folders =
-                          spaceFoldersMap[s.id] ||
-                          (s.id === selectedClickupSpaceId
-                            ? clickupFoldersAndLists?.folders?.map(f => f.name)
+                      {(Array.isArray(clickupSpaces) ? clickupSpaces : []).map(s => {
+                        const rawFolders =
+                          spaceFoldersMap?.[s.id] ||
+                          (s.id === selectedClickupSpaceId && Array.isArray(clickupFoldersAndLists?.folders)
+                            ? clickupFoldersAndLists.folders.map(f => f?.name).filter(Boolean)
                             : undefined);
+                        const folders = Array.isArray(rawFolders) ? rawFolders : undefined;
                         const folderListStr =
                           folders && folders.length > 0
                             ? `(${folders.join(', ')})`
@@ -972,7 +983,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                         className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-1.5 pl-2.5 pr-8 text-xs text-neutral-900 dark:text-white"
                       >
                         <option value="">Space (Folderless)</option>
-                        {(clickupFoldersAndLists?.folders || []).map(f => (
+                        {(Array.isArray(clickupFoldersAndLists?.folders) ? clickupFoldersAndLists.folders : []).map(f => (
                           <option key={f.id} value={f.id}>{f.name}</option>
                         ))}
                       </select>
@@ -992,7 +1003,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                         className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-1.5 pl-2.5 pr-8 text-xs text-neutral-900 dark:text-white"
                       >
                         <option value="">Select a list...</option>
-                        {availableLists.map(l => (
+                        {(Array.isArray(availableLists) ? availableLists : []).map(l => (
                           <option key={l.id} value={l.id}>{l.name}</option>
                         ))}
                       </select>
@@ -1064,7 +1075,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 </div>
               ) : (
                 <div className="max-h-36 overflow-y-auto rounded-xl border border-neutral-200/70 dark:border-white/5 bg-neutral-50 dark:bg-[#121212] p-2.5 space-y-2 text-xs divide-y divide-neutral-100 dark:divide-white/5">
-                  {activities.map(act => {
+                  {activities.map((act, actIdx) => {
+                    if (!act) return null;
                     let IconComponent = Clock;
                     let iconBg = 'text-neutral-500 bg-neutral-200/60 dark:bg-white/10';
 
@@ -1087,8 +1099,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       iconBg = 'text-indigo-500 bg-indigo-100 dark:bg-indigo-500/10';
                     }
 
+                    const toStr = typeof act.to === 'string' ? act.to : (typeof act.to === 'object' && act.to ? JSON.stringify(act.to) : String(act.to ?? ''));
+
                     return (
-                      <div key={act.id} className="pt-1.5 first:pt-0 flex items-start gap-2.5">
+                      <div key={act.id || `act-${actIdx}`} className="pt-1.5 first:pt-0 flex items-start gap-2.5">
                         <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${iconBg}`}>
                           <IconComponent className="h-3 w-3" />
                         </div>
@@ -1096,18 +1110,18 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                           <p className="text-[11px] font-medium text-neutral-700 dark:text-neutral-300 leading-snug">
                             {act.details || (
                               act.action === 'status_change'
-                                ? `Moved to ${act.to?.replace('_', ' ')}`
+                                ? `Moved to ${toStr.replace('_', ' ')}`
                                 : act.action === 'reassigned'
-                                ? `Assigned to ${act.to}`
+                                ? `Assigned to ${toStr}`
                                 : act.action === 'rescheduled'
-                                ? `Due date: ${act.to}`
+                                ? `Due date: ${toStr}`
                                 : act.action === 'billable_adjusted'
-                                ? `Billable hours adjusted to ${act.to}`
+                                ? `Billable hours adjusted to ${toStr}`
                                 : 'Task created'
                             )}
                           </p>
                           <span className="text-[10px] text-neutral-400 dark:text-white/30">
-                            {formatActivityTime(act.timestamp)}
+                            {formatActivityTime(act.timestamp || '')}
                             {act.actorName ? ` • by ${act.actorName}` : ''}
                           </span>
                         </div>
@@ -1184,7 +1198,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               <button
                 type="submit"
                 id="task-submit-button"
-                disabled={isSubmitting || !title.trim() || !userId || (status !== 'pipeline' && !dueDate.trim())}
+                disabled={isSubmitting || !title.trim() || !userId || (status !== 'pipeline' && status !== 'retainer' && !dueDate.trim())}
                 className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-blue-900/20 hover:bg-blue-500 transition-colors disabled:opacity-50"
               >
                 {taskToEdit ? 'Save Changes' : 'Create Task'}

@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { Task, User, CognitiveLoad } from '../types';
 import { getCognitiveLoadLabel } from '../utils/workload';
+import { useDashboard } from '../context/DashboardContext';
 import {
   Plus,
   Repeat,
@@ -9,16 +10,29 @@ import {
   Trash2,
   X,
   CopyPlus,
+  ExternalLink,
 } from 'lucide-react';
 
 interface RetainerSwimlaneProps {
   user: User;
   tasks: Task[];
-  onQuickAdd: (userId: string, title: string, cognitiveLoad: CognitiveLoad) => Promise<void>;
+  onQuickAdd: (
+    userId: string,
+    title: string,
+    cognitiveLoad: CognitiveLoad,
+    clickupDetails?: {
+      clickupFolderId?: string;
+      clickupFolderName?: string;
+      clickupListId?: string;
+      clickupListName?: string;
+      clickupSpaceId?: string;
+    }
+  ) => Promise<void>;
   onEditTask: (task: Task) => void;
   onUpdateTitle?: (taskId: string, newTitle: string) => void;
   onDeleteTask: (taskId: string) => void;
   onCreateSubtask: (task: Task) => void;
+  onOpenFullAdd?: () => void;
 }
 
 const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
@@ -29,11 +43,55 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
   onUpdateTitle,
   onDeleteTask,
   onCreateSubtask,
+  onOpenFullAdd,
 }) => {
+  const {
+    isClickupConnected,
+    isZensciencesUser,
+    selectedClickupSpaceId,
+    clickupFoldersAndLists,
+  } = useDashboard();
+
   const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newLoad, setNewLoad] = useState<CognitiveLoad>('medium');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // ClickUp destination selection state for quick-added retainer tasks
+  const [selectedFolderId, setSelectedFolderId] = useState<string>('');
+  const [selectedListId, setSelectedListId] = useState<string>('');
+
+  const folders = useMemo(() => {
+    return Array.isArray(clickupFoldersAndLists?.folders) ? clickupFoldersAndLists.folders : [];
+  }, [clickupFoldersAndLists]);
+
+  const folderlessLists = useMemo(() => {
+    return Array.isArray(clickupFoldersAndLists?.folderlessLists) ? clickupFoldersAndLists.folderlessLists : [];
+  }, [clickupFoldersAndLists]);
+
+  const availableLists = useMemo(() => {
+    if (selectedFolderId) {
+      const folder = folders.find(f => f && f.id === selectedFolderId);
+      return Array.isArray(folder?.lists) ? folder.lists : [];
+    }
+    return folderlessLists;
+  }, [selectedFolderId, folders, folderlessLists]);
+
+  // Synchronize default selected list when lists load or change
+  useEffect(() => {
+    if (!isClickupConnected || !isZensciencesUser) return;
+    if (selectedListId && availableLists.some(l => l.id === selectedListId)) return;
+
+    if (availableLists.length > 0) {
+      setSelectedListId(availableLists[0].id);
+    } else if (folderlessLists.length > 0) {
+      setSelectedFolderId('');
+      setSelectedListId(folderlessLists[0].id);
+    } else if (folders.length > 0 && Array.isArray(folders[0].lists) && folders[0].lists.length > 0) {
+      setSelectedFolderId(folders[0].id);
+      setSelectedListId(folders[0].lists[0].id);
+    }
+  }, [isClickupConnected, isZensciencesUser, availableLists, folderlessLists, folders, selectedListId]);
 
   // Inline title editing state for a retainer task
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -78,7 +136,27 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
     if (!trimmed || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      await onQuickAdd(user.id, trimmed, newLoad);
+      let clickupDetails: {
+        clickupFolderId?: string;
+        clickupFolderName?: string;
+        clickupListId?: string;
+        clickupListName?: string;
+        clickupSpaceId?: string;
+      } | undefined;
+
+      if (isClickupConnected && isZensciencesUser && selectedListId) {
+        const folder = folders.find(f => f && f.id === selectedFolderId);
+        const list = availableLists.find(l => l && l.id === selectedListId);
+        clickupDetails = {
+          clickupFolderId: selectedFolderId || undefined,
+          clickupFolderName: folder?.name,
+          clickupListId: selectedListId,
+          clickupListName: list?.name,
+          clickupSpaceId: selectedClickupSpaceId || undefined,
+        };
+      }
+
+      await onQuickAdd(user.id, trimmed, newLoad, clickupDetails);
       setNewTitle('');
       setIsAdding(false);
     } finally {
@@ -107,33 +185,46 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
           </span>
         </div>
 
-        <button
-          ref={toggleBtnRef}
-          type="button"
-          onClick={() => {
-            setIsAdding(prev => !prev);
-            setNewTitle('');
-            setNewLoad('medium');
-          }}
-          title={isAdding ? 'Cancel adding task' : 'Add task to retainer'}
-          className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
-            isAdding
-              ? 'bg-neutral-200 dark:bg-white/10 text-neutral-700 dark:text-white'
-              : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
-          }`}
-        >
-          {isAdding ? (
-            <>
-              <X className="h-3 w-3" />
-              <span>Cancel</span>
-            </>
-          ) : (
-            <>
-              <Plus className="h-3 w-3" />
-              <span>Add to Retainer</span>
-            </>
+        <div className="flex items-center gap-1.5">
+          {onOpenFullAdd && !isAdding && (
+            <button
+              type="button"
+              onClick={onOpenFullAdd}
+              title="Open full task modal with status prefilled to Retainer"
+              className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold text-neutral-500 hover:text-emerald-600 dark:text-white/40 dark:hover:text-emerald-400 hover:bg-neutral-200/60 dark:hover:bg-white/5 transition-colors cursor-pointer"
+            >
+              <span>+ Details</span>
+            </button>
           )}
-        </button>
+
+          <button
+            ref={toggleBtnRef}
+            type="button"
+            onClick={() => {
+              setIsAdding(prev => !prev);
+              setNewTitle('');
+              setNewLoad('medium');
+            }}
+            title={isAdding ? 'Cancel adding task' : 'Add task to retainer'}
+            className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+              isAdding
+                ? 'bg-neutral-200 dark:bg-white/10 text-neutral-700 dark:text-white'
+                : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
+            }`}
+          >
+            {isAdding ? (
+              <>
+                <X className="h-3 w-3" />
+                <span>Cancel</span>
+              </>
+            ) : (
+              <>
+                <Plus className="h-3 w-3" />
+                <span>Add to Retainer</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Inline Quick Add into Retainer */}
@@ -162,6 +253,46 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
             className="w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-[#121212] px-2.5 py-1.5 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-emerald-500 focus:outline-none"
           />
 
+          {/* ClickUp Destination Selection for Retainer parent task */}
+          {isClickupConnected && isZensciencesUser && (
+            <div className="flex flex-wrap items-center gap-1.5 p-2 rounded-lg bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-800/30 text-[10px]">
+              <span className="font-semibold text-purple-700 dark:text-purple-300 shrink-0">
+                ClickUp:
+              </span>
+              {folders.length > 0 && (
+                <select
+                  value={selectedFolderId}
+                  onChange={e => {
+                    setSelectedFolderId(e.target.value);
+                    setSelectedListId('');
+                  }}
+                  className="rounded border border-purple-200 dark:border-purple-800/40 bg-white dark:bg-[#141414] px-1.5 py-0.5 text-[10px] text-neutral-800 dark:text-neutral-200 max-w-[130px] truncate"
+                  title="ClickUp Folder"
+                >
+                  <option value="">Space (Folderless)</option>
+                  {folders.map(f => (
+                    <option key={f.id} value={f.id}>
+                      {f.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <select
+                value={selectedListId}
+                onChange={e => setSelectedListId(e.target.value)}
+                className="rounded border border-purple-200 dark:border-purple-800/40 bg-white dark:bg-[#141414] px-1.5 py-0.5 text-[10px] text-neutral-800 dark:text-neutral-200 max-w-[150px] truncate"
+                title="ClickUp List destination for parent task"
+              >
+                <option value="">Select ClickUp List...</option>
+                {availableLists.map(l => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1">
               {(['low', 'medium', 'high'] as const).map(load => (
@@ -184,14 +315,29 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
               ))}
             </div>
 
-            <button
-              type="button"
-              disabled={!newTitle.trim() || isSubmitting}
-              onClick={handleCommitAdd}
-              className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1 text-[10px] font-semibold text-white shadow-xs transition-colors cursor-pointer disabled:opacity-40"
-            >
-              Add Retainer
-            </button>
+            <div className="flex items-center gap-2">
+              {onOpenFullAdd && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAdding(false);
+                    onOpenFullAdd();
+                  }}
+                  className="text-[10px] font-medium text-neutral-500 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white hover:underline cursor-pointer"
+                  title="Open full task modal with space selection, custom fields, and description"
+                >
+                  + Full Details
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={!newTitle.trim() || isSubmitting}
+                onClick={handleCommitAdd}
+                className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1 text-[10px] font-semibold text-white shadow-xs transition-colors cursor-pointer disabled:opacity-40"
+              >
+                Add Retainer
+              </button>
+            </div>
           </div>
         </motion.div>
       )}
@@ -221,7 +367,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.9 }}
                 transition={{ duration: 0.15 }}
-                className="group relative flex items-center gap-2 shrink-0 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#1A1A1A] px-3 py-2 shadow-2xs hover:shadow-md hover:border-emerald-400/50 dark:hover:border-emerald-500/30 transition-all select-none max-w-[320px]"
+                className="group relative flex items-center gap-2 shrink-0 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#1A1A1A] px-3 py-2 shadow-2xs hover:shadow-md hover:border-emerald-400/50 dark:hover:border-emerald-500/30 transition-all select-none max-w-[340px]"
               >
                 {/* Fixed Retainer Indicator */}
                 <div
@@ -231,7 +377,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                   <Repeat className="h-3 w-3" />
                 </div>
 
-                {/* Task Title */}
+                {/* Task Title & Metadata */}
                 <div className="min-w-0 flex-1">
                   {isEditingThis ? (
                     <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
@@ -276,23 +422,45 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                     </h5>
                   )}
 
-                  {/* Cognitive Load Indicator */}
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <span
-                      className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                        task.cognitiveLoad === 'high'
-                          ? 'bg-red-500'
-                          : task.cognitiveLoad === 'medium'
-                          ? 'bg-yellow-500'
-                          : 'bg-green-500'
-                      }`}
-                    />
-                    <span
-                      title={`Cognitive Load: ${cognitiveLabel}`}
-                      className="text-[10px] text-neutral-500 dark:text-white/40 capitalize truncate"
-                    >
-                      {task.cognitiveLoad}
-                    </span>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    {/* Cognitive Load Indicator */}
+                    <div className="flex items-center gap-1">
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                          task.cognitiveLoad === 'high'
+                            ? 'bg-red-500'
+                            : task.cognitiveLoad === 'medium'
+                            ? 'bg-yellow-500'
+                            : 'bg-green-500'
+                        }`}
+                      />
+                      <span
+                        title={`Cognitive Load: ${cognitiveLabel}`}
+                        className="text-[10px] text-neutral-500 dark:text-white/40 capitalize truncate"
+                      >
+                        {task.cognitiveLoad}
+                      </span>
+                    </div>
+
+                    {/* ClickUp List & Link Indicator */}
+                    {task.clickupListName && (
+                      <span
+                        title={task.clickupUrl ? 'Open parent task in ClickUp' : `ClickUp List: ${task.clickupListName}`}
+                        onClick={e => {
+                          if (task.clickupUrl) {
+                            e.stopPropagation();
+                            window.open(task.clickupUrl, '_blank', 'noopener,noreferrer');
+                          }
+                        }}
+                        className={`inline-flex items-center gap-1 text-[9px] px-1.5 py-0.2 rounded bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/40 font-medium truncate max-w-[120px] ${
+                          task.clickupUrl ? 'hover:underline cursor-pointer' : ''
+                        }`}
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full bg-purple-500 shrink-0" />
+                        <span className="truncate">{task.clickupListName}</span>
+                        {task.clickupUrl && <ExternalLink className="h-2 w-2 shrink-0 opacity-70" />}
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -351,6 +519,7 @@ function areRetainerPropsEqual(prev: RetainerSwimlaneProps, next: RetainerSwimla
   if (prev.onUpdateTitle !== next.onUpdateTitle) return false;
   if (prev.onDeleteTask !== next.onDeleteTask) return false;
   if (prev.onCreateSubtask !== next.onCreateSubtask) return false;
+  if (prev.onOpenFullAdd !== next.onOpenFullAdd) return false;
 
   const prevTasks = prev.tasks;
   const nextTasks = next.tasks;

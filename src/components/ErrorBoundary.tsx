@@ -49,10 +49,15 @@ export class ErrorBoundary extends React.Component<Props, State> {
               </p>
             </div>
             {this.state.error?.message && (
-              <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-left font-mono text-[11px] text-red-300 break-words">
-                {import.meta.env.DEV
-                  ? this.state.error.message
-                  : 'An unexpected error occurred. Please reload.'}
+              <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-left font-mono text-[11px] text-red-300 break-words space-y-1.5 max-h-48 overflow-y-auto">
+                <p className="font-semibold text-red-400">
+                  {this.state.error.message}
+                </p>
+                {this.state.error.stack && (
+                  <pre className="text-[10px] text-white/40 whitespace-pre-wrap overflow-x-auto">
+                    {this.state.error.stack.split('\n').slice(0, 4).join('\n')}
+                  </pre>
+                )}
               </div>
             )}
             <button

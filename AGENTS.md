@@ -6,6 +6,37 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
+### Sweep 48: 2026-10-06 (Edit Task Render Crash Elimination & Retainer ClickUp Destination Parent-Task Integration)
+
+- **BUG-14 (Edit Task Modal Component Render Crash & Defensive Hardening):**
+  - *Root Cause Analysis:*
+    1. In [`TaskModal`](file:///c:/ZenFlow/src/components/TaskModal.tsx) `delegatedSubtasks` list, `{assignee?.name.charAt(0).toUpperCase() || '?'}` evaluated `(undefined).charAt(0)` whenever a subtask's assigned user was unassigned or not present in the workspace `users` array, throwing an uncaught `TypeError: Cannot read properties of undefined (reading 'charAt')` that crashed the entire component tree into `<ErrorBoundary>`.
+    2. In `activities.map()`, `act.to?.replace('_', ' ')` only checked against nullish values; when `act.to` was an object (e.g. migration payload or activity dictionary), calling `.replace` threw `TypeError: act.to?.replace is not a function`.
+    3. In [`workload.ts`](file:///c:/ZenFlow/src/utils/workload.ts) `getTaskBillableMs`, spreading `[...task.activityLog]` without an `Array.isArray` check threw when `activityLog` was non-iterable.
+    4. In `TaskModal.tsx` submit button validation, `disabled={... || (status !== 'pipeline' && !dueDate.trim())}` failed to exclude `'retainer'`, permanently disabling the save button for Retainer tasks which have no deadlines.
+  - *Surgical Resolution:*
+    - Defensively guarded assignee name evaluation with `{(assignee?.name || '?').charAt(0).toUpperCase()}` and status formatting with `typeof st.status === 'string' ? st.status.replace('_', ' ') : 'todo'`.
+    - Protected activity log formatting with safe type conversion `const toStr = typeof act.to === 'string' ? act.to : (typeof act.to === 'object' && act.to ? JSON.stringify(act.to) : String(act.to ?? ''))`.
+    - Wrapped `cycleMetrics` calculation in try-catch and guarded all array manipulations (`delegatedSubtasks`, `activities`, `availableLists`, `selectedSpaceInfo`, `clickupSpaces`, `folders`) with `Array.isArray()`.
+    - Corrected submit button disabled condition to `(status !== 'pipeline' && status !== 'retainer' && !dueDate.trim())`.
+    - Enhanced [`ErrorBoundary`](file:///c:/ZenFlow/src/components/ErrorBoundary.tsx) to display real error messages and stack traces.
+- **WORKFLOW-02 (Retainer Tasks ClickUp Destination Selection & Parent Task Creation):**
+  - *Architecture & User Experience:*
+    1. In [`RetainerSwimlane`](file:///c:/ZenFlow/src/components/RetainerSwimlane.tsx), integrated ClickUp folder and list destination selectors directly into the quick-add card when ClickUp is connected, automatically defaulting to the active space/folder/list while allowing quick inline switching.
+    2. Added a "+ Details" header button and "+ Full Details" quick-add link that triggers `onOpenFullAdd` (`onAddTask(user.id, 'retainer')`) to open [`TaskModal`](file:///c:/ZenFlow/src/components/TaskModal.tsx) with status prefilled to `'retainer'`.
+    3. Rendered ClickUp List badges and direct ClickUp hyperlinks on Retainer cards.
+    4. Forwarded ClickUp parameters (`clickupFolderId`, `clickupFolderName`, `clickupListId`, `clickupListName`, `clickupSpaceId`) through [`Swimlane`](file:///c:/ZenFlow/src/components/Swimlane.tsx), [`App`](file:///c:/ZenFlow/src/App.tsx), and [`DashboardContext`](file:///c:/ZenFlow/src/context/DashboardContext.tsx).
+    5. In [`server.ts`](file:///c:/ZenFlow/server.ts), added fallback to workspace token `store.users.find(u => u.clickupApiKey)?.clickupApiKey` across `POST /api/tasks`, `PUT /api/tasks/:id`, and `tasks_reordered`, guaranteeing that tasks sync to ClickUp even when individual board members lack personal tokens.
+    6. When Retainer tasks are created, ClickUp creates the parent task in the destination list with status `'in progress'`, populating `clickupTaskId`.
+    7. Subtasks created via `+ Subtask` in `RetainerSwimlane` / [`DuplicateTaskModal`](file:///c:/ZenFlow/src/components/DuplicateTaskModal.tsx) now nest directly under the ClickUp parent task (`clickupParentTaskId: sourceTask.clickupTaskId`).
+- **OPS-07 (Docker Build Daemon Cache Key Failure Resolution & .dockerignore Alignment):**
+  - *Root Cause Analysis:* In commit `bec8ffcb`, `data` was added as a whole directory pattern to [`.dockerignore`](file:///c:/ZenFlow/.dockerignore). When [`Dockerfile`](file:///c:/ZenFlow/Dockerfile) added `COPY --from=builder /app/data ./data` in Sweep 47 to persist the seed data file (`data/store.json`), the build daemon excluded `data/` during `COPY . .` in the `builder` stage. Consequently, `/app/data` did not exist in the builder image, causing the runner stage's `COPY --from=builder /app/data ./data` to crash the build with: `failed to solve: failed to compute cache key: failed to calculate checksum of ref ...: "/app/data": not found`.
+  - *Surgical Resolution:*
+    1. Aligned [`.dockerignore`](file:///c:/ZenFlow/.dockerignore) with [`.gitignore`](file:///c:/ZenFlow/.gitignore) by replacing blanket `data` with temporary file mask `data/*.tmp.*`. This blocks temporary persistence buffers while allowing repository seed data (`data/store.json`) into the build context.
+    2. In [`Dockerfile`](file:///c:/ZenFlow/Dockerfile) builder stage, added `RUN mkdir -p /app/data && npm run build` to defensively guarantee that `/app/data` is always present even in bare CI environments.
+- **AUDIT-07 (Static Analysis & Production Build Certification):**
+  - Verified 0 warnings and 0 errors across `npm run lint`, `npx tsc --noEmit --noUnusedLocals --noUnusedParameters`, and `npm run build`.
+
 ### Sweep 47: 2026-10-06 (Post-Sweep 46 Dead Code Purge, Audit Stream Error Hardening, ClickUp Team Token Isolation & Container Persistence)
 
 - **SAN-12 (Post-Universal Subtask Purge of 7 Stale Authorization Symbols):**

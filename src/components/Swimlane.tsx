@@ -41,7 +41,14 @@ interface SwimlaneProps {
     title: string,
     status: TaskStatus,
     cognitiveLoad: 'low' | 'medium' | 'high',
-    dueDate?: string
+    dueDate?: string,
+    clickupDetails?: {
+      clickupFolderId?: string;
+      clickupFolderName?: string;
+      clickupListId?: string;
+      clickupListName?: string;
+      clickupSpaceId?: string;
+    }
   ) => Promise<void>;
   onEditTask: (task: Task) => void;
   onRescheduleTask?: (taskId: string, newDueDate: string | undefined) => void;
@@ -410,9 +417,20 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   );
 
   const handleQuickAddRetainer = useCallback(
-    async (targetUserId: string, title: string, cognitiveLoad: CognitiveLoad) => {
+    async (
+      targetUserId: string,
+      title: string,
+      cognitiveLoad: CognitiveLoad,
+      clickupDetails?: {
+        clickupFolderId?: string;
+        clickupFolderName?: string;
+        clickupListId?: string;
+        clickupListName?: string;
+        clickupSpaceId?: string;
+      }
+    ) => {
       if (onQuickAddTask) {
-        await onQuickAddTask(targetUserId, title, 'retainer', cognitiveLoad);
+        await onQuickAddTask(targetUserId, title, 'retainer', cognitiveLoad, undefined, clickupDetails);
       }
     },
     [onQuickAddTask]
@@ -849,6 +867,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                   onUpdateTitle={onUpdateTaskTitle}
                   onDeleteTask={onDeleteTask}
                   onCreateSubtask={onDuplicateTask || onEditTask}
+                  onOpenFullAdd={() => onAddTask(user.id, 'retainer')}
                 />
               </div>
 

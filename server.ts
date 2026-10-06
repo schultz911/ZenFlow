@@ -2291,7 +2291,7 @@ async function startServer() {
     const assignedUser = store.users.find(u => u.id === userId);
     const callerApiKey = (req.headers['x-clickup-api-key'] as string) || (req.body.clickupApiKey as string);
     const callerId = (req.headers['x-caller-user-id'] as string) || (req.body.callerUserId as string);
-    const syncToken = (assignedUser?.clickupApiKey || callerApiKey || '').trim();
+    const syncToken = (assignedUser?.clickupApiKey || callerApiKey || store.users.find(u => u.clickupApiKey)?.clickupApiKey || '').trim();
     if (newTask.clickupListId && syncToken) {
       syncTaskToClickUp(newTask, syncToken, assignedUser, callerId).catch(e =>
         console.error('[ClickUp] Post-create sync err:', e)
@@ -2782,7 +2782,7 @@ async function startServer() {
     const taskUser = store.users.find(u => u.id === updatedTask.userId);
     const callerApiKey = (req.headers['x-clickup-api-key'] as string) || (req.body.clickupApiKey as string);
     const callerId = (req.headers['x-caller-user-id'] as string) || (req.body.callerUserId as string);
-    const syncToken = (taskUser?.clickupApiKey || callerApiKey || '').trim();
+    const syncToken = (taskUser?.clickupApiKey || callerApiKey || store.users.find(u => u.clickupApiKey)?.clickupApiKey || '').trim();
     if ((updatedTask.clickupTaskId || updatedTask.clickupListId) && syncToken) {
       syncTaskToClickUp(updatedTask, syncToken, taskUser, callerId).catch(e =>
         console.error('[ClickUp] Post-update sync err:', e)
@@ -2954,7 +2954,7 @@ async function startServer() {
     const callerId = (req.headers['x-caller-user-id'] as string) || (req.body.callerUserId as string);
     for (const modTask of clickupTasksToSync) {
       const modUser = store.users.find(u => u.id === modTask.userId);
-      const syncToken = (modUser?.clickupApiKey || callerApiKey || '').trim();
+      const syncToken = (modUser?.clickupApiKey || callerApiKey || store.users.find(u => u.clickupApiKey)?.clickupApiKey || '').trim();
       if (syncToken) {
         syncTaskToClickUp(modTask, syncToken, modUser, callerId).catch(e =>
           console.error('[ClickUp] Reorder sync err:', e)

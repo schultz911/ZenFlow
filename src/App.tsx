@@ -318,9 +318,27 @@ function DashboardContent() {
       title: string,
       status: TaskStatus,
       cognitiveLoad: 'low' | 'medium' | 'high',
-      dueDate?: string
+      dueDate?: string,
+      clickupDetails?: {
+        clickupFolderId?: string;
+        clickupFolderName?: string;
+        clickupListId?: string;
+        clickupListName?: string;
+        clickupSpaceId?: string;
+      }
     ) => {
-      await createTask({ userId, title, status, cognitiveLoad, dueDate });
+      await createTask({
+        userId,
+        title,
+        status,
+        cognitiveLoad,
+        dueDate,
+        clickupFolderId: clickupDetails?.clickupFolderId,
+        clickupFolderName: clickupDetails?.clickupFolderName,
+        clickupListId: clickupDetails?.clickupListId,
+        clickupListName: clickupDetails?.clickupListName,
+        clickupSpaceId: clickupDetails?.clickupSpaceId,
+      });
     },
     [createTask]
   );
