@@ -47,7 +47,7 @@ export const DeadlineDemandModal: React.FC<DeadlineDemandModalProps> = ({
 
   const statusLabels: Record<TaskStatus, string> = {
     pipeline: 'Pipeline',
-    retainer: 'Retainer',
+    retainer: 'Ongoing',
     todo: 'To Do',
     in_progress: 'In Progress',
     in_review: 'In Review',

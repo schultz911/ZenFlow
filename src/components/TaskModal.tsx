@@ -700,7 +700,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 pl-3 pr-8 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none focus:ring-0 transition-colors capitalize cursor-pointer hover:border-neutral-400 dark:hover:border-white/20"
                 >
                   <option value="pipeline" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">Pipeline (Backlog)</option>
-                  <option value="retainer" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">Retainer (Ongoing)</option>
+                  <option value="retainer" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">Ongoing</option>
                   <option value="todo" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">To Do</option>
                   <option value="in_progress" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">In Progress</option>
                   <option value="in_review" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">In Review</option>

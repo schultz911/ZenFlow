@@ -163,26 +163,26 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
 
   return (
     <div
-      className="relative rounded-xl border border-neutral-200/80 dark:border-white/5 bg-neutral-100/60 dark:bg-[#111111] p-2.5 sm:p-3 transition-all"
+      className="relative rounded-xl border border-neutral-200/80 dark:border-white/5 bg-neutral-100/60 dark:bg-[#111111] p-2.5 sm:p-3 transition-all h-full flex flex-col"
     >
-      {/* Retainer Header */}
+      {/* Ongoing Header */}
       <div className="flex items-center justify-between gap-2 mb-2 px-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+          <div className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
             <Repeat className="h-3 w-3" />
           </div>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-700 dark:text-white/70">
-            Retainer
+          <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-700 dark:text-white/70 shrink-0">
+            Ongoing
           </span>
-          <span className="rounded-full bg-neutral-200/80 dark:bg-white/10 px-2 py-0.2 text-[10px] font-semibold text-neutral-600 dark:text-white/50">
+          <span className="rounded-full bg-neutral-200/80 dark:bg-white/10 px-2 py-0.2 text-[10px] font-semibold text-neutral-600 dark:text-white/50 shrink-0">
             {tasks.length}
           </span>
-          <span className="hidden sm:inline-block text-[10px] text-neutral-400 dark:text-white/30">
+          <span className="hidden sm:inline-block text-[10px] text-neutral-400 dark:text-white/30 truncate">
             No deadline · Zero workload · In Progress on ClickUp
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             ref={toggleBtnRef}
             type="button"
@@ -191,8 +191,8 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
               setNewTitle('');
               setNewLoad('medium');
             }}
-            title={isAdding ? 'Cancel adding task' : 'Add task to retainer'}
-            className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+            title={isAdding ? 'Cancel adding task' : 'Add ongoing task'}
+            className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors cursor-pointer ${
               isAdding
                 ? 'bg-neutral-200 dark:bg-white/10 text-neutral-700 dark:text-white'
                 : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
@@ -200,13 +200,13 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
           >
             {isAdding ? (
               <>
-                <X className="h-3 w-3" />
+                <X className="h-3 w-3 shrink-0" />
                 <span>Cancel</span>
               </>
             ) : (
               <>
-                <Plus className="h-3 w-3" />
-                <span>Add to Retainer</span>
+                <Plus className="h-3 w-3 shrink-0" />
+                <span>Add to Ongoing</span>
               </>
             )}
           </button>
@@ -235,7 +235,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                 setIsAdding(false);
               }
             }}
-            placeholder="Retainer task name... (Enter to save, Esc to cancel)"
+            placeholder="Ongoing task name... (Enter to save, Esc to cancel)"
             className="w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-[#121212] px-2.5 py-1.5 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-emerald-500 focus:outline-none"
           />
 
@@ -308,7 +308,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                 onClick={handleCommitAdd}
                 className="rounded-lg bg-emerald-600 hover:bg-emerald-500 px-3 py-1 text-[10px] font-semibold text-white shadow-xs transition-colors cursor-pointer disabled:opacity-40"
               >
-                Add Retainer
+                Add Ongoing
               </button>
             </div>
           </div>
@@ -324,7 +324,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
           >
             <Plus className="h-3.5 w-3.5" />
             <span className="text-[11px] font-medium">
-              No retainer tasks · Click to add ongoing client retainers
+              No ongoing tasks · Click to add ongoing client work
             </span>
           </div>
         ) : (
@@ -344,7 +344,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
               >
                 {/* Fixed Retainer Indicator */}
                 <div
-                  title="Retainer task (ongoing)"
+                  title="Ongoing task"
                   className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5"
                 >
                   <Repeat className="h-3 w-3" />
@@ -436,7 +436,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                       e.stopPropagation();
                       onCreateSubtask(task);
                     }}
-                    title="Create subtask from this retainer"
+                    title="Create subtask from this ongoing task"
                     className="rounded p-1 text-neutral-400 hover:text-emerald-600 dark:text-white/40 dark:hover:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-colors cursor-pointer"
                   >
                     <CopyPlus className="h-3 w-3" />
@@ -447,7 +447,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                       e.stopPropagation();
                       onEditTask(task);
                     }}
-                    title="Open retainer task details"
+                    title="Open ongoing task details"
                     className="rounded p-1 text-neutral-400 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
                   >
                     <Edit2 className="h-3 w-3" />
@@ -458,7 +458,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                       e.stopPropagation();
                       onDeleteTask(task.id);
                     }}
-                    title="Delete retainer task"
+                    title="Delete ongoing task"
                     className="rounded p-1 text-neutral-400 hover:text-red-500 dark:text-white/40 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
                   >
                     <Trash2 className="h-3 w-3" />

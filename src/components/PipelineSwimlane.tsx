@@ -138,7 +138,7 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`relative rounded-xl border p-2.5 sm:p-3 transition-all ${
+      className={`relative rounded-xl border p-2.5 sm:p-3 transition-all h-full flex flex-col ${
         isDragOver
           ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20 ring-2 ring-indigo-500/30'
           : 'border-neutral-200/80 dark:border-white/5 bg-neutral-100/60 dark:bg-[#111111]'
@@ -146,18 +146,18 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
     >
       {/* Pipeline Header */}
       <div className="flex items-center justify-between gap-2 mb-2 px-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex h-5 w-5 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
+        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+          <div className="flex h-5 w-5 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 shrink-0">
             <Inbox className="h-3 w-3" />
           </div>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-700 dark:text-white/70">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-700 dark:text-white/70 shrink-0">
             Pipeline
           </span>
-          <span className="rounded-full bg-neutral-200/80 dark:bg-white/10 px-2 py-0.2 text-[10px] font-semibold text-neutral-600 dark:text-white/50">
+          <span className="rounded-full bg-neutral-200/80 dark:bg-white/10 px-2 py-0.2 text-[10px] font-semibold text-neutral-600 dark:text-white/50 shrink-0">
             {tasks.length}
           </span>
-          <span className="hidden sm:inline-block text-[10px] text-neutral-400 dark:text-white/30">
-            No deadline · Does not impact workload capacity
+          <span className="hidden 2xl:inline-block text-[10px] text-neutral-400 dark:text-white/30 truncate">
+            No deadline · Zero capacity impact
           </span>
         </div>
 
@@ -170,7 +170,7 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
             setNewLoad('medium');
           }}
           title={isAdding ? 'Cancel adding task' : 'Add task to pipeline'}
-          className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+          className={`flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold whitespace-nowrap shrink-0 transition-colors cursor-pointer ${
             isAdding
               ? 'bg-neutral-200 dark:bg-white/10 text-neutral-700 dark:text-white'
               : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30'
@@ -178,12 +178,12 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
         >
           {isAdding ? (
             <>
-              <X className="h-3 w-3" />
+              <X className="h-3 w-3 shrink-0" />
               <span>Cancel</span>
             </>
           ) : (
             <>
-              <Plus className="h-3 w-3" />
+              <Plus className="h-3 w-3 shrink-0" />
               <span>Add to Pipeline</span>
             </>
           )}
