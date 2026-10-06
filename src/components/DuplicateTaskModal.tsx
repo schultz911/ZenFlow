@@ -35,7 +35,6 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
     creativeDirectors,
     duplicateTaskToBoard,
     setActiveBoardId,
-    isSuperadmin,
   } = useDashboard();
 
   // Find source user and board

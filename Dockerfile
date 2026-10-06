@@ -20,6 +20,7 @@ COPY package*.json ./
 RUN npm install --omit=dev
 
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/data ./data
 COPY --from=builder /app/firebase-applet-config.json* ./
 
 EXPOSE 3000

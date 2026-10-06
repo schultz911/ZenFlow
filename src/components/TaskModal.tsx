@@ -157,8 +157,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     canEditUserTasks,
     clickupCustomFieldOptions,
     clickupTaskTypeFieldId: ctxClickupTaskTypeFieldId,
-    isSuperadmin,
-    isCreativeDirector,
   } = useDashboard();
 
   const canDuplicate = Boolean(onDuplicateTask);

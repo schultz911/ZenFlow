@@ -93,23 +93,6 @@ const ZENFLOW_TO_CLICKUP_STATUS: Record<string, string> = {
   archived: 'complete',
 };
 
-const CLICKUP_TO_ZENFLOW_STATUS: Record<string, Task['status']> = {
-  'to do': 'todo',
-  'todo': 'todo',
-  'open': 'todo',
-  'in progress': 'in_progress',
-  'in_progress': 'in_progress',
-  'internal review': 'in_review',
-  'in review': 'in_review',
-  'review': 'in_review',
-  'client review': 'done',
-  'done': 'done',
-  'closed': 'archived',
-  'complete': 'archived',
-  'completed': 'archived',
-  'archived': 'archived',
-};
-
 export interface AuditLogEntry {
   id: string;
   timestamp: string;
@@ -918,9 +901,10 @@ function ensureSuperadmin(appStore: AppStore) {
 // Ensure superadmin exists and data is deduplicated on startup
 ensureSuperadmin(store);
 
-let cachedClickupTeamId: string | null = null;
+const cachedClickupTeamIds = new Map<string, string>();
 async function resolveClickupTeamId(token: string): Promise<string | null> {
-  if (cachedClickupTeamId) return cachedClickupTeamId;
+  const cached = cachedClickupTeamIds.get(token);
+  if (cached) return cached;
   try {
     const teamRes = await fetch('https://api.clickup.com/api/v2/team', {
       headers: { Authorization: token },
@@ -928,7 +912,7 @@ async function resolveClickupTeamId(token: string): Promise<string | null> {
     if (teamRes.ok) {
       const teamData = await teamRes.json();
       const tid = teamData.teams?.[0]?.id ? String(teamData.teams[0].id) : null;
-      if (tid) cachedClickupTeamId = tid;
+      if (tid) cachedClickupTeamIds.set(token, tid);
       return tid;
     }
   } catch (err) {
@@ -2340,8 +2324,6 @@ async function startServer() {
       req.headers['issuperadmin'] === 'true' ||
       req.headers['x-is-superadmin'] === 'true';
 
-    const isCallerCreativeDirector = isCallerSuperadmin || Boolean(caller?.isCreativeDirector);
-
     const { targetUserId, targetStatus, targetDueDate } = req.body;
     if (!targetUserId || typeof targetUserId !== 'string') {
       return res.status(400).json({ error: 'targetUserId is required' });
@@ -3614,6 +3596,16 @@ async function startServer() {
 
     if (fs.existsSync(AUDIT_LOG_FILE)) {
       const stream = fs.createReadStream(AUDIT_LOG_FILE);
+      stream.on('error', (err) => {
+        console.error('[Audit Download Stream Error]:', err);
+        if (!res.headersSent) {
+          res.status(500).end();
+        }
+        stream.destroy();
+      });
+      res.on('close', () => {
+        stream.destroy();
+      });
       stream.pipe(res);
     } else {
       const content = [...recentAuditLogs].reverse().map(l => JSON.stringify(l)).join('\n');
