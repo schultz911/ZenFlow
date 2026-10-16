@@ -31,9 +31,11 @@ export const UnassignedListRibbon: React.FC<UnassignedListRibbonProps> = React.m
   const folders = useMemo(() => clickupFoldersAndLists?.folders || [], [clickupFoldersAndLists]);
   const folderlessLists = useMemo(() => clickupFoldersAndLists?.folderlessLists || [], [clickupFoldersAndLists]);
 
-  // Tasks lacking ClickUp list assignment, excluding done/archived
+  // Tasks lacking ClickUp list assignment, excluding done/archived/pipeline
   const unassignedTasks = useMemo(() => {
-    return tasks.filter(t => !t.clickupListId && t.status !== 'done' && t.status !== 'archived');
+    return tasks.filter(
+      t => !t.clickupListId && t.status !== 'done' && t.status !== 'archived' && t.status !== 'pipeline'
+    );
   }, [tasks]);
 
   // List Assignment Flyout State

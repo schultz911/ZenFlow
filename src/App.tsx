@@ -15,6 +15,7 @@ import { UnassignedListRibbon } from './components/UnassignedListRibbon';
 import { EditUserModal } from './components/EditUserModal';
 import { DuplicateTaskModal } from './components/DuplicateTaskModal';
 import { DeleteTaskModal } from './components/DeleteTaskModal';
+import { FreePoolContainer } from './components/FreePoolContainer';
 import { User, Task, TaskStatus } from './types';
 import { UserPlus, FileText, Palette, Loader2, Trash2 } from 'lucide-react';
 import { testConnection } from './lib/firebase';
@@ -33,6 +34,7 @@ function DashboardContent() {
     users,
     tasks,
     activeRoleTab,
+    setActiveRoleTab,
     activeDragInfo,
     setActiveDragInfo,
     moveTask,
@@ -43,6 +45,7 @@ function DashboardContent() {
     adjustBillableHours,
     rescheduleTask,
     activeBoardId,
+    setActiveBoardId,
     showClickupPrompt,
     setShowClickupPrompt,
   } = useDashboard();
@@ -76,6 +79,25 @@ function DashboardContent() {
     setDefaultTaskStatus(status || 'todo');
     setTaskModalOpen(true);
   }, []); // stable — reads from refs at call time
+
+  // Free pool resource jump and highlight handler
+  const handleSelectFreeResource = useCallback((user: User) => {
+    if (user.role !== activeRoleTab) {
+      setActiveRoleTab(user.role);
+    }
+    if (activeBoardId !== 'all') {
+      const isVisibleOnCurrentBoard = user.id === activeBoardId || user.creativeDirectorId === activeBoardId;
+      if (!isVisibleOnCurrentBoard) {
+        setActiveBoardId('all');
+      }
+    }
+    setTimeout(() => {
+      const el = document.getElementById(`swimlane-${user.id}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 120);
+  }, [activeRoleTab, setActiveRoleTab, activeBoardId, setActiveBoardId]);
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -616,6 +638,14 @@ function DashboardContent() {
           users={users}
           onClose={() => setTaskToDelete(null)}
           onConfirmDelete={handleConfirmDeleteTask}
+        />
+
+        {/* Floating Resource Free Pool across all boards */}
+        <FreePoolContainer
+          users={users}
+          tasks={tasks}
+          onAddTask={handleOpenAddTask}
+          onSelectUser={handleSelectFreeResource}
         />
 
         {/* Floating Drag-to-Delete Zone: Shown when a card is being dragged */}

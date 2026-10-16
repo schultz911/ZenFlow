@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
-import { Task, CognitiveLoad, TaskStatus } from '../types';
+import { Task, CognitiveLoad, TaskStatus, ClickupFolder, ClickupList } from '../types';
 import { getTaskBillableMs, formatBillableDetailed, getLastDayOfMonth } from '../utils/workload';
-import { X, Calendar, Brain, Trash2, History, Clock, ArrowRight, CheckCircle2, UserCheck, PlusCircle, Timer, ChevronDown, Check, CopyPlus, CornerDownRight, AlertCircle } from 'lucide-react';
+import { X, Calendar, Brain, Trash2, History, Clock, ArrowRight, CheckCircle2, UserCheck, PlusCircle, Timer, ChevronDown, Check, CopyPlus, CornerDownRight, AlertCircle, Folder, MapPin, ExternalLink } from 'lucide-react';
 
 function formatActivityTime(isoString: string): string {
   try {
@@ -149,10 +149,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     isZensciencesUser,
     isClickupConnected,
     selectedClickupSpaceId,
-    setSelectedClickupSpaceId,
     clickupSpaces,
     clickupFoldersAndLists,
     spaceFoldersMap,
+    spaceFoldersAndListsMap,
+    getFoldersAndListsForSpace,
     createClickupList,
     canEditUserTasks,
     clickupCustomFieldOptions,
@@ -180,7 +181,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [clickupTaskTypeId, setClickupTaskTypeId] = useState<string>('');
   const [clickupTaskTypeFieldId, setClickupTaskTypeFieldId] = useState<string>('');
 
-  // ClickUp folder and list destination state
+  // ClickUp folder and list destination state (isolated per task modal)
+  const [modalSpaceId, setModalSpaceId] = useState<string>('');
+  const [modalFoldersAndLists, setModalFoldersAndLists] = useState<{
+    folders: ClickupFolder[];
+    folderlessLists: ClickupList[];
+  }>({ folders: [], folderlessLists: [] });
   const [clickupFolderId, setClickupFolderId] = useState<string>('');
   const [clickupListId, setClickupListId] = useState<string>('');
   const [isCreatingList, setIsCreatingList] = useState(false);
@@ -211,6 +217,23 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setClickupTaskType(taskToEdit.clickupTaskType || '');
       setClickupTaskTypeId(taskToEdit.clickupTaskTypeId || '');
       setClickupTaskTypeFieldId(taskToEdit.clickupTaskTypeFieldId || ctxClickupTaskTypeFieldId || '');
+
+      // Resolve space ID specific to this task
+      let initialSpaceId = taskToEdit.clickupSpaceId || '';
+      if (!initialSpaceId && taskToEdit.clickupListId && spaceFoldersAndListsMap) {
+        for (const [sId, data] of Object.entries(spaceFoldersAndListsMap)) {
+          const inFolders = data.folders?.some(f => f.lists?.some(l => l.id === taskToEdit.clickupListId));
+          const inFolderless = data.folderlessLists?.some(l => l.id === taskToEdit.clickupListId);
+          if (inFolders || inFolderless) {
+            initialSpaceId = sId;
+            break;
+          }
+        }
+      }
+      if (!initialSpaceId) {
+        initialSpaceId = selectedClickupSpaceId || (clickupSpaces.length > 0 ? clickupSpaces[0].id : '');
+      }
+      setModalSpaceId(initialSpaceId);
     } else {
       setTitle('');
       setDescription('');
@@ -218,9 +241,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setUserId(defaultUser);
       setDueDate('');
       setCognitiveLoad('medium');
-      setStatus(defaultStatus);
+      setStatus(defaultStatus || 'todo');
       setClickupFolderId('');
       setClickupListId('');
+      setModalSpaceId(selectedClickupSpaceId || (clickupSpaces.length > 0 ? clickupSpaces[0].id : ''));
 
       // If user has a role, match default task type if options available
       const userObj = users.find(u => u.id === defaultUser);
@@ -252,6 +276,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     isOpen,
     ctxClickupTaskTypeFieldId,
     clickupCustomFieldOptions,
+    selectedClickupSpaceId,
+    clickupSpaces,
+    spaceFoldersAndListsMap,
   ]);
 
   // Derived effective task type options (ClickUp dropdown custom fields with fallback)
@@ -310,16 +337,42 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     }
   }, [taskToEdit, activities]);
 
-  // Available lists for the selected folder
+  // Keep modal's folders and lists synced with modalSpaceId for this task
+  useEffect(() => {
+    if (!modalSpaceId) {
+      setModalFoldersAndLists({ folders: [], folderlessLists: [] });
+      return;
+    }
+    let isMounted = true;
+    if (spaceFoldersAndListsMap?.[modalSpaceId]) {
+      setModalFoldersAndLists(spaceFoldersAndListsMap[modalSpaceId]);
+    } else if (modalSpaceId === selectedClickupSpaceId && clickupFoldersAndLists) {
+      setModalFoldersAndLists(clickupFoldersAndLists);
+    }
+
+    if (getFoldersAndListsForSpace) {
+      getFoldersAndListsForSpace(modalSpaceId).then(data => {
+        if (isMounted && data) {
+          setModalFoldersAndLists(data);
+        }
+      });
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [modalSpaceId, spaceFoldersAndListsMap, selectedClickupSpaceId, clickupFoldersAndLists, getFoldersAndListsForSpace]);
+
+  // Available lists for the selected folder within the modal's space
   const availableLists = useMemo(() => {
-    const folders = Array.isArray(clickupFoldersAndLists?.folders) ? clickupFoldersAndLists.folders : [];
-    const folderlessLists = Array.isArray(clickupFoldersAndLists?.folderlessLists) ? clickupFoldersAndLists.folderlessLists : [];
+    const folders = Array.isArray(modalFoldersAndLists?.folders) ? modalFoldersAndLists.folders : [];
+    const folderlessLists = Array.isArray(modalFoldersAndLists?.folderlessLists) ? modalFoldersAndLists.folderlessLists : [];
     if (clickupFolderId) {
       const folder = folders.find(f => f && f.id === clickupFolderId);
       return Array.isArray(folder?.lists) ? folder.lists : [];
     }
     return folderlessLists;
-  }, [clickupFolderId, clickupFoldersAndLists]);
+  }, [clickupFolderId, modalFoldersAndLists]);
 
   // Click outside and Escape key handler for Space dropdown
   useEffect(() => {
@@ -342,16 +395,16 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     };
   }, [isSpaceDropdownOpen]);
 
-  // Currently selected space display label
+  // Currently selected space display label for the modal
   const selectedSpaceInfo = useMemo(() => {
-    if (!selectedClickupSpaceId) return null;
+    if (!modalSpaceId) return null;
     const spaces = Array.isArray(clickupSpaces) ? clickupSpaces : [];
-    const s = spaces.find(space => space && space.id === selectedClickupSpaceId);
+    const s = spaces.find(space => space && space.id === modalSpaceId);
     if (!s) return null;
     const rawFolders =
       spaceFoldersMap?.[s.id] ||
-      (s.id === selectedClickupSpaceId && Array.isArray(clickupFoldersAndLists?.folders)
-        ? clickupFoldersAndLists.folders.map(f => f?.name).filter(Boolean)
+      (s.id === modalSpaceId && Array.isArray(modalFoldersAndLists?.folders)
+        ? modalFoldersAndLists.folders.map(f => f?.name).filter(Boolean)
         : undefined);
     const folders = Array.isArray(rawFolders) ? rawFolders : undefined;
     const folderListStr =
@@ -365,7 +418,71 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       folderListStr,
       fullText: folderListStr ? `${s.name} | ${folderListStr}` : s.name,
     };
-  }, [clickupSpaces, selectedClickupSpaceId, spaceFoldersMap, clickupFoldersAndLists]);
+  }, [clickupSpaces, modalSpaceId, spaceFoldersMap, modalFoldersAndLists]);
+
+  // Derived current selected ClickUp destination breadcrumb for this specific task
+  const currentDestinationDisplay = useMemo(() => {
+    if (!isZensciencesUser || !isClickupConnected) return null;
+
+    const spaces = Array.isArray(clickupSpaces) ? clickupSpaces : [];
+    const spaceObj = spaces.find(s => s && s.id === modalSpaceId);
+    const spaceName = spaceObj?.name || (modalSpaceId ? `Space ${modalSpaceId}` : '');
+
+    const folders = Array.isArray(modalFoldersAndLists?.folders) ? modalFoldersAndLists.folders : [];
+    const folderlessLists = Array.isArray(modalFoldersAndLists?.folderlessLists) ? modalFoldersAndLists.folderlessLists : [];
+
+    let folderName: string | undefined = taskToEdit?.clickupFolderName;
+    if (clickupFolderId) {
+      const f = folders.find(fold => fold && fold.id === clickupFolderId);
+      if (f?.name) folderName = f.name;
+    }
+
+    let listName: string | undefined = taskToEdit?.clickupListName;
+    if (clickupListId) {
+      if (clickupFolderId) {
+        const f = folders.find(fold => fold && fold.id === clickupFolderId);
+        const l = f?.lists?.find(lst => lst && lst.id === clickupListId);
+        if (l?.name) listName = l.name;
+      } else {
+        const l = folderlessLists.find(lst => lst && lst.id === clickupListId);
+        if (l?.name) listName = l.name;
+      }
+    }
+
+    const parts: string[] = [];
+    if (spaceName) parts.push(spaceName);
+    if (folderName) parts.push(folderName);
+    if (listName) parts.push(listName);
+
+    const hasList = Boolean(clickupListId || taskToEdit?.clickupListId);
+    const isPipeline = status === 'pipeline';
+
+    let pathString = parts.length > 0 ? parts.join(' › ') : 'None selected';
+    if (!hasList && isPipeline) {
+      pathString = spaceName ? `${spaceName} (List optional for Pipeline)` : 'None (Pipeline - no list required)';
+    }
+
+    return {
+      spaceName,
+      folderName,
+      listName,
+      hasList,
+      isPipeline,
+      pathString,
+      clickupUrl: taskToEdit?.clickupUrl,
+      clickupTaskId: taskToEdit?.clickupTaskId,
+    };
+  }, [
+    isZensciencesUser,
+    isClickupConnected,
+    modalSpaceId,
+    clickupSpaces,
+    modalFoldersAndLists,
+    clickupFolderId,
+    clickupListId,
+    taskToEdit,
+    status,
+  ]);
 
   const selectedUser = users.find(u => u.id === userId);
   const role = selectedUser?.role || 'content';
@@ -392,7 +509,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     try {
       const created = await createClickupList(
         newListName.trim(),
-        selectedClickupSpaceId,
+        modalSpaceId,
         clickupFolderId || undefined
       );
       if (created) {
@@ -418,19 +535,19 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     setSubmitError(null);
     const finalDueDate = (status === 'pipeline' || status === 'retainer') ? undefined : (dueDate.trim() || undefined);
 
-    // Resolve folder and list names
+    // Resolve folder and list names from the modal's space data
     let folderName: string | undefined;
     let listName: string | undefined;
-    const folders = clickupFoldersAndLists?.folders || [];
-    const folderlessLists = clickupFoldersAndLists?.folderlessLists || [];
+    const folders = modalFoldersAndLists?.folders || [];
+    const folderlessLists = modalFoldersAndLists?.folderlessLists || [];
     if (clickupFolderId) {
       const f = folders.find(fold => fold.id === clickupFolderId);
-      folderName = f?.name;
+      folderName = f?.name || taskToEdit?.clickupFolderName;
       const l = f?.lists?.find(lst => lst.id === clickupListId);
-      listName = l?.name;
+      listName = l?.name || (clickupListId === taskToEdit?.clickupListId ? taskToEdit?.clickupListName : undefined);
     } else if (clickupListId) {
       const l = folderlessLists.find(lst => lst.id === clickupListId);
-      listName = l?.name;
+      listName = l?.name || (clickupListId === taskToEdit?.clickupListId ? taskToEdit?.clickupListName : undefined);
     }
 
     try {
@@ -446,7 +563,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           clickupFolderName: folderName,
           clickupListId: clickupListId || undefined,
           clickupListName: listName,
-          clickupSpaceId: selectedClickupSpaceId || undefined,
+          clickupSpaceId: modalSpaceId || undefined,
           clickupTaskType: clickupTaskType || undefined,
           clickupTaskTypeId: clickupTaskTypeId || undefined,
           clickupTaskTypeFieldId: clickupTaskTypeFieldId || ctxClickupTaskTypeFieldId || undefined,
@@ -463,7 +580,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           clickupFolderName: folderName,
           clickupListId: clickupListId || undefined,
           clickupListName: listName,
-          clickupSpaceId: selectedClickupSpaceId || undefined,
+          clickupSpaceId: modalSpaceId || undefined,
           clickupTaskType: clickupTaskType || undefined,
           clickupTaskTypeId: clickupTaskTypeId || undefined,
           clickupTaskTypeFieldId: clickupTaskTypeFieldId || ctxClickupTaskTypeFieldId || undefined,
@@ -864,9 +981,16 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           {isZensciencesUser && isClickupConnected && (
             <div className="rounded-xl border border-purple-500/25 bg-purple-50/30 dark:bg-purple-950/20 p-3 space-y-2.5">
               <div className="flex items-center justify-between">
-                <span className="text-xs uppercase tracking-wider font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
-                  <span>ClickUp Destination</span>
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs uppercase tracking-wider font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
+                    <span>ClickUp Destination</span>
+                  </span>
+                  {status === 'pipeline' && (
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-purple-200/60 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 font-medium">
+                      Optional for Pipeline
+                    </span>
+                  )}
+                </div>
                 <button
                   type="button"
                   onClick={() => setIsCreatingList(!isCreatingList)}
@@ -874,6 +998,36 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 >
                   {isCreatingList ? 'Select Existing List' : '+ Create New List'}
                 </button>
+              </div>
+
+              {/* Current Destination Path Preview for this specific task */}
+              <div className="rounded-xl border border-purple-200 dark:border-purple-800/40 bg-purple-100/40 dark:bg-purple-900/20 p-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <MapPin className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-purple-700 dark:text-purple-300 shrink-0">
+                      Destination:
+                    </span>
+                    <span className="text-xs font-semibold text-neutral-900 dark:text-white truncate" title={currentDestinationDisplay?.pathString}>
+                      {currentDestinationDisplay?.pathString}
+                    </span>
+                  </div>
+                  {currentDestinationDisplay?.clickupUrl ? (
+                    <a
+                      href={currentDestinationDisplay.clickupUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-600 text-[10px] font-semibold text-white hover:bg-purple-500 shrink-0 transition-colors"
+                    >
+                      <span>Open in ClickUp</span>
+                      <ExternalLink className="h-2.5 w-2.5" />
+                    </a>
+                  ) : status === 'pipeline' && !currentDestinationDisplay?.hasList ? (
+                    <span className="text-[10px] text-purple-600 dark:text-purple-400 italic shrink-0">
+                      No list required
+                    </span>
+                  ) : null}
+                </div>
               </div>
 
               {/* Space Selection with folders against each space name */}
@@ -911,8 +1065,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       {(Array.isArray(clickupSpaces) ? clickupSpaces : []).map(s => {
                         const rawFolders =
                           spaceFoldersMap?.[s.id] ||
-                          (s.id === selectedClickupSpaceId && Array.isArray(clickupFoldersAndLists?.folders)
-                            ? clickupFoldersAndLists.folders.map(f => f?.name).filter(Boolean)
+                          (s.id === modalSpaceId && Array.isArray(modalFoldersAndLists?.folders)
+                            ? modalFoldersAndLists.folders.map(f => f?.name).filter(Boolean)
                             : undefined);
                         const folders = Array.isArray(rawFolders) ? rawFolders : undefined;
                         const folderListStr =
@@ -922,7 +1076,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                             ? '(Folderless)'
                             : '';
                         const fullText = folderListStr ? `${s.name} | ${folderListStr}` : s.name;
-                        const isSelected = s.id === selectedClickupSpaceId;
+                        const isSelected = s.id === modalSpaceId;
 
                         return (
                           <SpaceDropdownRow
@@ -932,7 +1086,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                             fullText={fullText}
                             isSelected={isSelected}
                             onSelect={() => {
-                              setSelectedClickupSpaceId(s.id, s.name);
+                              setModalSpaceId(s.id);
                               setClickupFolderId('');
                               setClickupListId('');
                               setIsSpaceDropdownOpen(false);
@@ -981,7 +1135,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                         className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-1.5 pl-2.5 pr-8 text-xs text-neutral-900 dark:text-white"
                       >
                         <option value="">Space (Folderless)</option>
-                        {(Array.isArray(clickupFoldersAndLists?.folders) ? clickupFoldersAndLists.folders : []).map(f => (
+                        {(Array.isArray(modalFoldersAndLists?.folders) ? modalFoldersAndLists.folders : []).map(f => (
                           <option key={f.id} value={f.id}>{f.name}</option>
                         ))}
                       </select>
@@ -1000,10 +1154,15 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                         onChange={e => setClickupListId(e.target.value)}
                         className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-1.5 pl-2.5 pr-8 text-xs text-neutral-900 dark:text-white"
                       >
-                        <option value="">Select a list...</option>
+                        <option value="">
+                          {status === 'pipeline' ? 'None (Pipeline - no list required)' : 'Select a list...'}
+                        </option>
                         {(Array.isArray(availableLists) ? availableLists : []).map(l => (
                           <option key={l.id} value={l.id}>{l.name}</option>
                         ))}
+                        {clickupListId && !availableLists.some(l => l.id === clickupListId) && (
+                          <option value={clickupListId}>{taskToEdit?.clickupListName || 'Current List'}</option>
+                        )}
                       </select>
                       <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
                     </div>

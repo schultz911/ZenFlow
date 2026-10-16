@@ -6,6 +6,31 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
+### Sweep 49: 2026-10-16 (Pipeline ClickUp List Optionality, Per-Task Destination Isolation & Cross-Board Floating Free Pool)
+
+- **WORKFLOW-03 (Pipeline ClickUp List Optionality & Warning Elimination):**
+  - *Context & Rationale:* Pipeline tasks represent unscheduled backlog and conceptual ideas that do not have active ClickUp tasks or lists assigned. Previously, [`UnassignedListRibbon`](file:///c:/ZenFlow/src/components/UnassignedListRibbon.tsx) and [`TaskCard`](file:///c:/ZenFlow/src/components/TaskCard.tsx) flagged pipeline tasks with amber "+ Assign ClickUp List" warnings and populated the unassigned ribbon.
+  - *Surgical Resolution:*
+    1. In [`UnassignedListRibbon`](file:///c:/ZenFlow/src/components/UnassignedListRibbon.tsx), added `t.status !== 'pipeline'` filter condition to `unassignedTasks`.
+    2. In [`TaskCard`](file:///c:/ZenFlow/src/components/TaskCard.tsx), suppressed the "+ Assign ClickUp List" warning button for `status === 'pipeline'`.
+    3. In [`TaskModal`](file:///c:/ZenFlow/src/components/TaskModal.tsx), clearly denoted list selection as optional for pipeline tasks with dedicated badge and list placeholder `None (Pipeline - no list required)`.
+- **INT-09 (Task-Isolated ClickUp Destination State & Cross-Space Pollution Elimination):**
+  - *Root Cause Analysis:* Previously, `TaskModal` did not track a local space ID for the task being edited. Instead, it derived destination information from global `selectedClickupSpaceId` in `DashboardContext`. Selecting a space inside `TaskModal` called `setSelectedClickupSpaceId`, mutating the global dashboard view for all boards. Furthermore, switching the global space in the header caused all tasks opened in `TaskModal` to display the new space rather than their own saved destination.
+  - *Surgical Resolution:*
+    1. In [`DashboardContext`](file:///c:/ZenFlow/src/context/DashboardContext.tsx), added `spaceFoldersAndListsMap` cache and `getFoldersAndListsForSpace(spaceId)` asynchronous loader.
+    2. In [`TaskModal`](file:///c:/ZenFlow/src/components/TaskModal.tsx), implemented isolated `modalSpaceId` and `modalFoldersAndLists` state initialized from `taskToEdit.clickupSpaceId` (with fallback to reverse lookup in `spaceFoldersAndListsMap` or global space for new tasks).
+    3. Space selection inside `TaskModal` now updates only `modalSpaceId` without altering `selectedClickupSpaceId`.
+    4. Rendered a dedicated "Current Destination" preview card displaying the full hierarchical breadcrumb (`Space › Folder › List`), direct ClickUp hyperlinks, and pipeline optionality notices.
+    5. In `handleSubmit`, folder and list names and `clickupSpaceId` resolve strictly from `modalFoldersAndLists`.
+- **WORKFLOW-04 (Cross-Board Floating Free Pool Container):**
+  - *Architecture & User Experience:*
+    1. Built [`FreePoolContainer`](file:///c:/ZenFlow/src/components/FreePoolContainer.tsx) as a floating glassmorphic container positioned fixed at `bottom-5 right-5 z-40`.
+    2. Dynamically evaluates all workspace members across all boards to identify resources with zero tasks in their `todo` and `in_progress` lanes.
+    3. Provides dual presentation modes: a compact floating pill with live pulsing emerald light, available count, and stacked avatar previews; and an expanded floating panel with role filter tabs (`All`, `Content`, `Design`), member avatar badges, active/review workload stats, "+ Task" quick assignment, and single-click swimlane navigation.
+    4. Mounted in [`App`](file:///c:/ZenFlow/src/App.tsx) with smooth motion transitions and responsive layout compatibility.
+- **AUDIT-08 (Static Analysis & Production Build Certification):**
+  - Verified 0 warnings and 0 errors across `npx tsc --noEmit` and `npm run build`.
+
 ### Sweep 48: 2026-10-06 (Edit Task Render Crash Elimination & Retainer ClickUp Destination Parent-Task Integration)
 
 - **BUG-14 (Edit Task Modal Component Render Crash & Defensive Hardening):**

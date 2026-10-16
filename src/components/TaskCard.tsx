@@ -429,7 +429,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             {task.clickupFolderName ? `${task.clickupFolderName} / ${task.clickupListName}` : task.clickupListName}
           </span>
         </div>
-      ) : isZensciencesUser && task.status !== 'done' && task.status !== 'archived' ? (
+      ) : isZensciencesUser && task.status !== 'done' && task.status !== 'archived' && task.status !== 'pipeline' ? (
         <button
           type="button"
           onClick={e => {
