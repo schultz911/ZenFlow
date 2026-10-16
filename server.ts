@@ -2434,25 +2434,39 @@ async function startServer() {
 
       if (syncToken) {
         let listId = sourceTask.clickupListId;
-        if (!listId) {
-          try {
-            const pRes = await fetch(`https://api.clickup.com/api/v2/task/${sourceTask.clickupTaskId}`, {
-              headers: { Authorization: syncToken },
-            });
-            if (pRes.ok) {
-              const pData = await pRes.json();
-              if (pData.list?.id) {
-                listId = String(pData.list.id);
-                newTask.clickupListId = listId;
-                if (pData.list.name) newTask.clickupListName = pData.list.name;
-                if (pData.space?.id) newTask.clickupSpaceId = String(pData.space.id);
-                if (pData.folder?.id) newTask.clickupFolderId = String(pData.folder.id);
-                if (pData.folder?.name) newTask.clickupFolderName = pData.folder.name;
+
+        // Authoritatively query the parent task directly from ClickUp to resolve its true, current list.
+        // This permanently eliminates ClickUp ITEM_137 ("Parent not child of list") error.
+        try {
+          const pRes = await fetch(`https://api.clickup.com/api/v2/task/${sourceTask.clickupTaskId}`, {
+            headers: { Authorization: syncToken },
+          });
+          if (pRes.ok) {
+            const pData = await pRes.json();
+            if (pData.list?.id) {
+              listId = String(pData.list.id);
+              sourceTask.clickupListId = listId;
+              newTask.clickupListId = listId;
+              if (pData.list.name) {
+                sourceTask.clickupListName = pData.list.name;
+                newTask.clickupListName = pData.list.name;
+              }
+              if (pData.space?.id) {
+                sourceTask.clickupSpaceId = String(pData.space.id);
+                newTask.clickupSpaceId = String(pData.space.id);
+              }
+              if (pData.folder?.id) {
+                sourceTask.clickupFolderId = String(pData.folder.id);
+                newTask.clickupFolderId = String(pData.folder.id);
+              }
+              if (pData.folder?.name) {
+                sourceTask.clickupFolderName = pData.folder.name;
+                newTask.clickupFolderName = pData.folder.name;
               }
             }
-          } catch (pErr) {
-            console.warn('[Duplicate Subtask] Could not resolve parent list ID:', pErr);
           }
+        } catch (pErr) {
+          console.warn('[Duplicate Subtask] Could not resolve fresh parent list ID from ClickUp:', pErr);
         }
 
         if (listId) {
@@ -2476,7 +2490,7 @@ async function startServer() {
           }
 
           try {
-            const cuRes = await fetch(`https://api.clickup.com/api/v2/list/${listId}/task`, {
+            let cuRes = await fetch(`https://api.clickup.com/api/v2/list/${listId}/task`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -2484,6 +2498,54 @@ async function startServer() {
               },
               body: JSON.stringify(subtaskPayload),
             });
+
+            // Defensive self-healing retry if ClickUp returns ITEM_137 ("Parent not child of list")
+            if (!cuRes.ok) {
+              const errBody = await cuRes.text();
+              if (errBody.includes('Parent not child of list') || errBody.includes('ITEM_137')) {
+                console.warn(`[ClickUp Subtask] Parent ${sourceTask.clickupTaskId} not in list ${listId} (ITEM_137). Querying ClickUp for true parent list...`);
+                try {
+                  const refreshRes = await fetch(`https://api.clickup.com/api/v2/task/${sourceTask.clickupTaskId}`, {
+                    headers: { Authorization: syncToken },
+                  });
+                  if (refreshRes.ok) {
+                    const freshParent = await refreshRes.json();
+                    if (freshParent.list?.id && String(freshParent.list.id) !== listId) {
+                      const trueListId = String(freshParent.list.id);
+                      console.log(`[ClickUp Subtask] Retrying subtask creation in true parent list ${trueListId}...`);
+                      const retryRes = await fetch(`https://api.clickup.com/api/v2/list/${trueListId}/task`, {
+                        method: 'POST',
+                        headers: {
+                          'Content-Type': 'application/json',
+                          Authorization: syncToken,
+                        },
+                        body: JSON.stringify(subtaskPayload),
+                      });
+                      if (retryRes.ok) {
+                        cuRes = retryRes;
+                        listId = trueListId;
+                        sourceTask.clickupListId = trueListId;
+                        newTask.clickupListId = trueListId;
+                        if (freshParent.list.name) {
+                          sourceTask.clickupListName = freshParent.list.name;
+                          newTask.clickupListName = freshParent.list.name;
+                        }
+                      } else {
+                        const retryErrText = await retryRes.text();
+                        console.warn(`[ClickUp Subtask] Retry under list ${trueListId} failed:`, retryErrText);
+                      }
+                    }
+                  }
+                } catch (retryErr) {
+                  console.warn('[ClickUp Subtask] Error during ITEM_137 recovery:', retryErr);
+                }
+              }
+
+              if (!cuRes.ok) {
+                console.warn(`[ClickUp Subtask] Failed to create subtask under ${sourceTask.clickupTaskId}:`, errBody);
+                clickupWarning = `Could not create ClickUp subtask: ${errBody}`;
+              }
+            }
 
             if (cuRes.ok) {
               const cuSubtask = await cuRes.json();
@@ -2507,10 +2569,6 @@ async function startServer() {
                   newTaskId: newTask.id,
                 },
               });
-            } else {
-              const errText = await cuRes.text();
-              console.warn(`[ClickUp Subtask] Failed to create subtask under ${sourceTask.clickupTaskId}:`, errText);
-              clickupWarning = `Could not create ClickUp subtask: ${errText}`;
             }
           } catch (cuErr: any) {
             console.warn('[ClickUp Subtask] Network error creating subtask:', cuErr);

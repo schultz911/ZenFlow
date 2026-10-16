@@ -593,55 +593,53 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                     )}
                   </div>
                 </div>
-
-                {/* Quick Board Navigation Action on Success */}
-                {feedback.type === 'success' && feedback.targetBoardId && (
-                  <div className="mt-3 pt-2 border-t border-emerald-200/50 dark:border-emerald-500/20 flex items-center justify-between">
-                    <span className="text-[11px] text-neutral-600 dark:text-neutral-400">
-                      Jump to view the subtask on destination board:
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleSwitchToDestinationBoard}
-                      className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white px-2.5 py-1 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-                    >
-                      <span>Switch to {feedback.targetBoardName || 'Board'}</span>
-                      <ArrowRight className="h-3 w-3" />
-                    </button>
-                  </div>
-                )}
               </div>
             )}
 
             {/* Actions */}
-            <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-100 dark:border-white/5">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-100 dark:bg-[#141414] px-4 py-2 text-xs font-medium text-neutral-600 dark:text-white/60 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200 dark:hover:bg-white/5 transition-colors cursor-pointer"
-              >
-                {feedback?.type === 'success' ? 'Close' : 'Cancel'}
-              </button>
+            <div className="flex items-center justify-between gap-2 pt-3 border-t border-neutral-100 dark:border-white/5">
+              <div>
+                {feedback?.type === 'success' && feedback.targetBoardId && (
+                  <button
+                    type="button"
+                    onClick={handleSwitchToDestinationBoard}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                  >
+                    <span>Switch to {feedback.targetBoardName || 'Team'}</span>
+                    <ArrowRight className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
 
-              {feedback?.type !== 'success' && (
+              <div className="flex items-center gap-2">
                 <button
-                  type="submit"
-                  disabled={isSubmitting || !selectedUserId || (targetStatus !== 'pipeline' && !targetDueDate.trim())}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white px-4 py-2 text-xs font-semibold shadow-md shadow-blue-900/20 transition-all cursor-pointer disabled:cursor-not-allowed"
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-100 dark:bg-[#141414] px-4 py-2 text-xs font-medium text-neutral-600 dark:text-white/60 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200 dark:hover:bg-white/5 transition-colors cursor-pointer"
                 >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      <span>Creating...</span>
-                    </>
-                  ) : (
-                    <>
-                      <CopyPlus className="h-3.5 w-3.5" />
-                      <span>Create</span>
-                    </>
-                  )}
+                  {feedback?.type === 'success' ? 'Close' : 'Cancel'}
                 </button>
-              )}
+
+                {feedback?.type !== 'success' && (
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || !selectedUserId || (targetStatus !== 'pipeline' && !targetDueDate.trim())}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white px-4 py-2 text-xs font-semibold shadow-md shadow-blue-900/20 transition-all cursor-pointer disabled:cursor-not-allowed"
+                  >
+                    {isSubmitting ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        <span>Creating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CopyPlus className="h-3.5 w-3.5" />
+                        <span>Create</span>
+                      </>
+                    )}
+                  </button>
+                )}
+              </div>
             </div>
           </form>
         </motion.div>

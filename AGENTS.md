@@ -6,6 +6,18 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
+### Sweep 50: 2026-10-16 (ClickUp Subtask Parent List Alignment & Duplicate Modal Footer Redesign)
+
+- **INT-10 (ClickUp Subtask Creation ITEM_137 "Parent not child of list" Elimination):**
+  - *Root Cause Analysis:* When delegating subtasks across boards, ClickUp API v2 enforces that `POST /api/v2/list/{list_id}/task` with `{ parent: parentTaskId }` must target the exact list where the parent task currently resides. Previously, [`server.ts`](file:///c:/ZenFlow/server.ts) relied on `sourceTask.clickupListId` stored in ZenFlow. If the parent task was moved to another folder or list in ClickUp, or if the stored `clickupListId` was stale, ClickUp rejected subtask creation with HTTP 400: `{"err":"Parent not child of list","ECODE":"ITEM_137"}`. Refreshing the dashboard succeeded only because full sync re-aligned `sourceTask.clickupListId`.
+  - *Surgical Resolution:*
+    1. In `POST /api/tasks/:id/duplicate` in [`server.ts`](file:///c:/ZenFlow/server.ts), authoritatively queried `GET https://api.clickup.com/api/v2/task/${sourceTask.clickupTaskId}` prior to subtask creation to dynamically fetch the parent task's fresh, true `list.id`, `list.name`, `folder.id`, and `space.id`, synchronizing `sourceTask` and `newTask` immediately.
+    2. Implemented defensive self-healing retry logic: if ClickUp returns `ITEM_137` ("Parent not child of list"), the server automatically re-fetches the parent task from ClickUp, extracts the true list ID, and retries subtask creation transparently.
+- **UI-39 (DuplicateTaskModal Success Navigation Redesign):**
+  - *Surgical Resolution:* In [`DuplicateTaskModal.tsx`](file:///c:/ZenFlow/src/components/DuplicateTaskModal.tsx), removed the redundant explanatory text string `"Jump to view the subtask on destination board:"` and repositioned the `"Switch to [Team]"` action button directly at the bottom left of the modal footer, maintaining balanced layout with the `"Close"` button on the bottom right.
+- **AUDIT-09 (Static Analysis & Production Build Certification):**
+  - Verified 0 warnings and 0 errors across `npm run lint` and `npm run build`.
+
 ### Sweep 49: 2026-10-16 (Pipeline ClickUp List Optionality, Per-Task Destination Isolation & Cross-Board Floating Free Pool)
 
 - **WORKFLOW-03 (Pipeline ClickUp List Optionality & Warning Elimination):**
