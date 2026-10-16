@@ -1131,8 +1131,14 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         },
         body: JSON.stringify({ userId, apiKey, callerUserId }),
       });
-      const data = await res.json();
-      if (res.ok && data.success) {
+      let data: any = null;
+      try {
+        const text = await res.text();
+        data = text ? JSON.parse(text) : null;
+      } catch {
+        data = null;
+      }
+      if (res.ok && data?.success) {
         setUserSyncFailures(prev => ({ ...prev, [userId]: false }));
         await fetchState();
         return {
@@ -1147,7 +1153,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         success: false,
         syncedCount: 0,
         archivedCount: 0,
-        message: data.error || 'Failed to sync with ClickUp',
+        message: data?.error || (res.status === 502 ? 'Server temporarily updating (502 Bad Gateway). Please retry in a moment.' : 'Failed to sync with ClickUp'),
       };
     } catch (err: any) {
       setUserSyncFailures(prev => ({ ...prev, [userId]: true }));
