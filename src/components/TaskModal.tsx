@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
 import { Task, CognitiveLoad, TaskStatus, ClickupFolder, ClickupList } from '../types';
 import { getTaskBillableMs, formatBillableDetailed, getLastDayOfMonth } from '../utils/workload';
-import { X, Calendar, Brain, Trash2, History, Clock, ArrowRight, CheckCircle2, UserCheck, PlusCircle, Timer, ChevronDown, Check, CopyPlus, CornerDownRight, AlertCircle, Folder, MapPin, ExternalLink } from 'lucide-react';
+import { X, Calendar, Brain, Trash2, History, Clock, ArrowRight, CheckCircle2, UserCheck, PlusCircle, Timer, ChevronDown, Check, CopyPlus, CornerDownRight, AlertCircle, MapPin, ExternalLink } from 'lucide-react';
 
 function formatActivityTime(isoString: string): string {
   try {
