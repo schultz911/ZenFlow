@@ -34,6 +34,8 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
     syncWithFirestore,
     users,
     tasks,
+    isSuperadmin,
+    canManageMembers,
     isClickupConnected,
     clickupApiKey,
     connectClickup,
@@ -361,7 +363,8 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                   <button
                     type="button"
                     onClick={handleManualSync}
-                    disabled={isSyncing}
+                    disabled={isSyncing || !isSuperadmin}
+                    title={isSuperadmin ? 'Verify cloud persistence' : 'Only the Superadmin can synchronize workspace storage'}
                     className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-neutral-900 dark:bg-white text-white dark:text-black py-2 px-3 text-xs font-semibold hover:bg-neutral-800 dark:hover:bg-neutral-200 disabled:opacity-50 transition-colors cursor-pointer shadow-xs"
                   >
                     <RefreshCw className={`h-3 w-3 ${isSyncing ? 'animate-spin' : ''}`} />
@@ -638,7 +641,8 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                 <button
                   type="button"
                   onClick={handleRegisterWebhook}
-                  disabled={isRegisteringWebhook || !isClickupConnected}
+                  disabled={isRegisteringWebhook || !isClickupConnected || !isSuperadmin}
+                  title={isSuperadmin ? 'Register a signed ClickUp webhook' : 'Only the Superadmin can manage workspace webhooks'}
                   className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 py-2 px-3 text-xs font-semibold disabled:opacity-50 transition-colors cursor-pointer"
                 >
                   {isRegisteringWebhook ? (
@@ -724,7 +728,7 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                   <button
                     type="button"
                     onClick={handleToggleAuditFeed}
-                    disabled={isLoadingAudit}
+                    disabled={isLoadingAudit || !canManageMembers}
                     className="flex items-center justify-center gap-1 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-neutral-800/60 text-neutral-700 dark:text-white/80 hover:bg-neutral-50 dark:hover:bg-neutral-800 py-2 px-3 text-xs font-medium transition-colors cursor-pointer"
                   >
                     {isLoadingAudit ? (

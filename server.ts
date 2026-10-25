@@ -3756,9 +3756,10 @@ async function startServer() {
       type: 'connected',
       payload: { clientId, serverTime: Date.now() },
     });
-    writeSse(res, `event: init\ndata: ${initialSync}\n\n`);
-    // A snapshot on every connection closes the missed-event window, including deletions.
-    writeSse(res, `event: snapshot\ndata: ${JSON.stringify(redactPayload({ users: store.users, tasks: store.tasks }))}\n\n`);
+    // Queue the greeting and snapshot together so a healthy large workspace is not
+    // evicted merely because its small greeting is still buffered.
+    const snapshot = JSON.stringify(redactPayload({ users: store.users, tasks: store.tasks }));
+    writeSse(res, `event: init\ndata: ${initialSync}\n\nevent: snapshot\ndata: ${snapshot}\n\n`);
 
     // Periodic heartbeat to keep connections open across network proxies
     const heartbeatInterval = setInterval(() => {

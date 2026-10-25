@@ -133,6 +133,18 @@ test('snapshot reconciliation preserves pending creates, edits, deletes and reor
   assert.equal(recovered.tasks[1].title, 'Unsaved work');
   assert.deepEqual(recovered.users.map(user => user.id), ['alice']);
 });
+test('actual SSE handshake delivers a large workspace snapshot without evicting a healthy client', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'zenflow-large-sse-'));
+  const server = await fixtureServer(directory);
+  let connection: Awaited<ReturnType<typeof eventReader>> | undefined;
+  try {
+    server.store.tasks = Array.from({ length: 1000 }, (_, id) => ({ ...fixtureTask(`large-${id}`, 'alice'), description: 'x'.repeat(500) }));
+    connection = await eventReader(server.url);
+    const snapshot = await connection.next('snapshot');
+    assert.equal(snapshot.tasks.length, 1000);
+    assert.equal(server.ctx.clients.length, 1);
+  } finally { connection?.close(); await server.close(); await fs.rm(directory, { recursive: true, force: true }); }
+});
 test('workload scoring excludes retainer/pipeline and maintains numeric parity', () => {
   const task: any = { ...fixtureTask('active', 'alice', 'in_review'), inProgressDurationMs: 8 * 3600000, cognitiveLoad: 'medium' };
   const tasks = [task, fixtureTask('pipe', 'alice', 'pipeline'), fixtureTask('retainer', 'alice', 'retainer')];
