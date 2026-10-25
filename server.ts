@@ -3,18 +3,11 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import compression from 'compression';
-
-
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import {
-  getFirestore as getWebFirestore,
-  collection,
-  getDocs,
-  doc,
-  setDoc,
-  deleteDoc,
-  writeBatch,
-} from 'firebase/firestore';
+import { createApiSecurity, redactPayload, SESSION_COOKIE, sameOriginMutation, validSignature } from './server/security';
+import { readAuditTail, writeSse } from './server/resources';
+import { WebhookRegistry } from './server/webhooks';
+import { initializeApp as initializeAdminApp, getApps as getAdminApps } from 'firebase-admin/app';
+import { getAuth as getAdminAuth } from 'firebase-admin/auth';
 
 interface User {
   id: string;
@@ -120,9 +113,14 @@ const COGNITIVE_LOAD_ESTIMATES_MS: Record<string, number> = {
 
 // Support Railway dynamic PORT or default to 3000
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
-const DATA_DIR = path.join(process.cwd(), 'data');
+const DATA_DIR = process.env.ZENFLOW_DATA_DIR || path.join(process.cwd(), 'data');
 const DATA_FILE = path.join(DATA_DIR, 'store.json');
 const AUDIT_LOG_FILE = path.join(DATA_DIR, 'compliance-audit.jsonl');
+const webhookRegistry = new WebhookRegistry(path.join(DATA_DIR, '.clickup-webhooks.json'));
+// Identity trust is deliberately independent of the configurable Firestore credentials.
+const identityApp = getAdminApps().find(app => app.name === 'zenflow-identity') ||
+  initializeAdminApp({ projectId: 'zen-flow-7173d' }, 'zenflow-identity');
+const verifyIdentity = (token: string) => getAdminAuth(identityApp).verifyIdToken(token);
 
 const recentAuditLogs: AuditLogEntry[] = [];
 const MAX_RECENT_AUDIT_LOGS = 100;
@@ -310,9 +308,8 @@ function createRateLimiter(maxRequests: number, windowMs: number) {
 // In-memory active store
 let store: AppStore = loadStore();
 
-// Database drivers: Admin SDK (with Service Account) or Web SDK (with API Keys)
+// Server-owned persistence: Admin SDK with private credentials, or local storage.
 let adminDb: any = null;
-let webDb: any = null;
 let firestoreLastError: string | null = null;
 let firestoreLastSyncTime: string | null = null;
 let firestoreMode: 'admin' | 'web' | 'local' = 'local';
@@ -374,7 +371,7 @@ function findServiceAccount(): any | null {
 let initPromise: Promise<void> | null = null;
 
 async function initFirestore() {
-  if (adminDb || webDb) return;
+  if (adminDb) return;
   if (!initPromise) {
     initPromise = (async () => {
       // Read firebase-applet-config.json for fallback IDs
@@ -408,13 +405,13 @@ async function initFirestore() {
             throw new Error('Firebase Admin SDK or @google-cloud/firestore is not available in the current runtime environment.');
           }
 
-          const adminApps = adminAppModule.getApps();
+          const adminApps = adminAppModule.getApps().filter(app => app.name === 'zenflow-firestore');
           const adminApp = adminApps.length === 0
             ? adminAppModule.initializeApp({
                 credential: adminAppModule.cert(serviceAccountObj),
                 projectId: firestoreProjectId,
-              })
-            : adminAppModule.getApp();
+              }, 'zenflow-firestore')
+            : adminAppModule.getApp('zenflow-firestore');
 
           adminDb = adminFirestoreModule.getFirestore(adminApp);
           try {
@@ -432,26 +429,11 @@ async function initFirestore() {
         }
       }
 
-      // 2. Fallback to Web Client SDK if apiKey + projectId is provided
-      const fbConfig = {
-        apiKey: process.env.FIREBASE_API_KEY || process.env.VITE_FIREBASE_API_KEY || fileConfig.apiKey || '',
-        projectId: process.env.FIREBASE_PROJECT_ID || process.env.VITE_FIREBASE_PROJECT_ID || fileConfig.projectId || firestoreProjectId,
-        appId: process.env.FIREBASE_APP_ID || process.env.VITE_FIREBASE_APP_ID || fileConfig.appId || '',
-        authDomain: process.env.FIREBASE_AUTH_DOMAIN || process.env.VITE_FIREBASE_AUTH_DOMAIN || fileConfig.authDomain || '',
-      };
+      // Direct unauthenticated Firestore access is intentionally disabled. Local mode
+      // remains available for offline development or an explicitly provisioned volume.
+      firestoreMode = 'local';
+      firestoreLastError ||= 'Firebase Admin credentials required for cloud persistence';
 
-      if (fbConfig.apiKey && fbConfig.projectId) {
-        try {
-          const fbApp = getApps().length === 0 ? initializeApp(fbConfig) : getApp();
-          webDb = getWebFirestore(fbApp);
-          firestoreMode = 'web';
-          firestoreProjectId = fbConfig.projectId;
-          console.log('[Firestore Web] Initialized Firestore Web SDK for project:', fbConfig.projectId);
-        } catch (err: any) {
-          firestoreLastError = err.message || String(err);
-          console.warn('[Firestore Web] Initialization warning, using local resilient store:', err);
-        }
-      }
     })();
   }
   await initPromise;
@@ -473,22 +455,11 @@ function cleanDocData<T extends Record<string, any>>(obj: T): Partial<T> {
 }
 
 // Read the tail of the compliance audit log into the in-memory cache for fast sub-millisecond retrieval
-function loadRecentAuditLogs(): void {
+async function loadRecentAuditLogs(): Promise<void> {
   try {
-    if (fs.existsSync(AUDIT_LOG_FILE)) {
-      const content = fs.readFileSync(AUDIT_LOG_FILE, 'utf-8');
-      const lines = content.trim().split('\n').filter(Boolean);
-      const tail = lines.slice(-MAX_RECENT_AUDIT_LOGS);
-      // Iterate reverse chronological so recentAuditLogs[0] is strictly the newest event
-      for (let i = tail.length - 1; i >= 0; i--) {
-        try {
-          const entry = JSON.parse(tail[i]);
-          recentAuditLogs.push(entry);
-        } catch {}
-      }
-    }
-  } catch (err) {
-    console.warn('[Audit Log] Failed to read initial audit logs from disk:', err);
+    recentAuditLogs.push(...await readAuditTail<AuditLogEntry>(AUDIT_LOG_FILE, MAX_RECENT_AUDIT_LOGS));
+  } catch {
+    console.warn('[Audit Log] Failed to load recent audit records');
   }
 }
 
@@ -518,12 +489,10 @@ async function appendAuditLog(entry: Omit<AuditLogEntry, 'id' | 'timestamp'> & {
 
   // Mirror to Cloud Firestore audit collection if active
   try {
-    if (!adminDb && !webDb) await initFirestore();
+    if (!adminDb) await initFirestore();
     const payload = cleanDocData(fullEntry);
     if (adminDb) {
-      adminDb.collection('compliance_audit_logs').doc(fullEntry.id).set(payload, { merge: true }).catch(() => {});
-    } else if (webDb) {
-      setDoc(doc(webDb, 'compliance_audit_logs', fullEntry.id), payload, { merge: true }).catch(() => {});
+      adminDb.collection('compliance_audit_logs').doc(fullEntry.id).create(payload).catch(() => {});
     }
   } catch {
     // ignore
@@ -533,13 +502,10 @@ async function appendAuditLog(entry: Omit<AuditLogEntry, 'id' | 'timestamp'> & {
 // Unified DB helper methods with error tracking & auto-recovery
 async function dbSaveUser(user: User) {
   try {
-    if (!adminDb && !webDb) await initFirestore();
+    if (!adminDb) await initFirestore();
     const payload = cleanDocData(user);
     if (adminDb) {
       await adminDb.collection('users').doc(user.id).set(payload, { merge: true });
-      firestoreLastError = null;
-    } else if (webDb) {
-      await setDoc(doc(webDb, 'users', user.id), payload, { merge: true });
       firestoreLastError = null;
     }
   } catch (err: any) {
@@ -550,13 +516,10 @@ async function dbSaveUser(user: User) {
 
 async function dbSaveTask(task: Task) {
   try {
-    if (!adminDb && !webDb) await initFirestore();
+    if (!adminDb) await initFirestore();
     const payload = cleanDocData(task);
     if (adminDb) {
       await adminDb.collection('tasks').doc(task.id).set(payload, { merge: true });
-      firestoreLastError = null;
-    } else if (webDb) {
-      await setDoc(doc(webDb, 'tasks', task.id), payload, { merge: true });
       firestoreLastError = null;
     }
   } catch (err: any) {
@@ -567,12 +530,9 @@ async function dbSaveTask(task: Task) {
 
 async function dbDeleteTask(taskId: string) {
   try {
-    if (!adminDb && !webDb) await initFirestore();
+    if (!adminDb) await initFirestore();
     if (adminDb) {
       await adminDb.collection('tasks').doc(taskId).delete();
-      firestoreLastError = null;
-    } else if (webDb) {
-      await deleteDoc(doc(webDb, 'tasks', taskId));
       firestoreLastError = null;
     }
   } catch (err: any) {
@@ -583,12 +543,9 @@ async function dbDeleteTask(taskId: string) {
 
 async function dbDeleteUser(userId: string) {
   try {
-    if (!adminDb && !webDb) await initFirestore();
+    if (!adminDb) await initFirestore();
     if (adminDb) {
       await adminDb.collection('users').doc(userId).delete();
-      firestoreLastError = null;
-    } else if (webDb) {
-      await deleteDoc(doc(webDb, 'users', userId));
       firestoreLastError = null;
     }
   } catch (err: any) {
@@ -600,7 +557,7 @@ async function dbDeleteUser(userId: string) {
 async function dbBatchDeleteTasks(taskIds: string[]) {
   if (taskIds.length === 0) return;
   try {
-    if (!adminDb && !webDb) await initFirestore();
+    if (!adminDb) await initFirestore();
     const CHUNK_SIZE = 500;
     for (let i = 0; i < taskIds.length; i += CHUNK_SIZE) {
       const chunk = taskIds.slice(i, i + CHUNK_SIZE);
@@ -608,13 +565,6 @@ async function dbBatchDeleteTasks(taskIds: string[]) {
         const batch = adminDb.batch();
         for (const id of chunk) {
           batch.delete(adminDb.collection('tasks').doc(id));
-        }
-        await batch.commit();
-        firestoreLastError = null;
-      } else if (webDb) {
-        const batch = writeBatch(webDb);
-        for (const id of chunk) {
-          batch.delete(doc(webDb, 'tasks', id));
         }
         await batch.commit();
         firestoreLastError = null;
@@ -629,7 +579,7 @@ async function dbBatchDeleteTasks(taskIds: string[]) {
 async function dbBatchSaveUsers(users: User[]) {
   if (users.length === 0) return;
   try {
-    if (!adminDb && !webDb) await initFirestore();
+    if (!adminDb) await initFirestore();
     const CHUNK_SIZE = 500;
     for (let i = 0; i < users.length; i += CHUNK_SIZE) {
       const chunk = users.slice(i, i + CHUNK_SIZE);
@@ -637,13 +587,6 @@ async function dbBatchSaveUsers(users: User[]) {
         const batch = adminDb.batch();
         for (const u of chunk) {
           batch.set(adminDb.collection('users').doc(u.id), cleanDocData(u), { merge: true });
-        }
-        await batch.commit();
-        firestoreLastError = null;
-      } else if (webDb) {
-        const batch = writeBatch(webDb);
-        for (const u of chunk) {
-          batch.set(doc(webDb, 'users', u.id), cleanDocData(u), { merge: true });
         }
         await batch.commit();
         firestoreLastError = null;
@@ -658,7 +601,7 @@ async function dbBatchSaveUsers(users: User[]) {
 async function dbBatchSaveTasks(tasks: Task[]) {
   if (tasks.length === 0) return;
   try {
-    if (!adminDb && !webDb) await initFirestore();
+    if (!adminDb) await initFirestore();
     // Firestore has a maximum batch limit of 500 operations. Chunk tasks into blocks of 500.
     const CHUNK_SIZE = 500;
     for (let i = 0; i < tasks.length; i += CHUNK_SIZE) {
@@ -667,13 +610,6 @@ async function dbBatchSaveTasks(tasks: Task[]) {
         const batch = adminDb.batch();
         for (const t of chunk) {
           batch.set(adminDb.collection('tasks').doc(t.id), cleanDocData(t), { merge: true });
-        }
-        await batch.commit();
-        firestoreLastError = null;
-      } else if (webDb) {
-        const batch = writeBatch(webDb);
-        for (const t of chunk) {
-          batch.set(doc(webDb, 'tasks', t.id), cleanDocData(t), { merge: true });
         }
         await batch.commit();
         firestoreLastError = null;
@@ -687,9 +623,9 @@ async function dbBatchSaveTasks(tasks: Task[]) {
 
 // Sync existing users and tasks with Firestore
 async function syncFromFirestore() {
-  if (!adminDb && !webDb) {
+  if (!adminDb) {
     await initFirestore();
-    if (!adminDb && !webDb) return;
+    if (!adminDb) return;
   }
 
   try {
@@ -710,23 +646,6 @@ async function syncFromFirestore() {
       });
 
       tasksSnap.forEach((d: any) => {
-        const t = d.data() as Task;
-        if (!DUMMY_TASK_IDS.has(t.id) && !DUMMY_USER_IDS.has(t.userId)) {
-          firestoreTasks.push(t);
-        }
-      });
-    } else if (webDb) {
-      const usersSnap = await getDocs(collection(webDb, 'users'));
-      const tasksSnap = await getDocs(collection(webDb, 'tasks'));
-
-      usersSnap.forEach(d => {
-        const u = d.data() as User;
-        if (!DUMMY_USER_IDS.has(u.id) && !u.email?.endsWith('@acme.studio')) {
-          firestoreUsers.push(u);
-        }
-      });
-
-      tasksSnap.forEach(d => {
         const t = d.data() as Task;
         if (!DUMMY_TASK_IDS.has(t.id) && !DUMMY_USER_IDS.has(t.userId)) {
           firestoreTasks.push(t);
@@ -774,6 +693,8 @@ async function syncFromFirestore() {
 type SSEClient = {
   id: number;
   res: Response;
+  userId: string;
+  expiresAt: number;
 };
 
 let clients: SSEClient[] = [];
@@ -783,7 +704,7 @@ const MAX_SSE_CLIENTS = 100;
 function broadcastEvent(type: string, payload: any) {
   const eventData = JSON.stringify({
     type,
-    payload,
+    payload: redactPayload(payload),
     timestamp: Date.now(),
   });
 
@@ -795,8 +716,11 @@ function broadcastEvent(type: string, payload: any) {
       if (client.res.writableEnded || client.res.destroyed) {
         return false;
       }
-      client.res.write(message);
-      return true;
+      if (client.expiresAt <= Date.now() || !store.users.some(user => user.id === client.userId)) {
+        client.res.destroy();
+        return false;
+      }
+      return writeSse(client.res, message);
     } catch {
       return false;
     }
@@ -1496,6 +1420,7 @@ async function processClickupWebhookEvent(params: {
 
 async function startServer() {
   const app = express();
+  app.set('case sensitive routing', true);
 
   // Initialize Firestore if credentials are provided, or fall back safely
   await initFirestore();
@@ -1551,7 +1476,9 @@ async function startServer() {
     next();
   });
 
-  app.use(express.json({ limit: '1mb' }));
+  app.use(express.json({ limit: '1mb', verify: (req, _res, buffer) => {
+    if (req.url?.split('?')[0].replace(/\/+$/, '') === '/api/clickup/webhook') (req as Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
+  } }));
 
   // Sliding-window rate limiters for sensitive endpoints (prevent DoS and quota depletion)
   const authLimiter = createRateLimiter(20, 60 * 1000); // 20 login attempts per minute per IP
@@ -1560,7 +1487,33 @@ async function startServer() {
   // Initialize and load database records from Firestore
   await syncFromFirestore();
   autoArchiveDoneTasks();
-  loadRecentAuditLogs();
+  await loadRecentAuditLogs();
+  await webhookRegistry.load(adminDb);
+  const savedWebhook = webhookRegistry.latest();
+  registeredWebhookId = savedWebhook?.id || null;
+  activeWebhookEndpoint = savedWebhook?.endpoint || null;
+
+  // Exchange a verified Firebase ID token for an HttpOnly, same-origin SSE/API cookie.
+  app.post('/api/auth/session', authLimiter, async (req: Request, res: Response) => {
+    if (!sameOriginMutation(req)) return res.status(403).json({ error: 'Invalid request origin' });
+    const token = req.get('authorization')?.match(/^Bearer (\S+)$/)?.[1];
+    if (!token) return res.status(401).json({ error: 'Google identity required' });
+    try {
+      const identity = await verifyIdentity(token);
+      if (!identity.email_verified || identity.firebase?.sign_in_provider !== 'google.com' || identity.exp * 1000 <= Date.now()) return res.status(401).json({ error: 'Verified Google identity required' });
+      const user = store.users.find(member => member.email.toLowerCase() === identity.email?.toLowerCase());
+      if (!user) return res.status(403).json({ error: 'Account not registered in ZenFlow' });
+      res.setHeader('Cache-Control', 'no-store');
+      res.cookie(SESSION_COOKIE, token, { httpOnly: true, secure: req.secure, sameSite: 'strict', path: '/api', maxAge: Math.max(0, identity.exp * 1000 - Date.now()) });
+      res.json({ user: redactPayload(user) });
+    } catch { res.status(401).json({ error: 'Google session expired or invalid' }); }
+  });
+  app.delete('/api/auth/session', (req: Request, res: Response) => {
+    if (!sameOriginMutation(req)) return res.status(403).json({ error: 'Invalid request origin' });
+    res.clearCookie(SESSION_COOKIE, { httpOnly: true, secure: req.secure, sameSite: 'strict', path: '/api' });
+    res.status(204).end();
+  });
+  app.use('/api', createApiSecurity({ getStore: () => store, verify: verifyIdentity }));
 
   // API: Health check
   app.get('/api/health', (_req: Request, res: Response) => {
@@ -1573,7 +1526,7 @@ async function startServer() {
     maybeArchive();
     const etag = `W/"zenflow-rev-${stateRevision}"`;
     res.setHeader('ETag', etag);
-    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    res.setHeader('Cache-Control', 'private, no-cache, must-revalidate');
 
     deduplicateUsers(store);
 
@@ -1683,7 +1636,7 @@ async function startServer() {
     deduplicateUsers(store);
     const etag = `W/"zenflow-users-${stateRevision}"`;
     res.setHeader('ETag', etag);
-    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    res.setHeader('Cache-Control', 'private, no-cache, must-revalidate');
 
     if (req.headers['if-none-match'] === etag) {
       return res.status(304).end();
@@ -2173,7 +2126,7 @@ async function startServer() {
     maybeArchive();
     const etag = `W/"zenflow-tasks-${stateRevision}"`;
     res.setHeader('ETag', etag);
-    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    res.setHeader('Cache-Control', 'private, no-cache, must-revalidate');
 
     if (req.headers['if-none-match'] === etag) {
       return res.status(304).end();
@@ -3447,14 +3400,18 @@ async function startServer() {
 
   // API: Inbound ClickUp Webhook Listener (zero-friction status, assignee, and task sync)
   app.post('/api/clickup/webhook', (req: Request, res: Response) => {
-    // 1. Acknowledge HTTP 200 immediately to adhere to ClickUp Webhook timeout SLA
+    const registration = webhookRegistry.get(req.body?.webhook_id);
+    if (!validSignature((req as Request & { rawBody?: Buffer }).rawBody, req.get('x-signature'), registration?.secret)) {
+      return res.status(401).json({ error: 'Invalid webhook signature' });
+    }
     res.status(200).json({ received: true });
 
     webhookEventsCount++;
     lastWebhookEventAt = new Date().toISOString();
     lastWebhookAction = req.body.event || 'webhook_received';
 
-    const taskId = (req.body.task_id || req.body.taskId || req.body.task?.id || '').trim();
+    const rawTaskId = req.body.task_id || req.body.taskId || req.body.task?.id;
+    const taskId = typeof rawTaskId === 'string' ? rawTaskId.trim() : '';
     const eventType = req.body.event || 'unknown';
     const historyItems = Array.isArray(req.body.history_items) ? req.body.history_items : [];
 
@@ -3541,7 +3498,12 @@ async function startServer() {
         });
       }
 
-      registeredWebhookId = responseData.id || responseData.webhook?.id;
+      const registration = responseData.webhook || responseData;
+      if (typeof registration.id !== 'string' || typeof registration.secret !== 'string' || !registration.secret) {
+        return res.status(502).json({ error: 'ClickUp did not return a webhook signing secret' });
+      }
+      await webhookRegistry.save({ id: registration.id, secret: registration.secret, endpoint }, adminDb);
+      registeredWebhookId = registration.id;
       activeWebhookEndpoint = endpoint;
 
       appendAuditLog({
@@ -3558,7 +3520,6 @@ async function startServer() {
         success: true,
         webhookId: registeredWebhookId,
         endpoint,
-        webhook: responseData.webhook || responseData,
         message: 'ClickUp real-time webhook registered successfully.',
       });
     } catch (err: any) {
@@ -3610,6 +3571,7 @@ async function startServer() {
         headers: { Authorization: apiKey.trim() },
       });
       if (cuRes.ok) {
+        await webhookRegistry.remove(id, adminDb);
         if (registeredWebhookId === id) {
           registeredWebhookId = null;
           activeWebhookEndpoint = null;
@@ -3694,7 +3656,7 @@ async function startServer() {
   // API: Firestore status & health check
   app.get('/api/firestore/status', (_req: Request, res: Response) => {
     res.json({
-      connected: !!adminDb || !!webDb,
+      connected: !!adminDb,
       mode: firestoreMode,
       projectId: firestoreProjectId,
       databaseId: firestoreDatabaseId,
@@ -3731,11 +3693,15 @@ async function startServer() {
       const keyPath = path.join(process.cwd(), 'serviceAccountKey.json');
       await fs.promises.writeFile(keyPath, JSON.stringify(parsed, null, 2), 'utf-8');
 
+      const adminApps = await import('firebase-admin/app');
+      const existingApp = adminApps.getApps().find(app => app.name === 'zenflow-firestore');
+      if (existingApp) await adminApps.deleteApp(existingApp);
       initPromise = null;
       adminDb = null;
-      webDb = null;
       await initFirestore();
+      if (!adminDb) return res.status(503).json({ success: false, message: 'Firebase Admin initialization failed' });
       await syncFromFirestore();
+      await webhookRegistry.load(adminDb);
 
       res.json({
         success: true,
@@ -3782,7 +3748,7 @@ async function startServer() {
     res.setHeader('X-Accel-Buffering', 'no'); // Disable proxy buffering
 
     const clientId = nextClientId++;
-    const newClient: SSEClient = { id: clientId, res };
+    const newClient: SSEClient = { id: clientId, res, userId: res.locals.caller.id, expiresAt: res.locals.identityExpiresAt };
     clients.push(newClient);
 
     // Initial greeting and full sync
@@ -3790,17 +3756,20 @@ async function startServer() {
       type: 'connected',
       payload: { clientId, serverTime: Date.now() },
     });
-    res.write(`event: init\ndata: ${initialSync}\n\n`);
+    writeSse(res, `event: init\ndata: ${initialSync}\n\n`);
+    // A snapshot on every connection closes the missed-event window, including deletions.
+    writeSse(res, `event: snapshot\ndata: ${JSON.stringify(redactPayload({ users: store.users, tasks: store.tasks }))}\n\n`);
 
     // Periodic heartbeat to keep connections open across network proxies
     const heartbeatInterval = setInterval(() => {
-      if (res.destroyed || res.writableEnded) {
+      if (res.destroyed || res.writableEnded || newClient.expiresAt <= Date.now() || !store.users.some(user => user.id === newClient.userId)) {
+        res.destroy();
         clearInterval(heartbeatInterval);
         clients = clients.filter(c => c.id !== clientId);
         return;
       }
       try {
-        res.write(': heartbeat\n\n');
+        writeSse(res, ': heartbeat\n\n');
       } catch {
         clearInterval(heartbeatInterval);
         clients = clients.filter(c => c.id !== clientId);
@@ -3828,7 +3797,7 @@ async function startServer() {
       })
     );
     app.get('*', (_req: Request, res: Response) => {
-      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+      res.setHeader('Cache-Control', 'private, no-cache, must-revalidate');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   };

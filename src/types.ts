@@ -15,6 +15,7 @@ export interface User {
   isCreativeDirector?: boolean;
   creativeDirectorId?: string;
   clickupApiKey?: string;
+  clickupConnected?: boolean;
   selectedClickupSpaceId?: string;
   selectedClickupSpaceName?: string;
   clickupUserId?: string;

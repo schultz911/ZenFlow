@@ -1,3 +1,9 @@
+// Prototype policy: all app data is served by the authenticated ZenFlow backend.
+// users/{id}: User profile plus private ClickUp token; never a public profile document.
+// tasks/{id}: Task records, timer fields and 15-entry activity history.
+// compliance_audit_logs/{id}: immutable application audit records.
+// server_secrets/{id}: private webhook registrations; Admin SDK only.
+// Existing typed validators document the schema. Admin SDK uses IAM and bypasses rules.
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
@@ -57,28 +63,32 @@ service cloud.firestore {
              (!('isSubtask' in data) || (data.isSubtask is bool));
     }
 
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
     // Users collection
     match /users/{userId} {
-      allow get: if isValidId(userId);
-      allow list: if true;
-      allow create: if isValidId(userId) && isValidUser(incoming()) && incoming().id == userId;
-      allow update: if isValidId(userId) && isValidUser(incoming());
-      allow delete: if isValidId(userId);
+      allow get: if false;
+      allow list: if false;
+      allow create: if false && isValidId(userId) && isValidUser(incoming()) && incoming().id == userId;
+      allow update: if false && isValidId(userId) && isValidUser(incoming());
+      allow delete: if false;
     }
 
     // Tasks collection
     match /tasks/{taskId} {
-      allow get: if isValidId(taskId);
-      allow list: if true;
-      allow create: if isValidId(taskId) && isValidTask(incoming()) && incoming().id == taskId;
-      allow update: if isValidId(taskId) && isValidTask(incoming());
-      allow delete: if isValidId(taskId);
+      allow get: if false;
+      allow list: if false;
+      allow create: if false && isValidId(taskId) && isValidTask(incoming()) && incoming().id == taskId;
+      allow update: if false && isValidId(taskId) && isValidTask(incoming());
+      allow delete: if false;
     }
 
     // Compliance Audit Logs collection (SOC2 audit trail)
     match /compliance_audit_logs/{logId} {
-      allow get, list: if true;
-      allow create, update: if isValidId(logId);
+      allow get, list: if false;
+      allow create, update, delete: if false;
     }
   }
 }

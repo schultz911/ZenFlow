@@ -51,7 +51,7 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // ClickUp connection states
-  const [apiKeyInput, setApiKeyInput] = useState(clickupApiKey || '');
+  const [apiKeyInput, setApiKeyInput] = useState('');
   const [isClickupLoading, setIsClickupLoading] = useState(false);
   const [clickupError, setClickupError] = useState<string | null>(null);
   const [clickupSuccess, setClickupSuccess] = useState<string | null>(null);
@@ -98,7 +98,7 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
       refreshFirestoreStatus();
       refreshClickupWebhookStatus();
       setFeedback(null);
-      setApiKeyInput(clickupApiKey || '');
+      setApiKeyInput('');
       setClickupError(null);
       setClickupSuccess(null);
       setWebhookFeedback(null);
@@ -468,7 +468,7 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                       <div className="flex items-center justify-between">
                         <span>Personal API Token</span>
                         <span className="font-mono text-[11px] text-neutral-500 dark:text-white/50">
-                          {clickupApiKey ? `pk_••••••••${clickupApiKey.slice(-4)}` : 'Active'}
+                          {'Active'}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">

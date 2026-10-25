@@ -6,3 +6,8 @@ dist
 npm-debug.log*
 serviceAccountKey*.json
 data/*.tmp.*
+
+# Private webhook signing registrations and test-only emulator artifacts
+data/.clickup-webhooks.json*
+.firebase/
+*-debug.log

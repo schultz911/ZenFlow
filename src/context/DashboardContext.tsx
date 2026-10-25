@@ -1,3 +1,5 @@
+import { apiFetch as fetch, ensureApiSession, clearApiSession, getApiMemberId } from '../lib/api';
+import { reconcileSnapshot } from '../lib/reconcile';
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef, ReactNode } from 'react';
 import {
   User,
@@ -37,7 +39,8 @@ const OFFLINE_QUEUE_KEY = 'zenflow_mutation_queue_v1';
 
 function loadMutationQueue(): QueuedMutation[] {
   try {
-    const raw = localStorage.getItem(OFFLINE_QUEUE_KEY);
+    if (!getApiMemberId()) return [];
+    const raw = localStorage.getItem(`${OFFLINE_QUEUE_KEY}:${getApiMemberId()}`);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) return parsed;
@@ -50,10 +53,11 @@ function loadMutationQueue(): QueuedMutation[] {
 
 function saveMutationQueue(queue: QueuedMutation[]) {
   try {
+    if (!getApiMemberId()) return;
     if (queue.length > 0) {
-      localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+      localStorage.setItem(`${OFFLINE_QUEUE_KEY}:${getApiMemberId()}`, JSON.stringify(queue));
     } else {
-      localStorage.removeItem(OFFLINE_QUEUE_KEY);
+      localStorage.removeItem(`${OFFLINE_QUEUE_KEY}:${getApiMemberId()}`);
     }
   } catch {
     // ignore
@@ -218,22 +222,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const [activeDragInfo, setActiveDragInfo] = useState<DragTaskInfo | null>(null);
 
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    try {
-      const saved = localStorage.getItem(USER_SESSION_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (['user-1', 'user-2', 'user-3', 'user-4'].includes(parsed.id) || parsed.email?.endsWith('@acme.studio')) {
-          localStorage.removeItem(USER_SESSION_KEY);
-          return null;
-        }
-        return parsed;
-      }
-    } catch {
-      // ignore
-    }
-    return null;
-  });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   // Stable ref for currentUser — keeps adjustBillableHours and task helpers dep-free
   const currentUserRef = useRef<User | null>(currentUser);
@@ -314,12 +303,12 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, [currentUser]);
 
   const clickupApiKey = useMemo(() => {
-    return currentUser?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
+    return ''; // Saved credentials stay on the server; use clickupConnected.
   }, [currentUser]);
 
   const isClickupConnected = useMemo(() => {
-    return Boolean(isZensciencesUser && clickupApiKey);
-  }, [isZensciencesUser, clickupApiKey]);
+    return Boolean(isZensciencesUser && currentUser?.clickupConnected);
+  }, [isZensciencesUser, currentUser?.clickupConnected]);
 
   const [showClickupPrompt, setShowClickupPrompt] = useState<boolean>(false);
   const [clickupSpaces, setClickupSpaces] = useState<ClickupSpace[]>([]);
@@ -459,11 +448,11 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
             }
           }
 
-          setUsers(dedupedUsers);
+          setUsers(reconcileSnapshot({ users: dedupedUsers, tasks: [] }, loadMutationQueue(), tasksRef.current).users);
 
           // If currentUser exists, sync it to the primary deduplicated user
           setCurrentUser(prev => {
-            if (!prev) return dedupedUsers[0] || null;
+            if (!prev) return null;
             const targetId = idReassignments.get(prev.id) || prev.id;
             const matched = dedupedUsers.find(
               (u: User) => u.id === targetId || u.email.toLowerCase() === prev.email.toLowerCase()
@@ -505,7 +494,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
               taskMap.set(t.id, t);
             }
           }
-          setTasks(Array.from(taskMap.values()));
+          setTasks(reconcileSnapshot({ users: [], tasks: Array.from(taskMap.values()) }, loadMutationQueue(), tasksRef.current).tasks);
         }
         setSyncStatus('connected');
       }
@@ -521,14 +510,16 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Replay persistent offline mutation queue in FIFO sequence upon network restore
   const replayQueue = useCallback(async () => {
-    if (isReplayingRef.current) return;
+    if (!getApiMemberId() || isReplayingRef.current) return;
     const queue = loadMutationQueue();
     if (queue.length === 0) return;
 
     isReplayingRef.current = true;
     const remainingQueue: QueuedMutation[] = [];
+    const replayOwner = getApiMemberId();
 
     for (let i = 0; i < queue.length; i++) {
+      if (getApiMemberId() !== replayOwner) break;
       const item = queue[i];
 
       // Discard permanently failing mutations after 5 retries to prevent infinite replay loops
@@ -543,6 +534,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
           headers: { 'Content-Type': 'application/json' },
           body: item.payload ? JSON.stringify(item.payload) : undefined,
         });
+        if (res.status === 401 || res.status === 403) {
+          remainingQueue.push(...queue.slice(i));
+          break;
+        }
         if (!res.ok && res.status >= 400 && res.status < 500) {
           console.warn(`[Offline Queue] Discarding client error (${res.status}) for:`, item);
         } else if (!res.ok) {
@@ -559,10 +554,14 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
     }
 
-    saveMutationQueue(remainingQueue);
+    if (getApiMemberId() === replayOwner) {
+      const replayIds = new Set(queue.map(item => item.id));
+      const appended = loadMutationQueue().filter(item => !replayIds.has(item.id));
+      saveMutationQueue([...remainingQueue, ...appended]);
+    }
     isReplayingRef.current = false;
 
-    if (remainingQueue.length === 0) {
+    if (remainingQueue.length === 0 && getApiMemberId() === replayOwner) {
       await fetchState();
       await refreshFirestoreStatus();
       setSyncStatus('connected');
@@ -570,16 +569,17 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, [fetchState, refreshFirestoreStatus]);
 
   useEffect(() => {
+    if (!currentUser) return;
     fetchState();
     refreshFirestoreStatus();
     refreshClickupWebhookStatus();
-  }, [fetchState, refreshFirestoreStatus, refreshClickupWebhookStatus]);
+  }, [currentUser?.id, fetchState, refreshFirestoreStatus, refreshClickupWebhookStatus]);
 
   // Online / Offline network status listener with auto queue replay
   useEffect(() => {
     const handleOnline = () => {
       setSyncStatus('connecting');
-      replayQueue();
+      if (getApiMemberId()) replayQueue();
     };
     const handleOffline = () => {
       setSyncStatus('offline');
@@ -599,24 +599,37 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Server-Sent Events (SSE) Realtime Listener
   useEffect(() => {
+    if (!currentUser) return;
     let eventSource: EventSource | null = null;
     let reconnectTimeout: any = null;
     let isMounted = true;
 
-    function connectSSE() {
+    async function connectSSE() {
       if (!isMounted) return;
       try {
+        await ensureApiSession();
+        if (!isMounted) return;
         eventSource = new EventSource('/api/events');
 
         eventSource.onopen = () => {
           if (isMounted) {
             setSyncStatus('connected');
-            replayQueue();
           }
         };
 
         eventSource.addEventListener('init', () => {
           if (isMounted) setSyncStatus('connected');
+        });
+
+        eventSource.addEventListener('snapshot', (e: MessageEvent) => {
+          if (!isMounted) return;
+          try {
+            const snapshot = reconcileSnapshot(JSON.parse(e.data), loadMutationQueue(), tasksRef.current);
+            setUsers(snapshot.users);
+            setTasks(snapshot.tasks);
+            setCurrentUser(previous => previous ? snapshot.users.find(user => user.id === previous.id) || previous : null);
+            replayQueue();
+          } catch { setSyncStatus('offline'); }
         });
 
         eventSource.addEventListener('update', (e: MessageEvent) => {
@@ -720,11 +733,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         clearTimeout(reconnectTimeout);
       }
     };
-  }, []);
+  }, [replayQueue, currentUser?.id]);
 
   // ClickUp Loaders & Handlers
   const loadClickupSpaces = useCallback(async (apiKey: string) => {
-    if (!apiKey) return;
     try {
       const res = await fetch('/api/clickup/spaces', {
         headers: { 'x-clickup-api-key': apiKey },
@@ -772,7 +784,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, []);
 
   const loadClickupFoldersAndLists = useCallback(async (spaceId: string, apiKey: string) => {
-    if (!spaceId || !apiKey) return;
+    if (!spaceId) return;
     try {
       const res = await fetch(`/api/clickup/folders-and-lists?spaceId=${encodeURIComponent(spaceId)}`, {
         headers: { 'x-clickup-api-key': apiKey },
@@ -804,7 +816,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     if (spaceFoldersAndListsMapRef.current[spaceId]) {
       return spaceFoldersAndListsMapRef.current[spaceId];
     }
-    const key = currentUserRef.current?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
+    const key = '';
     try {
       const res = await fetch(`/api/clickup/folders-and-lists?spaceId=${encodeURIComponent(spaceId)}`, {
         headers: key ? { 'x-clickup-api-key': key } : {},
@@ -833,13 +845,13 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, []);
 
   useEffect(() => {
-    if (isClickupConnected && clickupApiKey) {
+    if (isClickupConnected) {
       loadClickupSpaces(clickupApiKey);
     }
   }, [isClickupConnected, clickupApiKey, loadClickupSpaces]);
 
   useEffect(() => {
-    if (isClickupConnected && clickupApiKey && selectedClickupSpaceId) {
+    if (isClickupConnected && selectedClickupSpaceId) {
       loadClickupFoldersAndLists(selectedClickupSpaceId, clickupApiKey);
     }
   }, [isClickupConnected, clickupApiKey, selectedClickupSpaceId, loadClickupFoldersAndLists]);
@@ -864,7 +876,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, [clickupApiKey]);
 
   useEffect(() => {
-    if (isClickupConnected && clickupApiKey) {
+    if (isClickupConnected) {
       loadClickupMembers(clickupApiKey);
     }
   }, [isClickupConnected, clickupApiKey, loadClickupMembers]);
@@ -874,11 +886,17 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   useEffect(() => {
     let isMounted = true;
     let unsubPromise: Promise<() => void> | null = null;
+    let authRevision = 0;
 
     unsubPromise = onFirebaseAuthStateChanged(async (fbUser) => {
+      const revision = ++authRevision;
       if (!isMounted) return;
 
       if (!fbUser) {
+        clearApiSession().catch(() => {});
+        setUsers([]);
+        setTasks([]);
+        setIsLoading(false);
         // No Google user session
         setCurrentUser(null);
         try {
@@ -901,8 +919,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         return;
       }
 
-      // Check registered users in workspace
-      let matched = usersRef.current.find(u => u.email.toLowerCase().trim() === email);
+      // Registration and identity are verified server-side before any workspace load.
+      let matched: User | undefined;
       if (!matched) {
         try {
           const res = await fetch('/api/auth/verify-email', {
@@ -919,6 +937,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
       }
 
+      if (!isMounted || revision !== authRevision) return;
       if (matched) {
         setCurrentUser(matched);
         setAuthError(null);
@@ -942,9 +961,11 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, []);
 
   const updateUserProfile = useCallback(async (userId: string, updates: Partial<User>): Promise<User> => {
-    setUsers(prev => prev.map(u => (u.id === userId ? { ...u, ...updates } : u)));
+    const publicUpdates = { ...updates };
+    delete publicUpdates.clickupApiKey;
+    setUsers(prev => prev.map(u => (u.id === userId ? { ...u, ...publicUpdates } : u)));
     if (currentUserRef.current?.id === userId) {
-      setCurrentUser(prev => (prev ? { ...prev, ...updates } : null));
+      setCurrentUser(prev => (prev ? { ...prev, ...publicUpdates } : null));
     }
     try {
       const res = await fetch(`/api/users/${userId}`, {
@@ -1048,11 +1069,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       if (!res.ok || !data.valid) {
         return { success: false, error: data.error || 'Invalid ClickUp API Key' };
       }
-      localStorage.setItem('zenflow_clickup_api_key', cleanKey);
       if (currentUserRef.current) {
         await updateUserProfile(currentUserRef.current.id, { clickupApiKey: cleanKey });
       }
-      await loadClickupSpaces(cleanKey);
+      await loadClickupSpaces('');
       setShowClickupPrompt(false);
       return { success: true };
     } catch (err: any) {
@@ -1063,7 +1083,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   const disconnectClickup = useCallback(() => {
     localStorage.removeItem('zenflow_clickup_api_key');
     if (currentUserRef.current) {
-      updateUserProfile(currentUserRef.current.id, { clickupApiKey: undefined });
+      updateUserProfile(currentUserRef.current.id, { clickupApiKey: '' });
     }
     setClickupSpaces([]);
     setClickupFoldersAndLists({ folders: [], folderlessLists: [] });
@@ -1083,18 +1103,18 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       });
     }
 
-    if (clickupApiKey) {
+    if (isClickupConnected) {
       await loadClickupFoldersAndLists(spaceId, clickupApiKey);
     }
-  }, [clickupApiKey, updateUserProfile, loadClickupFoldersAndLists]);
+  }, [clickupApiKey, isClickupConnected, updateUserProfile, loadClickupFoldersAndLists]);
 
   const createClickupList = useCallback(async (
     name: string,
     spaceId: string,
     folderId?: string
   ): Promise<ClickupList | null> => {
-    const apiKey = currentUserRef.current?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
-    if (!apiKey || !name) return null;
+    const apiKey = '';
+    if (!name) return null;
     try {
       const res = await fetch('/api/clickup/lists', {
         method: 'POST',
@@ -1119,7 +1139,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, [loadClickupFoldersAndLists]);
 
   const syncUserTasksWithClickUp = useCallback(async (userId: string) => {
-    const apiKey = currentUserRef.current?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
+    const apiKey = '';
     const callerUserId = currentUserRef.current?.id;
     try {
       const res = await fetch('/api/clickup/sync-user-tasks', {
@@ -1167,8 +1187,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, [fetchState]);
 
   const fetchClickupCustomFields = useCallback(async (params: { listId?: string; spaceId?: string; folderId?: string }): Promise<ClickupCustomFieldOption[]> => {
-    const apiKey = currentUserRef.current?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
-    if (!apiKey) return [];
+    const apiKey = '';
     setIsLoadingTaskTypes(true);
     try {
       const q = new URLSearchParams();
@@ -1197,10 +1216,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, []);
 
   useEffect(() => {
-    if (selectedClickupSpaceId && clickupApiKey) {
+    if (selectedClickupSpaceId && isClickupConnected) {
       fetchClickupCustomFields({ spaceId: selectedClickupSpaceId });
     }
-  }, [selectedClickupSpaceId, clickupApiKey, fetchClickupCustomFields]);
+  }, [selectedClickupSpaceId, isClickupConnected, fetchClickupCustomFields]);
 
   const getUserSyncState = useCallback((targetUserId: string): 'synced' | 'pending' | 'failed' | 'unmapped' => {
     const targetUser = usersRef.current.find(u => u.id === targetUserId);
@@ -1298,27 +1317,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     const googleUser = await signInWithGoogle();
     const cleanEmail = googleUser.email.trim().toLowerCase();
 
-    // Prefer user with existing tasks if multiple exist
-    const matchingUsers = usersRef.current.filter(u => u.email.toLowerCase() === cleanEmail);
-    let existing = matchingUsers.find(u => tasksRef.current.some(t => t.userId === u.id))
-      || matchingUsers.find(u => u.id !== 'user-superadmin-kiran')
-      || matchingUsers[0];
-
-    if (!existing) {
-      try {
-        const res = await fetch('/api/auth/verify-email', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: cleanEmail }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          existing = data.user;
-        }
-      } catch (err) {
-        console.warn('Backend verify-email call failed:', err);
-      }
-    }
+    const response = await fetch('/api/auth/verify-email', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: cleanEmail }),
+    });
+    const existing: User | undefined = response.ok ? (await response.json()).user : undefined;
 
     if (!existing) {
       await signOutFirebase();
@@ -1329,7 +1331,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     setCurrentUser(existing);
     setActiveRoleTab(existing.role);
-    if (existing.email.toLowerCase().endsWith('@zensciences.com') && !existing.clickupApiKey) {
+    if (existing.email.toLowerCase().endsWith('@zensciences.com') && !existing.clickupConnected) {
       setShowClickupPrompt(true);
     }
     return existing;
@@ -1337,6 +1339,9 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const logout = useCallback(() => {
     setCurrentUser(null);
+    setUsers([]);
+    setTasks([]);
+    clearApiSession().catch(() => {});
     try {
       localStorage.removeItem(USER_SESSION_KEY);
     } catch {}
@@ -1447,7 +1452,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     const payload = { id: realId, ...data };
 
     const callerId = currentUserRef.current?.id || '';
-    const clickKey = currentUserRef.current?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
+    const clickKey = '';
 
     try {
       if (!navigator.onLine) throw new Error('Offline');
@@ -1542,7 +1547,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     });
 
     const callerId = currentUserRef.current?.id || '';
-    const clickKey = currentUserRef.current?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
+    const clickKey = '';
 
     try {
       if (!navigator.onLine) throw new Error('Offline');
@@ -1649,7 +1654,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     const callerId = currentUserRef.current?.id || '';
-    const clickKey = currentUserRef.current?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
+    const clickKey = '';
 
     try {
       if (!navigator.onLine) throw new Error('Offline');
@@ -1836,7 +1841,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     });
 
     const callerId = currentUserRef.current?.id || '';
-    const clickKey = currentUserRef.current?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
+    const clickKey = '';
 
     try {
       if (!navigator.onLine) throw new Error('Offline');
@@ -1898,7 +1903,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     const callerId = currentUserRef.current?.id || '';
-    const clickKey = currentUserRef.current?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
+    const clickKey = '';
     const isSuper = Boolean(isSuperadmin || currentUserRef.current?.email?.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase());
 
     const res = await fetch(`/api/tasks/${taskId}/duplicate`, {
@@ -1980,7 +1985,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     );
 
     const callerId = currentUserRef.current?.id || '';
-    const clickKey = currentUserRef.current?.clickupApiKey || localStorage.getItem('zenflow_clickup_api_key') || '';
+    const clickKey = '';
 
     try {
       if (!navigator.onLine) throw new Error('Offline');

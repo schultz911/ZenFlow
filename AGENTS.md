@@ -6,6 +6,17 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
+### Sweep 52: 2026-10-25 (Verified API Identity, Private ClickUp Credentials, Server-Owned Firebase, Signed Webhooks and Bounded Resources)
+
+- **SEC-16 (Verified Backend Identity and Authorization):** Firebase identities are verified against the fixed Google login project, independently of configurable storage credentials. HttpOnly same-origin sessions protect REST, downloads and SSE. Server-owned role and ownership checks replace client header assertions, including atomic batch validation. Universal authenticated cross-board subtask delegation remains available (AUTH-07).
+- **SEC-17 (ClickUp Credential Response Redaction):** Public member fields use an allowlist with non-secret `clickupConnected`. Shared HTTP/SSE payloads no longer disclose saved personal tokens. Connection status, save/disconnect, and existing server token fallback remain supported. Legacy browser token copies are removed and offline queues retain member ownership.
+- **SEC-18 (Server-Owned Firestore and Audit Persistence):** Direct client database access is denied. Removed the unauthenticated Web SDK fallback and its now-unreachable server branches; retained Firebase Admin and its explicit `@google-cloud/firestore` runtime dependency. Cloud audit writes use create-only persistence. Live rules deployment requires verified Admin/IAM access and a coordinated client/server rollout; see `docs/READINESS.md`.
+- **SEC-19 (ClickUp Webhook HMAC Verification):** Exact raw request bytes are verified using the registered signing secret before acknowledgement or state effects. Registrations persist privately in the local data directory and Firestore `server_secrets`. Existing registrations without recoverable secrets must be re-registered. Secrets are not returned to browsers.
+- **PERF-41 (Live SSE Backpressure and Reconnect Recovery):** Output buffering is bounded to 256 KiB plus one large event, with authenticated snapshots on every reconnect. Pending offline creates, edits, reorders and deletes overlay snapshots before replay. Disconnected or expired members cannot retain an active stream.
+- **PERF-42 (Bounded Asynchronous Audit Tail):** Startup reads recent nonblank lines backwards in 64 KiB blocks instead of synchronously loading the entire log. Retains malformed-line tolerance, ordering, Unicode/CRLF and full-history downloads. Node 22 synthetic benchmark on a 45.9 MB log showed approximately 95% lower median read time with identical last-100 records; this is not a production SLA.
+- **AUDIT-11 (Reproducible Readiness Validation):** Added real-handler authorization/workflow fixtures, client session migration/race tests, real HTTP SSE checks, audit edge-case tests, emulator policy verification, compiled-server smoke checks and Node 22/Java 21 CI. See test scripts and `docs/READINESS.md` for scope and deployment prerequisites; no broad production certification is inferred from compilation alone.
+
+
 ### Sweep 51: 2026-10-16 (Post-Sweep 50 Dead Symbol Purge & Institutional-Grade Audit Certification)
 
 - **SAN-13 (Post-Sweep 50 Purge of Unreferenced Icon Import in TaskModal):**
