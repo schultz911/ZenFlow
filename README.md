@@ -35,12 +35,15 @@
 ## ⚡ Core Capabilities
 
 ### 1. Cognitive Load & Workload Scoring
+
 - **Dynamic Load Scoring**: Tasks are weighted by cognitive strain (`Low = 1`, `Medium = 2`, `High = 3`), dynamically calculating active workload pressure per team member.
 - **WIP Limits & Demand Alarms**: Configurable Work-In-Progress thresholds flag overloaded members with immediate visual warnings and demand alerts before task assignments breach capacity.
 - **Billable Hours & Cycle Metrics**: Active time accumulation while tasks reside in `in_progress`, alongside manual time adjustments, cycle tracking, and historical activity trails.
 
 ### 2. Multi-Stage Swimlane Lifecycle
+
 ZenFlow partitions workflows into dedicated swimlanes for Content and Design boards:
+
 - **Pipeline**: Backlog ideation space for uncommitted initiatives. ClickUp list assignment and deadlines remain optional; tasks do not trigger unassigned warnings.
 - **Retainer**: Dedicated lane for ongoing, recurring, or retainer client engagements. Retainer tasks do not require deadlines, do not inflate WIP counts, and feature direct one-click `+ Subtask` generation that feeds actionable items into execution lanes.
 - **To Do**: Prioritized queue ready for immediate execution.
@@ -49,10 +52,12 @@ ZenFlow partitions workflows into dedicated swimlanes for Content and Design boa
 - **Done & Archived**: Completed milestones with timestamped cycle analytics.
 
 ### 3. Floating Cross-Board Free Pool
+
 - **Idle Capacity Detection**: A persistent glassmorphic floating pill continuously monitors all Content and Design team members, identifying individuals with zero active tasks in `To Do` or `In Progress`.
 - **Instant Allocation**: Expand the floating panel to review idle members across roles and instantly allocate tasks without leaving the active board view.
 
 ### 4. ClickUp Deep Bi-Directional Integration
+
 - **Universal Subtask Delegation**: Any authenticated team member can delegate subtasks across boards. Subtasks nest hierarchically under the parent task in both ZenFlow and ClickUp.
 - **Isolated Per-Task Hierarchy**: Dynamic resolution of ClickUp Spaces, Folders, Lists, and Custom Task Types without cross-space UI pollution.
 - **Single Source of Truth (SSoT)**: ZenFlow asserts authoritative state on ownership, status, and deadlines, defensively correcting divergence from ClickUp webhooks.
@@ -60,6 +65,7 @@ ZenFlow partitions workflows into dedicated swimlanes for Content and Design boa
 - **Credential Redaction**: Personal API tokens are isolated server-side; client browser payloads receive only non-sensitive connection indicators (`clickupConnected: true`).
 
 ### 5. Resilient Real-Time Engine & Offline Capability
+
 - **Server-Sent Events (SSE)**: Bounded output streaming (256 KiB backpressure limit) ensures low latency and memory safety under multi-client loads.
 - **Optimistic UI with FIFO Replay**: Offline changes, reorders, and creations are applied instantly to local state and replayed sequentially upon network reconnection.
 
@@ -124,7 +130,7 @@ flowchart TD
 
 ## 📂 Directory Structure
 
-```
+```text
 c:/ZenFlow/
 ├── .github/workflows/          # CI/CD workflows (Node 22 / Java 21)
 ├── data/                       # Local volume data (store.json, audit.ndjson, webhooks.json)
@@ -174,12 +180,14 @@ c:/ZenFlow/
 ### Installation
 
 1. **Clone the repository**:
+
    ```sh
    git clone https://github.com/schultz911/ZenFlow.git
    cd ZenFlow
    ```
 
 2. **Install dependencies**:
+
    ```sh
    npm ci
    ```
@@ -239,7 +247,7 @@ Visit [http://localhost:3000](http://localhost:3000) in your browser.
 
 ZenFlow adopts a **Zero-Trust, Server-Owned** security posture:
 
-```
+```text
 +--------------------------------------------------------------------------+
 |                            RBAC Role Hierarchy                           |
 +--------------------------------------------------------------------------+
@@ -260,6 +268,7 @@ ZenFlow adopts a **Zero-Trust, Server-Owned** security posture:
 ```
 
 ### Key Security Safeguards
+
 1. **HttpOnly Cookie Sessions**: Verified Google ID tokens are exchanged for an `HttpOnly`, `SameSite=Strict` session cookie scoped strictly to `/api`. Tokens are never exposed in URLs or client-accessible web storage.
 2. **CSRF & Same-Origin Mutation Protection**: All state-modifying requests require custom headers validated against the application origin.
 3. **Firestore Security Rules**: Direct client reads and writes are denied unconditionally (`allow read, write: if false;`). Data is manipulated exclusively by the backend via the Firebase Admin SDK through IAM credentials.
@@ -271,7 +280,7 @@ ZenFlow adopts a **Zero-Trust, Server-Owned** security posture:
 
 ZenFlow acts as the **authoritative single source of truth** when coordinating with ClickUp:
 
-```
+```text
    ZenFlow Mutation ──────► POST/PUT ClickUp API v2 ──────► ClickUp Task Updated
           ▲                                                         │
           │                                                         ▼
@@ -342,7 +351,9 @@ docker run -d \
 ```
 
 ### Cloud Platforms (Railway / Nixpacks / Cloud Run)
+
 ZenFlow provides pre-configured [`railway.json`](railway.json), [`nixpacks.toml`](nixpacks.toml), and [`Procfile`](Procfile) manifests for deployment. Ensure the following steps are performed:
+
 1. Provide `FIREBASE_SERVICE_ACCOUNT_KEY` in platform environment variables.
 2. Mount a persistent volume to `/app/data` (or specify `ZENFLOW_DATA_DIR`).
 3. Deploy frontend and backend together.
@@ -356,6 +367,7 @@ For a detailed deployment runbook, refer to [`docs/READINESS.md`](docs/READINESS
 ## 📜 Audit & Compliance Trail
 
 All critical system actions (task creations, edits, status transitions, user updates, credential modifications, and webhook deliveries) are recorded to an append-only compliance log:
+
 - **Streaming NDJSON**: Stored in `data/audit.ndjson` and mirrored to Firestore `compliance_audit_logs`.
 - **Tail-Optimized Reads**: Backend reverse-reads recent log entries in 64 KiB blocks, providing fast initial log hydration without loading multi-megabyte audit histories into memory.
 - **Exportable Compliance Logs**: Superadmins can stream and download complete compliance records via `/api/audit/download`.
