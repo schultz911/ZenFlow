@@ -14,8 +14,6 @@ export const IN_REVIEW_HOURLY_RATES: Record<CognitiveLoad, number> = {
 
 /**
  * Returns role-tailored cognitive load naming
- * Content: Low (Content Writing), Medium (Creative Concept), High (Strategy and Planning)
- * Design: Low (Adaptive Design), Medium (Conceptual Design), High (Identity Design)
  */
 export function getCognitiveLoadLabel(load: CognitiveLoad, role: Role = 'content'): string {
   if (role === 'design') {
@@ -28,6 +26,50 @@ export function getCognitiveLoadLabel(load: CognitiveLoad, role: Role = 'content
         return 'Identity Design';
       default:
         return 'Conceptual Design';
+    }
+  } else if (role === 'video') {
+    switch (load) {
+      case 'low':
+        return 'Video Editing';
+      case 'medium':
+        return 'Motion Graphics';
+      case 'high':
+        return 'Creative Direction & Storyboard';
+      default:
+        return 'Motion Graphics';
+    }
+  } else if (role === 'ui_ux') {
+    switch (load) {
+      case 'low':
+        return 'UI Assets & Components';
+      case 'medium':
+        return 'Wireframing & Prototype';
+      case 'high':
+        return 'Design Systems & Architecture';
+      default:
+        return 'Wireframing & Prototype';
+    }
+  } else if (role === 'account_manager') {
+    switch (load) {
+      case 'low':
+        return 'Client Coordination';
+      case 'medium':
+        return 'Project Scoping';
+      case 'high':
+        return 'Strategic Account Planning';
+      default:
+        return 'Project Scoping';
+    }
+  } else if (role === 'administrator') {
+    switch (load) {
+      case 'low':
+        return 'Admin Tasks';
+      case 'medium':
+        return 'Operations Management';
+      case 'high':
+        return 'System Architecture';
+      default:
+        return 'Operations Management';
     }
   } else {
     // Content
@@ -42,6 +84,85 @@ export function getCognitiveLoadLabel(load: CognitiveLoad, role: Role = 'content
         return 'Creative Concept';
     }
   }
+}
+
+/**
+ * Returns specific display tag and styling for team members:
+ * Creative directors, content leads and art directors receive specific tags
+ * instead of the generic role tag.
+ */
+export function getUserTag(user?: {
+  role?: string;
+  isCreativeDirector?: boolean;
+  isContentLead?: boolean;
+  isArtDirector?: boolean;
+  isClusterLead?: boolean;
+  isAdministrator?: boolean;
+} | null): { label: string; badgeClass: string } {
+  if (!user) {
+    return {
+      label: 'Member',
+      badgeClass: 'bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border-neutral-200 dark:border-white/10',
+    };
+  }
+  if (user.isCreativeDirector) {
+    return {
+      label: 'Creative Director',
+      badgeClass: 'bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-500/30 font-semibold',
+    };
+  }
+  if (user.isContentLead) {
+    return {
+      label: 'Content Lead',
+      badgeClass: 'bg-blue-500/15 text-blue-600 dark:text-blue-300 border-blue-500/30 font-semibold',
+    };
+  }
+  if (user.isArtDirector) {
+    return {
+      label: 'Art Director',
+      badgeClass: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border-indigo-500/30 font-semibold',
+    };
+  }
+  if (user.isClusterLead) {
+    return {
+      label: 'Cluster Lead',
+      badgeClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30 font-semibold',
+    };
+  }
+  if (user.isAdministrator || user.role === 'administrator') {
+    return {
+      label: 'Administrator',
+      badgeClass: 'bg-rose-500/15 text-rose-600 dark:text-rose-300 border-rose-500/30 font-semibold',
+    };
+  }
+  if (user.role === 'ui_ux') {
+    return {
+      label: 'UI/UX',
+      badgeClass: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300 border-cyan-500/30',
+    };
+  }
+  if (user.role === 'video') {
+    return {
+      label: 'Video',
+      badgeClass: 'bg-violet-500/15 text-violet-600 dark:text-violet-300 border-violet-500/30',
+    };
+  }
+  if (user.role === 'account_manager') {
+    return {
+      label: 'Account Manager',
+      badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30',
+    };
+  }
+  if (user.role === 'design') {
+    return {
+      label: 'Design',
+      badgeClass: 'bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border-neutral-200 dark:border-white/10',
+    };
+  }
+  return {
+    label: 'Content',
+    badgeClass: 'bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border-neutral-200 dark:border-white/10',
+  };
 }
 
 /**

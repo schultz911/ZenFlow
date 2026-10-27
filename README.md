@@ -38,23 +38,32 @@
 - **WIP Limits & Demand Alarms**: Configurable Work-In-Progress thresholds flag overloaded members with immediate visual warnings and demand alerts before task assignments breach capacity.
 - **Billable Hours & Cycle Metrics**: Active time accumulation while tasks reside in `in_progress`, alongside manual time adjustments, cycle tracking, and historical activity trails.
 
-### 2. Multi-Stage Swimlane Lifecycle
+### 2. Multi-Stage Swimlane Lifecycle & Team Sections
 
-ZenFlow partitions workflows into dedicated swimlanes for Content and Design boards:
-
-- **Pipeline**: Backlog ideation space for uncommitted initiatives; deadlines remain optional and unassigned warnings are suppressed.
-- **Retainer**: Dedicated lane for ongoing, recurring, or retainer client engagements. Retainer tasks do not require deadlines, do not inflate WIP counts, and feature direct one-click `+ Subtask` generation that feeds actionable items into execution lanes.
-- **To Do**: Prioritized queue ready for immediate execution.
-- **In Progress**: Active execution lane with live billable duration tracking.
-- **In Review**: Creative Director and client review staging.
-- **Done & Archived**: Completed milestones with timestamped cycle analytics.
+ZenFlow structures workflows across dedicated disciplines:
+- **Delivery Boards (Content & Design)**: Partitioned by delivery teams under designated Creative Directors with quick team switcher dropdowns.
+- **Shared Agency Disciplines (Video & UI/UX)**: Shared agency-wide teams operating cross-functionally across all delivery teams without board dropdown isolation.
+- **Swimlane Stages**:
+  - **Pipeline**: Backlog ideation space for uncommitted initiatives; deadlines remain optional.
+  - **Retainer**: Ongoing, recurring client engagements without deadlines and with direct `+ Subtask` generation.
+  - **To Do**: Prioritized queue ready for immediate execution.
+  - **In Progress**: Active execution lane with live billable duration tracking.
+  - **In Review**: Creative Director, Lead, and client review staging.
+  - **Done & Archived**: Completed milestones with timestamped cycle analytics.
 
 ### 3. Floating Cross-Board Free Pool
 
-- **Idle Capacity Detection**: A persistent glassmorphic floating pill continuously monitors all Content and Design team members, identifying individuals with zero active tasks in `To Do` or `In Progress`.
-- **Instant Allocation**: Expand the floating panel to review idle members across roles and instantly allocate tasks without leaving the active board view.
+- **Idle Capacity Detection**: A persistent glassmorphic floating pill continuously monitors members across Content, Design, Video, and UI/UX, identifying individuals with zero active tasks in `To Do` or `In Progress`.
+- **Instant Allocation**: Filter idle capacity by role (`All`, `Content`, `Design`, `Video`, `UI/UX`) and instantly allocate tasks without leaving the active board view.
 
-### 4. Universal Subtask Delegation & Cloud Firestore Storage
+### 4. Roles, Leadership Hierarchy & Provisioning Permissions
+
+- **Member Roles**: Supports `Administrator`, `Account Manager`, `Content`, `Design`, `Video`, and `UI/UX`.
+- **Leadership Designations**: Configurable designations for `Administrator`, `Creative Director`, `Cluster Lead`, `Content Lead`, and `Art Director` with specific role tags.
+- **Cluster Lead Association**: Direct `Assigned Cluster Lead` mapping while boards continue to follow `Creative Director` as the primary leader of a cluster.
+- **Strict Provisioning Access**: Member onboarding and role management permissions are strictly restricted to `Superadmin`, `Administrator`, `Creative Director`, and `Cluster Lead`.
+
+### 5. Universal Subtask Delegation & Cloud Firestore Storage
 
 - **Universal Subtask Delegation**: Any authenticated team member can delegate subtasks across boards. Subtasks link hierarchically under the parent task (`parentTaskId`, `parentTaskTitle`, `isSubtask: true`).
 - **Native Cloud Persistence**: Tasks and team accounts save directly to Google Cloud Firestore (`users`, `tasks`, and `compliance_audit_logs`).

@@ -19,11 +19,16 @@ service cloud.firestore {
       return data.id is string && isValidId(data.id) &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
              data.email is string && data.email.size() > 0 && data.email.size() <= 150 &&
-             data.role in ['content', 'design'] &&
+             data.role in ['content', 'design', 'video', 'ui_ux', 'account_manager', 'administrator'] &&
              data.createdAt is string && data.createdAt.size() <= 40 &&
              (!('avatarColor' in data) || (data.avatarColor is string && data.avatarColor.size() <= 100)) &&
+             (!('isAdministrator' in data) || (data.isAdministrator is bool)) &&
              (!('isCreativeDirector' in data) || (data.isCreativeDirector is bool)) &&
-             (!('creativeDirectorId' in data) || (data.creativeDirectorId is string && data.creativeDirectorId.size() <= 128));
+             (!('isClusterLead' in data) || (data.isClusterLead is bool)) &&
+             (!('isContentLead' in data) || (data.isContentLead is bool)) &&
+             (!('isArtDirector' in data) || (data.isArtDirector is bool)) &&
+             (!('creativeDirectorId' in data) || (data.creativeDirectorId is string && data.creativeDirectorId.size() <= 128)) &&
+             (!('clusterLeadId' in data) || (data.clusterLeadId is string && data.clusterLeadId.size() <= 128));
     }
 
     function isValidTask(data) {

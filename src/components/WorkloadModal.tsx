@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task } from '../types';
-import { calculateUserWorkload, formatDueDate, getCognitiveLoadLabel, calculateWeeklyVelocity } from '../utils/workload';
+import { calculateUserWorkload, formatDueDate, getCognitiveLoadLabel, calculateWeeklyVelocity, getUserTag } from '../utils/workload';
 import { X, TrendingUp, Clock, CheckCircle2 } from 'lucide-react';
 
 interface WorkloadModalProps {
@@ -90,8 +90,8 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
             <div>
               <h2 className="text-base font-semibold tracking-tight text-neutral-900 dark:text-white flex items-center gap-2">
                 <span>{user.name}</span>
-                <span className="rounded-full bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-neutral-600 dark:text-white/40">
-                  {user.role === 'content' ? 'Content' : 'Design'}
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] tracking-wide ${getUserTag(user).badgeClass}`}>
+                  {getUserTag(user).label}
                 </span>
               </h2>
               <p className="text-xs text-neutral-500 dark:text-white/40 mt-0.5">

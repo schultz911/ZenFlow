@@ -20,7 +20,7 @@
         },
         "role": {
           "type": "string",
-          "enum": ["content", "design"],
+          "enum": ["content", "design", "video", "ui_ux", "account_manager", "administrator"],
           "description": "Team swimlane role"
         },
         "avatarColor": {
@@ -32,13 +32,33 @@
           "format": "date-time",
           "description": "Creation timestamp ISO string"
         },
+        "isAdministrator": {
+          "type": "boolean",
+          "description": "Whether this user has administrator privileges"
+        },
         "isCreativeDirector": {
           "type": "boolean",
           "description": "Whether this user is a designated Creative Director"
         },
+        "isClusterLead": {
+          "type": "boolean",
+          "description": "Whether this user is a designated Cluster Lead"
+        },
+        "isContentLead": {
+          "type": "boolean",
+          "description": "Whether this user is a designated Content Lead"
+        },
+        "isArtDirector": {
+          "type": "boolean",
+          "description": "Whether this user is a designated Art Director"
+        },
         "creativeDirectorId": {
           "type": "string",
           "description": "ID of the Creative Director this user is mapped to"
+        },
+        "clusterLeadId": {
+          "type": "string",
+          "description": "ID of the Cluster Lead this user is assigned to"
         }
       },
       "required": ["id", "name", "email", "role", "createdAt"]

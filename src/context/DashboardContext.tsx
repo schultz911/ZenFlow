@@ -104,19 +104,26 @@ interface DashboardContextType {
     name: string;
     email: string;
     role: Role;
+    isAdministrator?: boolean;
     isCreativeDirector?: boolean;
+    isClusterLead?: boolean;
+    isContentLead?: boolean;
+    isArtDirector?: boolean;
     creativeDirectorId?: string;
-
+    clusterLeadId?: string;
   }) => Promise<User>;
   updateUserProfile: (userId: string, updates: Partial<User>) => Promise<User>;
   remapUserTasks: (fromUserIdOrEmail: string, toUserId: string, deleteSourceUser?: boolean) => Promise<{ success: boolean; remappedCount: number; error?: string }>;
   // Role & Permissions
   isSuperadmin: boolean;
+  isAdministrator: boolean;
   isCreativeDirector: boolean;
+  isClusterLead: boolean;
   canManageMembers: boolean;
   canEditUserTasks: (targetUserId: string) => boolean;
   canSwitchBoards: boolean;
   creativeDirectors: User[];
+  clusterLeads: User[];
   activeBoardId: string;
   setActiveBoardId: (boardId: string) => void;
   fetchAuditLogs: (limit?: number) => Promise<AuditLogEntry[]>;
@@ -198,12 +205,24 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     return currentUser?.email?.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase();
   }, [currentUser]);
 
+  const isAdministrator = useMemo(() => {
+    return Boolean(currentUser?.isAdministrator || currentUser?.role === 'administrator');
+  }, [currentUser]);
+
   const isCreativeDirector = useMemo(() => {
     return Boolean(currentUser?.isCreativeDirector || isSuperadmin);
   }, [currentUser, isSuperadmin]);
 
+  const isClusterLead = useMemo(() => {
+    return Boolean(currentUser?.isClusterLead);
+  }, [currentUser]);
+
   const creativeDirectors = useMemo(() => {
     return users.filter(u => u.isCreativeDirector || u.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase());
+  }, [users]);
+
+  const clusterLeads = useMemo(() => {
+    return users.filter(u => u.isClusterLead || u.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase());
   }, [users]);
 
   const [activeBoardId, setActiveBoardIdState] = useState<string>(() => {
@@ -221,8 +240,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   useEffect(() => {
     if (currentUser) {
       const isSuper = currentUser.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase();
-      const isCD = Boolean(currentUser.isCreativeDirector || isSuper);
-      if (!isCD) {
+      const isPrivileged = Boolean(currentUser.isCreativeDirector || currentUser.isAdministrator || currentUser.isClusterLead || currentUser.role === 'administrator' || isSuper);
+      if (!isPrivileged) {
         // Regular user: locked to their assigned Creative Director's board
         const targetBoard = currentUser.creativeDirectorId || currentUser.id;
         setActiveBoardIdState(targetBoard);
@@ -234,24 +253,29 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const canManageMembers = useMemo(() => {
     if (!currentUser) return false;
-    return isSuperadmin || isCreativeDirector;
-  }, [currentUser, isSuperadmin, isCreativeDirector]);
+    return isSuperadmin || isAdministrator || isCreativeDirector || isClusterLead;
+  }, [currentUser, isSuperadmin, isAdministrator, isCreativeDirector, isClusterLead]);
 
   const canSwitchBoards = useMemo(() => {
     if (!currentUser) return false;
-    return isSuperadmin || isCreativeDirector;
-  }, [currentUser, isSuperadmin, isCreativeDirector]);
+    return isSuperadmin || isAdministrator || isCreativeDirector || isClusterLead;
+  }, [currentUser, isSuperadmin, isAdministrator, isCreativeDirector, isClusterLead]);
 
   const canEditUserTasks = useCallback((targetUserId: string): boolean => {
     if (!currentUser) return false;
-    if (isSuperadmin) return true;
+    if (isSuperadmin || isAdministrator) return true;
     if (isCreativeDirector) {
       if (targetUserId === currentUser.id) return true;
       const target = usersRef.current.find(u => u.id === targetUserId);
       return target?.creativeDirectorId === currentUser.id;
     }
+    if (isClusterLead) {
+      if (targetUserId === currentUser.id) return true;
+      const target = usersRef.current.find(u => u.id === targetUserId);
+      return target?.clusterLeadId === currentUser.id;
+    }
     return targetUserId === currentUser.id;
-  }, [currentUser, isSuperadmin, isCreativeDirector]);
+  }, [currentUser, isSuperadmin, isAdministrator, isCreativeDirector, isClusterLead]);
 
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     try {
@@ -895,9 +919,13 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     name: string;
     email: string;
     role: Role;
+    isAdministrator?: boolean;
     isCreativeDirector?: boolean;
+    isClusterLead?: boolean;
+    isContentLead?: boolean;
+    isArtDirector?: boolean;
     creativeDirectorId?: string;
-
+    clusterLeadId?: string;
   }): Promise<User> => {
     const res = await fetch('/api/users', {
       method: 'POST',
@@ -1545,11 +1573,14 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       remapUserTasks,
       // Role & Permissions
       isSuperadmin,
+      isAdministrator,
       isCreativeDirector,
+      isClusterLead,
       canManageMembers,
       canEditUserTasks,
       canSwitchBoards,
       creativeDirectors,
+      clusterLeads,
       activeBoardId,
       setActiveBoardId,
 
@@ -1590,11 +1621,14 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       updateUserProfile,
       remapUserTasks,
       isSuperadmin,
+      isAdministrator,
       isCreativeDirector,
+      isClusterLead,
       canManageMembers,
       canEditUserTasks,
       canSwitchBoards,
       creativeDirectors,
+      clusterLeads,
       activeBoardId,
       setActiveBoardId,
 

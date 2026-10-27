@@ -1,4 +1,4 @@
-export type Role = 'content' | 'design';
+export type Role = 'content' | 'design' | 'video' | 'ui_ux' | 'account_manager' | 'administrator';
 
 export type CognitiveLoad = 'low' | 'medium' | 'high';
 
@@ -14,6 +14,11 @@ export interface User {
   order?: number;
   isCreativeDirector?: boolean;
   creativeDirectorId?: string;
+  isAdministrator?: boolean;
+  isClusterLead?: boolean;
+  isContentLead?: boolean;
+  isArtDirector?: boolean;
+  clusterLeadId?: string;
 }
 
 export interface TaskActivity {

@@ -64,6 +64,18 @@ test('member provisioning, profile updates and root protection retain the role m
   assert.equal((await server.request('/users/alice', 'alice', 'PUT', { role: 'design' })).status, 403);
   assert.equal((await server.request('/users/alice', 'cd', 'PUT', { name: 'Alice Renamed' })).status, 200);
   assert.equal(server.store.users.find((u: any) => u.id === 'alice').name, 'Alice Renamed');
+  const videoUserRes = await server.request('/users', 'root', 'POST', {
+    name: 'Video Creator',
+    email: 'video@example.invalid',
+    role: 'video',
+    isArtDirector: true,
+    clusterLeadId: 'cd',
+  });
+  assert.equal(videoUserRes.status, 201);
+  const createdVideoUser = await videoUserRes.json();
+  assert.equal(createdVideoUser.role, 'video');
+  assert.equal(createdVideoUser.isArtDirector, true);
+  assert.equal(createdVideoUser.clusterLeadId, 'cd');
 }));
 test('HTTP user payloads and mutation events use an allowlist to prevent private credential leakage', async () => withServer(async server => {
   server.store.users[2].privateInternalToken = 'SYNTHETIC_PRIVATE_KEY';
@@ -103,11 +115,27 @@ test('actual session exchange and logout issue HttpOnly cookies only for verifie
   assert.match(logout.headers.get('set-cookie')!, /Expires=Thu, 01 Jan 1970/i);
 }));
 test('public member fields use strict allowlist', () => {
-  const member = publicMember({ id: 'a', email: 'a@b.invalid', role: 'design', futureSecret: 'secret', privateToken: 'token' });
+  const member = publicMember({
+    id: 'a',
+    email: 'a@b.invalid',
+    role: 'video',
+    isClusterLead: true,
+    isContentLead: true,
+    isArtDirector: true,
+    isAdministrator: true,
+    clusterLeadId: 'lead-1',
+    futureSecret: 'secret',
+    privateToken: 'token',
+  });
   assert.equal(member.futureSecret, undefined);
   assert.equal(member.privateToken, undefined);
   assert.equal(member.id, 'a');
-  assert.equal(member.role, 'design');
+  assert.equal(member.role, 'video');
+  assert.equal(member.isClusterLead, true);
+  assert.equal(member.isContentLead, true);
+  assert.equal(member.isArtDirector, true);
+  assert.equal(member.isAdministrator, true);
+  assert.equal(member.clusterLeadId, 'lead-1');
 });
 test('pipeline and retainer tasks retain deadline and timer behavior', async () => withServer(async server => {
   for (const status of ['pipeline', 'retainer']) {

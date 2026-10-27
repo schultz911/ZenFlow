@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
 import { Task, CognitiveLoad, TaskStatus } from '../types';
-import { getTaskBillableMs, formatBillableDetailed, getLastDayOfMonth } from '../utils/workload';
+import { getTaskBillableMs, formatBillableDetailed, getLastDayOfMonth, getUserTag } from '../utils/workload';
 import {
   X,
   Calendar,
@@ -417,7 +417,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     >
                       {users.map(u => (
                         <option key={u.id} value={u.id}>
-                          {u.name} ({u.role})
+                          {u.name} ({getUserTag(u).label})
                         </option>
                       ))}
                     </select>

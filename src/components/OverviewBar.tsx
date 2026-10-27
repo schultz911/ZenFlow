@@ -84,14 +84,15 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
     return () => clearTimeout(timer);
   }, [localSearch, onSearchChange, searchQuery]);
 
-  // Filter users by active tab and active team board
+  // Filter users by active tab. Video and UI/UX are shared teams across all delivery teams so they don't filter by board
+  const isSharedSection = activeRoleTab === 'video' || activeRoleTab === 'ui_ux';
   const displayedUsers = useMemo(() => {
     let boardUsers = users;
-    if (activeBoardId !== 'all') {
+    if (activeBoardId !== 'all' && !isSharedSection) {
       boardUsers = users.filter(u => u.id === activeBoardId || u.creativeDirectorId === activeBoardId);
     }
     return boardUsers.filter(u => u.role === activeRoleTab);
-  }, [users, activeRoleTab, activeBoardId]);
+  }, [users, activeRoleTab, activeBoardId, isSharedSection]);
 
   // Calculate workload analytics & overload counts using indexed lookup (O(U+T))
   const { avgWorkload, overloadedMembersCount } = useMemo(() => {
@@ -135,8 +136,16 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#0D0D0D] p-5 sm:px-6 shadow-sm dark:shadow-2xl transition-colors">
         <div>
           <div className="flex items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-neutral-900 dark:text-white capitalize">
-              {activeRoleTab === 'content' ? 'Content' : 'Design'}
+            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-neutral-900 dark:text-white">
+              {activeRoleTab === 'content'
+                ? 'Content'
+                : activeRoleTab === 'design'
+                ? 'Design'
+                : activeRoleTab === 'video'
+                ? 'Video'
+                : activeRoleTab === 'ui_ux'
+                ? 'UI/UX'
+                : activeRoleTab}
             </h1>
             <span className="rounded-full bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 px-2.5 py-0.5 text-xs text-neutral-600 dark:text-white/50">
               {displayedUsers.length} {displayedUsers.length === 1 ? 'member' : 'members'}
@@ -216,8 +225,8 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
 
         {/* Right Action Utilities: Team Board Selector & Export Workspace */}
         <div className="flex items-center gap-2">
-          {/* Team Board Selector (Superadmin & Creative Directors) */}
-          {canSwitchBoards && (
+          {/* Team Board Selector (Superadmin & Creative Directors - hidden on shared teams Video & UI/UX) */}
+          {canSwitchBoards && !isSharedSection && (
             <div className="relative" ref={boardDropdownRef}>
               <button
                 id="board-selector-btn"

@@ -12,7 +12,10 @@ import {
   Crown,
   Shield,
   Database,
+  Video as VideoIcon,
+  Layout,
 } from 'lucide-react';
+import { getUserTag } from '../utils/workload';
 
 interface HeaderProps {
   onOpenLoginModal: () => void;
@@ -56,6 +59,10 @@ const HeaderComponent: React.FC<HeaderProps> = ({
 
   const contentUsers = useMemo(() => users.filter(u => u.role === 'content'), [users]);
   const designUsers = useMemo(() => users.filter(u => u.role === 'design'), [users]);
+  const videoUsers = useMemo(() => users.filter(u => u.role === 'video'), [users]);
+  const uiUxUsers = useMemo(() => users.filter(u => u.role === 'ui_ux'), [users]);
+
+  const currentUserTag = useMemo(() => getUserTag(currentUser), [currentUser]);
 
   return (
     <header className="sticky top-0 z-30 w-full border-b border-neutral-200 dark:border-white/5 bg-white/95 dark:bg-[#0D0D0D]/95 backdrop-blur-md transition-colors">
@@ -95,12 +102,12 @@ const HeaderComponent: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Center: Role Switcher Tabs (Content & Design only) */}
+          {/* Center: Role Switcher Tabs (Content, Design, Video, UI/UX) */}
           <div className="hidden md:flex items-center rounded-full bg-neutral-100 dark:bg-[#1A1A1A] p-1 border border-neutral-200 dark:border-white/5">
             <button
               id="tab-content"
               onClick={() => setActiveRoleTab('content')}
-              className={`flex items-center gap-2 rounded-full px-5 py-1.5 text-xs sm:text-sm font-medium transition-all ${
+              className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs sm:text-sm font-medium transition-all ${
                 activeRoleTab === 'content'
                   ? 'bg-white dark:bg-[#2A2A2A] text-neutral-900 dark:text-white shadow-sm'
                   : 'text-neutral-500 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white'
@@ -120,7 +127,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
             <button
               id="tab-design"
               onClick={() => setActiveRoleTab('design')}
-              className={`flex items-center gap-2 rounded-full px-5 py-1.5 text-xs sm:text-sm font-medium transition-all ${
+              className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs sm:text-sm font-medium transition-all ${
                 activeRoleTab === 'design'
                   ? 'bg-white dark:bg-[#2A2A2A] text-neutral-900 dark:text-white shadow-sm'
                   : 'text-neutral-500 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white'
@@ -134,6 +141,46 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                   : 'bg-neutral-200 dark:bg-white/5 text-neutral-600 dark:text-white/40'
               }`}>
                 {designUsers.length}
+              </span>
+            </button>
+
+            <button
+              id="tab-video"
+              onClick={() => setActiveRoleTab('video')}
+              className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs sm:text-sm font-medium transition-all ${
+                activeRoleTab === 'video'
+                  ? 'bg-white dark:bg-[#2A2A2A] text-neutral-900 dark:text-white shadow-sm'
+                  : 'text-neutral-500 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white'
+              }`}
+            >
+              <VideoIcon className="h-3.5 w-3.5 text-violet-500 dark:text-violet-400" />
+              <span>Video</span>
+              <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                activeRoleTab === 'video'
+                  ? 'bg-violet-500/15 text-violet-600 dark:text-violet-300'
+                  : 'bg-neutral-200 dark:bg-white/5 text-neutral-600 dark:text-white/40'
+              }`}>
+                {videoUsers.length}
+              </span>
+            </button>
+
+            <button
+              id="tab-ui_ux"
+              onClick={() => setActiveRoleTab('ui_ux')}
+              className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs sm:text-sm font-medium transition-all ${
+                activeRoleTab === 'ui_ux'
+                  ? 'bg-white dark:bg-[#2A2A2A] text-neutral-900 dark:text-white shadow-sm'
+                  : 'text-neutral-500 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white'
+              }`}
+            >
+              <Layout className="h-3.5 w-3.5 text-cyan-500 dark:text-cyan-400" />
+              <span>UI/UX</span>
+              <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                activeRoleTab === 'ui_ux'
+                  ? 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300'
+                  : 'bg-neutral-200 dark:bg-white/5 text-neutral-600 dark:text-white/40'
+              }`}>
+                {uiUxUsers.length}
               </span>
             </button>
           </div>
@@ -216,11 +263,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                     <p className="text-[10px] uppercase tracking-widest text-neutral-500 dark:text-white/40">
                       {isSuperadmin
                         ? 'Superadmin'
-                        : isCreativeDirector
-                        ? 'Creative Dir.'
-                        : currentUser.role === 'content'
-                        ? 'Content'
-                        : 'Design'}
+                        : currentUserTag.label}
                     </p>
                   </div>
                   <ChevronDown className="h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
@@ -249,9 +292,9 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                             Superadmin
                           </span>
                         )}
-                        {!isSuperadmin && isCreativeDirector && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30">
-                            Creative Dir.
+                        {!isSuperadmin && (
+                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${currentUserTag.badgeClass}`}>
+                            {currentUserTag.label}
                           </span>
                         )}
                       </div>
@@ -261,7 +304,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                       <div className="mt-1.5 flex items-center gap-1.5">
                         <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500" />
                         <span className="text-[10px] uppercase tracking-wider text-neutral-600 dark:text-white/60">
-                          {currentUser.role === 'content' ? 'Content' : 'Design'}
+                          {currentUserTag.label}
                         </span>
                       </div>
                     </div>
@@ -311,12 +354,12 @@ const HeaderComponent: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Mobile Sub-header Tabs (Content & Design only) */}
-        <div className="flex md:hidden items-center justify-between border-t border-neutral-200 dark:border-white/5 py-2">
-          <div className="flex items-center rounded-full bg-neutral-100 dark:bg-[#1A1A1A] p-1 text-xs w-full justify-around border border-neutral-200 dark:border-white/5">
+        {/* Mobile Sub-header Tabs (Content, Design, Video, UI/UX) */}
+        <div className="flex md:hidden items-center justify-between border-t border-neutral-200 dark:border-white/5 py-2 overflow-x-auto">
+          <div className="flex items-center rounded-full bg-neutral-100 dark:bg-[#1A1A1A] p-1 text-xs w-full justify-between border border-neutral-200 dark:border-white/5 gap-1">
             <button
               onClick={() => setActiveRoleTab('content')}
-              className={`flex-1 rounded-full py-1 text-center font-medium ${
+              className={`flex-1 rounded-full py-1 text-center font-medium px-2 text-[11px] ${
                 activeRoleTab === 'content'
                   ? 'bg-white dark:bg-[#2A2A2A] text-neutral-900 dark:text-white shadow-xs'
                   : 'text-neutral-500 dark:text-white/40'
@@ -326,13 +369,33 @@ const HeaderComponent: React.FC<HeaderProps> = ({
             </button>
             <button
               onClick={() => setActiveRoleTab('design')}
-              className={`flex-1 rounded-full py-1 text-center font-medium ${
+              className={`flex-1 rounded-full py-1 text-center font-medium px-2 text-[11px] ${
                 activeRoleTab === 'design'
                   ? 'bg-white dark:bg-[#2A2A2A] text-neutral-900 dark:text-white shadow-xs'
                   : 'text-neutral-500 dark:text-white/40'
               }`}
             >
               Design ({designUsers.length})
+            </button>
+            <button
+              onClick={() => setActiveRoleTab('video')}
+              className={`flex-1 rounded-full py-1 text-center font-medium px-2 text-[11px] ${
+                activeRoleTab === 'video'
+                  ? 'bg-white dark:bg-[#2A2A2A] text-neutral-900 dark:text-white shadow-xs'
+                  : 'text-neutral-500 dark:text-white/40'
+              }`}
+            >
+              Video ({videoUsers.length})
+            </button>
+            <button
+              onClick={() => setActiveRoleTab('ui_ux')}
+              className={`flex-1 rounded-full py-1 text-center font-medium px-2 text-[11px] ${
+                activeRoleTab === 'ui_ux'
+                  ? 'bg-white dark:bg-[#2A2A2A] text-neutral-900 dark:text-white shadow-xs'
+                  : 'text-neutral-500 dark:text-white/40'
+              }`}
+            >
+              UI/UX ({uiUxUsers.length})
             </button>
           </div>
         </div>

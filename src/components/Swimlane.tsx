@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task, TaskStatus, DragTaskInfo, CognitiveLoad } from '../types';
-import { calculateUserWorkload, compareTasksByDeadline } from '../utils/workload';
+import { calculateUserWorkload, compareTasksByDeadline, getUserTag } from '../utils/workload';
 import { TaskCard } from './TaskCard';
 import { PipelineSwimlane } from './PipelineSwimlane';
 import { RetainerSwimlane } from './RetainerSwimlane';
@@ -601,8 +601,8 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                     You
                   </span>
                 )}
-                <span className="rounded-full bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-neutral-500 dark:text-white/40">
-                  {user.role === 'content' ? 'Content' : 'Design'}
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] tracking-wide ${getUserTag(user).badgeClass}`}>
+                  {getUserTag(user).label}
                 </span>
 
                 {/* Collapsed Workspace Summary Pills */}

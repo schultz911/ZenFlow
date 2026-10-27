@@ -3,19 +3,36 @@ import type { Request, Response, NextFunction } from 'express';
 export const SUPERADMIN_EMAIL = 'kiran.s@zensciences.com';
 export const SESSION_COOKIE = 'zenflow_identity';
 export interface Member {
-  id: string; email: string; isCreativeDirector?: boolean; creativeDirectorId?: string;
+  id: string;
+  email: string;
+  role?: string;
+  isAdministrator?: boolean;
+  isCreativeDirector?: boolean;
+  isClusterLead?: boolean;
+  isContentLead?: boolean;
+  isArtDirector?: boolean;
+  creativeDirectorId?: string;
+  clusterLeadId?: string;
 }
 export interface Identity { email?: string; email_verified?: boolean; exp: number; firebase?: { sign_in_provider?: string } }
 export const isSuperadmin = (user: Member) => user.email.toLowerCase() === SUPERADMIN_EMAIL;
 export const canEdit = (caller: Member, owner: Member | undefined) => Boolean(owner && (
-  isSuperadmin(caller) || caller.id === owner.id || (caller.isCreativeDirector && owner.creativeDirectorId === caller.id)
+  isSuperadmin(caller) ||
+  caller.isAdministrator ||
+  caller.role === 'administrator' ||
+  caller.id === owner.id ||
+  (caller.isCreativeDirector && owner.creativeDirectorId === caller.id) ||
+  (caller.isClusterLead && owner.clusterLeadId === caller.id)
 ));
 
 // Explicit response fields: future credential fields are private by default.
 export function publicMember(user: any) {
   const result: Record<string, any> = {};
-  for (const key of ['id', 'name', 'email', 'role', 'avatarColor', 'createdAt', 'order', 'isCreativeDirector',
-    'creativeDirectorId']) {
+  for (const key of [
+    'id', 'name', 'email', 'role', 'avatarColor', 'createdAt', 'order',
+    'isCreativeDirector', 'creativeDirectorId',
+    'isAdministrator', 'isClusterLead', 'isContentLead', 'isArtDirector', 'clusterLeadId'
+  ]) {
     if (user[key] !== undefined) result[key] = user[key];
   }
   return result;
@@ -65,7 +82,11 @@ export function createApiSecurity(options: {
       res.locals.caller = caller;
       res.locals.identityExpiresAt = identity.exp * 1000;
       const superadmin = isSuperadmin(caller);
-      const manager = superadmin || Boolean(caller.isCreativeDirector);
+      const isCallerAdmin = superadmin || Boolean(caller.isAdministrator) || caller.role === 'administrator';
+      const isCallerCD = Boolean(caller.isCreativeDirector);
+      const isCallerClusterLead = Boolean(caller.isClusterLead);
+      const canManageMembers = superadmin || isCallerAdmin || isCallerCD || isCallerClusterLead;
+      const manager = canManageMembers;
       const denied = () => res.status(403).json({ error: 'You do not have permission for this operation' });
       const owner = (id: unknown) => store.users.find(user => user.id === id);
       const edit = (id: unknown) => canEdit(caller, owner(id));
@@ -80,8 +101,9 @@ export function createApiSecurity(options: {
       if (routePath === '/users' && req.method === 'POST') {
         if (!manager) return denied();
         const existing = store.users.find(user => user.email.toLowerCase() === String(body.email || '').toLowerCase());
-        if (!superadmin && (body.isCreativeDirector || (existing && (!edit(existing.id) || existing.isCreativeDirector)))) return denied();
-        if (!superadmin) body.creativeDirectorId = caller.id;
+        if (!superadmin && !isCallerAdmin && (body.isCreativeDirector || (existing && (!edit(existing.id) || existing.isCreativeDirector)))) return denied();
+        if (!superadmin && !isCallerAdmin && isCallerCD && !body.creativeDirectorId) body.creativeDirectorId = caller.id;
+        if (!superadmin && !isCallerAdmin && isCallerClusterLead && !body.clusterLeadId) body.clusterLeadId = caller.id;
       }
       const userMatch = routePath.match(/^\/users\/([^/]+)$/);
       if (userMatch && ['PUT', 'DELETE'].includes(req.method)) {
@@ -89,9 +111,9 @@ export function createApiSecurity(options: {
         if (target && !edit(target.id)) return denied();
         if (req.method === 'DELETE' && (!manager || (target && isSuperadmin(target)))) return denied();
         if (req.method === 'PUT') {
-          if (!superadmin && (body.email !== undefined || body.isCreativeDirector !== undefined)) return denied();
+          if (!superadmin && !isCallerAdmin && (body.email !== undefined || body.isCreativeDirector !== undefined)) return denied();
           if (!manager) return denied();
-          if (!superadmin && body.creativeDirectorId !== undefined && body.creativeDirectorId !== caller.id) return denied();
+          if (!superadmin && !isCallerAdmin && body.creativeDirectorId !== undefined && body.creativeDirectorId !== caller.id) return denied();
         }
       }
       if (routePath === '/tasks' && req.method === 'POST' && !edit(body.userId)) return denied();

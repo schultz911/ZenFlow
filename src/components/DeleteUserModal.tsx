@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task } from '../types';
+import { getUserTag } from '../utils/workload';
 import { AlertTriangle, Trash2, X, Loader2 } from 'lucide-react';
 
 interface DeleteUserModalProps {
@@ -131,8 +132,8 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({
               <p className="text-sm font-semibold text-neutral-900 dark:text-white truncate">
                 {user.name}
               </p>
-              <span className="rounded-full bg-neutral-200 dark:bg-white/5 border border-neutral-300 dark:border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wider text-neutral-600 dark:text-white/40">
-                {user.role}
+              <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-wider ${getUserTag(user).badgeClass}`}>
+                {getUserTag(user).label}
               </span>
             </div>
             <p className="text-xs text-neutral-500 dark:text-white/40 truncate mt-0.5">

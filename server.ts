@@ -12,12 +12,17 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: 'content' | 'design';
+  role: 'content' | 'design' | 'video' | 'ui_ux' | 'account_manager' | 'administrator';
   avatarColor?: string;
   createdAt: string;
   order?: number;
   isCreativeDirector?: boolean;
   creativeDirectorId?: string;
+  isAdministrator?: boolean;
+  isClusterLead?: boolean;
+  isContentLead?: boolean;
+  isArtDirector?: boolean;
+  clusterLeadId?: string;
 }
 
 type TaskStatus = 'pipeline' | 'retainer' | 'todo' | 'in_progress' | 'in_review' | 'done' | 'archived';
@@ -1082,8 +1087,13 @@ async function startServer() {
       name,
       email,
       role,
+      isAdministrator,
       isCreativeDirector,
+      isClusterLead,
+      isContentLead,
+      isArtDirector,
       creativeDirectorId,
+      clusterLeadId,
     } = req.body;
 
     if (!name || !email || !role) {
@@ -1092,7 +1102,8 @@ async function startServer() {
 
     const cleanEmail = sanitizeString(email).toLowerCase();
     const cleanName = sanitizeString(name);
-    const cleanRole = role === 'design' ? 'design' : 'content';
+    const VALID_ROLES = ['content', 'design', 'video', 'ui_ux', 'account_manager', 'administrator'] as const;
+    const cleanRole = (VALID_ROLES as readonly string[]).includes(role) ? role : 'content';
 
     if (!cleanEmail || !cleanName) {
       return res.status(400).json({ error: 'Valid name and email are required' });
@@ -1102,8 +1113,13 @@ async function startServer() {
     if (existingUser) {
       existingUser.name = cleanName;
       existingUser.role = cleanRole;
+      if (isAdministrator !== undefined) existingUser.isAdministrator = !!isAdministrator;
       if (isCreativeDirector !== undefined) existingUser.isCreativeDirector = !!isCreativeDirector;
+      if (isClusterLead !== undefined) existingUser.isClusterLead = !!isClusterLead;
+      if (isContentLead !== undefined) existingUser.isContentLead = !!isContentLead;
+      if (isArtDirector !== undefined) existingUser.isArtDirector = !!isArtDirector;
       if (creativeDirectorId !== undefined) existingUser.creativeDirectorId = creativeDirectorId ? sanitizeString(creativeDirectorId) : undefined;
+      if (clusterLeadId !== undefined) existingUser.clusterLeadId = clusterLeadId ? sanitizeString(clusterLeadId) : undefined;
       saveStore(store);
       dbSaveUser(existingUser).catch(e => console.error('Firestore user update err:', e));
       broadcastEvent('user_updated', existingUser);
@@ -1126,8 +1142,13 @@ async function startServer() {
       email: cleanEmail,
       role: cleanRole,
       avatarColor: AVATAR_COLORS[colorIndex],
+      isAdministrator: !!isAdministrator,
       isCreativeDirector: !!isCreativeDirector,
+      isClusterLead: !!isClusterLead,
+      isContentLead: !!isContentLead,
+      isArtDirector: !!isArtDirector,
       creativeDirectorId: creativeDirectorId ? sanitizeString(creativeDirectorId) : undefined,
+      clusterLeadId: clusterLeadId ? sanitizeString(clusterLeadId) : undefined,
       createdAt: new Date().toISOString(),
     };
 
@@ -1162,8 +1183,13 @@ async function startServer() {
       name,
       email,
       role,
+      isAdministrator,
       isCreativeDirector,
+      isClusterLead,
+      isContentLead,
+      isArtDirector,
       creativeDirectorId,
+      clusterLeadId,
     } = req.body;
 
     const callerId = (req.headers['x-caller-user-id'] as string || '').trim();
@@ -1233,14 +1259,30 @@ async function startServer() {
             const cleanName = sanitizeString(name);
             if (cleanName) existingTargetUser.name = cleanName;
           }
-          if (role !== undefined && (role === 'content' || role === 'design')) {
+          const VALID_ROLES = ['content', 'design', 'video', 'ui_ux', 'account_manager', 'administrator'] as const;
+          if (role !== undefined && (VALID_ROLES as readonly string[]).includes(role)) {
             existingTargetUser.role = role;
+          }
+          if (isAdministrator !== undefined) {
+            existingTargetUser.isAdministrator = !!isAdministrator;
           }
           if (isCreativeDirector !== undefined) {
             existingTargetUser.isCreativeDirector = !!isCreativeDirector;
           }
+          if (isClusterLead !== undefined) {
+            existingTargetUser.isClusterLead = !!isClusterLead;
+          }
+          if (isContentLead !== undefined) {
+            existingTargetUser.isContentLead = !!isContentLead;
+          }
+          if (isArtDirector !== undefined) {
+            existingTargetUser.isArtDirector = !!isArtDirector;
+          }
           if (creativeDirectorId !== undefined) {
             existingTargetUser.creativeDirectorId = creativeDirectorId ? sanitizeString(creativeDirectorId) : undefined;
+          }
+          if (clusterLeadId !== undefined) {
+            existingTargetUser.clusterLeadId = clusterLeadId ? sanitizeString(clusterLeadId) : undefined;
           }
 
           // Remove the obsolete user record
@@ -1317,16 +1359,32 @@ async function startServer() {
       const cleanName = sanitizeString(name);
       if (cleanName) current.name = cleanName;
     }
-    if (role !== undefined && (role === 'content' || role === 'design')) {
+    const VALID_ROLES = ['content', 'design', 'video', 'ui_ux', 'account_manager', 'administrator'] as const;
+    if (role !== undefined && (VALID_ROLES as readonly string[]).includes(role)) {
       current.role = role;
+    }
+    if (isAdministrator !== undefined) {
+      current.isAdministrator = !!isAdministrator;
     }
     if (current.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase()) {
       current.isCreativeDirector = true;
     } else if (isCreativeDirector !== undefined) {
       current.isCreativeDirector = !!isCreativeDirector;
     }
+    if (isClusterLead !== undefined) {
+      current.isClusterLead = !!isClusterLead;
+    }
+    if (isContentLead !== undefined) {
+      current.isContentLead = !!isContentLead;
+    }
+    if (isArtDirector !== undefined) {
+      current.isArtDirector = !!isArtDirector;
+    }
     if (creativeDirectorId !== undefined) {
       current.creativeDirectorId = creativeDirectorId ? sanitizeString(creativeDirectorId) : undefined;
+    }
+    if (clusterLeadId !== undefined) {
+      current.clusterLeadId = clusterLeadId ? sanitizeString(clusterLeadId) : undefined;
     }
 
     saveStore(store);

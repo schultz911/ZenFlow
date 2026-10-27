@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task, TaskStatus } from '../types';
+import { getUserTag } from '../utils/workload';
 import {
   Users,
   ChevronDown,
@@ -33,7 +34,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
     }
   });
 
-  const [roleFilter, setRoleFilter] = useState<'all' | 'content' | 'design'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'content' | 'design' | 'video' | 'ui_ux'>('all');
 
   const toggleExpanded = () => {
     setIsExpanded(prev => {
@@ -91,6 +92,8 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
 
   const contentCount = useMemo(() => freeUsers.filter(u => u.role === 'content').length, [freeUsers]);
   const designCount = useMemo(() => freeUsers.filter(u => u.role === 'design').length, [freeUsers]);
+  const videoCount = useMemo(() => freeUsers.filter(u => u.role === 'video').length, [freeUsers]);
+  const uiUxCount = useMemo(() => freeUsers.filter(u => u.role === 'ui_ux').length, [freeUsers]);
 
   return (
     <div className="fixed bottom-5 right-5 z-40 select-none">
@@ -224,6 +227,28 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
               >
                 Design ({designCount})
               </button>
+              <button
+                type="button"
+                onClick={() => setRoleFilter('video')}
+                className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
+                  roleFilter === 'video'
+                    ? 'bg-violet-600 text-white shadow-xs'
+                    : 'text-neutral-500 dark:text-white/50 hover:bg-neutral-100 dark:hover:bg-white/5'
+                }`}
+              >
+                Video ({videoCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setRoleFilter('ui_ux')}
+                className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
+                  roleFilter === 'ui_ux'
+                    ? 'bg-cyan-600 text-white shadow-xs'
+                    : 'text-neutral-500 dark:text-white/50 hover:bg-neutral-100 dark:hover:bg-white/5'
+                }`}
+              >
+                UI/UX ({uiUxCount})
+              </button>
             </div>
 
             {/* Member List */}
@@ -249,7 +274,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
               ) : (
                 filteredFreeUsers.map(user => {
                   const stats = userStats.get(user.id);
-                  const isContent = user.role === 'content';
+                  const tagInfo = getUserTag(user);
 
                   return (
                     <div
@@ -277,13 +302,9 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                               {user.name}
                             </span>
                             <span
-                              className={`px-1.5 py-0.2 rounded text-[9px] font-semibold shrink-0 uppercase tracking-wider ${
-                                isContent
-                                  ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border border-blue-200/50 dark:border-blue-800/40'
-                                  : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-800/40'
-                              }`}
+                              className={`px-1.5 py-0.2 rounded text-[9px] uppercase tracking-wider border ${tagInfo.badgeClass}`}
                             >
-                              {user.role}
+                              {tagInfo.label}
                             </span>
                           </div>
 

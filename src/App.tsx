@@ -16,7 +16,7 @@ import { DuplicateTaskModal } from './components/DuplicateTaskModal';
 import { DeleteTaskModal } from './components/DeleteTaskModal';
 import { FreePoolContainer } from './components/FreePoolContainer';
 import { User, Task, TaskStatus } from './types';
-import { UserPlus, FileText, Palette, Loader2, Trash2 } from 'lucide-react';
+import { UserPlus, FileText, Palette, Video as VideoIcon, Layout, Loader2, Trash2 } from 'lucide-react';
 import { testConnection } from './lib/firebase';
 
 const EMPTY_TASKS: Task[] = [];
@@ -45,6 +45,7 @@ function DashboardContent() {
     rescheduleTask,
     activeBoardId,
     setActiveBoardId,
+    canManageMembers,
   } = useDashboard();
 
   // Modals state
@@ -109,10 +110,11 @@ function DashboardContent() {
     }
   });
 
-  // Filter users by role tab and active team board, and apply persistent custom ordering with current user pinned to top
+  // Filter users by role tab and active team board (video and UI/UX are shared teams across all boards)
   const roleFilteredUsers = useMemo(() => {
     let boardUsers = users;
-    if (activeBoardId !== 'all') {
+    const isSharedSection = activeRoleTab === 'video' || activeRoleTab === 'ui_ux';
+    if (activeBoardId !== 'all' && !isSharedSection) {
       boardUsers = users.filter(u => u.id === activeBoardId || u.creativeDirectorId === activeBoardId);
     }
     const filtered = boardUsers.filter(u => u.role === activeRoleTab);
@@ -501,23 +503,29 @@ function DashboardContent() {
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-[#141414] border border-neutral-200 dark:border-white/5 text-neutral-500 dark:text-white/50 mb-3">
                 {activeRoleTab === 'content' ? (
                   <FileText className="h-6 w-6 text-blue-500" />
-                ) : (
+                ) : activeRoleTab === 'design' ? (
                   <Palette className="h-6 w-6 text-indigo-500" />
+                ) : activeRoleTab === 'video' ? (
+                  <VideoIcon className="h-6 w-6 text-violet-500" />
+                ) : (
+                  <Layout className="h-6 w-6 text-cyan-500" />
                 )}
               </div>
-              <h3 className="text-sm font-semibold text-neutral-900 dark:text-white capitalize">
-                No members in {activeRoleTab} yet
+              <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">
+                No members in {activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab === 'video' ? 'Video' : activeRoleTab === 'content' ? 'Content' : activeRoleTab === 'design' ? 'Design' : activeRoleTab} yet
               </h3>
               <p className="mt-1 text-xs text-neutral-500 dark:text-white/40 max-w-sm">
-                Add a new member with the {activeRoleTab} role to generate their dedicated swimlane.
+                Add a new member with the {activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab} role to generate their dedicated swimlane.
               </p>
-              <button
-                onClick={handleOpenNewUser}
-                className="mt-4 flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 transition-colors shadow-md shadow-blue-900/20"
-              >
-                <UserPlus className="h-3.5 w-3.5" />
-                <span className="capitalize">Add {activeRoleTab} Member</span>
-              </button>
+              {canManageMembers && (
+                <button
+                  onClick={handleOpenNewUser}
+                  className="mt-4 flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 transition-colors shadow-md shadow-blue-900/20 cursor-pointer"
+                >
+                  <UserPlus className="h-3.5 w-3.5" />
+                  <span>Add {activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab === 'video' ? 'Video' : activeRoleTab === 'content' ? 'Content' : activeRoleTab === 'design' ? 'Design' : activeRoleTab} Member</span>
+                </button>
+              )}
             </div>
           ) : (
             <div className="space-y-6">

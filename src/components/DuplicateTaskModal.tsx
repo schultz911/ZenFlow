@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
 import { Task, TaskStatus, User } from '../types';
-import { formatDateOnly, getLastDayOfMonth } from '../utils/workload';
+import { formatDateOnly, getLastDayOfMonth, getUserTag } from '../utils/workload';
 import {
   X,
   CopyPlus,
@@ -374,7 +374,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                     >
                       {availableUsers.map(u => (
                         <option key={u.id} value={u.id}>
-                          {u.name} ({u.role.toUpperCase()}) — {u.email}
+                          {u.name} ({getUserTag(u).label.toUpperCase()}) — {u.email}
                         </option>
                       ))}
                     </select>
