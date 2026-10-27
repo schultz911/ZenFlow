@@ -13,3 +13,5 @@ data/*.tmp.*
 data/.clickup-webhooks.json*
 .firebase/
 *-debug.log
+
+data/
