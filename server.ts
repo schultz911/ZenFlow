@@ -12,7 +12,7 @@ interface User {
   id: string;
   name: string;
   email: string;
-  role: 'content' | 'design' | 'video' | 'ui_ux' | 'account_manager' | 'administrator';
+  role?: 'content' | 'design' | 'video' | 'ui_ux' | 'research' | 'account_manager' | 'administrator' | 'none';
   avatarColor?: string;
   createdAt: string;
   order?: number;
@@ -21,6 +21,8 @@ interface User {
   isAdministrator?: boolean;
   isBusinessLead?: boolean;
   isClusterLead?: boolean;
+  isTeamLead?: boolean;
+  isAccountManager?: boolean;
   isContentLead?: boolean;
   isArtDirector?: boolean;
   isContentSpecialist?: boolean;
@@ -1095,6 +1097,8 @@ async function startServer() {
       isBusinessLead,
       isCreativeDirector,
       isClusterLead,
+      isTeamLead,
+      isAccountManager,
       isContentLead,
       isArtDirector,
       isContentSpecialist,
@@ -1104,14 +1108,14 @@ async function startServer() {
       clusterLeadId,
     } = req.body;
 
-    if (!name || !email || !role) {
-      return res.status(400).json({ error: 'Name, email, and role are required' });
+    if (!name || !email) {
+      return res.status(400).json({ error: 'Name and email are required' });
     }
 
     const cleanEmail = sanitizeString(email).toLowerCase();
     const cleanName = sanitizeString(name);
-    const VALID_ROLES = ['content', 'design', 'video', 'ui_ux', 'account_manager', 'administrator'] as const;
-    const cleanRole = (VALID_ROLES as readonly string[]).includes(role) ? role : 'content';
+    const VALID_ROLES = ['content', 'design', 'video', 'ui_ux', 'research', 'account_manager', 'administrator'] as const;
+    const cleanRole = role && (VALID_ROLES as readonly string[]).includes(role) ? role : (role === 'none' ? undefined : (role || undefined));
     const effectiveIsAdmin = cleanRole === 'administrator' || !!isAdministrator;
 
     if (!cleanEmail || !cleanName) {
@@ -1127,6 +1131,8 @@ async function startServer() {
       if (isBusinessLead !== undefined) existingUser.isBusinessLead = !!isBusinessLead;
       if (isCreativeDirector !== undefined) existingUser.isCreativeDirector = !!isCreativeDirector;
       if (isClusterLead !== undefined) existingUser.isClusterLead = !!isClusterLead;
+      if (isTeamLead !== undefined) existingUser.isTeamLead = !!isTeamLead;
+      if (isAccountManager !== undefined) existingUser.isAccountManager = !!isAccountManager;
       if (isContentLead !== undefined) existingUser.isContentLead = !!isContentLead;
       if (isArtDirector !== undefined) existingUser.isArtDirector = !!isArtDirector;
       if (isContentSpecialist !== undefined) existingUser.isContentSpecialist = !!isContentSpecialist;
@@ -1160,6 +1166,8 @@ async function startServer() {
       isBusinessLead: !!isBusinessLead,
       isCreativeDirector: !!isCreativeDirector,
       isClusterLead: !!isClusterLead,
+      isTeamLead: !!isTeamLead,
+      isAccountManager: !!isAccountManager,
       isContentLead: !!isContentLead,
       isArtDirector: !!isArtDirector,
       isContentSpecialist: !!isContentSpecialist,
@@ -1205,6 +1213,8 @@ async function startServer() {
       isBusinessLead,
       isCreativeDirector,
       isClusterLead,
+      isTeamLead,
+      isAccountManager,
       isContentLead,
       isArtDirector,
       isContentSpecialist,
@@ -1381,9 +1391,13 @@ async function startServer() {
       const cleanName = sanitizeString(name);
       if (cleanName) current.name = cleanName;
     }
-    const VALID_ROLES = ['content', 'design', 'video', 'ui_ux', 'account_manager', 'administrator'] as const;
-    if (role !== undefined && (VALID_ROLES as readonly string[]).includes(role)) {
-      current.role = role;
+    const VALID_ROLES = ['content', 'design', 'video', 'ui_ux', 'research', 'account_manager', 'administrator'] as const;
+    if (role !== undefined) {
+      if ((VALID_ROLES as readonly string[]).includes(role)) {
+        current.role = role;
+      } else if (role === 'none' || role === '') {
+        current.role = undefined;
+      }
     }
     if (isAdministrator !== undefined) {
       current.isAdministrator = !!isAdministrator;
@@ -1395,6 +1409,12 @@ async function startServer() {
     }
     if (isClusterLead !== undefined) {
       current.isClusterLead = !!isClusterLead;
+    }
+    if (isTeamLead !== undefined) {
+      current.isTeamLead = !!isTeamLead;
+    }
+    if (isAccountManager !== undefined) {
+      current.isAccountManager = !!isAccountManager;
     }
     if (isContentLead !== undefined) {
       current.isContentLead = !!isContentLead;

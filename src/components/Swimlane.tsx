@@ -123,7 +123,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   canMoveDown,
 }) => {
   const {
-    canManageMembers,
+    canManageUser,
     canEditUserTasks,
   } = useDashboard();
 
@@ -697,8 +697,8 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               </button>
             )}
 
-            {/* 4. Edit User Button - Only Superadmin and CDs */}
-            {onEditUser && canManageMembers && (
+            {/* 4. Edit User Button - Only authorized managers */}
+            {onEditUser && canManageUser(user) && (
               <button
                 id={`edit-user-btn-${user.id}`}
                 onClick={() => onEditUser(user)}
@@ -710,7 +710,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
             )}
 
             {/* Delete User Button - Only authorized managers */}
-            {onDeleteUser && canManageMembers && !isCurrentUser && (
+            {onDeleteUser && canManageUser(user) && !isCurrentUser && (
               <button
                 id={`delete-user-btn-${user.id}`}
                 onClick={() => onDeleteUser(user)}

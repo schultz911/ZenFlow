@@ -10,6 +10,8 @@ export interface Member {
   isBusinessLead?: boolean;
   isCreativeDirector?: boolean;
   isClusterLead?: boolean;
+  isTeamLead?: boolean;
+  isAccountManager?: boolean;
   isContentLead?: boolean;
   isArtDirector?: boolean;
   isContentSpecialist?: boolean;
@@ -20,19 +22,25 @@ export interface Member {
 }
 export interface Identity { email?: string; email_verified?: boolean; exp: number; firebase?: { sign_in_provider?: string } }
 export const isSuperadmin = (user: Member) => user.email.toLowerCase() === SUPERADMIN_EMAIL;
-export const canEdit = (caller: Member, owner: Member | undefined) => Boolean(owner && (
-  isSuperadmin(caller) ||
-  caller.isAdministrator ||
-  caller.role === 'administrator' ||
-  caller.isBusinessLead ||
-  caller.id === owner.id ||
-  (caller.isCreativeDirector && owner.creativeDirectorId === caller.id) ||
-  (caller.isClusterLead && (owner.clusterLeadId === caller.id || owner.creativeDirectorId === caller.id)) ||
-  ((caller.isContentLead || caller.isArtDirector) && (
-    (caller.creativeDirectorId && owner.creativeDirectorId === caller.creativeDirectorId) ||
-    (caller.clusterLeadId && owner.clusterLeadId === caller.clusterLeadId)
-  ))
-));
+export const canEdit = (caller: Member, owner: Member | undefined) => {
+  if (!owner) return false;
+  if (isSuperadmin(caller) || caller.isAdministrator || caller.role === 'administrator' || caller.isBusinessLead) return true;
+  // Account Manager cannot edit boards
+  if (caller.isAccountManager || caller.designation === 'account_manager') return false;
+  // Creative Director and Cluster Lead edit their teams
+  if (caller.isCreativeDirector && owner.creativeDirectorId === caller.id) return true;
+  if (caller.isClusterLead && (owner.clusterLeadId === caller.id || owner.creativeDirectorId === caller.id)) return true;
+  // Team Lead edits their team
+  if (caller.isTeamLead || caller.isContentLead || caller.isArtDirector) {
+    if (
+      (caller.creativeDirectorId && owner.creativeDirectorId === caller.creativeDirectorId) ||
+      (caller.clusterLeadId && owner.clusterLeadId === caller.clusterLeadId) ||
+      (caller.role && owner.role === caller.role)
+    ) return true;
+  }
+  // Other users edit their own boards
+  return caller.id === owner.id;
+};
 
 // Explicit response fields: future credential fields are private by default.
 export function publicMember(user: any) {
@@ -40,8 +48,8 @@ export function publicMember(user: any) {
   for (const key of [
     'id', 'name', 'email', 'role', 'avatarColor', 'createdAt', 'order', 'designation',
     'isCreativeDirector', 'creativeDirectorId',
-    'isAdministrator', 'isBusinessLead', 'isClusterLead', 'isContentLead', 'isArtDirector',
-    'isContentSpecialist', 'isBrandDesigner', 'clusterLeadId'
+    'isAdministrator', 'isBusinessLead', 'isClusterLead', 'isTeamLead', 'isAccountManager',
+    'isContentLead', 'isArtDirector', 'isContentSpecialist', 'isBrandDesigner', 'clusterLeadId'
   ]) {
     if (user[key] !== undefined) result[key] = user[key];
   }

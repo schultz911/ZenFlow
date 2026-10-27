@@ -19,13 +19,15 @@ service cloud.firestore {
       return data.id is string && isValidId(data.id) &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
              data.email is string && data.email.size() > 0 && data.email.size() <= 150 &&
-             data.role in ['content', 'design', 'video', 'ui_ux', 'account_manager', 'administrator'] &&
+             (!('role' in data) || data.role in ['content', 'design', 'video', 'ui_ux', 'research', 'account_manager', 'administrator', 'none']) &&
              data.createdAt is string && data.createdAt.size() <= 40 &&
              (!('avatarColor' in data) || (data.avatarColor is string && data.avatarColor.size() <= 100)) &&
              (!('isAdministrator' in data) || (data.isAdministrator is bool)) &&
              (!('isBusinessLead' in data) || (data.isBusinessLead is bool)) &&
              (!('isCreativeDirector' in data) || (data.isCreativeDirector is bool)) &&
              (!('isClusterLead' in data) || (data.isClusterLead is bool)) &&
+             (!('isTeamLead' in data) || (data.isTeamLead is bool)) &&
+             (!('isAccountManager' in data) || (data.isAccountManager is bool)) &&
              (!('isContentLead' in data) || (data.isContentLead is bool)) &&
              (!('isArtDirector' in data) || (data.isArtDirector is bool)) &&
              (!('isContentSpecialist' in data) || (data.isContentSpecialist is bool)) &&

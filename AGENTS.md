@@ -6,6 +6,30 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
+### Sweep 55: 2026-10-28 (Research Shared Team, Admin Privilege Toggle, Role-Led Designations & Granular Matrix)
+
+- **TEAM-02 (Shared Cross-Functional Research Section):**
+  - Added native `Research` section across [`Header.tsx`](file:///c:/ZenFlow/src/components/Header.tsx), [`OverviewBar.tsx`](file:///c:/ZenFlow/src/components/OverviewBar.tsx), [`App.tsx`](file:///c:/ZenFlow/src/App.tsx), and [`FreePoolContainer.tsx`](file:///c:/ZenFlow/src/components/FreePoolContainer.tsx).
+  - Parity with `video` and `ui_ux`: `research` operates as a shared, cross-functional resource across all delivery teams without cluster dropdown filtering.
+  - Extended role defaults in [`workload.ts`](file:///c:/ZenFlow/src/utils/workload.ts) to support research task categories (`Secondary Research`, `Competitive Analysis`, `Primary Research & Synthesis`, `Market Research`).
+- **AUTH-10 (Administrator Privilege Toggle & Decoupled Teams):**
+  - Removed Administrator as a team card; added as an explicit toggle switch ("Administrator Privileges - System & Ops") in [`LoginModal.tsx`](file:///c:/ZenFlow/src/components/LoginModal.tsx) and [`EditUserModal.tsx`](file:///c:/ZenFlow/src/components/EditUserModal.tsx).
+  - The Administrator privilege toggle is strictly locked and disabled for non-administrators.
+  - Teams now comprise 6 functional disciplines: `Accounts`, `Content`, `Design`, `Video`, `UI/UX`, `Research`.
+  - Added support for no team selected (deselection allowed).
+- **AUTH-11 (Role-Led Designations & Access Matrix):**
+  - Stripped verbose access description paragraphs from designation pickers, keeping options clean and role-led: `Business Lead`, `Creative Director`, `Cluster Lead`, `Team Lead`, `Account Manager`.
+  - Implemented the strict permission boundary:
+    - `Administrator`, `Business Lead`: Can access all boards, edit all boards, add & delete accounts, edit all user info.
+    - `Cluster Lead`, `Creative Director`: Can access all boards, edit boards of their teams, add & delete accounts to their teams only, edit team member info (`canManageUser`).
+    - `Team Lead`: Can access team board, edit boards of their team, cannot add, edit, or delete accounts.
+    - `Account Manager`: Can access team board, cannot edit boards, cannot add, edit, or delete accounts.
+    - `All other users`: Can access their team board, edit their own board, cannot add, edit, or delete accounts.
+- **AUDIT-14 (Zero-Defect Verification & Production Build Certification):**
+  - Static analysis: certified 0 warnings and 0 errors across `npm run lint` and `npx tsc --noEmit --noUnusedLocals --noUnusedParameters`.
+  - Production build: confirmed 100% clean builds for both Vite client and esbuild server bundles (`npm run build`).
+  - Automated test suite: verified all 25 unit, security, session, and resource tests passing (`npm test`), plus production server smoke testing (`node --import tsx tests/smoke-production.ts`).
+
 ### Sweep 54: 2026-10-27 (Shared Video & UI/UX Teams, 6 User Roles, 7 Designations, Assigned Cluster Lead & Permission Controls)
 
 - **TEAM-01 (Shared Video & UI/UX Cross-Delivery Sections):**

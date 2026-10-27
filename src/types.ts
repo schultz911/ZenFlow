@@ -1,4 +1,4 @@
-export type Role = 'content' | 'design' | 'video' | 'ui_ux' | 'account_manager' | 'administrator';
+export type Role = 'content' | 'design' | 'video' | 'ui_ux' | 'research' | 'account_manager' | 'administrator' | 'none';
 
 export type CognitiveLoad = 'low' | 'medium' | 'high';
 
@@ -8,7 +8,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: Role;
+  role?: Role;
   avatarColor?: string;
   createdAt: string;
   order?: number;
@@ -18,6 +18,8 @@ export interface User {
   isAdministrator?: boolean;
   isBusinessLead?: boolean;
   isClusterLead?: boolean;
+  isTeamLead?: boolean;
+  isAccountManager?: boolean;
   isContentLead?: boolean;
   isArtDirector?: boolean;
   isContentSpecialist?: boolean;

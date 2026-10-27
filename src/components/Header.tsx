@@ -14,6 +14,7 @@ import {
   Database,
   Video as VideoIcon,
   Layout,
+  Search,
 } from 'lucide-react';
 import { getUserTag } from '../utils/workload';
 
@@ -61,6 +62,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
   const designUsers = useMemo(() => users.filter(u => u.role === 'design'), [users]);
   const videoUsers = useMemo(() => users.filter(u => u.role === 'video'), [users]);
   const uiUxUsers = useMemo(() => users.filter(u => u.role === 'ui_ux'), [users]);
+  const researchUsers = useMemo(() => users.filter(u => u.role === 'research'), [users]);
 
   const currentUserTag = useMemo(() => getUserTag(currentUser), [currentUser]);
 
@@ -181,6 +183,26 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                   : 'bg-neutral-200 dark:bg-white/5 text-neutral-600 dark:text-white/40'
               }`}>
                 {uiUxUsers.length}
+              </span>
+            </button>
+
+            <button
+              id="tab-research"
+              onClick={() => setActiveRoleTab('research')}
+              className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs sm:text-sm font-medium transition-all ${
+                activeRoleTab === 'research'
+                  ? 'bg-white dark:bg-[#2A2A2A] text-neutral-900 dark:text-white shadow-sm'
+                  : 'text-neutral-500 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white'
+              }`}
+            >
+              <Search className="h-3.5 w-3.5 text-teal-500 dark:text-teal-400" />
+              <span>Research</span>
+              <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                activeRoleTab === 'research'
+                  ? 'bg-teal-500/15 text-teal-600 dark:text-teal-300'
+                  : 'bg-neutral-200 dark:bg-white/5 text-neutral-600 dark:text-white/40'
+              }`}>
+                {researchUsers.length}
               </span>
             </button>
           </div>
@@ -396,6 +418,16 @@ const HeaderComponent: React.FC<HeaderProps> = ({
               }`}
             >
               UI/UX ({uiUxUsers.length})
+            </button>
+            <button
+              onClick={() => setActiveRoleTab('research')}
+              className={`flex-1 rounded-full py-1 text-center font-medium px-2 text-[11px] ${
+                activeRoleTab === 'research'
+                  ? 'bg-white dark:bg-[#2A2A2A] text-neutral-900 dark:text-white shadow-xs'
+                  : 'text-neutral-500 dark:text-white/40'
+              }`}
+            >
+              Research ({researchUsers.length})
             </button>
           </div>
         </div>

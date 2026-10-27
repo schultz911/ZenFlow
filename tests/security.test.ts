@@ -127,6 +127,8 @@ test('public member fields use strict allowlist', () => {
     isBusinessLead: true,
     isContentSpecialist: true,
     isBrandDesigner: true,
+    isTeamLead: true,
+    isAccountManager: true,
     designation: 'Business Lead',
     clusterLeadId: 'lead-1',
     futureSecret: 'secret',
@@ -137,6 +139,8 @@ test('public member fields use strict allowlist', () => {
   assert.equal(member.id, 'a');
   assert.equal(member.role, 'video');
   assert.equal(member.isClusterLead, true);
+  assert.equal(member.isTeamLead, true);
+  assert.equal(member.isAccountManager, true);
   assert.equal(member.isContentLead, true);
   assert.equal(member.isArtDirector, true);
   assert.equal(member.isAdministrator, true);

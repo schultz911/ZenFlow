@@ -103,11 +103,13 @@ interface DashboardContextType {
   createUser: (data: {
     name: string;
     email: string;
-    role: Role;
+    role?: Role;
     isAdministrator?: boolean;
     isBusinessLead?: boolean;
     isCreativeDirector?: boolean;
     isClusterLead?: boolean;
+    isTeamLead?: boolean;
+    isAccountManager?: boolean;
     isContentLead?: boolean;
     isArtDirector?: boolean;
     isContentSpecialist?: boolean;
@@ -124,7 +126,10 @@ interface DashboardContextType {
   isBusinessLead: boolean;
   isCreativeDirector: boolean;
   isClusterLead: boolean;
+  isTeamLead: boolean;
+  isAccountManager: boolean;
   canManageMembers: boolean;
+  canManageUser: (targetUser: User) => boolean;
   canEditUserTasks: (targetUserId: string) => boolean;
   canSwitchBoards: boolean;
   creativeDirectors: User[];
@@ -226,6 +231,14 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     return Boolean(currentUser?.isClusterLead);
   }, [currentUser]);
 
+  const isTeamLead = useMemo(() => {
+    return Boolean(currentUser?.isTeamLead || currentUser?.designation === 'team_lead' || currentUser?.designation === 'Team Lead');
+  }, [currentUser]);
+
+  const isAccountManager = useMemo(() => {
+    return Boolean(currentUser?.isAccountManager || currentUser?.designation === 'account_manager' || currentUser?.designation === 'Account Manager');
+  }, [currentUser]);
+
   const creativeDirectors = useMemo(() => {
     return users.filter(u => u.isCreativeDirector || u.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase());
   }, [users]);
@@ -262,19 +275,39 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const canManageMembers = useMemo(() => {
     if (!currentUser) return false;
+    // Administrator, Business Lead, Cluster Lead, Creative Director can add accounts
     return isSuperadmin || isAdministrator || isBusinessLead || isCreativeDirector || isClusterLead;
+  }, [currentUser, isSuperadmin, isAdministrator, isBusinessLead, isCreativeDirector, isClusterLead]);
+
+  const canManageUser = useCallback((targetUser: User): boolean => {
+    if (!currentUser) return false;
+    // Administrator, Business Lead can add and delete accounts and edit user information
+    if (isSuperadmin || isAdministrator || isBusinessLead) return true;
+    // Cluster Lead, Creative Director can add and delete accounts to their teams only and edit team member information
+    if (isCreativeDirector) {
+      return targetUser.creativeDirectorId === currentUser.id;
+    }
+    if (isClusterLead) {
+      return targetUser.clusterLeadId === currentUser.id || targetUser.creativeDirectorId === currentUser.id;
+    }
+    return false;
   }, [currentUser, isSuperadmin, isAdministrator, isBusinessLead, isCreativeDirector, isClusterLead]);
 
   const canSwitchBoards = useMemo(() => {
     if (!currentUser) return false;
+    // Administrator, Business Lead, Cluster Lead, Creative Director can access all boards
     return isSuperadmin || isAdministrator || isBusinessLead || isCreativeDirector || isClusterLead;
   }, [currentUser, isSuperadmin, isAdministrator, isBusinessLead, isCreativeDirector, isClusterLead]);
 
   const canEditUserTasks = useCallback((targetUserId: string): boolean => {
     if (!currentUser) return false;
-    // Administrator and Business Lead - Full board view, all team edit access
+    // Administrator and Business Lead - can access all boards, edit all boards
     if (isSuperadmin || isAdministrator || isBusinessLead) return true;
-    // Cluster Lead and Creative Director - Full board view, their team edit access
+    // Account Manager - cannot edit boards
+    if (currentUser.isAccountManager || currentUser.designation === 'account_manager') {
+      return false;
+    }
+    // Cluster Lead and Creative Director - can access all boards, edit boards of their teams
     if (isCreativeDirector) {
       if (targetUserId === currentUser.id) return true;
       const target = usersRef.current.find(u => u.id === targetUserId);
@@ -285,16 +318,17 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       const target = usersRef.current.find(u => u.id === targetUserId);
       return target?.clusterLeadId === currentUser.id;
     }
-    // Content Lead and Art Director - Team board view, their team edit access
-    if (currentUser?.isContentLead || currentUser?.isArtDirector) {
+    // Team Lead - can access team board, edit boards of their team
+    if (currentUser.isTeamLead || currentUser.isContentLead || currentUser.isArtDirector) {
       if (targetUserId === currentUser.id) return true;
       const target = usersRef.current.find(u => u.id === targetUserId);
       return Boolean(
         (currentUser.creativeDirectorId && target?.creativeDirectorId === currentUser.creativeDirectorId) ||
-        (currentUser.clusterLeadId && target?.clusterLeadId === currentUser.clusterLeadId)
+        (currentUser.clusterLeadId && target?.clusterLeadId === currentUser.clusterLeadId) ||
+        (currentUser.role && target?.role === currentUser.role)
       );
     }
-    // Content Specialist and Brand Designer - Team board view, their personal board edit access
+    // All other users - can access their team board, can edit their own boards
     return targetUserId === currentUser.id;
   }, [currentUser, isSuperadmin, isAdministrator, isBusinessLead, isCreativeDirector, isClusterLead]);
 
@@ -939,11 +973,13 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   const createUser = useCallback(async (data: {
     name: string;
     email: string;
-    role: Role;
+    role?: Role;
     isAdministrator?: boolean;
     isBusinessLead?: boolean;
     isCreativeDirector?: boolean;
     isClusterLead?: boolean;
+    isTeamLead?: boolean;
+    isAccountManager?: boolean;
     isContentLead?: boolean;
     isArtDirector?: boolean;
     isContentSpecialist?: boolean;
@@ -1602,7 +1638,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       isBusinessLead,
       isCreativeDirector,
       isClusterLead,
+      isTeamLead,
+      isAccountManager,
       canManageMembers,
+      canManageUser,
       canEditUserTasks,
       canSwitchBoards,
       creativeDirectors,
@@ -1651,7 +1690,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       isBusinessLead,
       isCreativeDirector,
       isClusterLead,
+      isTeamLead,
+      isAccountManager,
       canManageMembers,
+      canManageUser,
       canEditUserTasks,
       canSwitchBoards,
       creativeDirectors,

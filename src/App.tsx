@@ -16,7 +16,7 @@ import { DuplicateTaskModal } from './components/DuplicateTaskModal';
 import { DeleteTaskModal } from './components/DeleteTaskModal';
 import { FreePoolContainer } from './components/FreePoolContainer';
 import { User, Task, TaskStatus } from './types';
-import { UserPlus, FileText, Palette, Video as VideoIcon, Layout, Loader2, Trash2 } from 'lucide-react';
+import { UserPlus, FileText, Palette, Video as VideoIcon, Layout, Search, Loader2, Trash2 } from 'lucide-react';
 import { testConnection } from './lib/firebase';
 
 const EMPTY_TASKS: Task[] = [];
@@ -110,10 +110,10 @@ function DashboardContent() {
     }
   });
 
-  // Filter users by role tab and active team board (video and UI/UX are shared teams across all boards)
+  // Filter users by role tab and active team board (video, UI/UX, and research are shared teams across all boards)
   const roleFilteredUsers = useMemo(() => {
     let boardUsers = users;
-    const isSharedSection = activeRoleTab === 'video' || activeRoleTab === 'ui_ux';
+    const isSharedSection = activeRoleTab === 'video' || activeRoleTab === 'ui_ux' || activeRoleTab === 'research';
     if (activeBoardId !== 'all' && !isSharedSection) {
       boardUsers = users.filter(u => u.id === activeBoardId || u.creativeDirectorId === activeBoardId);
     }
@@ -507,15 +507,17 @@ function DashboardContent() {
                   <Palette className="h-6 w-6 text-indigo-500" />
                 ) : activeRoleTab === 'video' ? (
                   <VideoIcon className="h-6 w-6 text-violet-500" />
-                ) : (
+                ) : activeRoleTab === 'ui_ux' ? (
                   <Layout className="h-6 w-6 text-cyan-500" />
+                ) : (
+                  <Search className="h-6 w-6 text-teal-500" />
                 )}
               </div>
               <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">
-                No members in {activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab === 'video' ? 'Video' : activeRoleTab === 'content' ? 'Content' : activeRoleTab === 'design' ? 'Design' : activeRoleTab} yet
+                No members in {activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab === 'video' ? 'Video' : activeRoleTab === 'content' ? 'Content' : activeRoleTab === 'design' ? 'Design' : activeRoleTab === 'research' ? 'Research' : activeRoleTab} yet
               </h3>
               <p className="mt-1 text-xs text-neutral-500 dark:text-white/40 max-w-sm">
-                Add a new member with the {activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab} role to generate their dedicated swimlane.
+                Add a new member with the {activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab === 'research' ? 'Research' : activeRoleTab} role to generate their dedicated swimlane.
               </p>
               {canManageMembers && (
                 <button
@@ -523,7 +525,7 @@ function DashboardContent() {
                   className="mt-4 flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 transition-colors shadow-md shadow-blue-900/20 cursor-pointer"
                 >
                   <UserPlus className="h-3.5 w-3.5" />
-                  <span>Add {activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab === 'video' ? 'Video' : activeRoleTab === 'content' ? 'Content' : activeRoleTab === 'design' ? 'Design' : activeRoleTab} Member</span>
+                  <span>Add {activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab === 'video' ? 'Video' : activeRoleTab === 'content' ? 'Content' : activeRoleTab === 'design' ? 'Design' : activeRoleTab === 'research' ? 'Research' : activeRoleTab} Member</span>
                 </button>
               )}
             </div>

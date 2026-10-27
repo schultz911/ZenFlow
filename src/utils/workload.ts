@@ -49,6 +49,17 @@ export function getCognitiveLoadLabel(load: CognitiveLoad, role: Role = 'content
       default:
         return 'Wireframing & Prototype';
     }
+  } else if (role === 'research') {
+    switch (load) {
+      case 'low':
+        return 'Secondary Research';
+      case 'medium':
+        return 'Competitive Analysis';
+      case 'high':
+        return 'Primary Research & Synthesis';
+      default:
+        return 'Market Research';
+    }
   } else if (role === 'account_manager') {
     switch (load) {
       case 'low':
@@ -99,6 +110,8 @@ export function getUserTag(user?: {
   isClusterLead?: boolean;
   isAdministrator?: boolean;
   isBusinessLead?: boolean;
+  isTeamLead?: boolean;
+  isAccountManager?: boolean;
   isContentSpecialist?: boolean;
   isBrandDesigner?: boolean;
   designation?: string;
@@ -125,6 +138,18 @@ export function getUserTag(user?: {
     return {
       label: 'Cluster Lead',
       badgeClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30 font-semibold',
+    };
+  }
+  if (user.isTeamLead || user.designation === 'team_lead' || user.designation === 'Team Lead') {
+    return {
+      label: 'Team Lead',
+      badgeClass: 'bg-blue-500/15 text-blue-600 dark:text-blue-300 border-blue-500/30 font-semibold',
+    };
+  }
+  if (user.isAccountManager || user.designation === 'account_manager' || user.designation === 'Account Manager') {
+    return {
+      label: 'Account Manager',
+      badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30 font-semibold',
     };
   }
   if (user.isContentLead || user.designation === 'content_lead' || user.designation === 'Content Lead') {
@@ -157,6 +182,12 @@ export function getUserTag(user?: {
       badgeClass: 'bg-rose-500/15 text-rose-600 dark:text-rose-300 border-rose-500/30 font-semibold',
     };
   }
+  if (user.role === 'research') {
+    return {
+      label: 'Research',
+      badgeClass: 'bg-teal-500/15 text-teal-600 dark:text-teal-300 border-teal-500/30',
+    };
+  }
   if (user.role === 'ui_ux') {
     return {
       label: 'UI/UX',
@@ -181,8 +212,14 @@ export function getUserTag(user?: {
       badgeClass: 'bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border-neutral-200 dark:border-white/10',
     };
   }
+  if (user.role === 'content') {
+    return {
+      label: 'Content',
+      badgeClass: 'bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border-neutral-200 dark:border-white/10',
+    };
+  }
   return {
-    label: 'Content',
+    label: 'Member',
     badgeClass: 'bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border-neutral-200 dark:border-white/10',
   };
 }
@@ -678,7 +715,7 @@ export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
 /**
  * Generates and downloads an Excel (.xls) spreadsheet report of all workspace tasks with workload and billable hours metrics
  */
-export function exportWorkspaceXLS(tasks: Task[], users: { id: string; name: string; email: string; role: Role }[]) {
+export function exportWorkspaceXLS(tasks: Task[], users: { id: string; name: string; email: string; role?: Role }[]) {
   const userMap = new Map(users.map(u => [u.id, u]));
   const headers = [
     'Task ID',
@@ -746,7 +783,7 @@ export function exportWorkspaceXLS(tasks: Task[], users: { id: string; name: str
 /**
  * Generates and downloads a complete JSON audit file
  */
-export function exportWorkspaceJSON(tasks: Task[], users: { id: string; name: string; email: string; role: Role }[]) {
+export function exportWorkspaceJSON(tasks: Task[], users: { id: string; name: string; email: string; role?: Role }[]) {
   const payload = {
     exportedAt: new Date().toISOString(),
     totalUsers: users.length,

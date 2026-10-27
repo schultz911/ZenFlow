@@ -17,6 +17,10 @@ import {
   Briefcase,
   Award,
   Layers,
+  Lock,
+  Users,
+  UserCheck,
+  Search,
 } from 'lucide-react';
 
 interface LoginModalProps {
@@ -48,16 +52,15 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<Role>('content');
+  const [role, setRole] = useState<Role | undefined>('content');
+  const [isAdminPrivilege, setIsAdminPrivilege] = useState(false);
 
   // Designations
   const [isBusinessLead, setIsBusinessLead] = useState(false);
   const [isCD, setIsCD] = useState(false);
   const [isClusterLead, setIsClusterLead] = useState(false);
-  const [isContentLead, setIsContentLead] = useState(false);
-  const [isArtDirector, setIsArtDirector] = useState(false);
-  const [isContentSpecialist, setIsContentSpecialist] = useState(false);
-  const [isBrandDesigner, setIsBrandDesigner] = useState(false);
+  const [isTeamLead, setIsTeamLead] = useState(false);
+  const [isAccountManager, setIsAccountManager] = useState(false);
 
   // Assigned Leaders
   const [selectedCDId, setSelectedCDId] = useState<string>(() => {
@@ -128,7 +131,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
     setIsSubmitting(true);
     try {
-      const effectiveIsAdmin = role === 'administrator';
       if (isNewAccountOnly) {
         const designation = isBusinessLead
           ? 'Business Lead'
@@ -136,47 +138,40 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           ? 'Creative Director'
           : isClusterLead
           ? 'Cluster Lead'
-          : isContentLead
-          ? 'Content Lead'
-          : isArtDirector
-          ? 'Art Director'
-          : isContentSpecialist
-          ? 'Content Specialist'
-          : isBrandDesigner
-          ? 'Brand Designer'
-          : effectiveIsAdmin
+          : isTeamLead
+          ? 'Team Lead'
+          : isAccountManager
+          ? 'Account Manager'
+          : isAdminPrivilege
           ? 'Administrator'
           : undefined;
 
         await createUser({
           name: cleanName,
           email: cleanEmail,
-          role,
-          isAdministrator: effectiveIsAdmin,
+          role: role || undefined,
+          isAdministrator: isAdminPrivilege,
           isBusinessLead,
           isCreativeDirector: isCD,
           isClusterLead,
-          isContentLead,
-          isArtDirector,
-          isContentSpecialist,
-          isBrandDesigner,
+          isTeamLead,
+          isAccountManager,
           designation,
           creativeDirectorId: isCD ? undefined : (selectedCDId || undefined),
           clusterLeadId: isClusterLead ? undefined : (selectedClusterLeadId || undefined),
         });
       } else {
-        await login(cleanName, role, cleanEmail);
+        await login(cleanName, role || 'content', cleanEmail);
       }
       setName('');
       setEmail('');
       setRole('content');
+      setIsAdminPrivilege(false);
       setIsBusinessLead(false);
       setIsCD(false);
       setIsClusterLead(false);
-      setIsContentLead(false);
-      setIsArtDirector(false);
-      setIsContentSpecialist(false);
-      setIsBrandDesigner(false);
+      setIsTeamLead(false);
+      setIsAccountManager(false);
       setSelectedCDId('');
       setSelectedClusterLeadId('');
       onClose();
@@ -191,15 +186,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     return null;
   }
 
-  const roleOptions: Array<{ id: Role; label: string; desc: string; icon: React.ReactNode; tooltip: string; disabled?: boolean }> = [
-    {
-      id: 'administrator',
-      label: 'Administrator',
-      desc: 'System & Ops',
-      icon: <Shield className="h-4 w-4 text-rose-500" />,
-      tooltip: canAssignAdmin ? 'System & Operations Administrator with full board view and all team edit access' : 'Administrator option is restricted to Superadmins and other Administrators',
-      disabled: !canAssignAdmin,
-    },
+  const roleOptions: Array<{ id: Role; label: string; desc: string; icon: React.ReactNode; tooltip: string }> = [
     {
       id: 'account_manager',
       label: 'Accounts',
@@ -234,6 +221,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       desc: 'Product & Interface',
       icon: <Layout className="h-4 w-4 text-cyan-500" />,
       tooltip: 'Cross-functional product interface and user experience shared team',
+    },
+    {
+      id: 'research',
+      label: 'Research',
+      desc: 'Insights & Analysis',
+      icon: <Search className="h-4 w-4 text-teal-500" />,
+      tooltip: 'User research, insights, and data analysis shared team',
     },
   ];
 
@@ -408,24 +402,64 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   </div>
                 </div>
 
-                {/* Role / Team Selection: 6 user types */}
+                {/* Administrator Privileges Toggle */}
+                {isNewAccountOnly && (
+                  <div
+                    className={`rounded-xl border p-3 flex items-center justify-between transition-all ${
+                      !canAssignAdmin
+                        ? 'opacity-50 bg-neutral-100/50 dark:bg-white/[0.02] border-neutral-200 dark:border-white/5'
+                        : isAdminPrivilege
+                        ? 'border-rose-500/40 bg-rose-500/5 dark:bg-rose-500/10'
+                        : 'border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414]'
+                    }`}
+                    title={canAssignAdmin ? "Grant administrator privileges with full board and account access" : "Administrator privileges are restricted to Superadmins and other Administrators"}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="rounded-lg p-1.5 bg-rose-500/10 text-rose-500">
+                        <Shield className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-semibold text-neutral-900 dark:text-white">Administrator Privileges</span>
+                          {!canAssignAdmin && <Lock className="w-3 h-3 text-neutral-400" />}
+                        </div>
+                        <p className="text-[10px] text-neutral-500 dark:text-white/40">System & Ops — Full board access, team management, and workspace settings</p>
+                      </div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        id="toggle-admin-privilege"
+                        disabled={!canAssignAdmin}
+                        checked={isAdminPrivilege}
+                        onChange={e => setIsAdminPrivilege(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-neutral-200 peer-focus:outline-none rounded-full peer dark:bg-neutral-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-600 disabled:cursor-not-allowed"></div>
+                    </label>
+                  </div>
+                )}
+
+                {/* Role / Team Selection: 6 functional teams (optional) */}
                 <div>
-                  <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5" title="Select the member's core functional discipline or operational team">
-                    TEAM
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40" title="Select the member's functional team (click selected team to deselect)">
+                      TEAM
+                    </label>
+                    <span className="text-[10px] text-neutral-400 dark:text-white/40">
+                      {role ? '(click selected to deselect)' : '(no team selected)'}
+                    </span>
+                  </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {roleOptions.map(opt => (
                       <button
                         key={opt.id}
                         type="button"
                         id={`select-role-${opt.id}`}
-                        disabled={opt.disabled}
-                        onClick={() => !opt.disabled && setRole(opt.id)}
+                        onClick={() => setRole(prev => prev === opt.id ? undefined : opt.id)}
                         title={opt.tooltip}
                         className={`flex items-start gap-2 rounded-xl border p-2.5 text-left transition-all ${
-                          opt.disabled
-                            ? 'opacity-40 cursor-not-allowed bg-neutral-100/50 dark:bg-white/[0.02] border-neutral-200 dark:border-white/5'
-                            : role === opt.id
+                          role === opt.id
                             ? 'border-blue-500/50 bg-blue-50 dark:bg-blue-500/10 ring-1 ring-blue-500/30 cursor-pointer'
                             : 'border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414] hover:border-neutral-300 dark:hover:border-white/10 cursor-pointer'
                         }`}
@@ -446,133 +480,74 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   </div>
                 </div>
 
-                {/* Designations */}
+                {/* Designation: Role-led */}
                 <div className="rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-50/50 dark:bg-white/[0.02] p-3.5 space-y-3">
                   <div className="flex items-center gap-1.5">
                     <Award className="w-3.5 h-3.5 text-amber-500" />
-                    <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 uppercase tracking-wider" title="Configure member leadership designation and board access privileges">
+                    <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 uppercase tracking-wider" title="Configure member leadership designation">
                       Designation
                     </span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {/* Business Lead */}
-                    <label className="flex items-start gap-2 p-2 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors" title="Full board view, all team edit access">
+                    <label className="flex items-center gap-2 p-2.5 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
                       <input
                         type="checkbox"
                         checked={isBusinessLead}
                         onChange={e => setIsBusinessLead(e.target.checked)}
-                        className="mt-0.5 rounded border-neutral-300 dark:border-neutral-700 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5"
+                        className="rounded border-neutral-300 dark:border-neutral-700 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5"
                       />
-                      <div>
-                        <div className="flex items-center gap-1 text-xs font-medium text-neutral-800 dark:text-neutral-200">
-                          <Briefcase className="w-3 h-3 text-amber-500" />
-                          <span>Business Lead</span>
-                        </div>
-                        <p className="text-[10px] text-neutral-500 dark:text-white/40">Full board view, all team edit access</p>
-                      </div>
-                    </label>
-
-                    {/* Cluster Lead */}
-                    <label className="flex items-start gap-2 p-2 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors" title="Full board view, their team edit access">
-                      <input
-                        type="checkbox"
-                        checked={isClusterLead}
-                        onChange={e => setIsClusterLead(e.target.checked)}
-                        className="mt-0.5 rounded border-neutral-300 dark:border-neutral-700 text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5"
-                      />
-                      <div>
-                        <div className="flex items-center gap-1 text-xs font-medium text-neutral-800 dark:text-neutral-200">
-                          <Layers className="w-3 h-3 text-emerald-500" />
-                          <span>Cluster Lead</span>
-                        </div>
-                        <p className="text-[10px] text-neutral-500 dark:text-white/40">Full board view, their team edit access</p>
-                      </div>
+                      <Briefcase className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                      <span className="text-xs font-medium text-neutral-800 dark:text-neutral-200">Business Lead</span>
                     </label>
 
                     {/* Creative Director */}
-                    <label className="flex items-start gap-2 p-2 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors" title="Full board view, their team edit access">
+                    <label className="flex items-center gap-2 p-2.5 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
                       <input
                         type="checkbox"
                         checked={isCD}
                         onChange={e => setIsCD(e.target.checked)}
-                        className="mt-0.5 rounded border-neutral-300 dark:border-neutral-700 text-purple-600 focus:ring-purple-500 h-3.5 w-3.5"
+                        className="rounded border-neutral-300 dark:border-neutral-700 text-purple-600 focus:ring-purple-500 h-3.5 w-3.5"
                       />
-                      <div>
-                        <div className="flex items-center gap-1 text-xs font-medium text-neutral-800 dark:text-neutral-200">
-                          <Crown className="w-3 h-3 text-purple-500" />
-                          <span>Creative Director</span>
-                        </div>
-                        <p className="text-[10px] text-neutral-500 dark:text-white/40">Full board view, their team edit access</p>
-                      </div>
+                      <Crown className="w-3.5 h-3.5 text-purple-500 shrink-0" />
+                      <span className="text-xs font-medium text-neutral-800 dark:text-neutral-200">Creative Director</span>
                     </label>
 
-                    {/* Content Lead */}
-                    <label className="flex items-start gap-2 p-2 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors" title="Team board view, their team edit access">
+                    {/* Cluster Lead */}
+                    <label className="flex items-center gap-2 p-2.5 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
                       <input
                         type="checkbox"
-                        checked={isContentLead}
-                        onChange={e => setIsContentLead(e.target.checked)}
-                        className="mt-0.5 rounded border-neutral-300 dark:border-neutral-700 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
+                        checked={isClusterLead}
+                        onChange={e => setIsClusterLead(e.target.checked)}
+                        className="rounded border-neutral-300 dark:border-neutral-700 text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5"
                       />
-                      <div>
-                        <div className="flex items-center gap-1 text-xs font-medium text-neutral-800 dark:text-neutral-200">
-                          <FileText className="w-3 h-3 text-blue-500" />
-                          <span>Content Lead</span>
-                        </div>
-                        <p className="text-[10px] text-neutral-500 dark:text-white/40">Team board view, their team edit access</p>
-                      </div>
+                      <Layers className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span className="text-xs font-medium text-neutral-800 dark:text-neutral-200">Cluster Lead</span>
                     </label>
 
-                    {/* Art Director */}
-                    <label className="flex items-start gap-2 p-2 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors" title="Team board view, their team edit access">
+                    {/* Team Lead */}
+                    <label className="flex items-center gap-2 p-2.5 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
                       <input
                         type="checkbox"
-                        checked={isArtDirector}
-                        onChange={e => setIsArtDirector(e.target.checked)}
-                        className="mt-0.5 rounded border-neutral-300 dark:border-neutral-700 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                        checked={isTeamLead}
+                        onChange={e => setIsTeamLead(e.target.checked)}
+                        className="rounded border-neutral-300 dark:border-neutral-700 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
                       />
-                      <div>
-                        <div className="flex items-center gap-1 text-xs font-medium text-neutral-800 dark:text-neutral-200">
-                          <Palette className="w-3 h-3 text-indigo-500" />
-                          <span>Art Director</span>
-                        </div>
-                        <p className="text-[10px] text-neutral-500 dark:text-white/40">Team board view, their team edit access</p>
-                      </div>
+                      <Users className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                      <span className="text-xs font-medium text-neutral-800 dark:text-neutral-200">Team Lead</span>
                     </label>
 
-                    {/* Content Specialist */}
-                    <label className="flex items-start gap-2 p-2 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors" title="Team board view, their personal board edit access">
+                    {/* Account Manager */}
+                    <label className="flex items-center gap-2 p-2.5 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
                       <input
                         type="checkbox"
-                        checked={isContentSpecialist}
-                        onChange={e => setIsContentSpecialist(e.target.checked)}
-                        className="mt-0.5 rounded border-neutral-300 dark:border-neutral-700 text-blue-500 focus:ring-blue-400 h-3.5 w-3.5"
+                        checked={isAccountManager}
+                        onChange={e => setIsAccountManager(e.target.checked)}
+                        className="rounded border-neutral-300 dark:border-neutral-700 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
                       />
-                      <div>
-                        <div className="flex items-center gap-1 text-xs font-medium text-neutral-800 dark:text-neutral-200">
-                          <FileText className="w-3 h-3 text-blue-400" />
-                          <span>Content Specialist</span>
-                        </div>
-                        <p className="text-[10px] text-neutral-500 dark:text-white/40">Team board view, their personal board edit access</p>
-                      </div>
-                    </label>
-
-                    {/* Brand Designer */}
-                    <label className="flex items-start gap-2 p-2 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors" title="Team board view, their personal board edit access">
-                      <input
-                        type="checkbox"
-                        checked={isBrandDesigner}
-                        onChange={e => setIsBrandDesigner(e.target.checked)}
-                        className="mt-0.5 rounded border-neutral-300 dark:border-neutral-700 text-indigo-500 focus:ring-indigo-400 h-3.5 w-3.5"
-                      />
-                      <div>
-                        <div className="flex items-center gap-1 text-xs font-medium text-neutral-800 dark:text-neutral-200">
-                          <Palette className="w-3 h-3 text-indigo-400" />
-                          <span>Brand Designer</span>
-                        </div>
-                        <p className="text-[10px] text-neutral-500 dark:text-white/40">Team board view, their personal board edit access</p>
-                      </div>
+                      <UserCheck className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                      <span className="text-xs font-medium text-neutral-800 dark:text-neutral-200">Account Manager</span>
                     </label>
                   </div>
                 </div>

@@ -34,7 +34,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
     }
   });
 
-  const [roleFilter, setRoleFilter] = useState<'all' | 'content' | 'design' | 'video' | 'ui_ux'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'content' | 'design' | 'video' | 'ui_ux' | 'research'>('all');
 
   const toggleExpanded = () => {
     setIsExpanded(prev => {
@@ -94,6 +94,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
   const designCount = useMemo(() => freeUsers.filter(u => u.role === 'design').length, [freeUsers]);
   const videoCount = useMemo(() => freeUsers.filter(u => u.role === 'video').length, [freeUsers]);
   const uiUxCount = useMemo(() => freeUsers.filter(u => u.role === 'ui_ux').length, [freeUsers]);
+  const researchCount = useMemo(() => freeUsers.filter(u => u.role === 'research').length, [freeUsers]);
 
   return (
     <div className="fixed bottom-5 right-5 z-40 select-none">
@@ -248,6 +249,17 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                 }`}
               >
                 UI/UX ({uiUxCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setRoleFilter('research')}
+                className={`px-2 py-1 rounded-lg text-[10px] font-semibold transition-all cursor-pointer ${
+                  roleFilter === 'research'
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'text-neutral-500 dark:text-white/50 hover:bg-neutral-100 dark:hover:bg-white/5'
+                }`}
+              >
+                Research ({researchCount})
               </button>
             </div>
 

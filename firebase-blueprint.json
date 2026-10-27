@@ -20,7 +20,7 @@
         },
         "role": {
           "type": "string",
-          "enum": ["content", "design", "video", "ui_ux", "account_manager", "administrator"],
+          "enum": ["content", "design", "video", "ui_ux", "research", "account_manager", "administrator", "none"],
           "description": "Team swimlane role"
         },
         "avatarColor": {
@@ -39,6 +39,14 @@
         "isBusinessLead": {
           "type": "boolean",
           "description": "Whether this user is a designated Business Lead"
+        },
+        "isTeamLead": {
+          "type": "boolean",
+          "description": "Whether this user is a designated Team Lead"
+        },
+        "isAccountManager": {
+          "type": "boolean",
+          "description": "Whether this user is a designated Account Manager"
         },
         "isContentSpecialist": {
           "type": "boolean",

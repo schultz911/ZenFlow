@@ -84,8 +84,8 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
     return () => clearTimeout(timer);
   }, [localSearch, onSearchChange, searchQuery]);
 
-  // Filter users by active tab. Video and UI/UX are shared teams across all delivery teams so they don't filter by board
-  const isSharedSection = activeRoleTab === 'video' || activeRoleTab === 'ui_ux';
+  // Filter users by active tab. Video, UI/UX, and Research are shared teams across all delivery teams so they don't filter by board
+  const isSharedSection = activeRoleTab === 'video' || activeRoleTab === 'ui_ux' || activeRoleTab === 'research';
   const displayedUsers = useMemo(() => {
     let boardUsers = users;
     if (activeBoardId !== 'all' && !isSharedSection) {
@@ -145,6 +145,8 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                 ? 'Video'
                 : activeRoleTab === 'ui_ux'
                 ? 'UI/UX'
+                : activeRoleTab === 'research'
+                ? 'Research'
                 : activeRoleTab}
             </h1>
             <span className="rounded-full bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 px-2.5 py-0.5 text-xs text-neutral-600 dark:text-white/50">
