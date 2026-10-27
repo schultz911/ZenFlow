@@ -105,10 +105,14 @@ interface DashboardContextType {
     email: string;
     role: Role;
     isAdministrator?: boolean;
+    isBusinessLead?: boolean;
     isCreativeDirector?: boolean;
     isClusterLead?: boolean;
     isContentLead?: boolean;
     isArtDirector?: boolean;
+    isContentSpecialist?: boolean;
+    isBrandDesigner?: boolean;
+    designation?: string;
     creativeDirectorId?: string;
     clusterLeadId?: string;
   }) => Promise<User>;
@@ -117,6 +121,7 @@ interface DashboardContextType {
   // Role & Permissions
   isSuperadmin: boolean;
   isAdministrator: boolean;
+  isBusinessLead: boolean;
   isCreativeDirector: boolean;
   isClusterLead: boolean;
   canManageMembers: boolean;
@@ -209,6 +214,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     return Boolean(currentUser?.isAdministrator || currentUser?.role === 'administrator');
   }, [currentUser]);
 
+  const isBusinessLead = useMemo(() => {
+    return Boolean(currentUser?.isBusinessLead || currentUser?.designation === 'business_lead');
+  }, [currentUser]);
+
   const isCreativeDirector = useMemo(() => {
     return Boolean(currentUser?.isCreativeDirector || isSuperadmin);
   }, [currentUser, isSuperadmin]);
@@ -240,7 +249,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   useEffect(() => {
     if (currentUser) {
       const isSuper = currentUser.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase();
-      const isPrivileged = Boolean(currentUser.isCreativeDirector || currentUser.isAdministrator || currentUser.isClusterLead || currentUser.role === 'administrator' || isSuper);
+      const isPrivileged = Boolean(currentUser.isCreativeDirector || currentUser.isAdministrator || currentUser.isBusinessLead || currentUser.isClusterLead || currentUser.role === 'administrator' || isSuper);
       if (!isPrivileged) {
         // Regular user: locked to their assigned Creative Director's board
         const targetBoard = currentUser.creativeDirectorId || currentUser.id;
@@ -253,17 +262,19 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const canManageMembers = useMemo(() => {
     if (!currentUser) return false;
-    return isSuperadmin || isAdministrator || isCreativeDirector || isClusterLead;
-  }, [currentUser, isSuperadmin, isAdministrator, isCreativeDirector, isClusterLead]);
+    return isSuperadmin || isAdministrator || isBusinessLead || isCreativeDirector || isClusterLead;
+  }, [currentUser, isSuperadmin, isAdministrator, isBusinessLead, isCreativeDirector, isClusterLead]);
 
   const canSwitchBoards = useMemo(() => {
     if (!currentUser) return false;
-    return isSuperadmin || isAdministrator || isCreativeDirector || isClusterLead;
-  }, [currentUser, isSuperadmin, isAdministrator, isCreativeDirector, isClusterLead]);
+    return isSuperadmin || isAdministrator || isBusinessLead || isCreativeDirector || isClusterLead;
+  }, [currentUser, isSuperadmin, isAdministrator, isBusinessLead, isCreativeDirector, isClusterLead]);
 
   const canEditUserTasks = useCallback((targetUserId: string): boolean => {
     if (!currentUser) return false;
-    if (isSuperadmin || isAdministrator) return true;
+    // Administrator and Business Lead - Full board view, all team edit access
+    if (isSuperadmin || isAdministrator || isBusinessLead) return true;
+    // Cluster Lead and Creative Director - Full board view, their team edit access
     if (isCreativeDirector) {
       if (targetUserId === currentUser.id) return true;
       const target = usersRef.current.find(u => u.id === targetUserId);
@@ -274,8 +285,18 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       const target = usersRef.current.find(u => u.id === targetUserId);
       return target?.clusterLeadId === currentUser.id;
     }
+    // Content Lead and Art Director - Team board view, their team edit access
+    if (currentUser?.isContentLead || currentUser?.isArtDirector) {
+      if (targetUserId === currentUser.id) return true;
+      const target = usersRef.current.find(u => u.id === targetUserId);
+      return Boolean(
+        (currentUser.creativeDirectorId && target?.creativeDirectorId === currentUser.creativeDirectorId) ||
+        (currentUser.clusterLeadId && target?.clusterLeadId === currentUser.clusterLeadId)
+      );
+    }
+    // Content Specialist and Brand Designer - Team board view, their personal board edit access
     return targetUserId === currentUser.id;
-  }, [currentUser, isSuperadmin, isAdministrator, isCreativeDirector, isClusterLead]);
+  }, [currentUser, isSuperadmin, isAdministrator, isBusinessLead, isCreativeDirector, isClusterLead]);
 
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     try {
@@ -920,10 +941,14 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     email: string;
     role: Role;
     isAdministrator?: boolean;
+    isBusinessLead?: boolean;
     isCreativeDirector?: boolean;
     isClusterLead?: boolean;
     isContentLead?: boolean;
     isArtDirector?: boolean;
+    isContentSpecialist?: boolean;
+    isBrandDesigner?: boolean;
+    designation?: string;
     creativeDirectorId?: string;
     clusterLeadId?: string;
   }): Promise<User> => {
@@ -1574,6 +1599,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       // Role & Permissions
       isSuperadmin,
       isAdministrator,
+      isBusinessLead,
       isCreativeDirector,
       isClusterLead,
       canManageMembers,
@@ -1622,6 +1648,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       remapUserTasks,
       isSuperadmin,
       isAdministrator,
+      isBusinessLead,
       isCreativeDirector,
       isClusterLead,
       canManageMembers,

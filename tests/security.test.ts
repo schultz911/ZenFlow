@@ -60,6 +60,7 @@ test('member provisioning, profile updates and root protection retain the role m
   assert.equal((await server.request('/users', 'cd', 'POST', { name: 'New', email: 'new@example.invalid', role: 'design' })).status, 201);
   assert.equal(server.store.users.at(-1).creativeDirectorId, 'cd');
   assert.equal((await server.request('/users', 'cd', 'POST', { name: 'New CD', email: 'newcd@example.invalid', role: 'content', isCreativeDirector: true })).status, 403);
+  assert.equal((await server.request('/users', 'cd', 'POST', { name: 'New Admin', email: 'admin@example.invalid', role: 'administrator' })).status, 403);
   assert.equal((await server.request('/users/root', 'root', 'DELETE')).status, 403);
   assert.equal((await server.request('/users/alice', 'alice', 'PUT', { role: 'design' })).status, 403);
   assert.equal((await server.request('/users/alice', 'cd', 'PUT', { name: 'Alice Renamed' })).status, 200);
@@ -123,6 +124,10 @@ test('public member fields use strict allowlist', () => {
     isContentLead: true,
     isArtDirector: true,
     isAdministrator: true,
+    isBusinessLead: true,
+    isContentSpecialist: true,
+    isBrandDesigner: true,
+    designation: 'Business Lead',
     clusterLeadId: 'lead-1',
     futureSecret: 'secret',
     privateToken: 'token',
@@ -135,6 +140,10 @@ test('public member fields use strict allowlist', () => {
   assert.equal(member.isContentLead, true);
   assert.equal(member.isArtDirector, true);
   assert.equal(member.isAdministrator, true);
+  assert.equal(member.isBusinessLead, true);
+  assert.equal(member.isContentSpecialist, true);
+  assert.equal(member.isBrandDesigner, true);
+  assert.equal(member.designation, 'Business Lead');
   assert.equal(member.clusterLeadId, 'lead-1');
 });
 test('pipeline and retainer tasks retain deadline and timer behavior', async () => withServer(async server => {

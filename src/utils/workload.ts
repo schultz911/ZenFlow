@@ -98,6 +98,10 @@ export function getUserTag(user?: {
   isArtDirector?: boolean;
   isClusterLead?: boolean;
   isAdministrator?: boolean;
+  isBusinessLead?: boolean;
+  isContentSpecialist?: boolean;
+  isBrandDesigner?: boolean;
+  designation?: string;
 } | null): { label: string; badgeClass: string } {
   if (!user) {
     return {
@@ -105,28 +109,46 @@ export function getUserTag(user?: {
       badgeClass: 'bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border-neutral-200 dark:border-white/10',
     };
   }
-  if (user.isCreativeDirector) {
+  if (user.isBusinessLead || user.designation === 'business_lead' || user.designation === 'Business Lead') {
+    return {
+      label: 'Business Lead',
+      badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30 font-semibold',
+    };
+  }
+  if (user.isCreativeDirector || user.designation === 'creative_director' || user.designation === 'Creative Director') {
     return {
       label: 'Creative Director',
       badgeClass: 'bg-purple-500/15 text-purple-600 dark:text-purple-300 border-purple-500/30 font-semibold',
     };
   }
-  if (user.isContentLead) {
+  if (user.isClusterLead || user.designation === 'cluster_lead' || user.designation === 'Cluster Lead') {
+    return {
+      label: 'Cluster Lead',
+      badgeClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30 font-semibold',
+    };
+  }
+  if (user.isContentLead || user.designation === 'content_lead' || user.designation === 'Content Lead') {
     return {
       label: 'Content Lead',
       badgeClass: 'bg-blue-500/15 text-blue-600 dark:text-blue-300 border-blue-500/30 font-semibold',
     };
   }
-  if (user.isArtDirector) {
+  if (user.isArtDirector || user.designation === 'art_director' || user.designation === 'Art Director') {
     return {
       label: 'Art Director',
       badgeClass: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border-indigo-500/30 font-semibold',
     };
   }
-  if (user.isClusterLead) {
+  if (user.isContentSpecialist || user.designation === 'content_specialist' || user.designation === 'Content Specialist') {
     return {
-      label: 'Cluster Lead',
-      badgeClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30 font-semibold',
+      label: 'Content Specialist',
+      badgeClass: 'bg-blue-500/15 text-blue-600 dark:text-blue-300 border-blue-500/30',
+    };
+  }
+  if (user.isBrandDesigner || user.designation === 'brand_designer' || user.designation === 'Brand Designer') {
+    return {
+      label: 'Brand Designer',
+      badgeClass: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border-indigo-500/30',
     };
   }
   if (user.isAdministrator || user.role === 'administrator') {
@@ -149,7 +171,7 @@ export function getUserTag(user?: {
   }
   if (user.role === 'account_manager') {
     return {
-      label: 'Account Manager',
+      label: 'Accounts',
       badgeClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30',
     };
   }

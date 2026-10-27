@@ -19,9 +19,13 @@ interface User {
   isCreativeDirector?: boolean;
   creativeDirectorId?: string;
   isAdministrator?: boolean;
+  isBusinessLead?: boolean;
   isClusterLead?: boolean;
   isContentLead?: boolean;
   isArtDirector?: boolean;
+  isContentSpecialist?: boolean;
+  isBrandDesigner?: boolean;
+  designation?: string;
   clusterLeadId?: string;
 }
 
@@ -1088,10 +1092,14 @@ async function startServer() {
       email,
       role,
       isAdministrator,
+      isBusinessLead,
       isCreativeDirector,
       isClusterLead,
       isContentLead,
       isArtDirector,
+      isContentSpecialist,
+      isBrandDesigner,
+      designation,
       creativeDirectorId,
       clusterLeadId,
     } = req.body;
@@ -1104,6 +1112,7 @@ async function startServer() {
     const cleanName = sanitizeString(name);
     const VALID_ROLES = ['content', 'design', 'video', 'ui_ux', 'account_manager', 'administrator'] as const;
     const cleanRole = (VALID_ROLES as readonly string[]).includes(role) ? role : 'content';
+    const effectiveIsAdmin = cleanRole === 'administrator' || !!isAdministrator;
 
     if (!cleanEmail || !cleanName) {
       return res.status(400).json({ error: 'Valid name and email are required' });
@@ -1113,11 +1122,16 @@ async function startServer() {
     if (existingUser) {
       existingUser.name = cleanName;
       existingUser.role = cleanRole;
-      if (isAdministrator !== undefined) existingUser.isAdministrator = !!isAdministrator;
+      if (cleanRole === 'administrator') existingUser.isAdministrator = true;
+      else if (isAdministrator !== undefined) existingUser.isAdministrator = !!isAdministrator;
+      if (isBusinessLead !== undefined) existingUser.isBusinessLead = !!isBusinessLead;
       if (isCreativeDirector !== undefined) existingUser.isCreativeDirector = !!isCreativeDirector;
       if (isClusterLead !== undefined) existingUser.isClusterLead = !!isClusterLead;
       if (isContentLead !== undefined) existingUser.isContentLead = !!isContentLead;
       if (isArtDirector !== undefined) existingUser.isArtDirector = !!isArtDirector;
+      if (isContentSpecialist !== undefined) existingUser.isContentSpecialist = !!isContentSpecialist;
+      if (isBrandDesigner !== undefined) existingUser.isBrandDesigner = !!isBrandDesigner;
+      if (designation !== undefined) existingUser.designation = designation ? sanitizeString(designation) : undefined;
       if (creativeDirectorId !== undefined) existingUser.creativeDirectorId = creativeDirectorId ? sanitizeString(creativeDirectorId) : undefined;
       if (clusterLeadId !== undefined) existingUser.clusterLeadId = clusterLeadId ? sanitizeString(clusterLeadId) : undefined;
       saveStore(store);
@@ -1142,11 +1156,15 @@ async function startServer() {
       email: cleanEmail,
       role: cleanRole,
       avatarColor: AVATAR_COLORS[colorIndex],
-      isAdministrator: !!isAdministrator,
+      isAdministrator: effectiveIsAdmin,
+      isBusinessLead: !!isBusinessLead,
       isCreativeDirector: !!isCreativeDirector,
       isClusterLead: !!isClusterLead,
       isContentLead: !!isContentLead,
       isArtDirector: !!isArtDirector,
+      isContentSpecialist: !!isContentSpecialist,
+      isBrandDesigner: !!isBrandDesigner,
+      designation: designation ? sanitizeString(designation) : undefined,
       creativeDirectorId: creativeDirectorId ? sanitizeString(creativeDirectorId) : undefined,
       clusterLeadId: clusterLeadId ? sanitizeString(clusterLeadId) : undefined,
       createdAt: new Date().toISOString(),
@@ -1184,10 +1202,14 @@ async function startServer() {
       email,
       role,
       isAdministrator,
+      isBusinessLead,
       isCreativeDirector,
       isClusterLead,
       isContentLead,
       isArtDirector,
+      isContentSpecialist,
+      isBrandDesigner,
+      designation,
       creativeDirectorId,
       clusterLeadId,
     } = req.body;
@@ -1379,6 +1401,21 @@ async function startServer() {
     }
     if (isArtDirector !== undefined) {
       current.isArtDirector = !!isArtDirector;
+    }
+    if (isBusinessLead !== undefined) {
+      current.isBusinessLead = !!isBusinessLead;
+    }
+    if (isContentSpecialist !== undefined) {
+      current.isContentSpecialist = !!isContentSpecialist;
+    }
+    if (isBrandDesigner !== undefined) {
+      current.isBrandDesigner = !!isBrandDesigner;
+    }
+    if (designation !== undefined) {
+      current.designation = designation ? sanitizeString(designation) : undefined;
+    }
+    if (current.role === 'administrator') {
+      current.isAdministrator = true;
     }
     if (creativeDirectorId !== undefined) {
       current.creativeDirectorId = creativeDirectorId ? sanitizeString(creativeDirectorId) : undefined;

@@ -36,6 +36,22 @@
           "type": "boolean",
           "description": "Whether this user has administrator privileges"
         },
+        "isBusinessLead": {
+          "type": "boolean",
+          "description": "Whether this user is a designated Business Lead"
+        },
+        "isContentSpecialist": {
+          "type": "boolean",
+          "description": "Whether this user is a designated Content Specialist"
+        },
+        "isBrandDesigner": {
+          "type": "boolean",
+          "description": "Whether this user is a designated Brand Designer"
+        },
+        "designation": {
+          "type": "string",
+          "description": "Designation name"
+        },
         "isCreativeDirector": {
           "type": "boolean",
           "description": "Whether this user is a designated Creative Director"

@@ -23,10 +23,14 @@ service cloud.firestore {
              data.createdAt is string && data.createdAt.size() <= 40 &&
              (!('avatarColor' in data) || (data.avatarColor is string && data.avatarColor.size() <= 100)) &&
              (!('isAdministrator' in data) || (data.isAdministrator is bool)) &&
+             (!('isBusinessLead' in data) || (data.isBusinessLead is bool)) &&
              (!('isCreativeDirector' in data) || (data.isCreativeDirector is bool)) &&
              (!('isClusterLead' in data) || (data.isClusterLead is bool)) &&
              (!('isContentLead' in data) || (data.isContentLead is bool)) &&
              (!('isArtDirector' in data) || (data.isArtDirector is bool)) &&
+             (!('isContentSpecialist' in data) || (data.isContentSpecialist is bool)) &&
+             (!('isBrandDesigner' in data) || (data.isBrandDesigner is bool)) &&
+             (!('designation' in data) || (data.designation is string && data.designation.size() <= 100)) &&
              (!('creativeDirectorId' in data) || (data.creativeDirectorId is string && data.creativeDirectorId.size() <= 128)) &&
              (!('clusterLeadId' in data) || (data.clusterLeadId is string && data.clusterLeadId.size() <= 128));
     }

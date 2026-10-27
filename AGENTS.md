@@ -6,23 +6,30 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
-### Sweep 54: 2026-10-27 (Shared Video & UI/UX Teams, 6 User Roles, 5 Designations, Assigned Cluster Lead & Permission Controls)
+### Sweep 54: 2026-10-27 (Shared Video & UI/UX Teams, 6 User Roles, 7 Designations, Assigned Cluster Lead & Permission Controls)
 
 - **TEAM-01 (Shared Video & UI/UX Cross-Delivery Sections):**
   - Added native `video` and `ui_ux` sections in the header and navigation tabs with dedicated iconography (`VideoIcon`, `Layout`) and member counters.
   - *Shared Team Architectural Parity:* Unlike `content` and `design` (which partition members by delivery team / `activeBoardId`), `video` and `ui_ux` represent cross-functional shared resources available across all delivery teams. The Overview Bar team selection dropdown is automatically suppressed, and swimlane rendering displays all members in the discipline across all boards without board dropdown filtering.
   - Extended [`OverviewBar.tsx`](file:///c:/ZenFlow/src/components/OverviewBar.tsx), [`Header.tsx`](file:///c:/ZenFlow/src/components/Header.tsx), [`App.tsx`](file:///c:/ZenFlow/src/App.tsx), and [`FreePoolContainer.tsx`](file:///c:/ZenFlow/src/components/FreePoolContainer.tsx) with full filter and tab support.
-- **AUTH-08 (6 User Types & 5 Specific Designations with Assigned Cluster Lead):**
-  - Support for 6 core user types / roles: `Administrator`, `Account Manager`, `Content`, `Design`, `Video`, `UI/UX`.
-  - Configurable designations: `Administrator` (`isAdministrator`), `Creative Director` (`isCreativeDirector`), `Cluster Lead` (`isClusterLead`), `Content Lead` (`isContentLead`), and `Art Director` (`isArtDirector`).
+- **AUTH-08 (6 User Types & 7 Specific Designations with Assigned Cluster Lead):**
+  - User Type / Section header updated to **"TEAM"** with 6 core disciplines: `Administrator` (subtext: "System & Ops"), `Accounts` (renamed from Account Manager), `Content`, `Design`, `Video`, `UI/UX`.
+  - Administrator option in TEAM is strictly greyed out and disabled for everyone except Superadmin and other Administrators.
+  - Administrator removed from designations; selecting Administrator under TEAM assigns administrator privileges directly.
+  - **Designation Access & Permission Matrix:**
+    - `Administrator` and `Business Lead` (`isBusinessLead`): Full board view, all team edit access
+    - `Cluster Lead` (`isClusterLead`) and `Creative Director` (`isCreativeDirector`): Full board view, their team edit access
+    - `Content Lead` (`isContentLead`) and `Art Director` (`isArtDirector`): Team board view, their team edit access
+    - `Content Specialist` (`isContentSpecialist`) and `Brand Designer` (`isBrandDesigner`): Team board view, their personal board edit access
   - Added new input for `Assigned Cluster Lead` (`clusterLeadId`), allowing team members to be assigned to specific Cluster Leads.
-  - Delivery boards continue to follow `Creative Director` (`creativeDirectorId`) as the primary leader of a cluster for team grouping and assignment.
+  - Delivery boards continue to follow `Creative Director` (`creativeDirectorId`) as the **Delivery lead** of a cluster.
+  - Member creation button updated to **"Create Account"**.
 - **AUTH-09 (Strict Role-Based Provisioning Permissions):**
-  - The Add Team Member action, modal access, and member creation permissions (`POST /api/users`) are strictly guarded to: `Superadmin`, `Administrator`, `Creative Director`, and `Cluster Lead` (`canManageMembers`).
-  - Unauthorized members are blocked on both UI and backend levels.
+  - The Add Team Member action, modal access, and member creation permissions (`POST /api/users`) are strictly guarded to: `Superadmin`, `Administrator`, `Business Lead`, `Creative Director`, and `Cluster Lead` (`canManageMembers`).
+  - Non-administrators are blocked from provisioning the Administrator role on both UI and backend levels.
 - **UI-40 (Specific Role & Leadership Tagging Engine):**
-  - Creative Directors, Content Leads, and Art Directors display specific badges (`Creative Director`, `Content Lead`, `Art Director`, `Cluster Lead`, `Administrator`) rather than generic role tags across swimlanes, member cards, modals, and header profile menus via `getUserTag(user)` in [`src/utils/workload.ts`](file:///c:/ZenFlow/src/utils/workload.ts).
-  - General members display their respective discipline tags (`Content`, `Design`, `Video`, `UI/UX`, `Account Manager`, `Administrator`).
+  - Leadership and specialized members display specific badges (`Business Lead`, `Creative Director`, `Cluster Lead`, `Content Lead`, `Art Director`, `Content Specialist`, `Brand Designer`, `Administrator`) rather than generic role tags across swimlanes, member cards, modals, and header profile menus via `getUserTag(user)` in [`src/utils/workload.ts`](file:///c:/ZenFlow/src/utils/workload.ts).
+  - General members display their respective discipline tags (`Content`, `Design`, `Video`, `UI/UX`, `Accounts`, `Administrator`).
 - **AUDIT-13 (Zero-Defect Verification & Production Build Certification):**
   - Static analysis: certified 0 warnings and 0 errors across `npm run lint` and `npx tsc --noEmit --noUnusedLocals --noUnusedParameters`.
   - Production build: certified 100% clean builds for both Vite client and esbuild server bundles (`npm run build`).

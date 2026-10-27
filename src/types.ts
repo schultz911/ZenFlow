@@ -12,12 +12,16 @@ export interface User {
   avatarColor?: string;
   createdAt: string;
   order?: number;
+  designation?: string;
   isCreativeDirector?: boolean;
   creativeDirectorId?: string;
   isAdministrator?: boolean;
+  isBusinessLead?: boolean;
   isClusterLead?: boolean;
   isContentLead?: boolean;
   isArtDirector?: boolean;
+  isContentSpecialist?: boolean;
+  isBrandDesigner?: boolean;
   clusterLeadId?: string;
 }
 

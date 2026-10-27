@@ -7,10 +7,14 @@ export interface Member {
   email: string;
   role?: string;
   isAdministrator?: boolean;
+  isBusinessLead?: boolean;
   isCreativeDirector?: boolean;
   isClusterLead?: boolean;
   isContentLead?: boolean;
   isArtDirector?: boolean;
+  isContentSpecialist?: boolean;
+  isBrandDesigner?: boolean;
+  designation?: string;
   creativeDirectorId?: string;
   clusterLeadId?: string;
 }
@@ -20,18 +24,24 @@ export const canEdit = (caller: Member, owner: Member | undefined) => Boolean(ow
   isSuperadmin(caller) ||
   caller.isAdministrator ||
   caller.role === 'administrator' ||
+  caller.isBusinessLead ||
   caller.id === owner.id ||
   (caller.isCreativeDirector && owner.creativeDirectorId === caller.id) ||
-  (caller.isClusterLead && owner.clusterLeadId === caller.id)
+  (caller.isClusterLead && (owner.clusterLeadId === caller.id || owner.creativeDirectorId === caller.id)) ||
+  ((caller.isContentLead || caller.isArtDirector) && (
+    (caller.creativeDirectorId && owner.creativeDirectorId === caller.creativeDirectorId) ||
+    (caller.clusterLeadId && owner.clusterLeadId === caller.clusterLeadId)
+  ))
 ));
 
 // Explicit response fields: future credential fields are private by default.
 export function publicMember(user: any) {
   const result: Record<string, any> = {};
   for (const key of [
-    'id', 'name', 'email', 'role', 'avatarColor', 'createdAt', 'order',
+    'id', 'name', 'email', 'role', 'avatarColor', 'createdAt', 'order', 'designation',
     'isCreativeDirector', 'creativeDirectorId',
-    'isAdministrator', 'isClusterLead', 'isContentLead', 'isArtDirector', 'clusterLeadId'
+    'isAdministrator', 'isBusinessLead', 'isClusterLead', 'isContentLead', 'isArtDirector',
+    'isContentSpecialist', 'isBrandDesigner', 'clusterLeadId'
   ]) {
     if (user[key] !== undefined) result[key] = user[key];
   }
@@ -82,7 +92,7 @@ export function createApiSecurity(options: {
       res.locals.caller = caller;
       res.locals.identityExpiresAt = identity.exp * 1000;
       const superadmin = isSuperadmin(caller);
-      const isCallerAdmin = superadmin || Boolean(caller.isAdministrator) || caller.role === 'administrator';
+      const isCallerAdmin = superadmin || Boolean(caller.isAdministrator) || caller.role === 'administrator' || Boolean(caller.isBusinessLead);
       const isCallerCD = Boolean(caller.isCreativeDirector);
       const isCallerClusterLead = Boolean(caller.isClusterLead);
       const canManageMembers = superadmin || isCallerAdmin || isCallerCD || isCallerClusterLead;
@@ -101,6 +111,7 @@ export function createApiSecurity(options: {
       if (routePath === '/users' && req.method === 'POST') {
         if (!manager) return denied();
         const existing = store.users.find(user => user.email.toLowerCase() === String(body.email || '').toLowerCase());
+        if (!superadmin && !isCallerAdmin && (body.role === 'administrator' || body.isAdministrator)) return denied();
         if (!superadmin && !isCallerAdmin && (body.isCreativeDirector || (existing && (!edit(existing.id) || existing.isCreativeDirector)))) return denied();
         if (!superadmin && !isCallerAdmin && isCallerCD && !body.creativeDirectorId) body.creativeDirectorId = caller.id;
         if (!superadmin && !isCallerAdmin && isCallerClusterLead && !body.clusterLeadId) body.clusterLeadId = caller.id;
@@ -111,6 +122,7 @@ export function createApiSecurity(options: {
         if (target && !edit(target.id)) return denied();
         if (req.method === 'DELETE' && (!manager || (target && isSuperadmin(target)))) return denied();
         if (req.method === 'PUT') {
+          if (!superadmin && !isCallerAdmin && (body.role === 'administrator' || body.isAdministrator)) return denied();
           if (!superadmin && !isCallerAdmin && (body.email !== undefined || body.isCreativeDirector !== undefined)) return denied();
           if (!manager) return denied();
           if (!superadmin && !isCallerAdmin && body.creativeDirectorId !== undefined && body.creativeDirectorId !== caller.id) return denied();
