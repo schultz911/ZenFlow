@@ -11,13 +11,9 @@ import {
   TaskOrderUpdate,
   QueuedMutation,
   TaskActivity,
-  ClickupSpace,
-  ClickupList,
-  ClickupFolder,
-  ClickupMember,
-  ClickupCustomFieldOption,
+
   AuditLogEntry,
-  ClickupWebhookStatus,
+
 } from '../types';
 import { INITIAL_USERS, INITIAL_TASKS } from '../data/initialData';
 import { compareTasksByDeadline, formatBillableHours, getTaskBillableMs } from '../utils/workload';
@@ -25,7 +21,7 @@ import { signInWithGoogle, signOutFirebase, onFirebaseAuthStateChanged } from '.
 
 export interface FirestoreStatus {
   connected: boolean;
-  mode: 'admin' | 'web' | 'local';
+  mode: 'admin';
   projectId: string;
   databaseId: string;
   serviceAccountFound: boolean;
@@ -100,7 +96,6 @@ interface DashboardContextType {
   authError: string | null;
   setAuthError: (err: string | null) => void;
   syncWithFirestore: () => Promise<{ success: boolean; message: string }>;
-  uploadServiceAccountKey: (keyContent: string) => Promise<{ success: boolean; message: string }>;
   login: (name: string, role: Role, email: string) => Promise<User>;
   loginWithGoogle: () => Promise<User>;
   logout: () => void;
@@ -111,8 +106,7 @@ interface DashboardContextType {
     role: Role;
     isCreativeDirector?: boolean;
     creativeDirectorId?: string;
-    clickupUserId?: string;
-    clickupUsername?: string;
+
   }) => Promise<User>;
   updateUserProfile: (userId: string, updates: Partial<User>) => Promise<User>;
   remapUserTasks: (fromUserIdOrEmail: string, toUserId: string, deleteSourceUser?: boolean) => Promise<{ success: boolean; remappedCount: number; error?: string }>;
@@ -125,35 +119,6 @@ interface DashboardContextType {
   creativeDirectors: User[];
   activeBoardId: string;
   setActiveBoardId: (boardId: string) => void;
-  // ClickUp Integration
-  isZensciencesUser: boolean;
-  isClickupConnected: boolean;
-  clickupApiKey: string;
-  clickupMembers: ClickupMember[];
-  loadClickupMembers: (apiKey?: string) => Promise<ClickupMember[]>;
-  clickupSpaces: ClickupSpace[];
-  selectedClickupSpaceId: string;
-  clickupFoldersAndLists: { folders: ClickupFolder[]; folderlessLists: ClickupList[] };
-  spaceFoldersMap: Record<string, string[]>;
-  spaceFoldersAndListsMap: Record<string, { folders: ClickupFolder[]; folderlessLists: ClickupList[] }>;
-  getFoldersAndListsForSpace: (spaceId: string) => Promise<{ folders: ClickupFolder[]; folderlessLists: ClickupList[] }>;
-  showClickupPrompt: boolean;
-  setShowClickupPrompt: (val: boolean) => void;
-  connectClickup: (apiKey: string) => Promise<{ success: boolean; error?: string }>;
-  disconnectClickup: () => void;
-  setSelectedClickupSpaceId: (spaceId: string, spaceName?: string) => Promise<void>;
-  createClickupList: (name: string, spaceId: string, folderId?: string) => Promise<ClickupList | null>;
-  syncUserTasksWithClickUp: (userId: string) => Promise<{ success: boolean; syncedCount: number; archivedCount: number; message: string }>;
-  assignTaskClickupList: (taskId: string, listId: string, listName: string, folderId?: string, folderName?: string) => Promise<Task>;
-  clickupCustomFieldOptions: ClickupCustomFieldOption[];
-  clickupTaskTypeFieldId: string;
-  isLoadingTaskTypes: boolean;
-  fetchClickupCustomFields: (params: { listId?: string; spaceId?: string; folderId?: string }) => Promise<ClickupCustomFieldOption[]>;
-  getUserSyncState: (userId: string) => 'synced' | 'pending' | 'failed' | 'unmapped';
-  // ClickUp Real-Time Webhook & Audit Stream
-  clickupWebhookStatus: ClickupWebhookStatus | null;
-  refreshClickupWebhookStatus: () => Promise<void>;
-  registerClickupWebhook: (customEndpoint?: string) => Promise<{ success: boolean; message: string; webhookId?: string }>;
   fetchAuditLogs: (limit?: number) => Promise<AuditLogEntry[]>;
   downloadAuditLogs: () => void;
   // Tasks
@@ -164,16 +129,7 @@ interface DashboardContextType {
     dueDate?: string;
     cognitiveLoad: 'low' | 'medium' | 'high';
     status: TaskStatus;
-    clickupTaskId?: string;
-    clickupFolderId?: string;
-    clickupFolderName?: string;
-    clickupListId?: string;
-    clickupListName?: string;
-    clickupSpaceId?: string;
-    clickupUrl?: string;
-    clickupTaskType?: string;
-    clickupTaskTypeId?: string;
-    clickupTaskTypeFieldId?: string;
+
   }) => Promise<Task>;
   updateTask: (id: string, updates: Partial<Task>) => Promise<Task>;
   adjustBillableHours: (taskId: string, newDurationMs: number, reason?: string) => Promise<Task>;
@@ -190,7 +146,7 @@ interface DashboardContextType {
     title?: string;
     targetStatus?: TaskStatus;
     targetDueDate?: string;
-  }) => Promise<{ task: Task; clickupSubtaskCreated: boolean; warning?: string; message?: string }>;
+  }) => Promise<{ task: Task;  warning?: string; message?: string }>;
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -297,37 +253,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     return targetUserId === currentUser.id;
   }, [currentUser, isSuperadmin, isCreativeDirector]);
 
-  // ClickUp Integration State
-  const isZensciencesUser = useMemo(() => {
-    return Boolean(currentUser?.email?.toLowerCase().endsWith('@zensciences.com'));
-  }, [currentUser]);
-
-  const clickupApiKey = useMemo(() => {
-    return ''; // Saved credentials stay on the server; use clickupConnected.
-  }, [currentUser]);
-
-  const isClickupConnected = useMemo(() => {
-    return Boolean(isZensciencesUser && currentUser?.clickupConnected);
-  }, [isZensciencesUser, currentUser?.clickupConnected]);
-
-  const [showClickupPrompt, setShowClickupPrompt] = useState<boolean>(false);
-  const [clickupSpaces, setClickupSpaces] = useState<ClickupSpace[]>([]);
-  const [selectedClickupSpaceId, setSelectedClickupSpaceIdState] = useState<string>(() => {
-    return currentUser?.selectedClickupSpaceId || localStorage.getItem('zenflow_clickup_space_id') || '';
-  });
-  const selectedClickupSpaceIdRef = useRef<string>(selectedClickupSpaceId);
-  selectedClickupSpaceIdRef.current = selectedClickupSpaceId;
-  const [clickupFoldersAndLists, setClickupFoldersAndLists] = useState<{
-    folders: ClickupFolder[];
-    folderlessLists: ClickupList[];
-  }>({ folders: [], folderlessLists: [] });
-  const [spaceFoldersMap, setSpaceFoldersMap] = useState<Record<string, string[]>>({});
-  const [spaceFoldersAndListsMap, setSpaceFoldersAndListsMap] = useState<
-    Record<string, { folders: ClickupFolder[]; folderlessLists: ClickupList[] }>
-  >({});
-  const spaceFoldersAndListsMapRef = useRef(spaceFoldersAndListsMap);
-  spaceFoldersAndListsMapRef.current = spaceFoldersAndListsMap;
-
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem(THEME_KEY);
@@ -340,12 +265,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [clickupMembers, setClickupMembers] = useState<ClickupMember[]>([]);
-  const [clickupCustomFieldOptions, setClickupCustomFieldOptions] = useState<ClickupCustomFieldOption[]>([]);
-  const [clickupTaskTypeFieldId, setClickupTaskTypeFieldId] = useState<string>('');
-  const [isLoadingTaskTypes, setIsLoadingTaskTypes] = useState<boolean>(false);
-  const [userSyncFailures, setUserSyncFailures] = useState<Record<string, boolean>>({});
-  const [clickupWebhookStatus, setClickupWebhookStatus] = useState<ClickupWebhookStatus | null>(null);
 
   const [syncStatus, setSyncStatus] = useState<'connected' | 'connecting' | 'offline'>('connecting');
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -359,18 +278,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         setFirestoreStatus(data);
       }
     } catch (err) {
-      // ignore
-    }
-  }, []);
-
-  const refreshClickupWebhookStatus = useCallback(async () => {
-    try {
-      const res = await fetch('/api/clickup/webhook/status');
-      if (res.ok) {
-        const data: ClickupWebhookStatus = await res.json();
-        setClickupWebhookStatus(data);
-      }
-    } catch {
       // ignore
     }
   }, []);
@@ -572,8 +479,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     if (!currentUser) return;
     fetchState();
     refreshFirestoreStatus();
-    refreshClickupWebhookStatus();
-  }, [currentUser?.id, fetchState, refreshFirestoreStatus, refreshClickupWebhookStatus]);
+
+  }, [currentUser?.id, fetchState, refreshFirestoreStatus]);
 
   // Online / Offline network status listener with auto queue replay
   useEffect(() => {
@@ -735,152 +642,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
   }, [replayQueue, currentUser?.id]);
 
-  // ClickUp Loaders & Handlers
-  const loadClickupSpaces = useCallback(async (apiKey: string) => {
-    try {
-      const res = await fetch('/api/clickup/spaces', {
-        headers: { 'x-clickup-api-key': apiKey },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data.spaces)) {
-          setClickupSpaces(data.spaces);
-          if (data.spaces.length > 0 && !selectedClickupSpaceIdRef.current) {
-            const firstId = data.spaces[0].id;
-            setSelectedClickupSpaceIdState(firstId);
-            localStorage.setItem('zenflow_clickup_space_id', firstId);
-          }
-          // Preload folder names for all spaces in background
-          data.spaces.forEach(async (sp: ClickupSpace) => {
-            try {
-              const fRes = await fetch(
-                `/api/clickup/folders-and-lists?spaceId=${encodeURIComponent(sp.id)}`,
-                { headers: { 'x-clickup-api-key': apiKey } }
-              );
-              if (fRes.ok) {
-                const fData = await fRes.json();
-                const folderNames = (fData.folders || []).map((f: ClickupFolder) => f.name);
-                setSpaceFoldersMap(prev => ({
-                  ...prev,
-                  [sp.id]: folderNames,
-                }));
-                setSpaceFoldersAndListsMap(prev => ({
-                  ...prev,
-                  [sp.id]: {
-                    folders: fData.folders || [],
-                    folderlessLists: fData.folderlessLists || [],
-                  },
-                }));
-              }
-            } catch {
-              // ignore
-            }
-          });
-        }
-      }
-    } catch (err) {
-      console.warn('Failed to load ClickUp spaces:', err);
-    }
-  }, []);
-
-  const loadClickupFoldersAndLists = useCallback(async (spaceId: string, apiKey: string) => {
-    if (!spaceId) return;
-    try {
-      const res = await fetch(`/api/clickup/folders-and-lists?spaceId=${encodeURIComponent(spaceId)}`, {
-        headers: { 'x-clickup-api-key': apiKey },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const payload = {
-          folders: data.folders || [],
-          folderlessLists: data.folderlessLists || [],
-        };
-        setClickupFoldersAndLists(payload);
-        setSpaceFoldersAndListsMap(prev => ({
-          ...prev,
-          [spaceId]: payload,
-        }));
-        const folderNames = (data.folders || []).map((f: ClickupFolder) => f.name);
-        setSpaceFoldersMap(prev => ({
-          ...prev,
-          [spaceId]: folderNames,
-        }));
-      }
-    } catch (err) {
-      console.warn('Failed to load ClickUp folders & lists:', err);
-    }
-  }, []);
-
-  const getFoldersAndListsForSpace = useCallback(async (spaceId: string) => {
-    if (!spaceId) return { folders: [], folderlessLists: [] };
-    if (spaceFoldersAndListsMapRef.current[spaceId]) {
-      return spaceFoldersAndListsMapRef.current[spaceId];
-    }
-    const key = '';
-    try {
-      const res = await fetch(`/api/clickup/folders-and-lists?spaceId=${encodeURIComponent(spaceId)}`, {
-        headers: key ? { 'x-clickup-api-key': key } : {},
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const result = {
-          folders: data.folders || [],
-          folderlessLists: data.folderlessLists || [],
-        };
-        setSpaceFoldersAndListsMap(prev => ({
-          ...prev,
-          [spaceId]: result,
-        }));
-        const folderNames = (data.folders || []).map((f: ClickupFolder) => f.name);
-        setSpaceFoldersMap(prev => ({
-          ...prev,
-          [spaceId]: folderNames,
-        }));
-        return result;
-      }
-    } catch (err) {
-      console.warn('Failed to load folders & lists for space:', err);
-    }
-    return { folders: [], folderlessLists: [] };
-  }, []);
-
-  useEffect(() => {
-    if (isClickupConnected) {
-      loadClickupSpaces(clickupApiKey);
-    }
-  }, [isClickupConnected, clickupApiKey, loadClickupSpaces]);
-
-  useEffect(() => {
-    if (isClickupConnected && selectedClickupSpaceId) {
-      loadClickupFoldersAndLists(selectedClickupSpaceId, clickupApiKey);
-    }
-  }, [isClickupConnected, clickupApiKey, selectedClickupSpaceId, loadClickupFoldersAndLists]);
-
-  const loadClickupMembers = useCallback(async (apiKey?: string): Promise<ClickupMember[]> => {
-    const key = (apiKey || clickupApiKey || '').trim();
-    try {
-      const headers: Record<string, string> = {};
-      if (key) headers['x-clickup-api-key'] = key;
-      const res = await fetch('/api/clickup/members', { headers });
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data.members)) {
-          setClickupMembers(data.members);
-          return data.members;
-        }
-      }
-    } catch (err) {
-      console.warn('Failed to load ClickUp members:', err);
-    }
-    return [];
-  }, [clickupApiKey]);
-
-  useEffect(() => {
-    if (isClickupConnected) {
-      loadClickupMembers(clickupApiKey);
-    }
-  }, [isClickupConnected, clickupApiKey, loadClickupMembers]);
-
   // Google Auth Session Enforcement
   // If not logged in via Google Auth, log them out and bring them to login screen
   useEffect(() => {
@@ -961,12 +722,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, []);
 
   const updateUserProfile = useCallback(async (userId: string, updates: Partial<User>): Promise<User> => {
-    const publicUpdates = { ...updates };
-    delete publicUpdates.clickupApiKey;
-    setUsers(prev => prev.map(u => (u.id === userId ? { ...u, ...publicUpdates } : u)));
-    if (currentUserRef.current?.id === userId) {
-      setCurrentUser(prev => (prev ? { ...prev, ...publicUpdates } : null));
-    }
     try {
       const res = await fetch(`/api/users/${userId}`, {
         method: 'PUT',
@@ -1056,226 +811,11 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, [isSuperadmin]);
 
-  const connectClickup = useCallback(async (apiKey: string): Promise<{ success: boolean; error?: string }> => {
-    const cleanKey = apiKey.trim();
-    if (!cleanKey) return { success: false, error: 'API key is required' };
-    try {
-      const res = await fetch('/api/clickup/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey: cleanKey }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.valid) {
-        return { success: false, error: data.error || 'Invalid ClickUp API Key' };
-      }
-      if (currentUserRef.current) {
-        await updateUserProfile(currentUserRef.current.id, { clickupApiKey: cleanKey });
-      }
-      await loadClickupSpaces('');
-      setShowClickupPrompt(false);
-      return { success: true };
-    } catch (err: any) {
-      return { success: false, error: err.message || 'Connection failed' };
-    }
-  }, [updateUserProfile, loadClickupSpaces]);
-
-  const disconnectClickup = useCallback(() => {
-    localStorage.removeItem('zenflow_clickup_api_key');
-    if (currentUserRef.current) {
-      updateUserProfile(currentUserRef.current.id, { clickupApiKey: '' });
-    }
-    setClickupSpaces([]);
-    setClickupFoldersAndLists({ folders: [], folderlessLists: [] });
-  }, [updateUserProfile]);
-
-  const setSelectedClickupSpaceId = useCallback(async (spaceId: string, spaceName?: string) => {
-    setSelectedClickupSpaceIdState(spaceId);
-    try {
-      localStorage.setItem('zenflow_clickup_space_id', spaceId);
-      if (spaceName) localStorage.setItem('zenflow_clickup_space_name', spaceName);
-    } catch {}
-
-    if (currentUserRef.current) {
-      await updateUserProfile(currentUserRef.current.id, {
-        selectedClickupSpaceId: spaceId,
-        selectedClickupSpaceName: spaceName,
-      });
-    }
-
-    if (isClickupConnected) {
-      await loadClickupFoldersAndLists(spaceId, clickupApiKey);
-    }
-  }, [clickupApiKey, isClickupConnected, updateUserProfile, loadClickupFoldersAndLists]);
-
-  const createClickupList = useCallback(async (
-    name: string,
-    spaceId: string,
-    folderId?: string
-  ): Promise<ClickupList | null> => {
-    const apiKey = '';
-    if (!name) return null;
-    try {
-      const res = await fetch('/api/clickup/lists', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          apiKey,
-          spaceId,
-          folderId,
-          name: name.trim(),
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const createdList: ClickupList = data.list;
-        await loadClickupFoldersAndLists(spaceId, apiKey);
-        return createdList;
-      }
-    } catch (err) {
-      console.warn('Failed to create ClickUp list:', err);
-    }
-    return null;
-  }, [loadClickupFoldersAndLists]);
-
-  const syncUserTasksWithClickUp = useCallback(async (userId: string) => {
-    const apiKey = '';
-    const callerUserId = currentUserRef.current?.id;
-    try {
-      const res = await fetch('/api/clickup/sync-user-tasks', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(apiKey ? { 'x-clickup-api-key': apiKey } : {}),
-          ...(callerUserId ? { 'x-caller-user-id': callerUserId } : {}),
-        },
-        body: JSON.stringify({ userId, apiKey, callerUserId }),
-      });
-      let data: any = null;
-      try {
-        const text = await res.text();
-        data = text ? JSON.parse(text) : null;
-      } catch {
-        data = null;
-      }
-      if (res.ok && data?.success) {
-        setUserSyncFailures(prev => ({ ...prev, [userId]: false }));
-        await fetchState();
-        return {
-          success: true,
-          syncedCount: data.syncedCount || 0,
-          archivedCount: data.archivedCount || 0,
-          message: data.message || 'Sync complete',
-        };
-      }
-      setUserSyncFailures(prev => ({ ...prev, [userId]: true }));
-      return {
-        success: false,
-        syncedCount: 0,
-        archivedCount: 0,
-        message: data?.error || (res.status === 502 ? 'Server temporarily updating (502 Bad Gateway). Please retry in a moment.' : 'Failed to sync with ClickUp'),
-      };
-    } catch (err: any) {
-      setUserSyncFailures(prev => ({ ...prev, [userId]: true }));
-      return {
-        success: false,
-        syncedCount: 0,
-        archivedCount: 0,
-        message: err.message || 'Sync request failed',
-      };
-    }
-  }, [fetchState]);
-
-  const fetchClickupCustomFields = useCallback(async (params: { listId?: string; spaceId?: string; folderId?: string }): Promise<ClickupCustomFieldOption[]> => {
-    const apiKey = '';
-    setIsLoadingTaskTypes(true);
-    try {
-      const q = new URLSearchParams();
-      if (params.listId) q.set('listId', params.listId);
-      else if (params.spaceId) q.set('spaceId', params.spaceId);
-      else if (params.folderId) q.set('folderId', params.folderId);
-
-      const res = await fetch(`/api/clickup/custom-fields?${q.toString()}`, {
-        headers: { 'x-clickup-api-key': apiKey },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const options: ClickupCustomFieldOption[] = data.options || [];
-        setClickupCustomFieldOptions(options);
-        if (data.taskTypeField?.id) {
-          setClickupTaskTypeFieldId(data.taskTypeField.id);
-        }
-        return options;
-      }
-    } catch (err) {
-      console.warn('[DashboardContext] Failed to fetch custom fields:', err);
-    } finally {
-      setIsLoadingTaskTypes(false);
-    }
-    return [];
-  }, []);
-
-  useEffect(() => {
-    if (selectedClickupSpaceId && isClickupConnected) {
-      fetchClickupCustomFields({ spaceId: selectedClickupSpaceId });
-    }
-  }, [selectedClickupSpaceId, isClickupConnected, fetchClickupCustomFields]);
-
-  const getUserSyncState = useCallback((targetUserId: string): 'synced' | 'pending' | 'failed' | 'unmapped' => {
-    const targetUser = usersRef.current.find(u => u.id === targetUserId);
-    if (!targetUser?.clickupUserId) {
-      return 'unmapped';
-    }
-    if (userSyncFailures[targetUserId]) {
-      return 'failed';
-    }
-    const targetTasks = tasksRef.current.filter(t => t.userId === targetUserId);
-    const hasUnsynced = targetTasks.some(t => t.clickupListId && !t.clickupTaskId);
-    if (hasUnsynced) {
-      return 'pending';
-    }
-    return 'synced';
-  }, [userSyncFailures]);
-
-  // ClickUp Real-Time Webhook Registration
-  const registerClickupWebhook = useCallback(async (customEndpoint?: string): Promise<{ success: boolean; message: string; webhookId?: string }> => {
-    try {
-      const key = clickupApiKey || currentUserRef.current?.clickupApiKey || '';
-      const res = await fetch('/api/clickup/webhook/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(key ? { 'x-clickup-api-key': key } : {}),
-        },
-        body: JSON.stringify({ endpoint: customEndpoint }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        await refreshClickupWebhookStatus();
-        return {
-          success: true,
-          message: data.message || 'ClickUp real-time webhook registered successfully!',
-          webhookId: data.webhookId,
-        };
-      }
-      return { success: false, message: data.error || 'Failed to register webhook in ClickUp' };
-    } catch (err: any) {
-      return { success: false, message: err.message || 'Network error registering webhook' };
-    }
-  }, [clickupApiKey, refreshClickupWebhookStatus]);
-
   // SOC2 Compliance Audit Stream Queries & Export
   const fetchAuditLogs = useCallback(async (limit: number = 50): Promise<AuditLogEntry[]> => {
-    try {
-      const res = await fetch(`/api/audit/logs?limit=${limit}`);
-      if (res.ok) {
-        const data = await res.json();
-        return data.logs || [];
-      }
-    } catch (err) {
-      console.warn('Failed to fetch compliance audit logs:', err);
-    }
-    return [];
+    const res = await fetch(`/api/audit/logs?limit=${limit}`);
+    if (!res.ok) throw new Error('Audit history could not be loaded');
+    return (await res.json()).logs || [];
   }, []);
 
   const downloadAuditLogs = useCallback(() => {
@@ -1331,9 +871,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     setCurrentUser(existing);
     setActiveRoleTab(existing.role);
-    if (existing.email.toLowerCase().endsWith('@zensciences.com') && !existing.clickupConnected) {
-      setShowClickupPrompt(true);
-    }
+
     return existing;
   }, []);
 
@@ -1359,8 +897,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     role: Role;
     isCreativeDirector?: boolean;
     creativeDirectorId?: string;
-    clickupUserId?: string;
-    clickupUsername?: string;
+
   }): Promise<User> => {
     const res = await fetch('/api/users', {
       method: 'POST',
@@ -1387,16 +924,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     dueDate?: string;
     cognitiveLoad: 'low' | 'medium' | 'high';
     status: TaskStatus;
-    clickupTaskId?: string;
-    clickupFolderId?: string;
-    clickupFolderName?: string;
-    clickupListId?: string;
-    clickupListName?: string;
-    clickupSpaceId?: string;
-    clickupUrl?: string;
-    clickupTaskType?: string;
-    clickupTaskTypeId?: string;
-    clickupTaskTypeFieldId?: string;
+
   }): Promise<Task> => {
     const realId = `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const currentTasks = tasksRef.current;
@@ -1425,16 +953,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       completedAt: isCompleted ? now : undefined,
       inProgressStartedAt: isInProgress ? now : undefined,
       inProgressDurationMs: 0,
-      clickupTaskId: data.clickupTaskId,
-      clickupFolderId: data.clickupFolderId,
-      clickupFolderName: data.clickupFolderName,
-      clickupListId: data.clickupListId,
-      clickupListName: data.clickupListName,
-      clickupSpaceId: data.clickupSpaceId,
-      clickupUrl: data.clickupUrl,
-      clickupTaskType: data.clickupTaskType,
-      clickupTaskTypeId: data.clickupTaskTypeId,
-      clickupTaskTypeFieldId: data.clickupTaskTypeFieldId,
+
       createdAt: now,
       updatedAt: now,
       activityLog: [initialActivity],
@@ -1452,7 +971,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     const payload = { id: realId, ...data };
 
     const callerId = currentUserRef.current?.id || '';
-    const clickKey = '';
 
     try {
       if (!navigator.onLine) throw new Error('Offline');
@@ -1460,7 +978,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(clickKey ? { 'x-clickup-api-key': clickKey } : {}),
           ...(callerId ? { 'x-caller-user-id': callerId } : {}),
         },
         body: JSON.stringify(payload),
@@ -1547,7 +1064,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     });
 
     const callerId = currentUserRef.current?.id || '';
-    const clickKey = '';
 
     try {
       if (!navigator.onLine) throw new Error('Offline');
@@ -1555,7 +1071,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          ...(clickKey ? { 'x-clickup-api-key': clickKey } : {}),
           ...(callerId ? { 'x-caller-user-id': callerId } : {}),
         },
         body: JSON.stringify(updates),
@@ -1584,21 +1099,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     return updatedTask || (tasksRef.current.find(t => t.id === id) as Task);
   }, []);
-
-  const assignTaskClickupList = useCallback(async (
-    taskId: string,
-    listId: string,
-    listName: string,
-    folderId?: string,
-    folderName?: string
-  ): Promise<Task> => {
-    return await updateTask(taskId, {
-      clickupListId: listId,
-      clickupListName: listName,
-      clickupFolderId: folderId,
-      clickupFolderName: folderName,
-    });
-  }, [updateTask]);
 
   // Dedicated helper to adjust billable hours manually with immediate optimistic update and audit history logging
   const adjustBillableHours = useCallback(async (taskId: string, newDurationMs: number, reason?: string): Promise<Task> => {
@@ -1654,7 +1154,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     };
 
     const callerId = currentUserRef.current?.id || '';
-    const clickKey = '';
 
     try {
       if (!navigator.onLine) throw new Error('Offline');
@@ -1662,7 +1161,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          ...(clickKey ? { 'x-clickup-api-key': clickKey } : {}),
           ...(callerId ? { 'x-caller-user-id': callerId } : {}),
         },
         body: JSON.stringify(payload),
@@ -1841,7 +1339,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     });
 
     const callerId = currentUserRef.current?.id || '';
-    const clickKey = '';
 
     try {
       if (!navigator.onLine) throw new Error('Offline');
@@ -1849,7 +1346,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(clickKey ? { 'x-clickup-api-key': clickKey } : {}),
           ...(callerId ? { 'x-caller-user-id': callerId } : {}),
         },
         body: JSON.stringify({ updates: batchUpdates }),
@@ -1895,7 +1391,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     title?: string;
     targetStatus?: TaskStatus;
     targetDueDate?: string;
-  }): Promise<{ task: Task; clickupSubtaskCreated: boolean; warning?: string; message?: string }> => {
+  }): Promise<{ task: Task;  warning?: string; message?: string }> => {
     const { taskId, targetUserId, title, targetStatus, targetDueDate } = params;
     const sourceTask = tasksRef.current.find(t => t.id === taskId);
     if (!sourceTask) {
@@ -1903,7 +1399,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     const callerId = currentUserRef.current?.id || '';
-    const clickKey = '';
+
     const isSuper = Boolean(isSuperadmin || currentUserRef.current?.email?.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase());
 
     const res = await fetch(`/api/tasks/${taskId}/duplicate`, {
@@ -1911,7 +1407,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       headers: {
         'Content-Type': 'application/json',
         ...(callerId ? { 'x-caller-user-id': callerId } : {}),
-        ...(clickKey ? { 'x-clickup-api-key': clickKey } : {}),
         ...(isSuper ? { 'isSuperadmin': 'true', 'x-is-superadmin': 'true' } : {}),
       },
       body: JSON.stringify({
@@ -1937,7 +1432,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     return {
       task: newTask,
-      clickupSubtaskCreated: Boolean(data.clickupSubtaskCreated),
+
       warning: data.warning,
       message: data.message,
     };
@@ -1985,7 +1480,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     );
 
     const callerId = currentUserRef.current?.id || '';
-    const clickKey = '';
 
     try {
       if (!navigator.onLine) throw new Error('Offline');
@@ -1993,7 +1487,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(clickKey ? { 'x-clickup-api-key': clickKey } : {}),
           ...(callerId ? { 'x-caller-user-id': callerId } : {}),
         },
         body: JSON.stringify({ updates }),
@@ -2024,23 +1517,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, [fetchState, refreshFirestoreStatus]);
 
-  // Upload or apply Firebase Service Account Key
-  const uploadServiceAccountKey = useCallback(async (keyContent: string): Promise<{ success: boolean; message: string }> => {
-    try {
-      const res = await fetch('/api/firestore/credentials', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ serviceAccountKey: keyContent }),
-      });
-      const data = await res.json();
-      await fetchState();
-      await refreshFirestoreStatus();
-      return data;
-    } catch (err: any) {
-      return { success: false, message: err.message || 'Key upload failed' };
-    }
-  }, [fetchState, refreshFirestoreStatus]);
-
   const contextValue = useMemo(
     () => ({
       currentUser,
@@ -2060,7 +1536,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       setActiveDragInfo,
       refreshFirestoreStatus,
       syncWithFirestore,
-      uploadServiceAccountKey,
       login,
       loginWithGoogle,
       logout,
@@ -2077,35 +1552,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       creativeDirectors,
       activeBoardId,
       setActiveBoardId,
-      // ClickUp Integration
-      isZensciencesUser,
-      isClickupConnected,
-      clickupApiKey,
-      clickupMembers,
-      loadClickupMembers,
-      clickupSpaces,
-      selectedClickupSpaceId,
-      clickupFoldersAndLists,
-      spaceFoldersMap,
-      spaceFoldersAndListsMap,
-      getFoldersAndListsForSpace,
-      showClickupPrompt,
-      setShowClickupPrompt,
-      connectClickup,
-      disconnectClickup,
-      setSelectedClickupSpaceId,
-      createClickupList,
-      syncUserTasksWithClickUp,
-      assignTaskClickupList,
-      clickupCustomFieldOptions,
-      clickupTaskTypeFieldId,
-      isLoadingTaskTypes,
-      fetchClickupCustomFields,
-      getUserSyncState,
-      // Real-Time Webhook & Compliance Audit
-      clickupWebhookStatus,
-      refreshClickupWebhookStatus,
-      registerClickupWebhook,
+
       fetchAuditLogs,
       downloadAuditLogs,
       // Tasks
@@ -2135,7 +1582,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       activeDragInfo,
       refreshFirestoreStatus,
       syncWithFirestore,
-      uploadServiceAccountKey,
       login,
       loginWithGoogle,
       logout,
@@ -2151,32 +1597,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       creativeDirectors,
       activeBoardId,
       setActiveBoardId,
-      isZensciencesUser,
-      isClickupConnected,
-      clickupApiKey,
-      clickupMembers,
-      loadClickupMembers,
-      clickupSpaces,
-      selectedClickupSpaceId,
-      clickupFoldersAndLists,
-      spaceFoldersMap,
-      spaceFoldersAndListsMap,
-      getFoldersAndListsForSpace,
-      showClickupPrompt,
-      connectClickup,
-      disconnectClickup,
-      setSelectedClickupSpaceId,
-      createClickupList,
-      syncUserTasksWithClickUp,
-      assignTaskClickupList,
-      clickupCustomFieldOptions,
-      clickupTaskTypeFieldId,
-      isLoadingTaskTypes,
-      fetchClickupCustomFields,
-      getUserSyncState,
-      clickupWebhookStatus,
-      refreshClickupWebhookStatus,
-      registerClickupWebhook,
+
       fetchAuditLogs,
       downloadAuditLogs,
       createTask,

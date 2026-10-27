@@ -1,6 +1,5 @@
 import { apiFetch } from './api';
 import type { FirebaseApp } from 'firebase/app';
-import type { Firestore } from 'firebase/firestore';
 import appletConfig from '../../firebase-applet-config.json';
 
 // Default config loaded from firebase-applet-config.json or Vite environment variables
@@ -17,26 +16,7 @@ export const firebaseConfig = {
 };
 
 let appInstance: FirebaseApp | null = null;
-let dbInstance: Firestore | null = null;
 let authInstance: any = null;
-
-export async function getClientDb(): Promise<Firestore | null> {
-  if (dbInstance) return dbInstance;
-  if (firebaseConfig.apiKey && firebaseConfig.projectId) {
-    try {
-      const { initializeApp, getApps, getApp } = await import('firebase/app');
-      const { getFirestore } = await import('firebase/firestore');
-      appInstance = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
-      dbInstance = firebaseConfig.firestoreDatabaseId
-        ? getFirestore(appInstance, firebaseConfig.firestoreDatabaseId)
-        : getFirestore(appInstance);
-      return dbInstance;
-    } catch (err) {
-      console.warn('Firebase client initialization warning:', err);
-    }
-  }
-  return null;
-}
 
 export async function getFirebaseAuth(): Promise<any> {
   if (authInstance) return authInstance;
@@ -137,7 +117,7 @@ let inFlightStatusPromise: Promise<boolean> | null = null;
 
 /**
  * Validates connection to Firestore at app initialization (mandated by firebase-skill).
- * Uses server-side API verification first, falling back to on-demand dynamic client SDK only if needed.
+ * Checks the authenticated backend; direct client database access is disabled.
  * Deduplicates in-flight status requests to prevent redundant network egress on boot.
  */
 export async function testConnection(): Promise<boolean> {

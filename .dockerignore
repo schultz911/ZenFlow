@@ -5,7 +5,8 @@ dist
 .env.local
 npm-debug.log*
 serviceAccountKey*.json
-data/*.tmp.*
+data
+.migration-*
 
 # Private webhook signing registrations and test-only emulator artifacts
 data/.clickup-webhooks.json*

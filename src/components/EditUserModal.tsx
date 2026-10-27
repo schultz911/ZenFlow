@@ -10,14 +10,13 @@ import {
   Crown,
   ShieldCheck,
   Loader2,
-  Link2,
+
   Mail,
   ArrowRightLeft,
   AlertTriangle,
   CheckCircle2,
   KeyRound,
 } from 'lucide-react';
-import { ClickupMemberPicker } from './ClickupMemberPicker';
 
 interface EditUserModalProps {
   isOpen: boolean;
@@ -35,10 +34,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
     isSuperadmin,
     creativeDirectors,
     canManageMembers,
-    clickupMembers,
-    loadClickupMembers,
-    isClickupConnected,
-    clickupApiKey,
+
     users,
     tasks,
     remapUserTasks,
@@ -49,9 +45,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
   const [role, setRole] = useState<Role>('content');
   const [isCD, setIsCD] = useState(false);
   const [selectedCDId, setSelectedCDId] = useState<string>('');
-  const [clickupUserId, setClickupUserId] = useState<string>('');
-  const [clickupUsername, setClickupUsername] = useState<string>('');
-  const [isLoadingMembers, setIsLoadingMembers] = useState<boolean>(false);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,21 +64,15 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
       setRole(user.role);
       setIsCD(!!user.isCreativeDirector);
       setSelectedCDId(user.creativeDirectorId || '');
-      setClickupUserId(user.clickupUserId || '');
-      setClickupUsername(user.clickupUsername || '');
+
       setError(null);
       setShowRemapTool(false);
       setRemapSourceUserId('');
       setRemapDeleteSource(false);
       setRemapStatusMessage(null);
 
-      // Auto-load ClickUp members if empty
-      if (clickupMembers.length === 0 && (isClickupConnected || clickupApiKey)) {
-        setIsLoadingMembers(true);
-        loadClickupMembers(clickupApiKey).finally(() => setIsLoadingMembers(false));
-      }
     }
-  }, [user, isOpen, clickupMembers.length, isClickupConnected, clickupApiKey, loadClickupMembers]);
+  }, [user, isOpen]);
 
   // Global Escape key dismissal
   useEffect(() => {
@@ -149,8 +137,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
     const updates: Partial<User> = {
       name: cleanName,
       role,
-      clickupUserId: clickupUserId || undefined,
-      clickupUsername: clickupUsername || undefined,
+
     };
 
     if (isSuperadmin && !isTargetSuperadmin) {
@@ -416,48 +403,6 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
               </p>
             </div>
           )}
-
-          {/* ClickUp Member Mapping */}
-          <div className="rounded-xl border border-indigo-500/20 bg-indigo-50/20 dark:bg-indigo-950/10 p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-indigo-500/20 text-indigo-600 dark:text-indigo-400">
-                  <Link2 className="h-3.5 w-3.5" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-900 dark:text-white">
-                    ClickUp Member Mapping
-                  </label>
-                  <p className="text-[10px] text-neutral-500 dark:text-white/40">
-                    Map to ClickUp profile so tasks are assigned to the right person.
-                  </p>
-                </div>
-              </div>
-              {isLoadingMembers && (
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-500" />
-              )}
-            </div>
-
-            <ClickupMemberPicker
-              members={clickupMembers}
-              selectedMemberId={clickupUserId}
-              isLoading={isLoadingMembers}
-              onRefresh={async () => {
-                setIsLoadingMembers(true);
-                await loadClickupMembers(clickupApiKey);
-                setIsLoadingMembers(false);
-              }}
-              onSelect={member => {
-                if (member) {
-                  setClickupUserId(member.id);
-                  setClickupUsername(member.username || '');
-                } else {
-                  setClickupUserId('');
-                  setClickupUsername('');
-                }
-              }}
-            />
-          </div>
 
           {/* Superadmin Task Remapping & Transfer Section */}
           {isSuperadmin && (

@@ -14,7 +14,7 @@ import {
   ChevronLeft,
   Archive,
   Timer,
-  Folder,
+
   CopyPlus,
   CornerDownRight,
 } from 'lucide-react';
@@ -50,7 +50,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   onDuplicateToBoard,
   isDraggable = true,
 }) => {
-  const { canEditUserTasks, isZensciencesUser } = useDashboard();
+  const { canEditUserTasks, } = useDashboard();
   const canEdit = canEditUserTasks(task.userId);
   const canDuplicateToBoard = Boolean(onDuplicateToBoard);
   const effectivelyDraggable = isDraggable && canEdit;
@@ -420,27 +420,6 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           <Edit2 className="h-2.5 w-2.5 opacity-0 group-hover/title:opacity-60 shrink-0 text-neutral-400 dark:text-white/40" />
         </h4>
       )}
-
-      {/* ClickUp Destination Breadcrumb (Folder & List path) */}
-      {task.clickupListName ? (
-        <div className="mt-1 flex items-center gap-1 text-[10px] text-purple-600 dark:text-purple-400 font-medium truncate">
-          <Folder className="w-2.5 h-2.5 shrink-0 opacity-70" />
-          <span className="truncate">
-            {task.clickupFolderName ? `${task.clickupFolderName} / ${task.clickupListName}` : task.clickupListName}
-          </span>
-        </div>
-      ) : isZensciencesUser && task.status !== 'done' && task.status !== 'archived' && task.status !== 'pipeline' ? (
-        <button
-          type="button"
-          onClick={e => {
-            e.stopPropagation();
-            onEdit(task);
-          }}
-          className="mt-0.5 inline-flex items-center gap-1 text-[9px] font-semibold text-amber-600 dark:text-amber-400 hover:underline"
-        >
-          <span>+ Assign ClickUp List</span>
-        </button>
-      ) : null}
 
       {/* Optional Context snippet */}
       {task.description && (

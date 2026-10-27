@@ -11,7 +11,7 @@ import { DeleteUserModal } from './components/DeleteUserModal';
 import { BillableHoursModal } from './components/BillableHoursModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MarqueeRibbon } from './components/MarqueeRibbon';
-import { UnassignedListRibbon } from './components/UnassignedListRibbon';
+
 import { EditUserModal } from './components/EditUserModal';
 import { DuplicateTaskModal } from './components/DuplicateTaskModal';
 import { DeleteTaskModal } from './components/DeleteTaskModal';
@@ -46,8 +46,7 @@ function DashboardContent() {
     rescheduleTask,
     activeBoardId,
     setActiveBoardId,
-    showClickupPrompt,
-    setShowClickupPrompt,
+
   } = useDashboard();
 
   // Modals state
@@ -341,13 +340,7 @@ function DashboardContent() {
       status: TaskStatus,
       cognitiveLoad: 'low' | 'medium' | 'high',
       dueDate?: string,
-      clickupDetails?: {
-        clickupFolderId?: string;
-        clickupFolderName?: string;
-        clickupListId?: string;
-        clickupListName?: string;
-        clickupSpaceId?: string;
-      }
+
     ) => {
       await createTask({
         userId,
@@ -355,11 +348,7 @@ function DashboardContent() {
         status,
         cognitiveLoad,
         dueDate,
-        clickupFolderId: clickupDetails?.clickupFolderId,
-        clickupFolderName: clickupDetails?.clickupFolderName,
-        clickupListId: clickupDetails?.clickupListId,
-        clickupListName: clickupDetails?.clickupListName,
-        clickupSpaceId: clickupDetails?.clickupSpaceId,
+
       });
     },
     [createTask]
@@ -483,11 +472,7 @@ function DashboardContent() {
               users={users}
               onTaskClick={handleEditTask}
             />
-            <UnassignedListRibbon
-              tasks={tasks}
-              users={users}
-              onTaskClick={handleEditTask}
-            />
+
           </div>
         </div>
 
@@ -613,10 +598,10 @@ function DashboardContent() {
         />
 
         <FirestoreModal
-          isOpen={firestoreModalOpen || showClickupPrompt}
+          isOpen={firestoreModalOpen}
           onClose={() => {
             setFirestoreModalOpen(false);
-            setShowClickupPrompt(false);
+
           }}
         />
 

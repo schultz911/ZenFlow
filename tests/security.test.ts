@@ -3,10 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { createHmac } from 'node:crypto';
+
 import { fixtureServer, fixtureTask } from './fixtures';
-import { publicMember, redactPayload, validSignature } from '../server/security';
-import { WebhookRegistry } from '../server/webhooks';
 
 async function withServer(run: (server: Awaited<ReturnType<typeof fixtureServer>>) => Promise<void>) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'zenflow-security-'));
@@ -64,23 +62,8 @@ test('member provisioning, profile updates and root protection retain the role m
   assert.equal((await server.request('/users', 'cd', 'POST', { name: 'New CD', email: 'newcd@example.invalid', role: 'content', isCreativeDirector: true })).status, 403);
   assert.equal((await server.request('/users/root', 'root', 'DELETE')).status, 403);
   assert.equal((await server.request('/users/alice', 'alice', 'PUT', { role: 'design' })).status, 403);
-  assert.equal((await server.request('/users/alice', 'alice', 'PUT', { selectedClickupSpaceId: 'space' })).status, 200);
 }));
-test('HTTP user payloads and mutation events never disclose saved credentials', async () => withServer(async server => {
-  server.store.users[2].clickupApiKey = 'SYNTHETIC_PRIVATE_KEY';
-  for (const route of ['/state', '/users']) {
-    const response = await server.request(route);
-    assert.equal(response.status, 200);
-    assert.ok(!(await response.text()).includes('SYNTHETIC_PRIVATE_KEY'));
-  }
-  const response = await server.request('/users/alice', 'alice', 'PUT', { clickupApiKey: 'REPLACEMENT_SECRET' });
-  const publicUser = await response.json();
-  assert.equal(publicUser.clickupConnected, true);
-  assert.equal(publicUser.clickupApiKey, undefined);
-  assert.ok(!JSON.stringify(server.events).includes('REPLACEMENT_SECRET'));
-  assert.equal((await server.request('/users/alice', 'alice', 'PUT', { clickupApiKey: '' })).status, 200);
-  assert.equal(server.store.users[2].clickupApiKey, undefined);
-}));
+
 test('cookie mutations require the same-origin non-simple header; Bearer API requests work', async () => withServer(async server => {
   const cookie = { Cookie: 'zenflow_identity=alice' };
   assert.equal((await server.request('/tasks/a', '', 'PUT', { title: 'bad' }, cookie)).status, 403);
@@ -104,42 +87,7 @@ test('actual session exchange and logout issue HttpOnly cookies only for verifie
   assert.equal(logout.status, 204);
   assert.match(logout.headers.get('set-cookie')!, /Expires=Thu, 01 Jan 1970/i);
 }));
-test('unsigned or modified webhook cannot alter state, telemetry, audit or trigger persistence', async () => withServer(async server => {
-  server.store.tasks[0].clickupTaskId = 'cu-a';
-  await server.registry.save({ id: 'hook', secret: 'fixture-signing-secret', endpoint: 'https://example.invalid/api/clickup/webhook' });
-  const body = { webhook_id: 'hook', task_id: 'cu-a', event: 'taskTimeTrackedUpdated', history_items: [{ field: 'time_spent', after: 360000000 }] };
-  const signature = createHmac('sha256', 'fixture-signing-secret').update(JSON.stringify(body)).digest('hex');
-  for (const header of ['', 'a'.repeat(64), 'not-hex']) assert.equal((await server.request('/clickup/webhook', '', 'POST', body, { 'x-signature': header })).status, 401);
-  assert.equal(server.store.tasks[0].inProgressDurationMs, 0);
-  assert.equal(server.ctx.webhookEventsCount, 0);
-  assert.equal(server.audit.length, 0);
-  assert.equal((await server.request('/clickup/webhook', '', 'POST', body, { 'x-signature': signature })).status, 200);
-  await new Promise(resolve => setTimeout(resolve, 10));
-  assert.equal(server.store.tasks[0].inProgressDurationMs, 360000000);
-  assert.equal(server.ctx.webhookEventsCount, 1);
-}));
-test('webhook secrets survive restart without becoming a public response field', async () => {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'zenflow-hook-'));
-  try {
-    const file = path.join(directory, 'registration.json');
-    const registry = new WebhookRegistry(file);
-    await registry.save({ id: 'hook', secret: 'private', endpoint: 'https://example.invalid' });
-    const reloaded = new WebhookRegistry(file);
-    await reloaded.load();
-    assert.equal(reloaded.get('hook')?.secret, 'private');
-    assert.equal(redactPayload({ webhook: reloaded.get('hook') }).webhook.secret, undefined);
-    await reloaded.remove('hook');
-    const deleted = new WebhookRegistry(file); await deleted.load();
-    assert.equal(deleted.get('hook'), undefined);
-  } finally { await fs.rm(directory, { recursive: true, force: true }); }
-});
-test('public fields use an allowlist and HMAC checks exact raw bytes', () => {
-  assert.equal(publicMember({ id: 'a', email: 'a@b.invalid', role: 'design', futureSecret: 'secret', clickupApiKey: 'key' }).futureSecret, undefined);
-  const raw = Buffer.from('{"event":"test"}');
-  const signature = createHmac('sha256', 'secret').update(raw).digest('hex');
-  assert.equal(validSignature(raw, signature, 'secret'), true);
-  assert.equal(validSignature(Buffer.from('{ "event":"test"}'), signature, 'secret'), false);
-});
+
 test('pipeline and retainer tasks retain deadline and timer behavior', async () => withServer(async server => {
   for (const status of ['pipeline', 'retainer']) {
     const response = await server.request('/tasks', 'alice', 'POST', { userId: 'alice', title: `Task ${status}`, status, cognitiveLoad: 'medium' });

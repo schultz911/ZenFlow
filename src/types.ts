@@ -14,21 +14,7 @@ export interface User {
   order?: number;
   isCreativeDirector?: boolean;
   creativeDirectorId?: string;
-  clickupApiKey?: string;
-  clickupConnected?: boolean;
-  selectedClickupSpaceId?: string;
-  selectedClickupSpaceName?: string;
-  clickupUserId?: string;
-  clickupUsername?: string;
-}
 
-export interface ClickupMember {
-  id: string;
-  username: string;
-  email: string;
-  color?: string;
-  profilePicture?: string;
-  initials?: string;
 }
 
 export interface TaskActivity {
@@ -56,63 +42,11 @@ export interface Task {
   createdAt: string;
   updatedAt: string;
   activityLog?: TaskActivity[];
-  clickupTaskId?: string;
-  clickupFolderId?: string;
-  clickupFolderName?: string;
-  clickupListId?: string;
-  clickupListName?: string;
-  clickupSpaceId?: string;
-  clickupUrl?: string;
-  clickupTaskType?: string;
-  clickupTaskTypeId?: string;
-  clickupTaskTypeFieldId?: string;
+
   parentTaskId?: string;
   parentTaskTitle?: string;
-  clickupParentTaskId?: string;
+
   isSubtask?: boolean;
-}
-
-export interface ClickupCustomFieldOption {
-  id: string;
-  name: string;
-  color?: string;
-  orderindex?: number;
-}
-
-export interface ClickupCustomField {
-  id: string;
-  name: string;
-  type: string;
-  type_config?: {
-    options?: ClickupCustomFieldOption[];
-  };
-}
-
-export interface ClickupSpace {
-  id: string;
-  name: string;
-  color?: string;
-  private?: boolean;
-}
-
-export interface ClickupList {
-  id: string;
-  name: string;
-  orderindex?: number;
-  folder?: {
-    id: string;
-    name: string;
-  };
-  space?: {
-    id: string;
-    name: string;
-  };
-}
-
-export interface ClickupFolder {
-  id: string;
-  name: string;
-  lists: ClickupList[];
 }
 
 export interface QueuedMutation {
@@ -176,7 +110,7 @@ export interface TaskOrderUpdate {
   dueDate?: string | null;
 }
 
-export type RealtimeEventType = 
+export type RealtimeEventType =
   | 'user_created'
   | 'user_updated'
   | 'user_deleted'
@@ -209,16 +143,5 @@ export interface AuditLogEntry {
   from?: any;
   to?: any;
   metadata?: Record<string, any>;
-}
-
-export interface ClickupWebhookStatus {
-  listening: boolean;
-  registered: boolean;
-  webhookId?: string;
-  endpointUrl: string;
-  lastEventAt?: string;
-  lastEventAction?: string;
-  totalEventsCount: number;
-  supportedEvents?: string[];
 }
 

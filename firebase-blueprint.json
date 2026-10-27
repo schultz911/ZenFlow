@@ -20,7 +20,10 @@
         },
         "role": {
           "type": "string",
-          "enum": ["content", "design"],
+          "enum": [
+            "content",
+            "design"
+          ],
           "description": "Team swimlane role"
         },
         "avatarColor": {
@@ -39,29 +42,15 @@
         "creativeDirectorId": {
           "type": "string",
           "description": "ID of the Creative Director this user is mapped to"
-        },
-        "clickupApiKey": {
-          "type": "string",
-          "description": "Personal ClickUp API Token"
-        },
-        "selectedClickupSpaceId": {
-          "type": "string",
-          "description": "Active ClickUp space ID"
-        },
-        "selectedClickupSpaceName": {
-          "type": "string",
-          "description": "Active ClickUp space name"
-        },
-        "clickupUserId": {
-          "type": "string",
-          "description": "Mapped ClickUp Member ID"
-        },
-        "clickupUsername": {
-          "type": "string",
-          "description": "Mapped ClickUp Username"
         }
       },
-      "required": ["id", "name", "email", "role", "createdAt"]
+      "required": [
+        "id",
+        "name",
+        "email",
+        "role",
+        "createdAt"
+      ]
     },
     "Task": {
       "title": "Task",
@@ -90,12 +79,24 @@
         },
         "cognitiveLoad": {
           "type": "string",
-          "enum": ["low", "medium", "high"],
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
           "description": "Cognitive workload level"
         },
         "status": {
           "type": "string",
-          "enum": ["pipeline", "retainer", "todo", "in_progress", "in_review", "done", "archived"],
+          "enum": [
+            "pipeline",
+            "retainer",
+            "todo",
+            "in_progress",
+            "in_review",
+            "done",
+            "archived"
+          ],
           "description": "Current status in the workflow"
         },
         "order": {
@@ -120,46 +121,6 @@
           "type": "array",
           "description": "Audit trail of task lifecycle state transitions and assignments"
         },
-        "clickupTaskId": {
-          "type": "string",
-          "description": "Associated ClickUp task ID"
-        },
-        "clickupFolderId": {
-          "type": "string",
-          "description": "Associated ClickUp folder ID"
-        },
-        "clickupFolderName": {
-          "type": "string",
-          "description": "Associated ClickUp folder name"
-        },
-        "clickupListId": {
-          "type": "string",
-          "description": "Associated ClickUp list ID"
-        },
-        "clickupListName": {
-          "type": "string",
-          "description": "Associated ClickUp list name"
-        },
-        "clickupSpaceId": {
-          "type": "string",
-          "description": "Associated ClickUp space ID"
-        },
-        "clickupUrl": {
-          "type": "string",
-          "description": "URL to the task on ClickUp"
-        },
-        "clickupTaskType": {
-          "type": "string",
-          "description": "Selected ClickUp Task Type name"
-        },
-        "clickupTaskTypeId": {
-          "type": "string",
-          "description": "Selected ClickUp Task Type custom field option ID"
-        },
-        "clickupTaskTypeFieldId": {
-          "type": "string",
-          "description": "ClickUp Task Type custom field ID"
-        },
         "parentTaskId": {
           "type": "string",
           "description": "Source parent task ID if this task is a subtask"
@@ -167,10 +128,6 @@
         "parentTaskTitle": {
           "type": "string",
           "description": "Source parent task title for display"
-        },
-        "clickupParentTaskId": {
-          "type": "string",
-          "description": "Associated parent ClickUp task ID"
         },
         "isSubtask": {
           "type": "boolean",
@@ -187,7 +144,16 @@
           "description": "Last updated timestamp ISO string"
         }
       },
-      "required": ["id", "userId", "title", "cognitiveLoad", "status", "order", "createdAt", "updatedAt"]
+      "required": [
+        "id",
+        "userId",
+        "title",
+        "cognitiveLoad",
+        "status",
+        "order",
+        "createdAt",
+        "updatedAt"
+      ]
     },
     "AuditLogEntry": {
       "title": "AuditLogEntry",
@@ -205,7 +171,13 @@
         },
         "category": {
           "type": "string",
-          "enum": ["task", "user", "security", "webhook", "system"],
+          "enum": [
+            "task",
+            "user",
+            "security",
+            "webhook",
+            "system"
+          ],
           "description": "Event classification category"
         },
         "action": {
@@ -218,7 +190,12 @@
         },
         "targetType": {
           "type": "string",
-          "enum": ["task", "user", "workspace", "webhook"],
+          "enum": [
+            "task",
+            "user",
+            "workspace",
+            "webhook"
+          ],
           "description": "Type of the target entity"
         },
         "details": {
@@ -234,7 +211,14 @@
           "description": "Structured contextual metadata payload"
         }
       },
-      "required": ["id", "timestamp", "category", "action", "targetId", "targetType"]
+      "required": [
+        "id",
+        "timestamp",
+        "category",
+        "action",
+        "targetId",
+        "targetType"
+      ]
     }
   },
   "firestore": {

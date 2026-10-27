@@ -16,8 +16,10 @@ try {
   }
   localStorage.removeItem('zenflow_mutation_queue_v1');
   localStorage.removeItem('zenflow_clickup_api_key');
+  localStorage.removeItem('zenflow_clickup_space_id');
+  localStorage.removeItem('zenflow_clickup_space_name');
   if (cached) {
-    delete cached.clickupApiKey;
+    for (const key of Object.keys(cached)) if (/clickup/i.test(key)) delete cached[key];
     localStorage.setItem('team_dash_current_user_v1', JSON.stringify(cached));
   }
 } catch { /* Browser storage may be unavailable. */ }

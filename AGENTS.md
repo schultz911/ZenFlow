@@ -6,6 +6,14 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
+### Sweep 53: 2026-10-27 (Standalone Firestore Workspace)
+
+- Removed active ClickUp integration: synchronization, proxy routes, webhooks, credential controls, member mapping and task destination/link UI. Retired API URLs return 410; native cross-board subtask delegation remains available.
+- Firestore now owns members, tasks, timers, activity history and append-only audit records. Mutations commit atomically before HTTP success and SSE, with revision conflict detection and rollback on database failure. Local JSON/NDJSON persistence and browser credential upload are removed.
+- Added a restart-safe migration and private metadata backup without saved tokens. Existing IDs, content, native parent links and ownership are retained.
+- Added database failure tests and Firestore/Auth emulator coverage for migration, atomic audit rollback, conflicts, compiled-server CRUD, delegation and restart/deletion recovery. See docs/READINESS.md for deployment constraints and evidence; earlier integration descriptions below are historical.
+
+
 ### Sweep 52: 2026-10-25 (Verified API Identity, Private ClickUp Credentials, Server-Owned Firebase, Signed Webhooks and Bounded Resources)
 
 - **SEC-16 (Verified Backend Identity and Authorization):** Firebase identities are verified against the fixed Google login project, independently of configurable storage credentials. HttpOnly same-origin sessions protect REST, downloads and SSE. Server-owned role and ownership checks replace client header assertions, including atomic batch validation. Universal authenticated cross-board subtask delegation remains available (AUTH-07).

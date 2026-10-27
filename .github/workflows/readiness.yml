@@ -24,4 +24,4 @@ jobs:
       - run: npm run lint
       - run: npx tsc --noEmit --noUnusedLocals --noUnusedParameters
       - run: npm run build
-      - run: node --import tsx tests/smoke-production.ts
+      - run: npm run test:persistence

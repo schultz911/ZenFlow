@@ -1,0 +1,43 @@
+import assert from 'node:assert/strict';
+import { Firestore } from '@google-cloud/firestore';
+import { FirestoreWorkspace } from '../server/workspace';
+import { generateKeyPairSync } from 'node:crypto';
+
+if (!process.env.FIRESTORE_EMULATOR_HOST?.startsWith('127.0.0.1:')) throw new Error('Local emulator required');
+const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+const db = new Firestore({ projectId: 'demo-zenflow', preferRest: false, ignoreUndefinedProperties: true,
+  credentials: { client_email: 'test@demo-zenflow.iam.gserviceaccount.com', private_key: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString() } });
+const workspace = new FirestoreWorkspace(db as any);
+await db.recursiveDelete(db.collection('users'));
+await db.recursiveDelete(db.collection('tasks'));
+await db.recursiveDelete(db.collection('workspace'));
+await db.recursiveDelete(db.collection('compliance_audit_logs'));
+await db.doc('users/alice').set({ id: 'alice', email: 'alice@example.invalid', role: 'content', clickupApiKey: 'SYNTHETIC_SECRET' });
+await db.doc('tasks/parent').set({ id: 'parent', userId: 'alice', title: 'Parent', clickupTaskId: 'legacy' });
+await workspace.migrate();
+assert.equal((await db.doc('users/alice').get()).data()?.clickupApiKey, undefined);
+assert.equal((await db.doc('tasks/parent').get()).data()?.clickupTaskId, undefined);
+assert.equal((await db.doc('workspace_backups/native-v1/tasks/parent').get()).data()?.title, 'Parent');
+const before = await workspace.load();
+const after = structuredClone(before.store);
+after.tasks.push({ id: 'child', parentTaskId: 'parent', userId: 'alice', title: 'Child' });
+after.tasks[0].activityLog = [{ action: 'updated', details: 'Delegated' }];
+await workspace.commit(before, after, [{ id: 'audit-1', timestamp: new Date().toISOString(), action: 'delegated' }]);
+assert.equal((await db.doc('tasks/child').get()).data()?.parentTaskId, 'parent');
+assert.equal((await workspace.recentAudit(10)).length, 1);
+await assert.rejects(workspace.commit(before, before.store, [{ id: 'audit-conflict', action: 'stale' }]));
+assert.equal((await db.doc('compliance_audit_logs/audit-conflict').get()).exists, false);
+const restart = new FirestoreWorkspace(db as any);
+const restored = await restart.load();
+assert.equal(restored.store.tasks.length, 2);
+const removed = structuredClone(restored.store);
+removed.tasks = removed.tasks.filter(task => task.id !== 'child');
+await restart.commit(restored, removed, []);
+assert.equal((await workspace.load()).store.tasks.length, 1);
+// Repeated audit IDs must fail the whole write, including its associated task update.
+const atomic = await workspace.load();
+const changed = structuredClone(atomic.store); changed.tasks[0].title = 'Must rollback';
+await assert.rejects(workspace.commit(atomic, changed, [{ id: 'audit-1', action: 'overwrite' }]));
+assert.equal((await db.doc('tasks/parent').get()).data()?.title, 'Parent');
+console.log('Firestore emulator: migration, restart, delegation, deletes, revision conflicts and atomic audit rollback passed.');
+await db.terminate();

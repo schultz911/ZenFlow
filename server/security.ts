@@ -1,10 +1,9 @@
 import type { Request, Response, NextFunction } from 'express';
-import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export const SUPERADMIN_EMAIL = 'kiran.s@zensciences.com';
 export const SESSION_COOKIE = 'zenflow_identity';
 export interface Member {
-  id: string; email: string; isCreativeDirector?: boolean; creativeDirectorId?: string; clickupApiKey?: string;
+  id: string; email: string; isCreativeDirector?: boolean; creativeDirectorId?: string;
 }
 export interface Identity { email?: string; email_verified?: boolean; exp: number; firebase?: { sign_in_provider?: string } }
 export const isSuperadmin = (user: Member) => user.email.toLowerCase() === SUPERADMIN_EMAIL;
@@ -16,10 +15,9 @@ export const canEdit = (caller: Member, owner: Member | undefined) => Boolean(ow
 export function publicMember(user: any) {
   const result: Record<string, any> = {};
   for (const key of ['id', 'name', 'email', 'role', 'avatarColor', 'createdAt', 'order', 'isCreativeDirector',
-    'creativeDirectorId', 'selectedClickupSpaceId', 'selectedClickupSpaceName', 'clickupUserId', 'clickupUsername']) {
+    'creativeDirectorId']) {
     if (user[key] !== undefined) result[key] = user[key];
   }
-  result.clickupConnected = Boolean(user.clickupApiKey || user.clickupConnected);
   return result;
 }
 export function redactPayload(value: any): any {
@@ -32,10 +30,6 @@ export function redactPayload(value: any): any {
     !['secret', 'private_key', 'clickupApiKey'].some(key => key in value)) return value;
   return Object.fromEntries(Object.entries(value).filter(([key]) => !['secret', 'private_key', 'clickupApiKey'].includes(key))
     .map(([key, item]) => [key, redactPayload(item)]));
-}
-export function validSignature(raw: Buffer | undefined, signature: unknown, secret: string | undefined): boolean {
-  if (!raw || !secret || typeof signature !== 'string' || !/^[a-f0-9]{64}$/i.test(signature)) return false;
-  return timingSafeEqual(createHmac('sha256', secret).update(raw).digest(), Buffer.from(signature, 'hex'));
 }
 export function readCookie(req: Request): string {
   const part = req.headers.cookie?.split(';').find(item => item.trim().startsWith(`${SESSION_COOKIE}=`));
@@ -54,7 +48,7 @@ export function createApiSecurity(options: {
 }) {
   return async (req: Request, res: Response, next: NextFunction) => {
     const routePath = req.path.replace(/\/+$/, '') || '/';
-    if ((req.method === 'GET' && routePath === '/health') || (req.method === 'POST' && routePath === '/clickup/webhook')) return next();
+    if ((req.method === 'GET' && routePath === '/health')) return next();
     const bearer = req.get('authorization')?.match(/^Bearer (\S+)$/)?.[1];
     const token = bearer || readCookie(req);
     if (!token) return res.status(401).json({ error: 'Google authentication required' });
@@ -78,8 +72,7 @@ export function createApiSecurity(options: {
       req.body = body;
 
       if (routePath.startsWith('/audit/') && !manager) return denied();
-      if ((routePath.startsWith('/firestore/') || routePath === '/clickup/webhook/register' ||
-        (req.method === 'DELETE' && routePath.startsWith('/clickup/webhook/'))) && req.method !== 'GET' && !superadmin) return denied();
+      if (routePath.startsWith('/firestore/') && req.method !== 'GET' && !superadmin) return denied();
       if (routePath === '/auth/login' || routePath === '/auth/verify-email') body.email = caller.email;
 
       if (routePath === '/users/remap-tasks' && !superadmin) return denied();
@@ -88,7 +81,6 @@ export function createApiSecurity(options: {
         const existing = store.users.find(user => user.email.toLowerCase() === String(body.email || '').toLowerCase());
         if (!superadmin && (body.isCreativeDirector || (existing && (!edit(existing.id) || existing.isCreativeDirector)))) return denied();
         if (!superadmin) body.creativeDirectorId = caller.id;
-        if (body.clickupApiKey !== undefined && existing?.id !== caller.id) return denied();
       }
       const userMatch = routePath.match(/^\/users\/([^/]+)$/);
       if (userMatch && ['PUT', 'DELETE'].includes(req.method)) {
@@ -97,9 +89,8 @@ export function createApiSecurity(options: {
         if (req.method === 'DELETE' && (!manager || (target && isSuperadmin(target)))) return denied();
         if (req.method === 'PUT') {
           if (!superadmin && (body.email !== undefined || body.isCreativeDirector !== undefined)) return denied();
-          if (!manager && Object.keys(body).some(key => !['clickupApiKey', 'selectedClickupSpaceId', 'selectedClickupSpaceName', 'clickupUserId', 'clickupUsername'].includes(key))) return denied();
+          if (!manager) return denied();
           if (!superadmin && body.creativeDirectorId !== undefined && body.creativeDirectorId !== caller.id) return denied();
-          if (body.clickupApiKey !== undefined && target?.id !== caller.id) return denied();
         }
       }
       if (routePath === '/tasks' && req.method === 'POST' && !edit(body.userId)) return denied();
@@ -119,7 +110,6 @@ export function createApiSecurity(options: {
           if ((task && !edit(task.userId)) || (update.userId !== undefined && !edit(update.userId))) return denied();
         }
       }
-      if (routePath === '/clickup/sync-user-tasks' && !edit(body.userId)) return denied();
 
       // Existing integration handlers consume these values; overwrite every caller assertion.
       req.headers['x-caller-user-id'] = caller.id;
@@ -129,13 +119,6 @@ export function createApiSecurity(options: {
       body.callerUserId = caller.id;
       body.callerEmail = caller.email;
       body.isSuperadmin = superadmin;
-      const savedKey = caller.clickupApiKey || store.users.find(user => user.clickupApiKey)?.clickupApiKey;
-      if (routePath !== '/clickup/verify') {
-        req.headers['x-clickup-api-key'] = savedKey || '';
-        body.apiKey = savedKey || '';
-        if (!routePath.startsWith('/users')) body.clickupApiKey = savedKey || '';
-        delete req.query.apiKey;
-      }
       const json = res.json.bind(res);
       res.json = ((value: any) => json(redactPayload(value))) as Response['json'];
       res.setHeader('Cache-Control', 'private, no-cache, must-revalidate');

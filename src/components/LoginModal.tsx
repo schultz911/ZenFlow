@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
 import { Role } from '../types';
-import { X, Mail, User as UserIcon, Palette, FileText, ArrowRight, Crown, Loader2, Link2 } from 'lucide-react';
-import { ClickupMemberPicker } from './ClickupMemberPicker';
+import { X, Mail, User as UserIcon, Palette, FileText, ArrowRight, Crown, Loader2 } from 'lucide-react';
 
 interface LoginModalProps {
   isOpen: boolean;
@@ -24,9 +23,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     isSuperadmin,
     isCreativeDirector,
     creativeDirectors,
-    clickupMembers,
-    loadClickupMembers,
-    clickupApiKey,
+
     authError,
     setAuthError,
   } = useDashboard();
@@ -39,13 +36,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     if (currentUser?.isCreativeDirector) return currentUser.id;
     return creativeDirectors[0]?.id || '';
   });
-  const [selectedClickupUserId, setSelectedClickupUserId] = useState<string>('');
-
-  useEffect(() => {
-    if (isOpen && isNewAccountOnly && clickupMembers.length === 0 && clickupApiKey) {
-      loadClickupMembers(clickupApiKey);
-    }
-  }, [isOpen, isNewAccountOnly, clickupMembers.length, clickupApiKey, loadClickupMembers]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
@@ -99,15 +89,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     setIsSubmitting(true);
     try {
       if (isNewAccountOnly) {
-        const matchedMember = clickupMembers.find(m => m.id === selectedClickupUserId);
+
         await createUser({
           name: cleanName,
           email: cleanEmail,
           role,
           isCreativeDirector: isSuperadmin ? isCD : false,
           creativeDirectorId: isCD ? undefined : (selectedCDId || undefined),
-          clickupUserId: selectedClickupUserId || undefined,
-          clickupUsername: matchedMember?.username || undefined,
+
         });
       } else {
         await login(cleanName, role, cleanEmail);
@@ -401,26 +390,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               </div>
               <p className="text-[10px] text-neutral-500 dark:text-white/40 mt-1">
                 This member will appear on this Creative Director's board.
-              </p>
-            </div>
-          )}
-
-          {/* New Account Only: ClickUp Member Mapping with in-line search filtering */}
-          {isNewAccountOnly && (
-            <div className="space-y-1.5">
-              <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5 flex items-center gap-1.5">
-                <Link2 className="w-3.5 h-3.5 text-indigo-500" />
-                <span>Map to ClickUp User (Optional)</span>
-              </label>
-              <ClickupMemberPicker
-                members={clickupMembers}
-                selectedMemberId={selectedClickupUserId}
-                onSelect={member => {
-                  setSelectedClickupUserId(member?.id || '');
-                }}
-              />
-              <p className="text-[10px] text-neutral-500 dark:text-white/40">
-                Automatically assigns tasks created in ZenFlow to this ClickUp member.
               </p>
             </div>
           )}
