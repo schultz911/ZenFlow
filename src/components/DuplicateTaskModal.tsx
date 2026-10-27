@@ -10,7 +10,6 @@ import {
   Layers,
   Loader2,
   AlertCircle,
-  ExternalLink,
   ArrowRight,
   Shield,
   UserCheck,
@@ -93,7 +92,6 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
   const [feedback, setFeedback] = useState<{
     type: 'success' | 'error';
     message: string;
-    clickupSubtaskCreated?: boolean;
     warning?: string;
     targetBoardId?: string;
     targetBoardName?: string;
@@ -200,7 +198,6 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
       setFeedback({
         type: 'success',
         message: `Subtask created under "${task.title}" on ${targetUserName}'s board!`,
-        clickupSubtaskCreated: res.clickupSubtaskCreated,
         warning: res.warning,
         targetBoardId: selectedBoardId,
         targetBoardName: boardName,
@@ -337,31 +334,6 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                   </span>
                 </div>
               </div>
-
-              {/* ClickUp Linkage Pill */}
-              <div className="pt-1 border-t border-neutral-200/50 dark:border-white/5">
-                {task.clickupTaskId ? (
-                  <div className="flex items-center justify-between gap-2 text-[11px]">
-                    <div className="flex items-center gap-1.5 text-purple-600 dark:text-purple-400 font-medium truncate">
-                      <ExternalLink className="h-3 w-3 shrink-0" />
-                      <span className="truncate">Parent ClickUp Task #{task.clickupTaskId}</span>
-                      {task.clickupListName && (
-                        <span className="text-neutral-400 dark:text-white/40 text-[10px] shrink-0">
-                          ({task.clickupFolderName ? `${task.clickupFolderName} / ` : ''}{task.clickupListName})
-                        </span>
-                      )}
-                    </div>
-                    <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold bg-purple-50 dark:bg-purple-950/30 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-500/20 shrink-0">
-                      Creates ClickUp Subtask
-                    </span>
-                  </div>
-                ) : (
-                  <p className="text-[11px] text-neutral-500 dark:text-neutral-400 flex items-center gap-1.5">
-                    <span className="h-1.5 w-1.5 rounded-full bg-neutral-400" />
-                    <span>Parent task is local to ZenFlow. Subtask will be created on ZenFlow board.</span>
-                  </p>
-                )}
-              </div>
             </div>
 
             {/* Selection Steps */}
@@ -400,15 +372,11 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                       disabled={isSubmitting || feedback?.type === 'success'}
                       className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#1A1A1A] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer disabled:opacity-50"
                     >
-                      {availableUsers.map(u => {
-                        const hasClickup = Boolean(u.clickupUserId);
-                        return (
-                          <option key={u.id} value={u.id}>
-                            {u.name} ({u.role.toUpperCase()}) — {u.email}{' '}
-                            {hasClickup ? '✓ ClickUp Mapped' : '· ClickUp auto-match by email'}
-                          </option>
-                        );
-                      })}
+                      {availableUsers.map(u => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} ({u.role.toUpperCase()}) — {u.email}
+                        </option>
+                      ))}
                     </select>
 
                     {/* Selected user preview pill */}
@@ -428,17 +396,6 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                             {selectedTargetUser.role}
                           </span>
                         </div>
-                        {selectedTargetUser.clickupUserId ? (
-                          <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                            ClickUp ID: {selectedTargetUser.clickupUserId}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-blue-600 dark:text-blue-400 flex items-center gap-1">
-                            <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />
-                            Match via {selectedTargetUser.email}
-                          </span>
-                        )}
                       </div>
                     )}
                   </div>
@@ -581,11 +538,6 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                   )}
                   <div className="flex-1 space-y-1">
                     <p className="font-semibold">{feedback.message}</p>
-                    {feedback.clickupSubtaskCreated && (
-                      <p className="text-[11px] text-emerald-600 dark:text-emerald-400">
-                        ✓ Dedicated subtask created under parent #{task.clickupTaskId} on ClickUp and assigned to {selectedTargetUser?.name}.
-                      </p>
-                    )}
                     {feedback.warning && (
                       <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
                         Notice: {feedback.warning}

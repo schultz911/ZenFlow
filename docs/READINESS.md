@@ -1,24 +1,23 @@
 # Readiness hardening deployment
 
-The 25 October 2026 implementation closes API identity/permission bypasses, removes shared ClickUp credentials, restricts direct Firestore access, verifies ClickUp webhook signatures, bounds SSE output, and reads only the recent audit-log tail.
+The implementation closes API identity/permission bypasses, restricts direct Firestore access, bounds SSE output, and reads only the recent audit-log tail for sub-millisecond retrieval. All workspace data (`users`, `tasks`) and SOC2 compliance audit logs persist directly to Google Cloud Firestore in standalone mode.
 
 ## Deploy in this order
 
-1. Configure `FIREBASE_SERVICE_ACCOUNT_KEY` for the intended Firestore project. The backend requires Firestore Admin/IAM access to `users`, `tasks`, `compliance_audit_logs`, and the private `server_secrets/clickup_webhooks` document. Identity verification always uses the Google login project `zen-flow-7173d`, regardless of the storage project. An uploaded database credential cannot change identity trust.
+1. Configure `FIREBASE_SERVICE_ACCOUNT_KEY` for the intended Firestore project. The backend requires Firestore Admin/IAM access to `users`, `tasks`, and `compliance_audit_logs`. Identity verification always uses the Google login project `zen-flow-7173d`, regardless of the storage project. An uploaded database credential cannot change identity trust.
 2. Back up the existing store/audit data. If relying on local persistence, mount a persistent volume and set `ZENFLOW_DATA_DIR` to that directory. Local mode remains usable but does not provide cloud persistence; the connection status reports this explicitly. `serviceAccountKey.json` uploads remain supported for Superadmin only; prefer the environment credential for redeployment persistence.
 3. Deploy the client and server together. Check Google sign-in and `/api/firestore/status` with a registered account; confirm `mode: admin`, `connected: true`, and actual successful writes before changing live database rules. Do not treat successful compilation or SDK initialization alone as proof of database access.
 4. Deploy the reviewed rules using `npx firebase deploy --only firestore:rules --project YOUR_STORAGE_PROJECT`. All direct client reads/writes, including authenticated ones, are denied. Only the authorized backend serves app data. The Admin SDK bypasses these rules through IAM. These rules are committed source changes; pushing GitHub alone does not deploy them.
-5. Re-register the ClickUp webhook from Connections & Compliance as Superadmin. Previous registrations without a recoverable signing secret are intentionally rejected. New secrets are persisted privately in Firestore and in the local data directory, never returned to browsers. Registration and deletion are restricted to Superadmin.
-6. Check task creation/edit/reorder, universal cross-board subtasks, pipeline/retainer behavior, member management, and a correctly signed webhook. Confirm reconnection recovers changes/deletions. Rotate personal ClickUp tokens if the prior deployment exposed them.
+5. Check task creation/edit/reorder, universal cross-board subtasks, pipeline/retainer behavior, member management, and audit log downloads. Confirm reconnection recovers changes/deletions.
 
 ## Authentication and permissions
 
 - Google identities must be signed for `zen-flow-7173d`, verified, unexpired, from the Google provider, and already registered in ZenFlow.
 - A verified ID token is exchanged for an HttpOnly, SameSite=Strict cookie scoped to `/api`. HTTPS requests receive Secure cookies. The cookie lasts no longer than the ID token. Every request verifies its identity and current membership; caller-supplied role/email/ID assertions cannot authorize an action.
 - Cookie mutations require a same-origin non-simple request header. Bearer-token API clients are also supported. SSE and downloads use the HttpOnly cookie, keeping tokens out of URLs.
-- Regular members edit their own tasks and connection preferences. CDs can edit their assigned team's tasks/members. Only Superadmin changes email/CD privileges, remaps accounts, changes Firebase credentials, or manages webhook registration. All registered members retain cross-board subtask delegation and workspace/free-pool visibility.
-- Public user payloads use an allowlist plus a `clickupConnected` boolean. Personal ClickUp keys remain server-side. The connection form accepts a new key but never prefills or returns the stored one.
-- Browser migration removes old stored tokens. Offline queues are scoped to the member who created them; previous queued work is migrated under the original cached member ID. A reconnect snapshot overlays pending changes before FIFO replay. Auth failures retain queued work.
+- Regular members edit their own tasks. CDs can edit their assigned team's tasks/members. Only Superadmin changes email/CD privileges, remaps accounts, or changes Firebase credentials. All registered members retain cross-board subtask delegation and workspace/free-pool visibility.
+- Public user payloads use a strict allowlist.
+- Offline queues are scoped to the member who created them; previous queued work is migrated under the original cached member ID. A reconnect snapshot overlays pending changes before FIFO replay. Auth failures retain queued work.
 
 ## Verification
 

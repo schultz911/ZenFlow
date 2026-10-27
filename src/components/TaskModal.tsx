@@ -1,9 +1,25 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
-import { Task, CognitiveLoad, TaskStatus, ClickupFolder, ClickupList } from '../types';
+import { Task, CognitiveLoad, TaskStatus } from '../types';
 import { getTaskBillableMs, formatBillableDetailed, getLastDayOfMonth } from '../utils/workload';
-import { X, Calendar, Brain, Trash2, History, Clock, ArrowRight, CheckCircle2, UserCheck, PlusCircle, Timer, ChevronDown, Check, CopyPlus, CornerDownRight, AlertCircle, MapPin, ExternalLink } from 'lucide-react';
+import {
+  X,
+  Calendar,
+  Brain,
+  Trash2,
+  History,
+  Clock,
+  ArrowRight,
+  CheckCircle2,
+  UserCheck,
+  PlusCircle,
+  Timer,
+  ChevronDown,
+  CopyPlus,
+  CornerDownRight,
+  AlertCircle,
+} from 'lucide-react';
 
 function formatActivityTime(isoString: string): string {
   try {
@@ -43,93 +59,6 @@ interface TaskModalProps {
   onDuplicateTask?: (task: Task) => void;
 }
 
-interface SpaceDropdownRowProps {
-  space: { id: string; name: string };
-  folderListStr: string;
-  fullText: string;
-  isSelected: boolean;
-  onSelect: () => void;
-}
-
-const SpaceDropdownRow: React.FC<SpaceDropdownRowProps> = ({
-  space,
-  folderListStr,
-  fullText,
-  isSelected,
-  onSelect,
-}) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const textRef = useRef<HTMLDivElement>(null);
-  const [isHovered, setIsHovered] = useState(false);
-  const [overflowDistance, setOverflowDistance] = useState(0);
-
-  const measureOverflow = () => {
-    if (containerRef.current && textRef.current) {
-      const diff = Math.ceil(textRef.current.offsetWidth - containerRef.current.clientWidth);
-      setOverflowDistance(diff > 4 ? diff : 0);
-    }
-  };
-
-  useEffect(() => {
-    measureOverflow();
-  }, [fullText]);
-
-  const totalDuration = useMemo(() => {
-    if (overflowDistance <= 0) return 0;
-    return Math.max(3.5, Math.min(10, overflowDistance / 25 + 2));
-  }, [overflowDistance]);
-
-  return (
-    <div
-      onClick={onSelect}
-      onMouseEnter={() => {
-        measureOverflow();
-        setIsHovered(true);
-      }}
-      onMouseLeave={() => {
-        setIsHovered(false);
-      }}
-      className={`group w-full max-w-full px-2.5 py-1.5 text-xs cursor-pointer flex items-center justify-between transition-colors ${
-        isSelected
-          ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-medium'
-          : 'text-neutral-800 dark:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-white/5'
-      }`}
-    >
-      <div
-        ref={containerRef}
-        className="flex-1 min-w-0 overflow-hidden no-scrollbar py-0.5 text-left"
-        title={fullText}
-      >
-        <div
-          ref={textRef}
-          style={
-            isHovered && overflowDistance > 0
-              ? ({
-                  '--scroll-dist': `-${overflowDistance}px`,
-                  animation: `auto-scroll-hover ${totalDuration}s ease-in-out infinite`,
-                } as React.CSSProperties)
-              : {
-                  transform: 'translateX(0)',
-                  transition: 'transform 0.3s ease-out',
-                }
-          }
-          className="inline-block whitespace-nowrap"
-        >
-          <span className="font-medium">{space.name}</span>
-          {folderListStr && (
-            <span className="text-neutral-500 dark:text-white/45 ml-1.5 font-normal">
-              | {folderListStr}
-            </span>
-          )}
-        </div>
-      </div>
-      {isSelected && (
-        <Check className="h-3.5 w-3.5 shrink-0 ml-2 text-purple-600 dark:text-purple-400" />
-      )}
-    </div>
-  );
-};
-
 export const TaskModal: React.FC<TaskModalProps> = ({
   isOpen,
   onClose,
@@ -146,18 +75,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     createTask,
     updateTask,
     deleteTask,
-    isZensciencesUser,
-    isClickupConnected,
-    selectedClickupSpaceId,
-    clickupSpaces,
-    clickupFoldersAndLists,
-    spaceFoldersMap,
-    spaceFoldersAndListsMap,
-    getFoldersAndListsForSpace,
-    createClickupList,
     canEditUserTasks,
-    clickupCustomFieldOptions,
-    clickupTaskTypeFieldId: ctxClickupTaskTypeFieldId,
   } = useDashboard();
 
   const canDuplicate = Boolean(onDuplicateTask);
@@ -176,28 +94,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [cognitiveLoad, setCognitiveLoad] = useState<CognitiveLoad>('medium');
   const [status, setStatus] = useState<TaskStatus>('todo');
 
-  // ClickUp Task Type custom field state
-  const [clickupTaskType, setClickupTaskType] = useState<string>('');
-  const [clickupTaskTypeId, setClickupTaskTypeId] = useState<string>('');
-  const [clickupTaskTypeFieldId, setClickupTaskTypeFieldId] = useState<string>('');
-
-  // ClickUp folder and list destination state (isolated per task modal)
-  const [modalSpaceId, setModalSpaceId] = useState<string>('');
-  const [modalFoldersAndLists, setModalFoldersAndLists] = useState<{
-    folders: ClickupFolder[];
-    folderlessLists: ClickupList[];
-  }>({ folders: [], folderlessLists: [] });
-  const [clickupFolderId, setClickupFolderId] = useState<string>('');
-  const [clickupListId, setClickupListId] = useState<string>('');
-  const [isCreatingList, setIsCreatingList] = useState(false);
-  const [newListName, setNewListName] = useState('');
-  const [isSubmittingNewList, setIsSubmittingNewList] = useState(false);
-  const [newListError, setNewListError] = useState<string | null>(null);
-
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
-  const [isSpaceDropdownOpen, setIsSpaceDropdownOpen] = useState(false);
-  const spaceDropdownRef = useRef<HTMLDivElement>(null);
 
   const canEdit = useMemo(() => {
     if (!taskToEdit) return true;
@@ -212,28 +110,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setDueDate(taskToEdit.dueDate || '');
       setCognitiveLoad(taskToEdit.cognitiveLoad || 'medium');
       setStatus(taskToEdit.status || 'todo');
-      setClickupFolderId(taskToEdit.clickupFolderId || '');
-      setClickupListId(taskToEdit.clickupListId || '');
-      setClickupTaskType(taskToEdit.clickupTaskType || '');
-      setClickupTaskTypeId(taskToEdit.clickupTaskTypeId || '');
-      setClickupTaskTypeFieldId(taskToEdit.clickupTaskTypeFieldId || ctxClickupTaskTypeFieldId || '');
-
-      // Resolve space ID specific to this task
-      let initialSpaceId = taskToEdit.clickupSpaceId || '';
-      if (!initialSpaceId && taskToEdit.clickupListId && spaceFoldersAndListsMap) {
-        for (const [sId, data] of Object.entries(spaceFoldersAndListsMap)) {
-          const inFolders = data.folders?.some(f => f.lists?.some(l => l.id === taskToEdit.clickupListId));
-          const inFolderless = data.folderlessLists?.some(l => l.id === taskToEdit.clickupListId);
-          if (inFolders || inFolderless) {
-            initialSpaceId = sId;
-            break;
-          }
-        }
-      }
-      if (!initialSpaceId) {
-        initialSpaceId = selectedClickupSpaceId || (clickupSpaces.length > 0 ? clickupSpaces[0].id : '');
-      }
-      setModalSpaceId(initialSpaceId);
     } else {
       setTitle('');
       setDescription('');
@@ -242,288 +118,68 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setDueDate('');
       setCognitiveLoad('medium');
       setStatus(defaultStatus || 'todo');
-      setClickupFolderId('');
-      setClickupListId('');
-      setModalSpaceId(selectedClickupSpaceId || (clickupSpaces.length > 0 ? clickupSpaces[0].id : ''));
-
-      // If user has a role, match default task type if options available
-      const userObj = users.find(u => u.id === defaultUser);
-      const roleName = userObj?.role === 'content' ? 'Content & Copy' : 'Design';
-      const matchedOption = (clickupCustomFieldOptions || []).find(
-        o => (o?.name || '').toLowerCase() === roleName.toLowerCase()
-      );
-      if (matchedOption) {
-        setClickupTaskType(matchedOption.name);
-        setClickupTaskTypeId(matchedOption.id);
-      } else {
-        setClickupTaskType('');
-        setClickupTaskTypeId('');
-      }
-      setClickupTaskTypeFieldId(ctxClickupTaskTypeFieldId || '');
     }
     setShowConfirmDelete(false);
-    setIsCreatingList(false);
-    setNewListName('');
-    setNewListError(null);
     setSubmitError(null);
-    setIsSpaceDropdownOpen(false);
-  }, [
-    taskToEdit,
-    defaultUserId,
-    defaultStatus,
-    currentUser,
-    users,
-    isOpen,
-    ctxClickupTaskTypeFieldId,
-    clickupCustomFieldOptions,
-    selectedClickupSpaceId,
-    clickupSpaces,
-    spaceFoldersAndListsMap,
-  ]);
+  }, [taskToEdit, defaultUserId, defaultStatus, currentUser, users]);
 
-  // Derived effective task type options (ClickUp dropdown custom fields with fallback)
-  const effectiveTaskTypeOptions = useMemo(() => {
-    let list =
-      clickupCustomFieldOptions && clickupCustomFieldOptions.length > 0
-        ? [...clickupCustomFieldOptions]
-        : [
-            { id: 'content', name: 'Content & Copy' },
-            { id: 'design', name: 'Design' },
-          ];
-    if (
-      clickupTaskType &&
-      !list.some(
-        o => (o?.name || '').toLowerCase() === (clickupTaskType || '').toLowerCase() || o?.id === clickupTaskTypeId
-      )
-    ) {
-      list.unshift({ id: clickupTaskTypeId || clickupTaskType, name: clickupTaskType });
-    }
-    return list;
-  }, [clickupCustomFieldOptions, clickupTaskType, clickupTaskTypeId]);
-
+  // Activity log calculation
   const activities = useMemo(() => {
-    return Array.isArray(taskToEdit?.activityLog) ? taskToEdit.activityLog : [];
+    if (!taskToEdit?.activityLog || !Array.isArray(taskToEdit.activityLog)) return [];
+    return [...taskToEdit.activityLog].reverse();
   }, [taskToEdit]);
 
+  // Cycle time & lead time metrics
   const cycleMetrics = useMemo(() => {
     if (!taskToEdit) return null;
     try {
-      const startMs = taskToEdit.createdAt ? new Date(taskToEdit.createdAt).getTime() : 0;
-      const endMs = taskToEdit.completedAt
-        ? new Date(taskToEdit.completedAt).getTime()
-        : (taskToEdit.status === 'done' ? Date.now() : Date.now());
+      const createdTime = new Date(taskToEdit.createdAt).getTime();
+      const now = Date.now();
+      const completedTime = taskToEdit.completedAt ? new Date(taskToEdit.completedAt).getTime() : null;
 
-      const totalLeadTimeMs = startMs > 0 && !isNaN(startMs) && !isNaN(endMs) ? Math.max(0, endMs - startMs) : 0;
+      const totalLeadTimeMs = (completedTime || now) - createdTime;
+      const totalLeadTimeStr = formatDuration(totalLeadTimeMs);
 
-      // Time in current status: find latest activity that changed status or created task
-      const statusChangeAct = Array.isArray(activities)
-        ? activities.find(a => a && (a.action === 'status_change' || a.action === 'created'))
-        : undefined;
-      const statusStartMs = statusChangeAct?.timestamp ? new Date(statusChangeAct.timestamp).getTime() : startMs;
-      const currentStatusMs = statusStartMs > 0 && !isNaN(statusStartMs) ? Math.max(0, Date.now() - statusStartMs) : 0;
+      let currentStatusDurationStr = '< 1m';
+      if (taskToEdit.activityLog && Array.isArray(taskToEdit.activityLog) && taskToEdit.activityLog.length > 0) {
+        const lastTransition = [...taskToEdit.activityLog].reverse().find(a => a && a.action === 'status_change');
+        if (lastTransition) {
+          const transTime = new Date(lastTransition.timestamp).getTime();
+          currentStatusDurationStr = formatDuration(now - transTime);
+        } else {
+          currentStatusDurationStr = totalLeadTimeStr;
+        }
+      } else {
+        currentStatusDurationStr = totalLeadTimeStr;
+      }
 
-      const billableMs = getTaskBillableMs(taskToEdit);
-      const billableDetailedStr = formatBillableDetailed(billableMs);
+      const totalBillableMs = getTaskBillableMs(taskToEdit);
+      const billableDetailedStr = formatBillableDetailed(totalBillableMs);
 
       return {
-        isDone: taskToEdit.status === 'done',
-        totalLeadTimeStr: totalLeadTimeMs > 0 ? formatDuration(totalLeadTimeMs) : '< 1m',
-        currentStatusStr: currentStatusMs > 0 ? formatDuration(currentStatusMs) : '< 1m',
+        totalLeadTimeStr,
+        currentStatusStr: currentStatusDurationStr,
         billableDetailedStr,
-        revisionCount: Array.isArray(activities) ? activities.length : 0,
+        isDone: taskToEdit.status === 'done' || taskToEdit.status === 'archived',
       };
     } catch {
       return null;
     }
-  }, [taskToEdit, activities]);
+  }, [taskToEdit]);
 
-  // Keep modal's folders and lists synced with modalSpaceId for this task
-  useEffect(() => {
-    if (!modalSpaceId) {
-      setModalFoldersAndLists({ folders: [], folderlessLists: [] });
-      return;
-    }
-    let isMounted = true;
-    if (spaceFoldersAndListsMap?.[modalSpaceId]) {
-      setModalFoldersAndLists(spaceFoldersAndListsMap[modalSpaceId]);
-    } else if (modalSpaceId === selectedClickupSpaceId && clickupFoldersAndLists) {
-      setModalFoldersAndLists(clickupFoldersAndLists);
-    }
-
-    if (getFoldersAndListsForSpace) {
-      getFoldersAndListsForSpace(modalSpaceId).then(data => {
-        if (isMounted && data) {
-          setModalFoldersAndLists(data);
-        }
-      });
-    }
-
-    return () => {
-      isMounted = false;
-    };
-  }, [modalSpaceId, spaceFoldersAndListsMap, selectedClickupSpaceId, clickupFoldersAndLists, getFoldersAndListsForSpace]);
-
-  // Available lists for the selected folder within the modal's space
-  const availableLists = useMemo(() => {
-    const folders = Array.isArray(modalFoldersAndLists?.folders) ? modalFoldersAndLists.folders : [];
-    const folderlessLists = Array.isArray(modalFoldersAndLists?.folderlessLists) ? modalFoldersAndLists.folderlessLists : [];
-    if (clickupFolderId) {
-      const folder = folders.find(f => f && f.id === clickupFolderId);
-      return Array.isArray(folder?.lists) ? folder.lists : [];
-    }
-    return folderlessLists;
-  }, [clickupFolderId, modalFoldersAndLists]);
-
-  // Click outside and Escape key handler for Space dropdown
-  useEffect(() => {
-    if (!isSpaceDropdownOpen) return;
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (spaceDropdownRef.current && !spaceDropdownRef.current.contains(e.target as Node)) {
-        setIsSpaceDropdownOpen(false);
-      }
-    };
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setIsSpaceDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleOutsideClick);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isSpaceDropdownOpen]);
-
-  // Currently selected space display label for the modal
-  const selectedSpaceInfo = useMemo(() => {
-    if (!modalSpaceId) return null;
-    const spaces = Array.isArray(clickupSpaces) ? clickupSpaces : [];
-    const s = spaces.find(space => space && space.id === modalSpaceId);
-    if (!s) return null;
-    const rawFolders =
-      spaceFoldersMap?.[s.id] ||
-      (s.id === modalSpaceId && Array.isArray(modalFoldersAndLists?.folders)
-        ? modalFoldersAndLists.folders.map(f => f?.name).filter(Boolean)
-        : undefined);
-    const folders = Array.isArray(rawFolders) ? rawFolders : undefined;
-    const folderListStr =
-      folders && folders.length > 0
-        ? `(${folders.join(', ')})`
-        : folders
-        ? '(Folderless)'
-        : '';
-    return {
-      name: s.name,
-      folderListStr,
-      fullText: folderListStr ? `${s.name} | ${folderListStr}` : s.name,
-    };
-  }, [clickupSpaces, modalSpaceId, spaceFoldersMap, modalFoldersAndLists]);
-
-  // Derived current selected ClickUp destination breadcrumb for this specific task
-  const currentDestinationDisplay = useMemo(() => {
-    if (!isZensciencesUser || !isClickupConnected) return null;
-
-    const spaces = Array.isArray(clickupSpaces) ? clickupSpaces : [];
-    const spaceObj = spaces.find(s => s && s.id === modalSpaceId);
-    const spaceName = spaceObj?.name || (modalSpaceId ? `Space ${modalSpaceId}` : '');
-
-    const folders = Array.isArray(modalFoldersAndLists?.folders) ? modalFoldersAndLists.folders : [];
-    const folderlessLists = Array.isArray(modalFoldersAndLists?.folderlessLists) ? modalFoldersAndLists.folderlessLists : [];
-
-    let folderName: string | undefined = taskToEdit?.clickupFolderName;
-    if (clickupFolderId) {
-      const f = folders.find(fold => fold && fold.id === clickupFolderId);
-      if (f?.name) folderName = f.name;
-    }
-
-    let listName: string | undefined = taskToEdit?.clickupListName;
-    if (clickupListId) {
-      if (clickupFolderId) {
-        const f = folders.find(fold => fold && fold.id === clickupFolderId);
-        const l = f?.lists?.find(lst => lst && lst.id === clickupListId);
-        if (l?.name) listName = l.name;
-      } else {
-        const l = folderlessLists.find(lst => lst && lst.id === clickupListId);
-        if (l?.name) listName = l.name;
-      }
-    }
-
-    const parts: string[] = [];
-    if (spaceName) parts.push(spaceName);
-    if (folderName) parts.push(folderName);
-    if (listName) parts.push(listName);
-
-    const hasList = Boolean(clickupListId || taskToEdit?.clickupListId);
-    const isPipeline = status === 'pipeline';
-
-    let pathString = parts.length > 0 ? parts.join(' › ') : 'None selected';
-    if (!hasList && isPipeline) {
-      pathString = spaceName ? `${spaceName} (List optional for Pipeline)` : 'None (Pipeline - no list required)';
-    }
-
-    return {
-      spaceName,
-      folderName,
-      listName,
-      hasList,
-      isPipeline,
-      pathString,
-      clickupUrl: taskToEdit?.clickupUrl,
-      clickupTaskId: taskToEdit?.clickupTaskId,
-    };
-  }, [
-    isZensciencesUser,
-    isClickupConnected,
-    modalSpaceId,
-    clickupSpaces,
-    modalFoldersAndLists,
-    clickupFolderId,
-    clickupListId,
-    taskToEdit,
-    status,
-  ]);
-
-  const selectedUser = users.find(u => u.id === userId);
-  const role = selectedUser?.role || 'content';
-
-  // Quick due dates helper
-  const setQuickDate = (daysFromNow: number | null) => {
-    if (daysFromNow === null) {
+  // Quick date selector helpers
+  const setQuickDate = (daysFromNow: number | null, isEndOfMonth: boolean = false) => {
+    if (daysFromNow === null && !isEndOfMonth) {
       setDueDate('');
       return;
     }
-    const d = new Date();
-    d.setDate(d.getDate() + daysFromNow);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    setDueDate(`${yyyy}-${mm}-${dd}`);
-  };
-
-  const handleCreateNewList = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newListName.trim()) return;
-    setIsSubmittingNewList(true);
-    setNewListError(null);
-    try {
-      const created = await createClickupList(
-        newListName.trim(),
-        modalSpaceId,
-        clickupFolderId || undefined
-      );
-      if (created) {
-        setClickupListId(created.id);
-        setIsCreatingList(false);
-        setNewListName('');
-      } else {
-        setNewListError('Failed to create list');
-      }
-    } catch (err: any) {
-      setNewListError(err.message || 'Error creating list');
-    } finally {
-      setIsSubmittingNewList(false);
+    if (isEndOfMonth) {
+      setDueDate(getLastDayOfMonth());
+      return;
     }
+    const d = new Date();
+    d.setDate(d.getDate() + (daysFromNow || 0));
+    setDueDate(d.toISOString().split('T')[0]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -535,21 +191,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     setSubmitError(null);
     const finalDueDate = (status === 'pipeline' || status === 'retainer') ? undefined : (dueDate.trim() || undefined);
 
-    // Resolve folder and list names from the modal's space data
-    let folderName: string | undefined;
-    let listName: string | undefined;
-    const folders = modalFoldersAndLists?.folders || [];
-    const folderlessLists = modalFoldersAndLists?.folderlessLists || [];
-    if (clickupFolderId) {
-      const f = folders.find(fold => fold.id === clickupFolderId);
-      folderName = f?.name || taskToEdit?.clickupFolderName;
-      const l = f?.lists?.find(lst => lst.id === clickupListId);
-      listName = l?.name || (clickupListId === taskToEdit?.clickupListId ? taskToEdit?.clickupListName : undefined);
-    } else if (clickupListId) {
-      const l = folderlessLists.find(lst => lst.id === clickupListId);
-      listName = l?.name || (clickupListId === taskToEdit?.clickupListId ? taskToEdit?.clickupListName : undefined);
-    }
-
     try {
       if (taskToEdit) {
         await updateTask(taskToEdit.id, {
@@ -559,14 +200,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           dueDate: finalDueDate,
           cognitiveLoad,
           status,
-          clickupFolderId: clickupFolderId || undefined,
-          clickupFolderName: folderName,
-          clickupListId: clickupListId || undefined,
-          clickupListName: listName,
-          clickupSpaceId: modalSpaceId || undefined,
-          clickupTaskType: clickupTaskType || undefined,
-          clickupTaskTypeId: clickupTaskTypeId || undefined,
-          clickupTaskTypeFieldId: clickupTaskTypeFieldId || ctxClickupTaskTypeFieldId || undefined,
         });
       } else {
         await createTask({
@@ -576,14 +209,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           dueDate: finalDueDate,
           cognitiveLoad,
           status,
-          clickupFolderId: clickupFolderId || undefined,
-          clickupFolderName: folderName,
-          clickupListId: clickupListId || undefined,
-          clickupListName: listName,
-          clickupSpaceId: modalSpaceId || undefined,
-          clickupTaskType: clickupTaskType || undefined,
-          clickupTaskTypeId: clickupTaskTypeId || undefined,
-          clickupTaskTypeFieldId: clickupTaskTypeFieldId || ctxClickupTaskTypeFieldId || undefined,
         });
       }
       onClose();
@@ -601,24 +226,24 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     try {
       await deleteTask(taskToEdit.id);
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      setSubmitError(err?.message || 'Failed to delete task');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Escape key dismissal
+  // Close on Escape key
   useEffect(() => {
-    if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isSubmitting && !isSubmittingNewList) {
+      if (e.key === 'Escape' && isOpen) {
         onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, isSubmitting, isSubmittingNewList, onClose]);
+  }, [isOpen, onClose]);
 
   return (
     <AnimatePresence>
@@ -628,9 +253,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs overflow-y-auto"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-xs overflow-y-auto"
           onClick={e => {
-            if (e.target === e.currentTarget && !isSubmitting && !isSubmittingNewList) onClose();
+            if (e.target === e.currentTarget) onClose();
           }}
         >
           <motion.div
@@ -640,729 +265,468 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             transition={{ duration: 0.18, ease: 'easeOut' }}
             onClick={e => e.stopPropagation()}
             id="task-modal"
-            className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] p-6 shadow-2xl transition-all text-neutral-900 dark:text-white"
+            className="w-full max-w-lg max-h-[92vh] my-auto flex flex-col rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#111111] shadow-2xl transition-all text-neutral-900 dark:text-white overflow-hidden"
           >
-        <div className="flex items-center justify-between border-b border-neutral-100 dark:border-white/5 pb-3.5">
-          <h2 className="text-base font-semibold tracking-tight text-neutral-900 dark:text-white">
-            {taskToEdit ? 'Edit Task' : 'Create New Task'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-          {submitError && (
-            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400 flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{submitError}</span>
-            </div>
-          )}
-          {/* Subtask Breadcrumb if editing a delegated subtask */}
-          {taskToEdit?.isSubtask && (
-            <div className="flex items-center gap-2 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-500/20 px-3 py-2 text-xs text-blue-700 dark:text-blue-300">
-              <CornerDownRight className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
-              <div className="truncate">
-                <span className="font-semibold text-neutral-900 dark:text-white">Subtask of: </span>
-                <span className="font-medium">{taskToEdit.parentTaskTitle || 'Parent Task'}</span>
-                <span className="text-[10px] text-blue-600 dark:text-blue-400 ml-1.5">(Independent workflow)</span>
-              </div>
-            </div>
-          )}
-
-          {/* Delegated Subtasks list if parent task has subtasks */}
-          {delegatedSubtasks.length > 0 && (
-            <div className="rounded-xl border border-neutral-200/80 dark:border-white/10 bg-neutral-50 dark:bg-[#1A1A1A] p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-semibold text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5">
-                  <CornerDownRight className="h-3.5 w-3.5 text-blue-500" />
-                  <span>Delegated Subtasks ({delegatedSubtasks.length})</span>
-                </span>
-                <span className="text-[10px] text-neutral-400 dark:text-white/40">
-                  Independent on team boards
-                </span>
-              </div>
-              <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                {delegatedSubtasks.map(st => {
-                  const assignee = users.find(u => u.id === st.userId);
-                  return (
-                    <div
-                      key={st.id}
-                      className="flex items-center justify-between gap-2 rounded-lg bg-white dark:bg-black/30 border border-neutral-200/60 dark:border-white/5 px-2.5 py-1.5 text-xs"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <div
-                          className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[8px] font-bold text-white bg-gradient-to-br ${
-                            assignee?.avatarColor || 'from-blue-600 to-indigo-600'
-                          }`}
-                        >
-                          {(assignee?.name || '?').charAt(0).toUpperCase()}
-                        </div>
-                        <span className="font-medium text-neutral-800 dark:text-neutral-200 truncate">
-                          {assignee?.name || 'Unassigned'}
-                        </span>
-                        <span className="text-neutral-400 dark:text-white/40 truncate">
-                          — {st.title}
-                        </span>
-                      </div>
-                      <span className="text-[10px] font-semibold capitalize px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-white/10 text-neutral-600 dark:text-neutral-300 shrink-0">
-                        {typeof st.status === 'string' ? st.status.replace('_', ' ') : 'todo'}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Task Name & Task Type */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="sm:col-span-2">
-              <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
-                Task Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                id="task-title-input"
-                type="text"
-                value={title}
-                onChange={e => setTitle(e.target.value)}
-                placeholder="e.g. Redesign navigation menu for mobile screens"
-                className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
-                required
-                autoFocus
-              />
-            </div>
-
-            <div className="sm:col-span-1">
-              <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
-                Task Type
-              </label>
-              <div className="relative">
-                <select
-                  id="task-type-select"
-                  value={clickupTaskTypeId || clickupTaskType}
-                  onChange={e => {
-                    const val = e.target.value;
-                    const opt = effectiveTaskTypeOptions.find(o => o.id === val || o.name === val);
-                    if (opt) {
-                      setClickupTaskTypeId(opt.id);
-                      setClickupTaskType(opt.name);
-                    } else {
-                      setClickupTaskTypeId(val);
-                      setClickupTaskType(val);
-                    }
-                  }}
-                  className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 pl-3 pr-8 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none focus:ring-0 transition-colors cursor-pointer hover:border-neutral-400 dark:hover:border-white/20"
-                >
-                  <option value="">Select Type...</option>
-                  {effectiveTaskTypeOptions.map(opt => (
-                    <option key={opt.id} value={opt.id} className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">
-                      {opt.name}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
-              </div>
-            </div>
-          </div>
-
-          {/* Row: Assignee & Status */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Assignee */}
-            <div>
-              <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
-                Assignee
-              </label>
-              <div className="relative">
-                <select
-                  id="task-assignee-select"
-                  value={userId}
-                  onChange={e => setUserId(e.target.value)}
-                  className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 pl-3 pr-8 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none focus:ring-0 transition-colors cursor-pointer hover:border-neutral-400 dark:hover:border-white/20"
-                >
-                  {users.length === 0 ? (
-                    <option value="" disabled>
-                      No members yet — please add a member first
-                    </option>
-                  ) : (
-                    users.map(u => (
-                      <option key={u.id} value={u.id} className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">
-                        {u.name} ({u.role === 'content' ? 'Content' : 'Design'})
-                      </option>
-                    ))
-                  )}
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
-              </div>
-              {users.length === 0 && (
-                <p className="mt-1 text-[11px] text-amber-500 dark:text-amber-400">
-                  Please add at least one member before assigning tasks.
-                </p>
-              )}
-            </div>
-
-            {/* Status */}
-            <div>
-              <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
-                Status
-              </label>
-              <div className="relative">
-                <select
-                  id="task-status-select"
-                  value={status}
-                  onChange={e => setStatus(e.target.value as TaskStatus)}
-                  className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 pl-3 pr-8 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none focus:ring-0 transition-colors capitalize cursor-pointer hover:border-neutral-400 dark:hover:border-white/20"
-                >
-                  <option value="pipeline" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">Pipeline (Backlog)</option>
-                  <option value="retainer" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">Ongoing</option>
-                  <option value="todo" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">To Do</option>
-                  <option value="in_progress" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">In Progress</option>
-                  <option value="in_review" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">In Review</option>
-                  <option value="done" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">Done</option>
-                  <option value="archived" className="bg-white dark:bg-[#141414] text-neutral-900 dark:text-white">Archived</option>
-                </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
-              </div>
-            </div>
-          </div>
-
-          {/* Cognitive Load Picker with role-specific definitions */}
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 flex items-center gap-1.5">
-                <Brain className="h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
-                <span>Cognitive Load</span>
-              </label>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                id="cognitive-load-low"
-                onClick={() => setCognitiveLoad('low')}
-                className={`flex flex-col items-center justify-center rounded-xl border p-2.5 text-center transition-all ${
-                  cognitiveLoad === 'low'
-                    ? 'border-green-500/50 bg-green-50 dark:bg-green-500/15 text-green-700 dark:text-green-400 ring-1 ring-green-500/30'
-                    : 'border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414] text-neutral-600 dark:text-white/40 hover:text-neutral-900 dark:hover:text-white hover:border-neutral-300 dark:hover:border-white/10'
-                }`}
-              >
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-green-500" />
-                  <span className="text-xs font-semibold">Low</span>
-                </div>
-                <span className="text-[10px] text-neutral-500 dark:text-white/50 mt-1 leading-tight">
-                  {role === 'content' ? 'Content Writing' : 'Adaptive Design'}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                id="cognitive-load-medium"
-                onClick={() => setCognitiveLoad('medium')}
-                className={`flex flex-col items-center justify-center rounded-xl border p-2.5 text-center transition-all ${
-                  cognitiveLoad === 'medium'
-                    ? 'border-yellow-500/50 bg-yellow-50 dark:bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 ring-1 ring-yellow-500/30'
-                    : 'border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414] text-neutral-600 dark:text-white/40 hover:text-neutral-900 dark:hover:text-white hover:border-neutral-300 dark:hover:border-white/10'
-                }`}
-              >
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-yellow-500" />
-                  <span className="text-xs font-semibold">Medium</span>
-                </div>
-                <span className="text-[10px] text-neutral-500 dark:text-white/50 mt-1 leading-tight">
-                  {role === 'content' ? 'Creative Concept' : 'Conceptual Design'}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                id="cognitive-load-high"
-                onClick={() => setCognitiveLoad('high')}
-                className={`flex flex-col items-center justify-center rounded-xl border p-2.5 text-center transition-all ${
-                  cognitiveLoad === 'high'
-                    ? 'border-red-500/50 bg-red-50 dark:bg-red-500/15 text-red-700 dark:text-red-400 ring-1 ring-red-500/30'
-                    : 'border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414] text-neutral-600 dark:text-white/40 hover:text-neutral-900 dark:hover:text-white hover:border-neutral-300 dark:hover:border-white/10'
-                }`}
-              >
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-red-500" />
-                  <span className="text-xs font-semibold">High</span>
-                </div>
-                <span className="text-[10px] text-neutral-500 dark:text-white/50 mt-1 leading-tight">
-                  {role === 'content' ? 'Strategy & Planning' : 'Identity Design'}
-                </span>
-              </button>
-            </div>
-          </div>
-
-          {/* Due Date (Mandatory for active workflow lanes) */}
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 flex items-center gap-1.5">
-                <Calendar className="h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
-                <span>Due Date</span>
-                {status !== 'pipeline' && status !== 'retainer' && (
-                  <span className="text-red-500 font-semibold text-[11px] normal-case ml-0.5">
-                    * (Required)
-                  </span>
-                )}
-              </label>
-              <div className="flex items-center gap-1 text-[10px]">
-                <button
-                  type="button"
-                  onClick={() => setQuickDate(0)}
-                  className="rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:text-white/40 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
-                >
-                  Today
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQuickDate(1)}
-                  className="rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:text-white/40 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
-                >
-                  Tomorrow
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQuickDate(3)}
-                  className="rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:text-white/40 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
-                >
-                  +3d
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setQuickDate(7)}
-                  className="rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:text-white/40 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
-                >
-                  +1w
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDueDate(getLastDayOfMonth())}
-                  className="rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:text-white/40 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
-                >
-                  End of month
-                </button>
-                {(status === 'pipeline' || status === 'retainer') && dueDate && (
-                  <button
-                    type="button"
-                    onClick={() => setQuickDate(null)}
-                    className="rounded px-1.5 py-0.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 cursor-pointer"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <input
-              id="task-due-date-input"
-              type="date"
-              required={status !== 'pipeline' && status !== 'retainer'}
-              value={dueDate}
-              onChange={e => setDueDate(e.target.value)}
-              className={`w-full rounded-xl border bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white focus:outline-none transition-colors ${
-                status !== 'pipeline' && status !== 'retainer' && !dueDate
-                  ? 'border-amber-400 dark:border-amber-500/50 focus:border-amber-500'
-                  : 'border-neutral-300 dark:border-white/10 focus:border-blue-500'
-              }`}
-            />
-            {status !== 'pipeline' && status !== 'retainer' && !dueDate && (
-              <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-400">
-                A deadline is required to add tasks directly into active workflow lanes.
-              </p>
-            )}
-          </div>
-
-          {/* ClickUp Destination (Folder & List) - for @zensciences.com users */}
-          {isZensciencesUser && isClickupConnected && (
-            <div className="rounded-xl border border-purple-500/25 bg-purple-50/30 dark:bg-purple-950/20 p-3 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs uppercase tracking-wider font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-1.5">
-                    <span>ClickUp Destination</span>
-                  </span>
-                  {status === 'pipeline' && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-purple-200/60 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 font-medium">
-                      Optional for Pipeline
-                    </span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsCreatingList(!isCreatingList)}
-                  className="text-[11px] text-purple-600 dark:text-purple-400 hover:underline font-semibold"
-                >
-                  {isCreatingList ? 'Select Existing List' : '+ Create New List'}
-                </button>
-              </div>
-
-              {/* Current Destination Path Preview for this specific task */}
-              <div className="rounded-xl border border-purple-200 dark:border-purple-800/40 bg-purple-100/40 dark:bg-purple-900/20 p-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <MapPin className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-purple-700 dark:text-purple-300 shrink-0">
-                      Destination:
-                    </span>
-                    <span className="text-xs font-semibold text-neutral-900 dark:text-white truncate" title={currentDestinationDisplay?.pathString}>
-                      {currentDestinationDisplay?.pathString}
-                    </span>
-                  </div>
-                  {currentDestinationDisplay?.clickupUrl ? (
-                    <a
-                      href={currentDestinationDisplay.clickupUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-purple-600 text-[10px] font-semibold text-white hover:bg-purple-500 shrink-0 transition-colors"
-                    >
-                      <span>Open in ClickUp</span>
-                      <ExternalLink className="h-2.5 w-2.5" />
-                    </a>
-                  ) : status === 'pipeline' && !currentDestinationDisplay?.hasList ? (
-                    <span className="text-[10px] text-purple-600 dark:text-purple-400 italic shrink-0">
-                      No list required
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-
-              {/* Space Selection with folders against each space name */}
-              <div>
-                <label className="block text-[10px] uppercase font-semibold text-neutral-500 dark:text-white/40 mb-1">
-                  Space
-                </label>
-                <div className="relative" ref={spaceDropdownRef}>
-                  <button
-                    type="button"
-                    disabled={clickupSpaces.length === 0}
-                    onClick={() => setIsSpaceDropdownOpen(prev => !prev)}
-                    className={`w-full flex items-center justify-between rounded-xl border bg-white dark:bg-[#141414] py-1.5 pl-2.5 pr-2.5 text-xs text-neutral-900 dark:text-white transition-colors disabled:opacity-50 ${
-                      isSpaceDropdownOpen
-                        ? 'border-purple-500 ring-1 ring-purple-500/20'
-                        : 'border-neutral-300 dark:border-white/10 hover:border-neutral-400 dark:hover:border-white/20'
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 dark:border-white/5 shrink-0 bg-white dark:bg-[#111111]">
+              <div className="flex items-center gap-2.5">
+                <h2 className="text-base font-semibold tracking-tight text-neutral-900 dark:text-white">
+                  {taskToEdit ? 'Edit Task' : 'Create New Task'}
+                </h2>
+                {taskToEdit && (
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                      taskToEdit.status === 'done'
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                        : taskToEdit.status === 'in_progress'
+                        ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20'
+                        : taskToEdit.status === 'in_review'
+                        ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20'
+                        : taskToEdit.status === 'pipeline'
+                        ? 'bg-neutral-500/10 text-neutral-600 dark:text-neutral-400 border border-neutral-500/20'
+                        : taskToEdit.status === 'retainer'
+                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                        : 'bg-neutral-500/10 text-neutral-600 dark:text-neutral-400 border border-neutral-500/20'
                     }`}
                   >
-                    <span className="truncate text-left flex-1 min-w-0 mr-1.5" title={selectedSpaceInfo?.fullText}>
-                      {selectedSpaceInfo
-                        ? selectedSpaceInfo.fullText
-                        : clickupSpaces.length === 0
-                        ? 'No spaces available'
-                        : 'Select Space'}
-                    </span>
-                    <ChevronDown
-                      className={`h-3.5 w-3.5 shrink-0 text-neutral-400 dark:text-white/40 transition-transform duration-200 ${
-                        isSpaceDropdownOpen ? 'rotate-180' : ''
-                      }`}
-                    />
-                  </button>
+                    {taskToEdit.status.replace('_', ' ')}
+                  </span>
+                )}
+                {taskToEdit?.isSubtask && (
+                  <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                    <CornerDownRight className="w-2.5 h-2.5" />
+                    <span>Subtask</span>
+                  </span>
+                )}
+              </div>
 
-                  {isSpaceDropdownOpen && (Array.isArray(clickupSpaces) ? clickupSpaces.length > 0 : false) && (
-                    <div className="absolute left-0 right-0 top-full mt-1 w-full max-w-full z-50 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414] shadow-xl py-1 max-h-60 overflow-y-auto overflow-x-hidden">
-                      {(Array.isArray(clickupSpaces) ? clickupSpaces : []).map(s => {
-                        const rawFolders =
-                          spaceFoldersMap?.[s.id] ||
-                          (s.id === modalSpaceId && Array.isArray(modalFoldersAndLists?.folders)
-                            ? modalFoldersAndLists.folders.map(f => f?.name).filter(Boolean)
-                            : undefined);
-                        const folders = Array.isArray(rawFolders) ? rawFolders : undefined;
-                        const folderListStr =
-                          folders && folders.length > 0
-                            ? `(${folders.join(', ')})`
-                            : folders
-                            ? '(Folderless)'
-                            : '';
-                        const fullText = folderListStr ? `${s.name} | ${folderListStr}` : s.name;
-                        const isSelected = s.id === modalSpaceId;
+              <div className="flex items-center gap-1">
+                {taskToEdit && canDuplicate && (
+                  <button
+                    type="button"
+                    onClick={() => onDuplicateTask?.(taskToEdit)}
+                    title="Delegate subtask across boards"
+                    className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-purple-600 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-purple-400 transition-colors cursor-pointer mr-1"
+                  >
+                    <CopyPlus className="h-4 w-4" />
+                  </button>
+                )}
+
+                {taskToEdit && canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmDelete(!showConfirmDelete)}
+                    title="Delete task"
+                    className="rounded-lg p-1.5 text-neutral-400 hover:bg-red-50 hover:text-red-600 dark:text-white/40 dark:hover:bg-red-950/20 dark:hover:text-red-400 transition-colors cursor-pointer"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+
+                <button
+                  onClick={onClose}
+                  aria-label="Close modal"
+                  className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Subtask Breadcrumb if this task is a subtask */}
+            {taskToEdit?.isSubtask && taskToEdit.parentTaskTitle && (
+              <div className="px-6 py-2 bg-purple-50/50 dark:bg-purple-950/20 border-b border-purple-200/50 dark:border-purple-800/20 flex items-center gap-2 text-xs">
+                <CornerDownRight className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                <span className="text-neutral-500 dark:text-neutral-400">Parent Task:</span>
+                <span className="font-semibold text-purple-700 dark:text-purple-300 truncate">
+                  {taskToEdit.parentTaskTitle}
+                </span>
+              </div>
+            )}
+
+            {/* Error Banner */}
+            {submitError && (
+              <div className="mx-6 mt-4 p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-500/20 flex items-center gap-2 text-xs text-red-600 dark:text-red-400">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{submitError}</span>
+              </div>
+            )}
+
+            {/* Delete Confirmation Banner */}
+            {showConfirmDelete && (
+              <div className="mx-6 mt-4 p-3.5 rounded-xl border border-red-500/30 bg-red-50 dark:bg-red-950/30 space-y-2">
+                <p className="text-xs font-semibold text-red-700 dark:text-red-300">
+                  Are you sure you want to delete this task?
+                </p>
+                <p className="text-[11px] text-red-600/80 dark:text-red-400/80">
+                  This action cannot be undone. All activity logs and tracking history for this task will be permanently removed.
+                </p>
+                <div className="flex gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleDelete}
+                    disabled={isSubmitting}
+                    className="rounded-lg bg-red-600 hover:bg-red-500 px-3 py-1.5 text-xs font-semibold text-white transition-colors cursor-pointer"
+                  >
+                    Yes, Delete Task
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmDelete(false)}
+                    className="rounded-lg border border-neutral-300 dark:border-white/10 px-3 py-1.5 text-xs font-medium text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Form Body */}
+            <form onSubmit={handleSubmit} className="px-6 py-5 overflow-y-auto flex-1 space-y-4">
+              {/* Task Name */}
+              <div>
+                <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                  Task Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  id="task-title-input"
+                  type="text"
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  placeholder="e.g. Redesign navigation menu for mobile screens"
+                  className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
+                  required
+                  autoFocus
+                />
+              </div>
+
+              {/* Assignee & Status */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Assignee Selection */}
+                <div>
+                  <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                    Assignee <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="task-assignee-select"
+                      value={userId}
+                      onChange={e => setUserId(e.target.value)}
+                      className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 pl-3 pr-8 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer"
+                      required
+                    >
+                      {users.map(u => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} ({u.role})
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
+                  </div>
+                </div>
+
+                {/* Workflow Status */}
+                <div>
+                  <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                    Status
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="task-status-select"
+                      value={status}
+                      onChange={e => setStatus(e.target.value as TaskStatus)}
+                      className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 pl-3 pr-8 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer"
+                    >
+                      <option value="pipeline">Pipeline (Backlog)</option>
+                      <option value="retainer">Ongoing (No deadline)</option>
+                      <option value="todo">To Do</option>
+                      <option value="in_progress">In Progress</option>
+                      <option value="in_review">In Review</option>
+                      <option value="done">Done</option>
+                      <option value="archived">Archived</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
+                  </div>
+                </div>
+              </div>
+
+              {/* Cognitive Load */}
+              <div>
+                <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5 flex items-center gap-1.5">
+                  <Brain className="h-3.5 w-3.5 text-indigo-500" />
+                  <span>Cognitive Load</span>
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['low', 'medium', 'high'] as const).map(level => {
+                    const isSelected = cognitiveLoad === level;
+                    return (
+                      <button
+                        key={level}
+                        type="button"
+                        onClick={() => setCognitiveLoad(level)}
+                        className={`flex flex-col items-center justify-center p-2 rounded-xl border text-center transition-all cursor-pointer ${
+                          isSelected
+                            ? level === 'high'
+                              ? 'border-red-500/40 bg-red-500/10 text-red-500 font-semibold shadow-xs'
+                              : level === 'medium'
+                              ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 font-semibold shadow-xs'
+                              : 'border-green-500/40 bg-green-500/10 text-green-600 dark:text-green-400 font-semibold shadow-xs'
+                            : 'border-neutral-200 dark:border-white/5 bg-neutral-50/50 dark:bg-white/5 text-neutral-500 dark:text-white/40 hover:border-neutral-300 dark:hover:border-white/15'
+                        }`}
+                      >
+                        <span className="text-xs capitalize font-medium">{level}</span>
+                        <span className="text-[10px] opacity-70">
+                          {level === 'low' ? 'Quick win' : level === 'medium' ? 'Standard' : 'Complex'}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Deadline */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 text-blue-500" />
+                    <span>
+                      Deadline {status !== 'pipeline' && status !== 'retainer' && <span className="text-red-500">*</span>}
+                    </span>
+                  </label>
+
+                  {/* Quick Select Buttons */}
+                  <div className="flex items-center gap-1 text-[10px]">
+                    <button
+                      type="button"
+                      onClick={() => setQuickDate(1)}
+                      className="rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:text-white/40 dark:hover:bg-white/5 cursor-pointer"
+                    >
+                      Tomorrow
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuickDate(7)}
+                      className="rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:text-white/40 dark:hover:bg-white/5 cursor-pointer"
+                    >
+                      +1 Week
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setQuickDate(null, true)}
+                      className="rounded px-1.5 py-0.5 text-neutral-500 hover:bg-neutral-100 dark:text-white/40 dark:hover:bg-white/5 cursor-pointer"
+                    >
+                      Month End
+                    </button>
+                    {dueDate && (
+                      <button
+                        type="button"
+                        onClick={() => setQuickDate(null)}
+                        className="rounded px-1.5 py-0.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 cursor-pointer"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <input
+                  id="task-due-date-input"
+                  type="date"
+                  required={status !== 'pipeline' && status !== 'retainer'}
+                  value={dueDate}
+                  onChange={e => setDueDate(e.target.value)}
+                  className={`w-full rounded-xl border bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white focus:outline-none transition-colors ${
+                    status !== 'pipeline' && status !== 'retainer' && !dueDate
+                      ? 'border-amber-400 dark:border-amber-500/50 focus:border-amber-500'
+                      : 'border-neutral-300 dark:border-white/10 focus:border-blue-500'
+                  }`}
+                />
+                {status !== 'pipeline' && status !== 'retainer' && !dueDate && (
+                  <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-400">
+                    A deadline is required to add tasks directly into active workflow lanes.
+                  </p>
+                )}
+              </div>
+
+              {!canEdit && (
+                <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-600 dark:text-amber-400">
+                  Read-only view: You only have permission to edit tasks on your assigned board or swimlane.
+                </div>
+              )}
+
+              {/* Context / Description */}
+              <div>
+                <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                  Context (if any)
+                </label>
+                <textarea
+                  id="task-description-input"
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  placeholder="Key requirements, scope, or delivery specifications..."
+                  rows={2}
+                  className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none resize-none transition-colors"
+                />
+              </div>
+
+              {/* Delegated Subtasks Preview (if this task has subtasks) */}
+              {delegatedSubtasks.length > 0 && (
+                <div className="pt-3 border-t border-neutral-100 dark:border-white/5 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                      <CornerDownRight className="w-3.5 h-3.5" />
+                      <span>Delegated Subtasks ({delegatedSubtasks.length})</span>
+                    </span>
+                  </div>
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto rounded-xl border border-neutral-200/70 dark:border-white/5 bg-neutral-50 dark:bg-[#121212] p-2">
+                    {delegatedSubtasks.map(st => {
+                      const assignee = users.find(u => u.id === st.userId);
+                      return (
+                        <div
+                          key={st.id}
+                          className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white dark:bg-[#1A1A1A] border border-neutral-200/50 dark:border-white/5 text-xs"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div
+                              className={`flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-bold text-white bg-gradient-to-br ${
+                                assignee?.avatarColor || 'from-blue-600 to-indigo-600'
+                              } shrink-0`}
+                            >
+                              {(assignee?.name || '?').charAt(0).toUpperCase()}
+                            </div>
+                            <span className="font-medium text-neutral-800 dark:text-white truncate">
+                              {st.title}
+                            </span>
+                          </div>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 shrink-0">
+                            {typeof st.status === 'string' ? st.status.replace('_', ' ') : 'todo'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Activity Audit Trail & Cycle Time */}
+              {taskToEdit && (
+                <div className="pt-3 border-t border-neutral-100 dark:border-white/5 space-y-2.5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-white/40">
+                      <History className="h-3.5 w-3.5 text-blue-500" />
+                      <span>Activity & Cycle Time</span>
+                    </div>
+                    {cycleMetrics && (
+                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-neutral-400 dark:text-white/40">
+                        <span className="flex items-center gap-1 bg-neutral-100 dark:bg-white/5 px-2 py-0.5 rounded-md border border-neutral-200/50 dark:border-white/5">
+                          <Clock className="h-3 w-3 text-neutral-500 dark:text-white/50" />
+                          {cycleMetrics.isDone ? 'Completed in:' : 'Lead time:'} <strong className="text-neutral-700 dark:text-white/80">{cycleMetrics.totalLeadTimeStr}</strong>
+                        </span>
+                        <span className="bg-neutral-100 dark:bg-white/5 px-2 py-0.5 rounded-md border border-neutral-200/50 dark:border-white/5">
+                          In status: <strong className="text-neutral-700 dark:text-white/80">{cycleMetrics.currentStatusStr}</strong>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => onAdjustBillableHours?.(taskToEdit)}
+                          title="Click to manually correct billable hours"
+                          className="flex items-center gap-1 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-md border border-blue-200/60 dark:border-blue-500/25 hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:border-blue-400 transition-all cursor-pointer group"
+                        >
+                          <Timer className="h-3 w-3 text-blue-500 group-hover:scale-110 transition-transform" />
+                          <span>Billable:</span>
+                          <strong className="text-blue-700 dark:text-blue-300 underline decoration-blue-300 dark:decoration-blue-500 underline-offset-2">
+                            {cycleMetrics.billableDetailedStr}
+                          </strong>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  {activities.length === 0 ? (
+                    <div className="rounded-xl border border-neutral-200/70 dark:border-white/5 bg-neutral-50 dark:bg-[#121212] p-3 text-center text-[11px] text-neutral-400 dark:text-white/30">
+                      Created {formatActivityTime(taskToEdit.createdAt || '')} • No modifications recorded yet
+                    </div>
+                  ) : (
+                    <div className="max-h-36 overflow-y-auto rounded-xl border border-neutral-200/70 dark:border-white/5 bg-neutral-50 dark:bg-[#121212] p-2.5 space-y-2 text-xs divide-y divide-neutral-100 dark:divide-white/5">
+                      {activities.map((act, actIdx) => {
+                        if (!act) return null;
+                        let IconComponent = Clock;
+                        let iconBg = 'text-neutral-500 bg-neutral-200/60 dark:bg-white/10';
+
+                        if (act.action === 'created') {
+                          IconComponent = PlusCircle;
+                          iconBg = 'text-blue-500 bg-blue-100 dark:bg-blue-500/10';
+                        } else if (act.action === 'status_change') {
+                          IconComponent = act.to === 'done' ? CheckCircle2 : ArrowRight;
+                          iconBg = act.to === 'done'
+                            ? 'text-emerald-500 bg-emerald-100 dark:bg-emerald-500/10'
+                            : 'text-amber-500 bg-amber-100 dark:bg-amber-500/10';
+                        } else if (act.action === 'reassigned') {
+                          IconComponent = UserCheck;
+                          iconBg = 'text-purple-500 bg-purple-100 dark:bg-purple-500/10';
+                        } else if (act.action === 'billable_adjusted') {
+                          IconComponent = Timer;
+                          iconBg = 'text-blue-500 bg-blue-100 dark:bg-blue-500/10';
+                        }
+
+                        const toStr = typeof act.to === 'string' ? act.to : (typeof act.to === 'object' && act.to ? JSON.stringify(act.to) : String(act.to ?? ''));
+                        const fromStr = typeof act.from === 'string' ? act.from : (typeof act.from === 'object' && act.from ? JSON.stringify(act.from) : String(act.from ?? ''));
 
                         return (
-                          <SpaceDropdownRow
-                            key={s.id}
-                            space={s}
-                            folderListStr={folderListStr}
-                            fullText={fullText}
-                            isSelected={isSelected}
-                            onSelect={() => {
-                              setModalSpaceId(s.id);
-                              setClickupFolderId('');
-                              setClickupListId('');
-                              setIsSpaceDropdownOpen(false);
-                            }}
-                          />
+                          <div key={act.id || actIdx} className="pt-2 first:pt-0 flex items-start gap-2">
+                            <div className={`p-1 rounded-md shrink-0 mt-0.5 ${iconBg}`}>
+                              <IconComponent className="h-3 w-3" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-neutral-800 dark:text-white/90 text-[11px] truncate">
+                                {act.details || (
+                                  act.action === 'created'
+                                    ? 'Task created'
+                                    : act.action === 'status_change'
+                                    ? `Status changed from ${fromStr.replace('_', ' ')} to ${toStr.replace('_', ' ')}`
+                                    : act.action === 'reassigned'
+                                    ? `Reassigned to ${toStr}`
+                                    : act.action === 'billable_adjusted'
+                                    ? `Billable time set to ${toStr}`
+                                    : act.action
+                                )}
+                              </p>
+                              <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 dark:text-white/40 mt-0.5">
+                                <span>{act.actorName || 'System'}</span>
+                                <span>•</span>
+                                <span>{formatActivityTime(act.timestamp)}</span>
+                              </div>
+                            </div>
+                          </div>
                         );
                       })}
                     </div>
                   )}
                 </div>
-              </div>
-
-              {isCreatingList ? (
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    value={newListName}
-                    onChange={e => setNewListName(e.target.value)}
-                    placeholder="Enter new ClickUp list name..."
-                    className="w-full rounded-xl border border-purple-300 dark:border-purple-700 bg-white dark:bg-[#141414] py-1.5 px-3 text-xs text-neutral-900 dark:text-white"
-                  />
-                  {newListError && <p className="text-[10px] text-red-500">{newListError}</p>}
-                  <button
-                    type="button"
-                    onClick={handleCreateNewList}
-                    disabled={isSubmittingNewList || !newListName.trim()}
-                    className="rounded-lg bg-purple-600 px-3 py-1 text-xs font-semibold text-white hover:bg-purple-500 disabled:opacity-50"
-                  >
-                    {isSubmittingNewList ? 'Creating...' : 'Create and Select'}
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {/* Folder Selection */}
-                  <div>
-                    <label className="block text-[10px] uppercase font-semibold text-neutral-500 dark:text-white/40 mb-1">
-                      Folder
-                    </label>
-                    <div className="relative">
-                      <select
-                        value={clickupFolderId}
-                        onChange={e => {
-                          setClickupFolderId(e.target.value);
-                          setClickupListId('');
-                        }}
-                        className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-1.5 pl-2.5 pr-8 text-xs text-neutral-900 dark:text-white"
-                      >
-                        <option value="">Space (Folderless)</option>
-                        {(Array.isArray(modalFoldersAndLists?.folders) ? modalFoldersAndLists.folders : []).map(f => (
-                          <option key={f.id} value={f.id}>{f.name}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
-                    </div>
-                  </div>
-
-                  {/* List Selection */}
-                  <div>
-                    <label className="block text-[10px] uppercase font-semibold text-neutral-500 dark:text-white/40 mb-1">
-                      List
-                    </label>
-                    <div className="relative">
-                      <select
-                        value={clickupListId}
-                        onChange={e => setClickupListId(e.target.value)}
-                        className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-1.5 pl-2.5 pr-8 text-xs text-neutral-900 dark:text-white"
-                      >
-                        <option value="">
-                          {status === 'pipeline' ? 'None (Pipeline - no list required)' : 'Select a list...'}
-                        </option>
-                        {(Array.isArray(availableLists) ? availableLists : []).map(l => (
-                          <option key={l.id} value={l.id}>{l.name}</option>
-                        ))}
-                        {clickupListId && !availableLists.some(l => l.id === clickupListId) && (
-                          <option value={clickupListId}>{taskToEdit?.clickupListName || 'Current List'}</option>
-                        )}
-                      </select>
-                      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
-                    </div>
-                  </div>
-                </div>
               )}
-            </div>
-          )}
 
-          {!canEdit && (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-2.5 text-xs text-amber-600 dark:text-amber-400">
-              Read-only view: You only have permission to edit tasks on your assigned board or swimlane.
-            </div>
-          )}
-
-          {/* Context (if any) - moved to end */}
-          <div>
-            <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
-              Context (if any)
-            </label>
-            <textarea
-              id="task-description-input"
-              value={description}
-              onChange={e => setDescription(e.target.value)}
-              placeholder="Key requirements, scope, or delivery specifications..."
-              rows={2}
-              className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none resize-none transition-colors"
-            />
-          </div>
-
-          {/* Micro Activity Audit Trail & Cycle Time */}
-          {taskToEdit && (
-            <div className="pt-3 border-t border-neutral-100 dark:border-white/5 space-y-2.5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-white/40">
-                  <History className="h-3.5 w-3.5 text-blue-500" />
-                  <span>Activity & Cycle Time</span>
-                </div>
-                {cycleMetrics && (
-                  <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-neutral-400 dark:text-white/40">
-                    <span className="flex items-center gap-1 bg-neutral-100 dark:bg-white/5 px-2 py-0.5 rounded-md border border-neutral-200/50 dark:border-white/5">
-                      <Clock className="h-3 w-3 text-neutral-500 dark:text-white/50" />
-                      {cycleMetrics.isDone ? 'Completed in:' : 'Lead time:'} <strong className="text-neutral-700 dark:text-white/80">{cycleMetrics.totalLeadTimeStr}</strong>
-                    </span>
-                    <span className="bg-neutral-100 dark:bg-white/5 px-2 py-0.5 rounded-md border border-neutral-200/50 dark:border-white/5">
-                      In status: <strong className="text-neutral-700 dark:text-white/80">{cycleMetrics.currentStatusStr}</strong>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => onAdjustBillableHours?.(taskToEdit)}
-                      title="Click to manually correct billable hours"
-                      className="flex items-center gap-1 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded-md border border-blue-200/60 dark:border-blue-500/25 hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:border-blue-400 transition-all cursor-pointer group"
-                    >
-                      <Timer className="h-3 w-3 text-blue-500 group-hover:scale-110 transition-transform" />
-                      <span>Billable:</span>
-                      <strong className="text-blue-700 dark:text-blue-300 underline decoration-blue-300 dark:decoration-blue-500 underline-offset-2">
-                        {cycleMetrics.billableDetailedStr}
-                      </strong>
-                    </button>
-                  </div>
-                )}
+              {/* Submit Buttons */}
+              <div className="flex items-center justify-end gap-2 pt-4 border-t border-neutral-100 dark:border-white/5">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-xl border border-neutral-200 dark:border-white/10 px-4 py-2 text-xs font-medium text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  id="task-submit-button"
+                  type="submit"
+                  disabled={isSubmitting || !title.trim() || !userId || (status !== 'pipeline' && status !== 'retainer' && !dueDate.trim()) || !canEdit}
+                  className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-5 py-2 text-xs font-semibold text-white shadow-md shadow-blue-900/20 hover:bg-blue-500 focus:outline-none transition-all disabled:opacity-50 cursor-pointer"
+                >
+                  {isSubmitting ? (
+                    <span>Saving...</span>
+                  ) : (
+                    <span>{taskToEdit ? 'Save Changes' : 'Create Task'}</span>
+                  )}
+                </button>
               </div>
-
-              {activities.length === 0 ? (
-                <div className="rounded-xl border border-neutral-200/70 dark:border-white/5 bg-neutral-50 dark:bg-[#121212] p-3 text-center text-[11px] text-neutral-400 dark:text-white/30">
-                  Created {formatActivityTime(taskToEdit.createdAt || '')} • No modifications recorded yet
-                </div>
-              ) : (
-                <div className="max-h-36 overflow-y-auto rounded-xl border border-neutral-200/70 dark:border-white/5 bg-neutral-50 dark:bg-[#121212] p-2.5 space-y-2 text-xs divide-y divide-neutral-100 dark:divide-white/5">
-                  {activities.map((act, actIdx) => {
-                    if (!act) return null;
-                    let IconComponent = Clock;
-                    let iconBg = 'text-neutral-500 bg-neutral-200/60 dark:bg-white/10';
-
-                    if (act.action === 'created') {
-                      IconComponent = PlusCircle;
-                      iconBg = 'text-blue-500 bg-blue-100 dark:bg-blue-500/10';
-                    } else if (act.action === 'status_change') {
-                      IconComponent = act.to === 'done' ? CheckCircle2 : ArrowRight;
-                      iconBg = act.to === 'done'
-                        ? 'text-emerald-500 bg-emerald-100 dark:bg-emerald-500/10'
-                        : 'text-amber-500 bg-amber-100 dark:bg-amber-500/10';
-                    } else if (act.action === 'reassigned') {
-                      IconComponent = UserCheck;
-                      iconBg = 'text-purple-500 bg-purple-100 dark:bg-purple-500/10';
-                    } else if (act.action === 'rescheduled') {
-                      IconComponent = Calendar;
-                      iconBg = 'text-sky-500 bg-sky-100 dark:bg-sky-500/10';
-                    } else if (act.action === 'billable_adjusted') {
-                      IconComponent = Timer;
-                      iconBg = 'text-indigo-500 bg-indigo-100 dark:bg-indigo-500/10';
-                    }
-
-                    const toStr = typeof act.to === 'string' ? act.to : (typeof act.to === 'object' && act.to ? JSON.stringify(act.to) : String(act.to ?? ''));
-
-                    return (
-                      <div key={act.id || `act-${actIdx}`} className="pt-1.5 first:pt-0 flex items-start gap-2.5">
-                        <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${iconBg}`}>
-                          <IconComponent className="h-3 w-3" />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[11px] font-medium text-neutral-700 dark:text-neutral-300 leading-snug">
-                            {act.details || (
-                              act.action === 'status_change'
-                                ? `Moved to ${toStr.replace('_', ' ')}`
-                                : act.action === 'reassigned'
-                                ? `Assigned to ${toStr}`
-                                : act.action === 'rescheduled'
-                                ? `Due date: ${toStr}`
-                                : act.action === 'billable_adjusted'
-                                ? `Billable hours adjusted to ${toStr}`
-                                : 'Task created'
-                            )}
-                          </p>
-                          <span className="text-[10px] text-neutral-400 dark:text-white/30">
-                            {formatActivityTime(act.timestamp || '')}
-                            {act.actorName ? ` • by ${act.actorName}` : ''}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="mt-6 flex items-center justify-between pt-3 border-t border-neutral-100 dark:border-white/5">
-            {taskToEdit ? (
-              <div>
-                {showConfirmDelete ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-red-500 font-medium">Confirm?</span>
-                    <button
-                      type="button"
-                      onClick={handleDelete}
-                      disabled={isSubmitting}
-                      className="rounded-xl bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-500 transition-colors"
-                    >
-                      Yes, Delete
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmDelete(false)}
-                      className="rounded-xl border border-neutral-300 dark:border-white/10 px-2.5 py-1.5 text-xs text-neutral-600 dark:text-white/40 hover:text-neutral-900 dark:hover:text-white"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmDelete(true)}
-                      className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-600 p-1.5 rounded-xl hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                      <span>Delete Task</span>
-                    </button>
-                    {canDuplicate && onDuplicateTask && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onClose();
-                          onDuplicateTask(taskToEdit);
-                        }}
-                        className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 p-1.5 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-colors cursor-pointer"
-                        title="Create and assign subtask on another board"
-                      >
-                        <CopyPlus className="h-3.5 w-3.5" />
-                        <span>Create subtask</span>
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div />
-            )}
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-100 dark:bg-[#141414] px-3.5 py-2 text-xs font-medium text-neutral-600 dark:text-white/50 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200 dark:hover:bg-white/5 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                id="task-submit-button"
-                disabled={isSubmitting || !title.trim() || !userId || (status !== 'pipeline' && status !== 'retainer' && !dueDate.trim())}
-                className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-blue-900/20 hover:bg-blue-500 transition-colors disabled:opacity-50"
-              >
-                {taskToEdit ? 'Save Changes' : 'Create Task'}
-              </button>
-            </div>
-          </div>
-        </form>
+            </form>
           </motion.div>
         </motion.div>
       )}

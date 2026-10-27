@@ -24,7 +24,6 @@ import {
   ArrowUp,
   ArrowDown,
   Calendar,
-  RefreshCw,
   UserCog,
 } from 'lucide-react';
 import { useDashboard } from '../context/DashboardContext';
@@ -41,14 +40,7 @@ interface SwimlaneProps {
     title: string,
     status: TaskStatus,
     cognitiveLoad: 'low' | 'medium' | 'high',
-    dueDate?: string,
-    clickupDetails?: {
-      clickupFolderId?: string;
-      clickupFolderName?: string;
-      clickupListId?: string;
-      clickupListName?: string;
-      clickupSpaceId?: string;
-    }
+    dueDate?: string
   ) => Promise<void>;
   onEditTask: (task: Task) => void;
   onRescheduleTask?: (taskId: string, newDueDate: string | undefined) => void;
@@ -131,47 +123,11 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   canMoveDown,
 }) => {
   const {
-    isZensciencesUser,
-    isClickupConnected,
-    syncUserTasksWithClickUp,
     canManageMembers,
     canEditUserTasks,
-    setShowClickupPrompt,
-    getUserSyncState,
   } = useDashboard();
 
-  const [isSyncingClickUp, setIsSyncingClickUp] = useState(false);
-  const [syncFeedback, setSyncFeedback] = useState<string | null>(null);
-
   const canEdit = useMemo(() => canEditUserTasks(user.id), [canEditUserTasks, user.id]);
-
-  const syncState = useMemo(() => {
-    return getUserSyncState(user.id);
-  }, [getUserSyncState, user.id, tasks]);
-
-  const handleSyncClickUp = async () => {
-    if (!isClickupConnected) {
-      setShowClickupPrompt(true);
-      return;
-    }
-    setIsSyncingClickUp(true);
-    setSyncFeedback(null);
-    try {
-      const res = await syncUserTasksWithClickUp(user.id);
-      if (res.success) {
-        setSyncFeedback(`Synced ${res.syncedCount}`);
-        setTimeout(() => setSyncFeedback(null), 3000);
-      } else {
-        setSyncFeedback(res.message || 'Sync failed');
-        setTimeout(() => setSyncFeedback(null), 3000);
-      }
-    } catch {
-      setSyncFeedback('Sync error');
-      setTimeout(() => setSyncFeedback(null), 3000);
-    } finally {
-      setIsSyncingClickUp(false);
-    }
-  };
 
   const [showArchived, setShowArchived] = useState(false);
   const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
@@ -420,17 +376,10 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     async (
       targetUserId: string,
       title: string,
-      cognitiveLoad: CognitiveLoad,
-      clickupDetails?: {
-        clickupFolderId?: string;
-        clickupFolderName?: string;
-        clickupListId?: string;
-        clickupListName?: string;
-        clickupSpaceId?: string;
-      }
+      cognitiveLoad: CognitiveLoad
     ) => {
       if (onQuickAddTask) {
-        await onQuickAddTask(targetUserId, title, 'retainer', cognitiveLoad, undefined, clickupDetails);
+        await onQuickAddTask(targetUserId, title, 'retainer', cognitiveLoad);
       }
     },
     [onQuickAddTask]
@@ -745,40 +694,6 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               >
                 <Plus className="h-3.5 w-3.5" />
                 <span>Add Task</span>
-              </button>
-            )}
-
-            {/* 3. Sync tasks with ClickUp button (Icon only, 4 color states) */}
-            {isZensciencesUser && (
-              <button
-                id={`sync-clickup-btn-${user.id}`}
-                type="button"
-                onClick={handleSyncClickUp}
-                disabled={isSyncingClickUp || syncState === 'unmapped'}
-                title={
-                  syncState === 'unmapped'
-                    ? 'Member not mapped to ClickUp (edit profile to map)'
-                    : isSyncingClickUp
-                    ? `Syncing tasks with ClickUp for ${user.name}...`
-                    : syncState === 'failed'
-                    ? syncFeedback || 'Sync failed with ClickUp (click to retry)'
-                    : syncState === 'pending'
-                    ? syncFeedback || (isCurrentUser ? 'Changes pending sync with ClickUp (click to sync)' : `Changes pending sync with ClickUp for ${user.name}`)
-                    : syncFeedback || (isCurrentUser ? 'Tasks synced with ClickUp' : `Tasks synced with ClickUp for ${user.name}`)
-                }
-                className={`flex items-center justify-center p-2 rounded-xl border transition-all ${
-                  syncState === 'unmapped'
-                    ? 'border-neutral-200 dark:border-white/10 bg-neutral-100/50 dark:bg-white/5 text-neutral-400 dark:text-white/20 opacity-50 cursor-not-allowed'
-                    : syncState === 'failed'
-                    ? 'border-red-500/40 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 cursor-pointer shadow-xs'
-                    : syncState === 'pending'
-                    ? 'border-amber-500/40 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/40 cursor-pointer shadow-xs'
-                    : 'border-emerald-500/40 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 cursor-pointer shadow-xs'
-                }`}
-              >
-                <RefreshCw
-                  className={`h-3.5 w-3.5 ${isSyncingClickUp ? 'animate-spin' : ''}`}
-                />
               </button>
             )}
 

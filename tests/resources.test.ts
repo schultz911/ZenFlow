@@ -104,7 +104,7 @@ test('actual SSE snapshots recover missed deletions and redact keys; healthy cli
   let first: Awaited<ReturnType<typeof eventReader>> | undefined;
   let second: typeof first;
   try {
-    server.store.users[2].clickupApiKey = 'PRIVATE_FIXTURE_KEY';
+    server.store.users[2].secretToken = 'PRIVATE_FIXTURE_KEY';
     server.enableLiveBroadcast();
     first = await eventReader(server.url);
     const initial = await first.next('snapshot');

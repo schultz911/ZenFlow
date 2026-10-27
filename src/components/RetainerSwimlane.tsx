@@ -1,8 +1,7 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Task, User, CognitiveLoad } from '../types';
 import { getCognitiveLoadLabel } from '../utils/workload';
-import { useDashboard } from '../context/DashboardContext';
 import {
   Plus,
   Repeat,
@@ -18,14 +17,7 @@ interface RetainerSwimlaneProps {
   onQuickAdd: (
     userId: string,
     title: string,
-    cognitiveLoad: CognitiveLoad,
-    clickupDetails?: {
-      clickupFolderId?: string;
-      clickupFolderName?: string;
-      clickupListId?: string;
-      clickupListName?: string;
-      clickupSpaceId?: string;
-    }
+    cognitiveLoad: CognitiveLoad
   ) => Promise<void>;
   onEditTask: (task: Task) => void;
   onUpdateTitle?: (taskId: string, newTitle: string) => void;
@@ -42,53 +34,10 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
   onDeleteTask,
   onCreateSubtask,
 }) => {
-  const {
-    isClickupConnected,
-    isZensciencesUser,
-    selectedClickupSpaceId,
-    clickupFoldersAndLists,
-  } = useDashboard();
-
   const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newLoad, setNewLoad] = useState<CognitiveLoad>('medium');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // ClickUp destination selection state for quick-added retainer tasks
-  const [selectedFolderId, setSelectedFolderId] = useState<string>('');
-  const [selectedListId, setSelectedListId] = useState<string>('');
-
-  const folders = useMemo(() => {
-    return Array.isArray(clickupFoldersAndLists?.folders) ? clickupFoldersAndLists.folders : [];
-  }, [clickupFoldersAndLists]);
-
-  const folderlessLists = useMemo(() => {
-    return Array.isArray(clickupFoldersAndLists?.folderlessLists) ? clickupFoldersAndLists.folderlessLists : [];
-  }, [clickupFoldersAndLists]);
-
-  const availableLists = useMemo(() => {
-    if (selectedFolderId) {
-      const folder = folders.find(f => f && f.id === selectedFolderId);
-      return Array.isArray(folder?.lists) ? folder.lists : [];
-    }
-    return folderlessLists;
-  }, [selectedFolderId, folders, folderlessLists]);
-
-  // Synchronize default selected list when lists load or change
-  useEffect(() => {
-    if (!isClickupConnected || !isZensciencesUser) return;
-    if (selectedListId && availableLists.some(l => l.id === selectedListId)) return;
-
-    if (availableLists.length > 0) {
-      setSelectedListId(availableLists[0].id);
-    } else if (folderlessLists.length > 0) {
-      setSelectedFolderId('');
-      setSelectedListId(folderlessLists[0].id);
-    } else if (folders.length > 0 && Array.isArray(folders[0].lists) && folders[0].lists.length > 0) {
-      setSelectedFolderId(folders[0].id);
-      setSelectedListId(folders[0].lists[0].id);
-    }
-  }, [isClickupConnected, isZensciencesUser, availableLists, folderlessLists, folders, selectedListId]);
 
   // Inline title editing state for a retainer task
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
@@ -133,27 +82,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
     if (!trimmed || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      let clickupDetails: {
-        clickupFolderId?: string;
-        clickupFolderName?: string;
-        clickupListId?: string;
-        clickupListName?: string;
-        clickupSpaceId?: string;
-      } | undefined;
-
-      if (isClickupConnected && isZensciencesUser && selectedListId) {
-        const folder = folders.find(f => f && f.id === selectedFolderId);
-        const list = availableLists.find(l => l && l.id === selectedListId);
-        clickupDetails = {
-          clickupFolderId: selectedFolderId || undefined,
-          clickupFolderName: folder?.name,
-          clickupListId: selectedListId,
-          clickupListName: list?.name,
-          clickupSpaceId: selectedClickupSpaceId || undefined,
-        };
-      }
-
-      await onQuickAdd(user.id, trimmed, newLoad, clickupDetails);
+      await onQuickAdd(user.id, trimmed, newLoad);
       setNewTitle('');
       setIsAdding(false);
     } finally {
@@ -178,7 +107,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
             {tasks.length}
           </span>
           <span className="hidden sm:inline-block text-[10px] text-neutral-400 dark:text-white/30 truncate">
-            No deadline · Zero workload · In Progress on ClickUp
+            No deadline · Zero workload
           </span>
         </div>
 
@@ -238,46 +167,6 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
             placeholder="Ongoing task name... (Enter to save, Esc to cancel)"
             className="w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-[#121212] px-2.5 py-1.5 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-emerald-500 focus:outline-none"
           />
-
-          {/* ClickUp Destination Selection for Retainer parent task */}
-          {isClickupConnected && isZensciencesUser && (
-            <div className="flex flex-wrap items-center gap-1.5 p-2 rounded-lg bg-purple-50/60 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-800/30 text-[10px]">
-              <span className="font-semibold text-purple-700 dark:text-purple-300 shrink-0">
-                ClickUp:
-              </span>
-              {folders.length > 0 && (
-                <select
-                  value={selectedFolderId}
-                  onChange={e => {
-                    setSelectedFolderId(e.target.value);
-                    setSelectedListId('');
-                  }}
-                  className="rounded border border-purple-200 dark:border-purple-800/40 bg-white dark:bg-[#141414] px-1.5 py-0.5 text-[10px] text-neutral-800 dark:text-neutral-200 max-w-[130px] truncate"
-                  title="ClickUp Folder"
-                >
-                  <option value="">Space (Folderless)</option>
-                  {folders.map(f => (
-                    <option key={f.id} value={f.id}>
-                      {f.name}
-                    </option>
-                  ))}
-                </select>
-              )}
-              <select
-                value={selectedListId}
-                onChange={e => setSelectedListId(e.target.value)}
-                className="rounded border border-purple-200 dark:border-purple-800/40 bg-white dark:bg-[#141414] px-1.5 py-0.5 text-[10px] text-neutral-800 dark:text-neutral-200 max-w-[150px] truncate"
-                title="ClickUp List destination for parent task"
-              >
-                <option value="">Select ClickUp List...</option>
-                {availableLists.map(l => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
 
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1">
@@ -414,17 +303,6 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                         {task.cognitiveLoad}
                       </span>
                     </div>
-
-                    {/* ClickUp List Badge */}
-                    {task.clickupListName && (
-                      <span
-                        title={`ClickUp List: ${task.clickupListName}`}
-                        className="inline-flex items-center gap-1 text-[8.5px] px-1 py-0.2 rounded bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/60 dark:border-purple-800/40 font-medium truncate max-w-[85px]"
-                      >
-                        <span className="h-1 w-1 rounded-full bg-purple-500 shrink-0" />
-                        <span className="truncate">{task.clickupListName}</span>
-                      </span>
-                    )}
                   </div>
                 </div>
 

@@ -3,9 +3,8 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import compression from 'compression';
-import { createApiSecurity, redactPayload, SESSION_COOKIE, sameOriginMutation, validSignature } from './server/security';
+import { createApiSecurity, redactPayload, SESSION_COOKIE, sameOriginMutation } from './server/security';
 import { readAuditTail, writeSse } from './server/resources';
-import { WebhookRegistry } from './server/webhooks';
 import { initializeApp as initializeAdminApp, getApps as getAdminApps } from 'firebase-admin/app';
 import { getAuth as getAdminAuth } from 'firebase-admin/auth';
 
@@ -19,11 +18,6 @@ interface User {
   order?: number;
   isCreativeDirector?: boolean;
   creativeDirectorId?: string;
-  clickupApiKey?: string;
-  selectedClickupSpaceId?: string;
-  selectedClickupSpaceName?: string;
-  clickupUserId?: string;
-  clickupUsername?: string;
 }
 
 type TaskStatus = 'pipeline' | 'retainer' | 'todo' | 'in_progress' | 'in_review' | 'done' | 'archived';
@@ -53,19 +47,8 @@ interface Task {
   createdAt: string;
   updatedAt: string;
   activityLog?: TaskActivity[];
-  clickupTaskId?: string;
-  clickupFolderId?: string;
-  clickupFolderName?: string;
-  clickupListId?: string;
-  clickupListName?: string;
-  clickupSpaceId?: string;
-  clickupUrl?: string;
-  clickupTaskType?: string;
-  clickupTaskTypeId?: string;
-  clickupTaskTypeFieldId?: string;
   parentTaskId?: string;
   parentTaskTitle?: string;
-  clickupParentTaskId?: string;
   isSubtask?: boolean;
 }
 
@@ -75,16 +58,6 @@ interface AppStore {
 }
 
 const SUPERADMIN_EMAIL = 'kiran.s@zensciences.com';
-
-const ZENFLOW_TO_CLICKUP_STATUS: Record<string, string> = {
-  pipeline: 'open',
-  retainer: 'in progress',
-  todo: 'to do',
-  in_progress: 'in progress',
-  in_review: 'internal review',
-  done: 'client review',
-  archived: 'complete',
-};
 
 export interface AuditLogEntry {
   id: string;
@@ -105,18 +78,11 @@ export interface AuditLogEntry {
   metadata?: Record<string, any>;
 }
 
-const COGNITIVE_LOAD_ESTIMATES_MS: Record<string, number> = {
-  low: 12 * 3600 * 1000,
-  medium: 24 * 3600 * 1000,
-  high: 36 * 3600 * 1000,
-};
-
 // Support Railway dynamic PORT or default to 3000
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const DATA_DIR = process.env.ZENFLOW_DATA_DIR || path.join(process.cwd(), 'data');
 const DATA_FILE = path.join(DATA_DIR, 'store.json');
 const AUDIT_LOG_FILE = path.join(DATA_DIR, 'compliance-audit.jsonl');
-const webhookRegistry = new WebhookRegistry(path.join(DATA_DIR, '.clickup-webhooks.json'));
 // Identity trust is deliberately independent of the configurable Firestore credentials.
 const identityApp = getAdminApps().find(app => app.name === 'zenflow-identity') ||
   initializeAdminApp({ projectId: 'zen-flow-7173d' }, 'zenflow-identity');
@@ -124,13 +90,6 @@ const verifyIdentity = (token: string) => getAdminAuth(identityApp).verifyIdToke
 
 const recentAuditLogs: AuditLogEntry[] = [];
 const MAX_RECENT_AUDIT_LOGS = 100;
-
-// ClickUp Real-Time Webhook Listener State
-let registeredWebhookId: string | null = null;
-let activeWebhookEndpoint: string | null = null;
-let webhookEventsCount = 0;
-let lastWebhookEventAt: string | null = null;
-let lastWebhookAction: string | null = null;
 
 
 // Auto-detect production mode if running compiled dist artifact or in container environments
@@ -825,368 +784,7 @@ function ensureSuperadmin(appStore: AppStore) {
 // Ensure superadmin exists and data is deduplicated on startup
 ensureSuperadmin(store);
 
-const cachedClickupTeamIds = new Map<string, string>();
-async function resolveClickupTeamId(token: string): Promise<string | null> {
-  const cached = cachedClickupTeamIds.get(token);
-  if (cached) return cached;
-  try {
-    const teamRes = await fetch('https://api.clickup.com/api/v2/team', {
-      headers: { Authorization: token },
-    });
-    if (teamRes.ok) {
-      const teamData = await teamRes.json();
-      const tid = teamData.teams?.[0]?.id ? String(teamData.teams[0].id) : null;
-      if (tid) cachedClickupTeamIds.set(token, tid);
-      return tid;
-    }
-  } catch (err) {
-    console.warn('[ClickUp] Could not resolve team ID for time tracking:', err);
-  }
-  return null;
-}
 
-// Post time entry ensuring it is credited to the board member (taskUser), never polluting the caller's timesheet
-async function postClickupTimeEntry(params: {
-  clickupTaskId: string;
-  durationMs: number;
-  taskUser: User;
-  callerUserId?: string;
-  callerToken: string;
-}): Promise<boolean> {
-  const { clickupTaskId, durationMs, taskUser, callerUserId, callerToken } = params;
-  const timeMs = Math.round(durationMs);
-  if (timeMs < 1000) return true;
-
-  const isOwnBoard = !callerUserId || callerUserId === taskUser.id;
-  const boardUserToken = taskUser.clickupApiKey?.trim();
-  const boardUserClickupId = taskUser.clickupUserId ? parseInt(taskUser.clickupUserId, 10) : undefined;
-
-  // PRIORITY 1: If board member has their own ClickUp API key, authenticate with it.
-  // This guarantees the entry is credited directly to the board member's personal timesheet.
-  if (boardUserToken) {
-    const teamId = await resolveClickupTeamId(boardUserToken);
-    if (teamId) {
-      try {
-        const timeRes = await fetch(`https://api.clickup.com/api/v2/team/${teamId}/time_entries`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: boardUserToken,
-          },
-          body: JSON.stringify({
-            tid: clickupTaskId,
-            duration: timeMs,
-            start: Date.now() - timeMs,
-            stop: Date.now(),
-            billable: false,
-            ...(boardUserClickupId && !isNaN(boardUserClickupId) ? { assignee: boardUserClickupId } : {}),
-          }),
-        });
-        if (timeRes.ok) {
-          console.log(`[ClickUp Time Sync] Tracked ${timeMs}ms directly to board member's timesheet (${taskUser.name}) via personal API key`);
-          return true;
-        }
-      } catch (err) {
-        console.warn(`[ClickUp Time Sync] Error via board member team time entries:`, err);
-      }
-    }
-
-    try {
-      const timeRes = await fetch(`https://api.clickup.com/api/v2/task/${clickupTaskId}/time`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: boardUserToken,
-        },
-        body: JSON.stringify({
-          time: timeMs,
-          start: Date.now() - timeMs,
-          end: Date.now(),
-        }),
-      });
-      if (timeRes.ok) {
-        console.log(`[ClickUp Time Sync] Tracked ${timeMs}ms to board member's timesheet (${taskUser.name}) via task time endpoint`);
-        return true;
-      }
-    } catch (err) {
-      console.warn(`[ClickUp Time Sync] Error via board member task time endpoint:`, err);
-    }
-  }
-
-  // PRIORITY 2: If caller token is available and board member has a mapped ClickUp User ID,
-  // post via ClickUp Time Tracking API specifying "assignee: boardUserClickupId".
-  // This attributes the time entry to the board member in ClickUp.
-  if (callerToken && boardUserClickupId && !isNaN(boardUserClickupId)) {
-    const teamId = await resolveClickupTeamId(callerToken);
-    if (teamId) {
-      try {
-        const timeRes = await fetch(`https://api.clickup.com/api/v2/team/${teamId}/time_entries`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: callerToken,
-          },
-          body: JSON.stringify({
-            tid: clickupTaskId,
-            duration: timeMs,
-            start: Date.now() - timeMs,
-            stop: Date.now(),
-            billable: false,
-            assignee: boardUserClickupId,
-          }),
-        });
-        if (timeRes.ok) {
-          console.log(`[ClickUp Time Sync] Tracked ${timeMs}ms for assignee ${boardUserClickupId} (${taskUser.name}) on board`);
-          return true;
-        } else {
-          const errText = await timeRes.text();
-          console.warn(`[ClickUp Time Sync] Failed to post time for assignee ${boardUserClickupId}:`, errText);
-        }
-      } catch (err) {
-        console.warn(`[ClickUp Time Sync] Exception posting time for assignee ${boardUserClickupId}:`, err);
-      }
-    }
-  }
-
-  // PRIORITY 3: If this is the logged-in user's OWN board, caller token can log to their own timesheet.
-  if (isOwnBoard && callerToken) {
-    try {
-      const timeRes = await fetch(`https://api.clickup.com/api/v2/task/${clickupTaskId}/time`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: callerToken,
-        },
-        body: JSON.stringify({
-          time: timeMs,
-          start: Date.now() - timeMs,
-          end: Date.now(),
-        }),
-      });
-      if (timeRes.ok) {
-        console.log(`[ClickUp Time Sync] Tracked ${timeMs}ms on logged-in user's own board (${taskUser.name})`);
-        return true;
-      }
-    } catch (err) {
-      console.warn(`[ClickUp Time Sync] Error posting time for own board:`, err);
-    }
-  }
-
-  // GUARANTEE: If syncing another user's board and direct attribution to that user is not possible,
-  // DO NOT log under the caller's token! Skipping protects the caller's timesheet from cross-contamination.
-  if (!isOwnBoard) {
-    console.log(`[ClickUp Time Sync] Protected caller timesheet: Skipped time sync for task on ${taskUser.name}'s board because time could not be attributed directly to ${taskUser.name}.`);
-  }
-  return false;
-}
-
-async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User, callerUserId?: string) {
-  const taskUser = user || store.users.find(u => u.id === task.userId);
-  if (!taskUser) return;
-  const callerToken = (apiKey || '').trim();
-  const token = (taskUser.clickupApiKey || callerToken || store.users.find(u => u.clickupApiKey)?.clickupApiKey || '').trim();
-  if (!token || !task.clickupListId) return;
-
-  const targetStatus = ZENFLOW_TO_CLICKUP_STATUS[task.status] || 'to do';
-  const estimateMs = COGNITIVE_LOAD_ESTIMATES_MS[task.cognitiveLoad] || COGNITIVE_LOAD_ESTIMATES_MS.medium;
-  const clickupAssigneeId = taskUser?.clickupUserId ? parseInt(taskUser.clickupUserId, 10) : undefined;
-
-  // Tracked duration in ms from ZenFlow
-  let zenflowTrackedMs = task.inProgressDurationMs || 0;
-  if (task.status === 'in_progress' && task.inProgressStartedAt) {
-    zenflowTrackedMs += Math.max(0, Date.now() - new Date(task.inProgressStartedAt).getTime());
-  }
-
-  // If task already exists in ClickUp, update it
-  if (task.clickupTaskId) {
-    try {
-      // 1. Fetch current task on ClickUp to inspect time_spent and sync tracked time accurately
-      let clickupTimeSpent = 0;
-      let existingClickupAssignees: number[] = [];
-      try {
-        const getRes = await fetch(`https://api.clickup.com/api/v2/task/${task.clickupTaskId}`, {
-          headers: { Authorization: token },
-        });
-        if (getRes.ok) {
-          const cuTask = await getRes.json();
-          clickupTimeSpent = typeof cuTask.time_spent === 'number' ? cuTask.time_spent : 0;
-          if (Array.isArray(cuTask.assignees)) {
-            existingClickupAssignees = cuTask.assignees
-              .map((a: any) => (typeof a === 'object' && a?.id ? parseInt(String(a.id), 10) : parseInt(String(a), 10)))
-              .filter((id: number) => !isNaN(id));
-          }
-        }
-      } catch (err) {
-        console.warn(`[ClickUp Sync] Error reading task ${task.id} details:`, err);
-      }
-
-      // Sync tracked time if ZenFlow has more time than recorded in ClickUp
-      const timeDiffMs = zenflowTrackedMs - clickupTimeSpent;
-      if (timeDiffMs >= 1000) {
-        await postClickupTimeEntry({
-          clickupTaskId: task.clickupTaskId,
-          durationMs: timeDiffMs,
-          taskUser,
-          callerUserId,
-          callerToken: callerToken || token,
-        });
-      }
-
-      // 2. Update task attributes on ClickUp (replace assignees, not add)
-      const updatePayload: Record<string, any> = {
-        name: task.title,
-        status: targetStatus,
-        time_estimate: estimateMs,
-      };
-      if (task.description) updatePayload.description = task.description;
-      if (task.dueDate) updatePayload.due_date = new Date(task.dueDate + 'T23:59:59').getTime();
-      if (task.inProgressStartedAt) updatePayload.start_date = new Date(task.inProgressStartedAt).getTime();
-
-      // Replace assignee: remove previous assignees, add new assignee
-      if (clickupAssigneeId && !isNaN(clickupAssigneeId)) {
-        const rem = existingClickupAssignees.filter(id => id !== clickupAssigneeId);
-        const add = existingClickupAssignees.includes(clickupAssigneeId) ? [] : [clickupAssigneeId];
-        updatePayload.assignees = {
-          ...(add.length > 0 ? { add } : {}),
-          ...(rem.length > 0 ? { rem } : {}),
-        };
-      } else if (existingClickupAssignees.length > 0) {
-        updatePayload.assignees = { rem: existingClickupAssignees };
-      }
-
-      const res = await fetch(`https://api.clickup.com/api/v2/task/${task.clickupTaskId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: token,
-        },
-        body: JSON.stringify(updatePayload),
-      });
-      if (!res.ok) {
-        console.warn(`[ClickUp Sync] Failed to update task ${task.id} in ClickUp:`, await res.text());
-      }
-
-      // 3. Set "Task Type" Custom Field value
-      if (task.clickupTaskTypeFieldId && task.clickupTaskTypeId) {
-        try {
-          await fetch(`https://api.clickup.com/api/v2/task/${task.clickupTaskId}/field/${task.clickupTaskTypeFieldId}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: token,
-            },
-            body: JSON.stringify({ value: task.clickupTaskTypeId }),
-          });
-        } catch (cfErr) {
-          console.warn(`[ClickUp Sync] Error setting Task Type custom field on ${task.id}:`, cfErr);
-        }
-      } else if (task.clickupTaskType && task.clickupListId) {
-        // Resolve field and option dynamically if needed
-        try {
-          const fRes = await fetch(`https://api.clickup.com/api/v2/list/${task.clickupListId}/field`, {
-            headers: { Authorization: token },
-          });
-          if (fRes.ok) {
-            const fData = await fRes.json();
-            const ttField = (fData.fields || []).find((f: any) =>
-              (f.name || '').toLowerCase().trim() === 'task type' || (f.name || '').toLowerCase().includes('task type')
-            );
-            if (ttField) {
-              const matchedOpt = (ttField.type_config?.options || []).find((o: any) =>
-                o.name.toLowerCase() === task.clickupTaskType?.toLowerCase() || o.id === task.clickupTaskType
-              );
-              if (matchedOpt) {
-                task.clickupTaskTypeFieldId = ttField.id;
-                task.clickupTaskTypeId = matchedOpt.id;
-                await fetch(`https://api.clickup.com/api/v2/task/${task.clickupTaskId}/field/${ttField.id}`, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: token,
-                  },
-                  body: JSON.stringify({ value: matchedOpt.id }),
-                });
-              }
-            }
-          }
-        } catch (cfErr) {
-          console.warn(`[ClickUp Sync] Dynamic Task Type lookup err:`, cfErr);
-        }
-      }
-    } catch (err) {
-      console.warn(`[ClickUp Sync] Error updating task ${task.id}:`, err);
-    }
-    return;
-  }
-
-  // Create new task in ClickUp (without tags, with custom fields)
-  try {
-    const createPayload: Record<string, any> = {
-      name: task.title,
-      status: targetStatus,
-      time_estimate: estimateMs,
-    };
-    if (task.description) createPayload.description = task.description;
-    if (task.dueDate) createPayload.due_date = new Date(task.dueDate + 'T23:59:59').getTime();
-    if (task.inProgressStartedAt) createPayload.start_date = new Date(task.inProgressStartedAt).getTime();
-    if (clickupAssigneeId && !isNaN(clickupAssigneeId)) {
-      createPayload.assignees = [clickupAssigneeId];
-    }
-    if (task.clickupTaskTypeFieldId && task.clickupTaskTypeId) {
-      createPayload.custom_fields = [{ id: task.clickupTaskTypeFieldId, value: task.clickupTaskTypeId }];
-    }
-
-    const res = await fetch(`https://api.clickup.com/api/v2/list/${task.clickupListId}/task`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: token,
-      },
-      body: JSON.stringify(createPayload),
-    });
-    if (res.ok) {
-      const clickupTask = await res.json();
-      task.clickupTaskId = clickupTask.id;
-      task.clickupUrl = clickupTask.url;
-
-      // Sync initial tracked duration if already accumulated
-      if (zenflowTrackedMs >= 1000) {
-        await postClickupTimeEntry({
-          clickupTaskId: clickupTask.id,
-          durationMs: zenflowTrackedMs,
-          taskUser,
-          callerUserId,
-          callerToken: callerToken || token,
-        });
-      }
-
-      // Ensure custom field is set if not accepted in create payload
-      if (task.clickupTaskTypeFieldId && task.clickupTaskTypeId) {
-        try {
-          await fetch(`https://api.clickup.com/api/v2/task/${clickupTask.id}/field/${task.clickupTaskTypeFieldId}`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: token,
-            },
-            body: JSON.stringify({ value: task.clickupTaskTypeId }),
-          });
-        } catch {
-          // ignore
-        }
-      }
-
-      saveStore(store);
-      dbSaveTask(task).catch(e => console.error('Firestore save task err:', e));
-      broadcastEvent('task_updated', task);
-      console.log(`[ClickUp Sync] Created task ${task.id} in ClickUp (${clickupTask.id}) with status ${targetStatus} and tracked time ${zenflowTrackedMs}ms`);
-    } else {
-      console.warn(`[ClickUp Sync] Failed to create task ${task.id} in ClickUp:`, await res.text());
-    }
-  } catch (err) {
-    console.warn(`[ClickUp Sync] Error creating task ${task.id}:`, err);
-  }
-}
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -1257,167 +855,6 @@ function maybeArchive(): void {
   autoArchiveDoneTasks();
 }
 
-// Process inbound ClickUp webhook events (status updates, assignee reassignments, deadline syncing, deletions)
-async function processClickupWebhookEvent(params: {
-  taskId: string;
-  eventType: string;
-  historyItems: any[];
-  rawBody: any;
-  ip?: string;
-}): Promise<void> {
-  const { taskId, eventType, historyItems, rawBody, ip } = params;
-  if (!taskId) {
-    appendAuditLog({
-      category: 'webhook',
-      action: 'clickup_webhook_ping',
-      actor: { ip },
-      targetId: 'workspace',
-      targetType: 'webhook',
-      details: `ClickUp webhook event received without task_id: ${eventType}`,
-      metadata: { eventType, rawBody },
-    });
-    return;
-  }
-
-  console.log(`[ClickUp Webhook] Processing event "${eventType}" for task ${taskId}`);
-
-  const matchingTasks = store.tasks.filter(t => t.clickupTaskId === taskId);
-
-  // Requirement: Do NOT pull tasks from ClickUp even if assigned to a user on the app.
-  // Only tasks added on ZenFlow and present on the ZenFlow board should be updated by the live webhook.
-  if (matchingTasks.length === 0) {
-    console.log(`[ClickUp Webhook] Task ${taskId} is not present on the ZenFlow board. Ignoring event "${eventType}".`);
-    return;
-  }
-
-  const existingTask = matchingTasks[0];
-
-  // ZenFlow Single Source of Truth Enforcement:
-  // If task was deleted on ClickUp, do NOT delete from ZenFlow. Re-assert ZenFlow task state.
-  if (eventType === 'taskDeleted') {
-    appendAuditLog({
-      category: 'webhook',
-      action: 'clickup_task_deleted_preserved',
-      actor: { ip },
-      targetId: existingTask.id,
-      targetType: 'task',
-      details: `ClickUp deleted task "${existingTask.title}" (${taskId}), but ZenFlow remains authoritative. Task preserved in ZenFlow.`,
-      metadata: { clickupTaskId: taskId },
-    });
-    console.log(`[ClickUp Webhook] Task ${taskId} was deleted in ClickUp. Preserving in ZenFlow (authoritative source of truth).`);
-    return;
-  }
-
-  // Retrieve full task from ClickUp API if available to inspect divergence
-  let clickupTaskData: any = null;
-  const assignedUser = store.users.find(u => u.id === existingTask.userId);
-  const userWithKey = store.users.find(u => u.clickupApiKey);
-  const token = (assignedUser?.clickupApiKey || userWithKey?.clickupApiKey)?.trim();
-
-  if (token) {
-    try {
-      const cRes = await fetch(`https://api.clickup.com/api/v2/task/${taskId}`, {
-        headers: { Authorization: token },
-      });
-      if (cRes.ok) {
-        clickupTaskData = await cRes.json();
-      }
-    } catch (e) {
-      console.warn(`[ClickUp Webhook] Could not fetch ClickUp task ${taskId}:`, e);
-    }
-  }
-
-  // Detect if ClickUp task diverges from ZenFlow authoritative state
-  let hasDivergence = false;
-  let divergenceReason = '';
-
-  // 1. Inspect Status Divergence
-  const expectedClickupStatus = ZENFLOW_TO_CLICKUP_STATUS[existingTask.status] || 'to do';
-  let cuStatusRaw: string | null = null;
-  const statusItem = historyItems.find((h: any) => h.field === 'status');
-  if (statusItem?.after) {
-    cuStatusRaw = typeof statusItem.after === 'string'
-      ? statusItem.after.toLowerCase().trim()
-      : (statusItem.after?.status || '').toLowerCase().trim();
-  } else if (clickupTaskData?.status?.status) {
-    cuStatusRaw = (clickupTaskData.status.status || '').toLowerCase().trim();
-  }
-  if (cuStatusRaw && cuStatusRaw !== expectedClickupStatus.toLowerCase()) {
-    hasDivergence = true;
-    divergenceReason = `Status on ClickUp ("${cuStatusRaw}") differs from ZenFlow ("${existingTask.status}")`;
-  }
-
-  // 2. Inspect Assignee Divergence
-  const expectedClickupUserId = assignedUser?.clickupUserId ? String(assignedUser.clickupUserId) : null;
-  let cuAssigneeId: string | null = null;
-  const assigneeItem = historyItems.find((h: any) => h.field === 'assignee');
-  if (assigneeItem?.after) {
-    if (typeof assigneeItem.after === 'object') {
-      cuAssigneeId = assigneeItem.after.id ? String(assigneeItem.after.id) : null;
-    } else {
-      cuAssigneeId = String(assigneeItem.after);
-    }
-  } else if (clickupTaskData?.assignees?.[0]) {
-    cuAssigneeId = String(clickupTaskData.assignees[0].id);
-  }
-  if (expectedClickupUserId && cuAssigneeId && cuAssigneeId !== expectedClickupUserId) {
-    hasDivergence = true;
-    divergenceReason = `Assignee on ClickUp (${cuAssigneeId}) differs from ZenFlow assignee (${expectedClickupUserId})`;
-  }
-
-  // 3. Inspect Due Date Divergence
-  if (existingTask.dueDate && clickupTaskData?.due_date !== undefined) {
-    const expectedDueMs = new Date(existingTask.dueDate + 'T23:59:59').getTime();
-    const actualDueMs = Number(clickupTaskData.due_date);
-    // Tolerate timezone shift under 24h
-    if (!isNaN(actualDueMs) && Math.abs(expectedDueMs - actualDueMs) > 86400000) {
-      hasDivergence = true;
-      divergenceReason = `Due date on ClickUp differs from ZenFlow (${existingTask.dueDate})`;
-    }
-  }
-
-  // If any divergence is detected, assert ZenFlow as source of truth and update ClickUp
-  if (hasDivergence && token) {
-    console.log(`[ClickUp Webhook] Divergence detected (${divergenceReason}). Re-syncing ZenFlow authoritative state to ClickUp for task "${existingTask.title}" (${taskId}).`);
-    syncTaskToClickUp(existingTask, token, assignedUser).catch(e =>
-      console.error('[ClickUp Webhook] Error pushing authoritative state to ClickUp:', e)
-    );
-
-    appendAuditLog({
-      category: 'webhook',
-      action: 'zenflow_source_of_truth_asserted',
-      actor: { ip },
-      targetId: existingTask.id,
-      targetType: 'task',
-      details: `ClickUp diverged from ZenFlow (${divergenceReason}). ZenFlow authoritative state pushed to ClickUp.`,
-      metadata: { clickupTaskId: taskId, divergenceReason },
-    });
-    return;
-  }
-
-  // If time tracked on ClickUp changed and ZenFlow has less tracked time, record duration
-  const timeItem = historyItems.find((h: any) => h.field === 'time_spent' || h.field === 'time_tracked');
-  if (timeItem?.after !== undefined) {
-    const parsedMs = Number(timeItem.after);
-    if (!isNaN(parsedMs) && parsedMs > (existingTask.inProgressDurationMs || 0)) {
-      existingTask.inProgressDurationMs = parsedMs;
-      existingTask.updatedAt = new Date().toISOString();
-      const activityEntries = Array.isArray(existingTask.activityLog) ? [...existingTask.activityLog] : [];
-      activityEntries.unshift({
-        id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-        timestamp: new Date().toISOString(),
-        action: 'billable_adjusted',
-        details: `Tracked duration synced to ${formatBillableHoursServer(parsedMs)} from ClickUp`,
-      });
-      existingTask.activityLog = activityEntries.slice(0, 15);
-      saveStore(store);
-      dbSaveTask(existingTask).catch(e => console.error('Firestore save err:', e));
-      broadcastEvent('task_updated', existingTask);
-    }
-  }
-}
-
-
 async function startServer() {
   const app = express();
   app.set('case sensitive routing', true);
@@ -1454,7 +891,7 @@ async function startServer() {
     res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
     res.setHeader(
       'Content-Security-Policy',
-      "default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://lh3.googleusercontent.com https://*.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.clickup.com; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com; frame-ancestors 'none';"
+      "default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://lh3.googleusercontent.com https://*.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com; frame-ancestors 'none';"
     );
     next();
   });
@@ -1476,9 +913,7 @@ async function startServer() {
     next();
   });
 
-  app.use(express.json({ limit: '1mb', verify: (req, _res, buffer) => {
-    if (req.url?.split('?')[0].replace(/\/+$/, '') === '/api/clickup/webhook') (req as Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
-  } }));
+  app.use(express.json({ limit: '1mb' }));
 
   // Sliding-window rate limiters for sensitive endpoints (prevent DoS and quota depletion)
   const authLimiter = createRateLimiter(20, 60 * 1000); // 20 login attempts per minute per IP
@@ -1488,10 +923,6 @@ async function startServer() {
   await syncFromFirestore();
   autoArchiveDoneTasks();
   await loadRecentAuditLogs();
-  await webhookRegistry.load(adminDb);
-  const savedWebhook = webhookRegistry.latest();
-  registeredWebhookId = savedWebhook?.id || null;
-  activeWebhookEndpoint = savedWebhook?.endpoint || null;
 
   // Exchange a verified Firebase ID token for an HttpOnly, same-origin SSE/API cookie.
   app.post('/api/auth/session', authLimiter, async (req: Request, res: Response) => {
@@ -1653,11 +1084,6 @@ async function startServer() {
       role,
       isCreativeDirector,
       creativeDirectorId,
-      clickupApiKey,
-      selectedClickupSpaceId,
-      selectedClickupSpaceName,
-      clickupUserId,
-      clickupUsername,
     } = req.body;
 
     if (!name || !email || !role) {
@@ -1678,9 +1104,6 @@ async function startServer() {
       existingUser.role = cleanRole;
       if (isCreativeDirector !== undefined) existingUser.isCreativeDirector = !!isCreativeDirector;
       if (creativeDirectorId !== undefined) existingUser.creativeDirectorId = creativeDirectorId ? sanitizeString(creativeDirectorId) : undefined;
-      if (clickupApiKey !== undefined) existingUser.clickupApiKey = clickupApiKey ? sanitizeString(clickupApiKey) : undefined;
-      if (clickupUserId !== undefined) existingUser.clickupUserId = clickupUserId ? sanitizeString(clickupUserId) : undefined;
-      if (clickupUsername !== undefined) existingUser.clickupUsername = clickupUsername ? sanitizeString(clickupUsername) : undefined;
       saveStore(store);
       dbSaveUser(existingUser).catch(e => console.error('Firestore user update err:', e));
       broadcastEvent('user_updated', existingUser);
@@ -1705,11 +1128,6 @@ async function startServer() {
       avatarColor: AVATAR_COLORS[colorIndex],
       isCreativeDirector: !!isCreativeDirector,
       creativeDirectorId: creativeDirectorId ? sanitizeString(creativeDirectorId) : undefined,
-      clickupApiKey: clickupApiKey ? sanitizeString(clickupApiKey) : undefined,
-      selectedClickupSpaceId: selectedClickupSpaceId ? sanitizeString(selectedClickupSpaceId) : undefined,
-      selectedClickupSpaceName: selectedClickupSpaceName ? sanitizeString(selectedClickupSpaceName) : undefined,
-      clickupUserId: clickupUserId ? sanitizeString(clickupUserId) : undefined,
-      clickupUsername: clickupUsername ? sanitizeString(clickupUsername) : undefined,
       createdAt: new Date().toISOString(),
     };
 
@@ -1746,11 +1164,6 @@ async function startServer() {
       role,
       isCreativeDirector,
       creativeDirectorId,
-      clickupApiKey,
-      selectedClickupSpaceId,
-      selectedClickupSpaceName,
-      clickupUserId,
-      clickupUsername,
     } = req.body;
 
     const callerId = (req.headers['x-caller-user-id'] as string || '').trim();
@@ -1828,31 +1241,6 @@ async function startServer() {
           }
           if (creativeDirectorId !== undefined) {
             existingTargetUser.creativeDirectorId = creativeDirectorId ? sanitizeString(creativeDirectorId) : undefined;
-          }
-          if (clickupApiKey !== undefined) {
-            existingTargetUser.clickupApiKey = clickupApiKey ? sanitizeString(clickupApiKey) : undefined;
-          } else if (!existingTargetUser.clickupApiKey && current.clickupApiKey) {
-            existingTargetUser.clickupApiKey = current.clickupApiKey;
-          }
-          if (selectedClickupSpaceId !== undefined) {
-            existingTargetUser.selectedClickupSpaceId = selectedClickupSpaceId ? sanitizeString(selectedClickupSpaceId) : undefined;
-          } else if (!existingTargetUser.selectedClickupSpaceId && current.selectedClickupSpaceId) {
-            existingTargetUser.selectedClickupSpaceId = current.selectedClickupSpaceId;
-          }
-          if (selectedClickupSpaceName !== undefined) {
-            existingTargetUser.selectedClickupSpaceName = selectedClickupSpaceName ? sanitizeString(selectedClickupSpaceName) : undefined;
-          } else if (!existingTargetUser.selectedClickupSpaceName && current.selectedClickupSpaceName) {
-            existingTargetUser.selectedClickupSpaceName = current.selectedClickupSpaceName;
-          }
-          if (clickupUserId !== undefined) {
-            existingTargetUser.clickupUserId = clickupUserId ? sanitizeString(clickupUserId) : undefined;
-          } else if (!existingTargetUser.clickupUserId && current.clickupUserId) {
-            existingTargetUser.clickupUserId = current.clickupUserId;
-          }
-          if (clickupUsername !== undefined) {
-            existingTargetUser.clickupUsername = clickupUsername ? sanitizeString(clickupUsername) : undefined;
-          } else if (!existingTargetUser.clickupUsername && current.clickupUsername) {
-            existingTargetUser.clickupUsername = current.clickupUsername;
           }
 
           // Remove the obsolete user record
@@ -1939,21 +1327,6 @@ async function startServer() {
     }
     if (creativeDirectorId !== undefined) {
       current.creativeDirectorId = creativeDirectorId ? sanitizeString(creativeDirectorId) : undefined;
-    }
-    if (clickupApiKey !== undefined) {
-      current.clickupApiKey = clickupApiKey ? sanitizeString(clickupApiKey) : undefined;
-    }
-    if (selectedClickupSpaceId !== undefined) {
-      current.selectedClickupSpaceId = selectedClickupSpaceId ? sanitizeString(selectedClickupSpaceId) : undefined;
-    }
-    if (selectedClickupSpaceName !== undefined) {
-      current.selectedClickupSpaceName = selectedClickupSpaceName ? sanitizeString(selectedClickupSpaceName) : undefined;
-    }
-    if (clickupUserId !== undefined) {
-      current.clickupUserId = clickupUserId ? sanitizeString(clickupUserId) : undefined;
-    }
-    if (clickupUsername !== undefined) {
-      current.clickupUsername = clickupUsername ? sanitizeString(clickupUsername) : undefined;
     }
 
     saveStore(store);
@@ -2145,16 +1518,6 @@ async function startServer() {
       dueDate,
       cognitiveLoad,
       status,
-      clickupTaskId,
-      clickupFolderId,
-      clickupFolderName,
-      clickupListId,
-      clickupListName,
-      clickupSpaceId,
-      clickupUrl,
-      clickupTaskType,
-      clickupTaskTypeId,
-      clickupTaskTypeFieldId,
     } = req.body;
 
     // Idempotency guard for offline mutation replay: if task with this ID already exists, return it
@@ -2210,16 +1573,6 @@ async function startServer() {
       completedAt: isDone ? new Date().toISOString() : undefined,
       inProgressStartedAt: isInProgress ? new Date().toISOString() : undefined,
       inProgressDurationMs: 0,
-      clickupTaskId: clickupTaskId ? sanitizeString(clickupTaskId) : undefined,
-      clickupFolderId: clickupFolderId ? sanitizeString(clickupFolderId) : undefined,
-      clickupFolderName: clickupFolderName ? sanitizeString(clickupFolderName) : undefined,
-      clickupListId: clickupListId ? sanitizeString(clickupListId) : undefined,
-      clickupListName: clickupListName ? sanitizeString(clickupListName) : undefined,
-      clickupSpaceId: clickupSpaceId ? sanitizeString(clickupSpaceId) : undefined,
-      clickupUrl: clickupUrl ? sanitizeString(clickupUrl) : undefined,
-      clickupTaskType: clickupTaskType ? sanitizeString(clickupTaskType) : undefined,
-      clickupTaskTypeId: clickupTaskTypeId ? sanitizeString(clickupTaskTypeId) : undefined,
-      clickupTaskTypeFieldId: clickupTaskTypeFieldId ? sanitizeString(clickupTaskTypeFieldId) : undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       activityLog: [initialActivity],
@@ -2240,92 +1593,58 @@ async function startServer() {
       metadata: { status: newTask.status, cognitiveLoad: newTask.cognitiveLoad, dueDate: newTask.dueDate },
     });
 
-    // Asynchronously push task to ClickUp if a list has been assigned
-    const assignedUser = store.users.find(u => u.id === userId);
-    const callerApiKey = (req.headers['x-clickup-api-key'] as string) || (req.body.clickupApiKey as string);
-    const callerId = (req.headers['x-caller-user-id'] as string) || (req.body.callerUserId as string);
-    const syncToken = (assignedUser?.clickupApiKey || callerApiKey || store.users.find(u => u.clickupApiKey)?.clickupApiKey || '').trim();
-    if (newTask.clickupListId && syncToken) {
-      syncTaskToClickUp(newTask, syncToken, assignedUser, callerId).catch(e =>
-        console.error('[ClickUp] Post-create sync err:', e)
-      );
-    }
-
     res.status(201).json(newTask);
   });
 
   // API: Duplicate a task to another board (Creative Directors and Superadmins only)
-  // Preserves ClickUp linkage and adds the new user as a secondary assignee on ClickUp
+  // Universal subtask delegation across boards
   app.post('/api/tasks/:id/duplicate', async (req: Request, res: Response) => {
     const { id } = req.params;
+    const { targetUserId, title, description, status: subtaskStatus, cognitiveLoad, dueDate } = req.body;
+
     const sourceTask = store.tasks.find(t => t.id === id);
     if (!sourceTask) {
       return res.status(404).json({ error: 'Source task not found' });
     }
 
-    const callerId = (req.headers['x-caller-user-id'] as string) || (req.body.callerUserId as string);
-    const callerApiKey = (req.headers['x-clickup-api-key'] as string) || (req.body.clickupApiKey as string);
-    const callerEmail = ((req.headers['x-caller-email'] as string) || (req.body.callerEmail as string) || '').toLowerCase();
-
-    let caller = callerId ? store.users.find(u => u.id === callerId) : undefined;
-    if (!caller && callerEmail) {
-      caller = store.users.find(u => u.email.toLowerCase() === callerEmail);
-    }
-
-    const isCallerSuperadmin = callerEmail === SUPERADMIN_EMAIL.toLowerCase() ||
-      caller?.email?.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase() ||
-      req.headers['issuperadmin'] === 'true' ||
-      req.headers['x-is-superadmin'] === 'true';
-
-    const { targetUserId, targetStatus, targetDueDate } = req.body;
-    if (!targetUserId || typeof targetUserId !== 'string') {
+    if (!targetUserId) {
       return res.status(400).json({ error: 'targetUserId is required' });
     }
 
     const targetUser = store.users.find(u => u.id === targetUserId);
     if (!targetUser) {
-      return res.status(400).json({ error: 'Target user does not exist in workspace' });
+      return res.status(404).json({ error: 'Target user not found' });
     }
 
-    const resolvedStatus: TaskStatus = targetStatus && ['pipeline', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(targetStatus)
-      ? targetStatus
-      : sourceTask.status;
+    const resolvedStatus: TaskStatus = subtaskStatus && ['todo', 'in_progress', 'in_review', 'done', 'retainer', 'pipeline'].includes(subtaskStatus)
+      ? subtaskStatus
+      : 'todo';
 
-    const resolvedDueDate = targetDueDate !== undefined
-      ? (targetDueDate ? sanitizeString(targetDueDate) : undefined)
-      : sourceTask.dueDate;
+    const resolvedDueDate = dueDate !== undefined ? (dueDate ? sanitizeString(dueDate) : undefined) : sourceTask.dueDate;
 
-    if (resolvedStatus !== 'pipeline' && !resolvedDueDate) {
-      return res.status(400).json({ error: 'A deadline is required when adding tasks to active workflow lanes' });
-    }
+    const maxOrder = store.tasks
+      .filter(t => t.userId === targetUser.id && t.status === resolvedStatus)
+      .reduce((max, t) => Math.max(max, t.order), -1);
 
-    const newTaskId = `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const now = new Date().toISOString();
-    const sourceUser = store.users.find(u => u.id === sourceTask.userId);
-    const actorDisplayName = caller?.name || (isCallerSuperadmin ? 'Superadmin' : 'Creative Director');
-
-    // Determine order: place at end of that status for target user
-    const existingInStatus = store.tasks.filter(
-      t => t.userId === targetUser.id && t.status === resolvedStatus
-    );
-    const maxOrder = existingInStatus.reduce((max, t) => Math.max(max, t.order ?? 0), -1);
+    const caller = (req as any).user;
+    const actorDisplayName = caller?.name || caller?.email || 'User';
 
     const initialActivity: TaskActivity = {
       id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       timestamp: now,
       action: 'created',
-      to: resolvedStatus,
       actorName: actorDisplayName,
-      details: `Duplicated from ${sourceUser?.name || 'previous board'} to ${targetUser.name}'s board by ${actorDisplayName}`,
+      details: `Subtask created from "${sourceTask.title}" and assigned to ${targetUser.name} by ${actorDisplayName}`,
     };
 
     const newTask: Task = {
-      id: newTaskId,
+      id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
       userId: targetUser.id,
-      title: req.body.title ? sanitizeString(req.body.title) : sourceTask.title,
-      description: sourceTask.description,
+      title: title ? title.trim() : `Subtask: ${sourceTask.title}`,
+      description: description !== undefined ? description.trim() : (sourceTask.description || ''),
       dueDate: resolvedDueDate,
-      cognitiveLoad: sourceTask.cognitiveLoad,
+      cognitiveLoad: cognitiveLoad || sourceTask.cognitiveLoad || 'medium',
       status: resolvedStatus,
       order: maxOrder + 1,
       completedAt: resolvedStatus === 'done' ? now : undefined,
@@ -2334,214 +1653,16 @@ async function startServer() {
       isSubtask: true,
       parentTaskId: sourceTask.id,
       parentTaskTitle: sourceTask.title,
-      clickupParentTaskId: sourceTask.clickupTaskId,
-      clickupFolderId: sourceTask.clickupFolderId,
-      clickupFolderName: sourceTask.clickupFolderName,
-      clickupListId: sourceTask.clickupListId,
-      clickupListName: sourceTask.clickupListName,
-      clickupSpaceId: sourceTask.clickupSpaceId,
-      clickupTaskType: sourceTask.clickupTaskType,
-      clickupTaskTypeId: sourceTask.clickupTaskTypeId,
-      clickupTaskTypeFieldId: sourceTask.clickupTaskTypeFieldId,
       createdAt: now,
       updatedAt: now,
       activityLog: [initialActivity],
     };
 
-    // ClickUp Subtask Creation: creates a dedicated subtask under the parent task assigned to targetUser
-    let clickupSubtaskCreated = false;
-    let clickupWarning: string | undefined;
-
-    if (sourceTask.clickupTaskId) {
-      const syncToken = (callerApiKey || caller?.clickupApiKey || targetUser.clickupApiKey || store.users.find(u => u.clickupApiKey)?.clickupApiKey || '').trim();
-
-      let targetClickupUserId = targetUser.clickupUserId ? parseInt(targetUser.clickupUserId, 10) : undefined;
-
-      // Auto-resolve ClickUp member ID by email if not set
-      if ((!targetClickupUserId || isNaN(targetClickupUserId)) && syncToken && targetUser.email) {
-        try {
-          const teamRes = await fetch('https://api.clickup.com/api/v2/team', {
-            headers: { Authorization: syncToken },
-          });
-          if (teamRes.ok) {
-            const teamData = await teamRes.json();
-            for (const team of teamData.teams || []) {
-              for (const m of team.members || []) {
-                if (m?.user?.email && m.user.email.toLowerCase() === targetUser.email.toLowerCase()) {
-                  targetClickupUserId = parseInt(String(m.user.id), 10);
-                  targetUser.clickupUserId = String(m.user.id);
-                  if (m.user.username) targetUser.clickupUsername = m.user.username;
-                  saveStore(store);
-                  dbSaveUser(targetUser).catch(e => console.error('Firestore save user err:', e));
-                  broadcastEvent('user_updated', targetUser);
-                  break;
-                }
-              }
-              if (targetClickupUserId) break;
-            }
-          }
-        } catch (memErr) {
-          console.warn('[Duplicate Subtask] Error auto-resolving ClickUp member by email:', memErr);
-        }
-      }
-
-      if (syncToken) {
-        let listId = sourceTask.clickupListId;
-
-        // Authoritatively query the parent task directly from ClickUp to resolve its true, current list.
-        // This permanently eliminates ClickUp ITEM_137 ("Parent not child of list") error.
-        try {
-          const pRes = await fetch(`https://api.clickup.com/api/v2/task/${sourceTask.clickupTaskId}`, {
-            headers: { Authorization: syncToken },
-          });
-          if (pRes.ok) {
-            const pData = await pRes.json();
-            if (pData.list?.id) {
-              listId = String(pData.list.id);
-              sourceTask.clickupListId = listId;
-              newTask.clickupListId = listId;
-              if (pData.list.name) {
-                sourceTask.clickupListName = pData.list.name;
-                newTask.clickupListName = pData.list.name;
-              }
-              if (pData.space?.id) {
-                sourceTask.clickupSpaceId = String(pData.space.id);
-                newTask.clickupSpaceId = String(pData.space.id);
-              }
-              if (pData.folder?.id) {
-                sourceTask.clickupFolderId = String(pData.folder.id);
-                newTask.clickupFolderId = String(pData.folder.id);
-              }
-              if (pData.folder?.name) {
-                sourceTask.clickupFolderName = pData.folder.name;
-                newTask.clickupFolderName = pData.folder.name;
-              }
-            }
-          }
-        } catch (pErr) {
-          console.warn('[Duplicate Subtask] Could not resolve fresh parent list ID from ClickUp:', pErr);
-        }
-
-        if (listId) {
-          const targetStatusCu = ZENFLOW_TO_CLICKUP_STATUS[resolvedStatus] || 'to do';
-          const estimateMs = COGNITIVE_LOAD_ESTIMATES_MS[newTask.cognitiveLoad] || COGNITIVE_LOAD_ESTIMATES_MS.medium;
-          const subtaskPayload: Record<string, any> = {
-            name: newTask.title,
-            description: newTask.description || '',
-            parent: sourceTask.clickupTaskId,
-            status: targetStatusCu,
-            time_estimate: estimateMs,
-          };
-          if (resolvedDueDate) {
-            subtaskPayload.due_date = new Date(resolvedDueDate + 'T23:59:59').getTime();
-          }
-          if (targetClickupUserId && !isNaN(targetClickupUserId)) {
-            subtaskPayload.assignees = [targetClickupUserId];
-          }
-          if (newTask.clickupTaskTypeFieldId && newTask.clickupTaskTypeId) {
-            subtaskPayload.custom_fields = [{ id: newTask.clickupTaskTypeFieldId, value: newTask.clickupTaskTypeId }];
-          }
-
-          try {
-            let cuRes = await fetch(`https://api.clickup.com/api/v2/list/${listId}/task`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: syncToken,
-              },
-              body: JSON.stringify(subtaskPayload),
-            });
-
-            // Defensive self-healing retry if ClickUp returns ITEM_137 ("Parent not child of list")
-            if (!cuRes.ok) {
-              const errBody = await cuRes.text();
-              if (errBody.includes('Parent not child of list') || errBody.includes('ITEM_137')) {
-                console.warn(`[ClickUp Subtask] Parent ${sourceTask.clickupTaskId} not in list ${listId} (ITEM_137). Querying ClickUp for true parent list...`);
-                try {
-                  const refreshRes = await fetch(`https://api.clickup.com/api/v2/task/${sourceTask.clickupTaskId}`, {
-                    headers: { Authorization: syncToken },
-                  });
-                  if (refreshRes.ok) {
-                    const freshParent = await refreshRes.json();
-                    if (freshParent.list?.id && String(freshParent.list.id) !== listId) {
-                      const trueListId = String(freshParent.list.id);
-                      console.log(`[ClickUp Subtask] Retrying subtask creation in true parent list ${trueListId}...`);
-                      const retryRes = await fetch(`https://api.clickup.com/api/v2/list/${trueListId}/task`, {
-                        method: 'POST',
-                        headers: {
-                          'Content-Type': 'application/json',
-                          Authorization: syncToken,
-                        },
-                        body: JSON.stringify(subtaskPayload),
-                      });
-                      if (retryRes.ok) {
-                        cuRes = retryRes;
-                        listId = trueListId;
-                        sourceTask.clickupListId = trueListId;
-                        newTask.clickupListId = trueListId;
-                        if (freshParent.list.name) {
-                          sourceTask.clickupListName = freshParent.list.name;
-                          newTask.clickupListName = freshParent.list.name;
-                        }
-                      } else {
-                        const retryErrText = await retryRes.text();
-                        console.warn(`[ClickUp Subtask] Retry under list ${trueListId} failed:`, retryErrText);
-                      }
-                    }
-                  }
-                } catch (retryErr) {
-                  console.warn('[ClickUp Subtask] Error during ITEM_137 recovery:', retryErr);
-                }
-              }
-
-              if (!cuRes.ok) {
-                console.warn(`[ClickUp Subtask] Failed to create subtask under ${sourceTask.clickupTaskId}:`, errBody);
-                clickupWarning = `Could not create ClickUp subtask: ${errBody}`;
-              }
-            }
-
-            if (cuRes.ok) {
-              const cuSubtask = await cuRes.json();
-              newTask.clickupTaskId = cuSubtask.id; // Distinct subtask ClickUp task ID!
-              newTask.clickupUrl = cuSubtask.url;
-              newTask.clickupListId = listId;
-              clickupSubtaskCreated = true;
-              console.log(`[ClickUp Subtask] Created subtask ${cuSubtask.id} under parent ${sourceTask.clickupTaskId} assigned to ${targetUser.name}`);
-
-              appendAuditLog({
-                category: 'task',
-                action: 'clickup_subtask_created',
-                actor: { ip: req.ip, id: caller?.id, name: actorDisplayName, email: caller?.email },
-                targetId: newTask.id,
-                targetType: 'task',
-                details: `Created ClickUp subtask #${cuSubtask.id} under parent #${sourceTask.clickupTaskId} assigned to ${targetUser.name}`,
-                metadata: {
-                  parentClickupTaskId: sourceTask.clickupTaskId,
-                  subtaskClickupTaskId: cuSubtask.id,
-                  targetClickupUserId,
-                  newTaskId: newTask.id,
-                },
-              });
-            }
-          } catch (cuErr: any) {
-            console.warn('[ClickUp Subtask] Network error creating subtask:', cuErr);
-            clickupWarning = cuErr.message || 'Network error reaching ClickUp';
-          }
-        } else {
-          clickupWarning = 'Could not resolve ClickUp list ID for subtask.';
-        }
-      } else {
-        clickupWarning = 'No ClickUp API key configured in workspace to create subtask.';
-      }
-    }
-
-    // Save and broadcast subtask card in ZenFlow
     store.tasks.push(newTask);
     saveStore(store);
     dbSaveTask(newTask).catch(e => console.error('Firestore save subtask err:', e));
     broadcastEvent('task_created', newTask);
 
-    // Update parent task activity log
     sourceTask.activityLog = Array.isArray(sourceTask.activityLog) ? sourceTask.activityLog : [];
     sourceTask.activityLog.unshift({
       id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -2565,19 +1686,13 @@ async function startServer() {
       metadata: {
         sourceTaskId: sourceTask.id,
         newTaskId: newTask.id,
-        clickupParentTaskId: sourceTask.clickupTaskId,
-        subtaskClickupTaskId: newTask.clickupTaskId,
         targetBoardId: targetUser.creativeDirectorId || targetUser.id,
       },
     });
 
     res.status(201).json({
       task: newTask,
-      clickupSubtaskCreated,
-      warning: clickupWarning,
-      message: clickupSubtaskCreated
-        ? `Subtask created under "${sourceTask.title}" on ${targetUser.name}'s board and synced with ClickUp.`
-        : `Subtask created on ${targetUser.name}'s board.`,
+      message: `Subtask created on ${targetUser.name}'s board.`,
     });
   });
 
@@ -2604,16 +1719,6 @@ async function startServer() {
       inProgressStartedAt: reqStartedAt,
       adjustmentReason,
       actorName,
-      clickupTaskId,
-      clickupFolderId,
-      clickupFolderName,
-      clickupListId,
-      clickupListName,
-      clickupSpaceId,
-      clickupUrl,
-      clickupTaskType,
-      clickupTaskTypeId,
-      clickupTaskTypeFieldId,
     } = req.body;
 
     if (title !== undefined) {
@@ -2758,16 +1863,6 @@ async function startServer() {
       completedAt,
       inProgressStartedAt,
       inProgressDurationMs,
-      clickupTaskId: clickupTaskId !== undefined ? (clickupTaskId ? sanitizeString(clickupTaskId) : undefined) : currentTask.clickupTaskId,
-      clickupFolderId: clickupFolderId !== undefined ? (clickupFolderId ? sanitizeString(clickupFolderId) : undefined) : currentTask.clickupFolderId,
-      clickupFolderName: clickupFolderName !== undefined ? (clickupFolderName ? sanitizeString(clickupFolderName) : undefined) : currentTask.clickupFolderName,
-      clickupListId: clickupListId !== undefined ? (clickupListId ? sanitizeString(clickupListId) : undefined) : currentTask.clickupListId,
-      clickupListName: clickupListName !== undefined ? (clickupListName ? sanitizeString(clickupListName) : undefined) : currentTask.clickupListName,
-      clickupSpaceId: clickupSpaceId !== undefined ? (clickupSpaceId ? sanitizeString(clickupSpaceId) : undefined) : currentTask.clickupSpaceId,
-      clickupUrl: clickupUrl !== undefined ? (clickupUrl ? sanitizeString(clickupUrl) : undefined) : currentTask.clickupUrl,
-      clickupTaskType: clickupTaskType !== undefined ? (clickupTaskType ? sanitizeString(clickupTaskType) : undefined) : currentTask.clickupTaskType,
-      clickupTaskTypeId: clickupTaskTypeId !== undefined ? (clickupTaskTypeId ? sanitizeString(clickupTaskTypeId) : undefined) : currentTask.clickupTaskTypeId,
-      clickupTaskTypeFieldId: clickupTaskTypeFieldId !== undefined ? (clickupTaskTypeFieldId ? sanitizeString(clickupTaskTypeFieldId) : undefined) : currentTask.clickupTaskTypeFieldId,
       updatedAt: new Date().toISOString(),
       activityLog: activityEntries.slice(0, 15),
     };
@@ -2788,17 +1883,6 @@ async function startServer() {
       details: activityEntries[0]?.details || `Task "${updatedTask.title}" updated`,
       metadata: { taskId: updatedTask.id, title: updatedTask.title },
     });
-
-    // Live Push to ClickUp
-    const taskUser = store.users.find(u => u.id === updatedTask.userId);
-    const callerApiKey = (req.headers['x-clickup-api-key'] as string) || (req.body.clickupApiKey as string);
-    const callerId = (req.headers['x-caller-user-id'] as string) || (req.body.callerUserId as string);
-    const syncToken = (taskUser?.clickupApiKey || callerApiKey || store.users.find(u => u.clickupApiKey)?.clickupApiKey || '').trim();
-    if ((updatedTask.clickupTaskId || updatedTask.clickupListId) && syncToken) {
-      syncTaskToClickUp(updatedTask, syncToken, taskUser, callerId).catch(e =>
-        console.error('[ClickUp] Post-update sync err:', e)
-      );
-    }
 
     res.json(updatedTask);
   });
@@ -2824,7 +1908,7 @@ async function startServer() {
       targetId: removed.id,
       targetType: 'task',
       details: `Task "${removed.title}" (ID: ${removed.id}) deleted`,
-      metadata: { userId: removed.userId, clickupTaskId: removed.clickupTaskId },
+      metadata: { userId: removed.userId,  },
     });
     res.json({ success: true, id: removed.id });
   });
@@ -2847,13 +1931,11 @@ async function startServer() {
     }
 
     const modifiedTasks: Task[] = [];
-    const clickupTasksToSync: Task[] = [];
 
     for (const update of updates) {
       if (!update || typeof update !== 'object' || !update.id) continue;
       const task = taskMap.get(update.id);
       if (task) {
-        let hasClickupAttributeChanged = false;
         if (!task.activityLog) task.activityLog = [];
 
         if (update.userId && typeof update.userId === 'string' && userMap.has(update.userId) && update.userId !== task.userId) {
@@ -2868,7 +1950,6 @@ async function startServer() {
             details: `Reassigned from ${oldUser} to ${newUser}`,
           });
           task.userId = update.userId;
-          hasClickupAttributeChanged = true;
         }
 
         if (update.status && ['pipeline', 'retainer', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(update.status)) {
@@ -2902,7 +1983,6 @@ async function startServer() {
             }
 
             task.status = update.status;
-            hasClickupAttributeChanged = true;
           }
         }
 
@@ -2922,7 +2002,6 @@ async function startServer() {
               details: 'Deadline removed upon moving to pipeline',
             });
             task.dueDate = undefined;
-            hasClickupAttributeChanged = true;
           }
         } else if (update.dueDate !== undefined) {
           const newDate = update.dueDate ? sanitizeString(update.dueDate) : undefined;
@@ -2936,7 +2015,6 @@ async function startServer() {
               details: newDate ? `Due date set to ${newDate}` : 'Deadline removed',
             });
             task.dueDate = newDate;
-            hasClickupAttributeChanged = true;
           }
         }
 
@@ -2947,9 +2025,6 @@ async function startServer() {
         task.updatedAt = new Date().toISOString();
         modifiedTasks.push(task);
 
-        if (hasClickupAttributeChanged && (task.clickupTaskId || task.clickupListId)) {
-          clickupTasksToSync.push(task);
-        }
       }
     }
 
@@ -2960,637 +2035,14 @@ async function startServer() {
 
     broadcastEvent('tasks_reordered', modifiedTasks);
 
-    // Live push status/assignee/deadline changed tasks to ClickUp (skip pure internal order updates)
-    const callerApiKey = (req.headers['x-clickup-api-key'] as string) || (req.body.clickupApiKey as string);
-    const callerId = (req.headers['x-caller-user-id'] as string) || (req.body.callerUserId as string);
-    for (const modTask of clickupTasksToSync) {
-      const modUser = store.users.find(u => u.id === modTask.userId);
-      const syncToken = (modUser?.clickupApiKey || callerApiKey || store.users.find(u => u.clickupApiKey)?.clickupApiKey || '').trim();
-      if (syncToken) {
-        syncTaskToClickUp(modTask, syncToken, modUser, callerId).catch(e =>
-          console.error('[ClickUp] Reorder sync err:', e)
-        );
-      }
-    }
-
     res.json({ success: true, tasks: modifiedTasks });
   });
 
   // ==========================================
-  // CLICKUP INTEGRATION ENDPOINTS
+  // CLICKUP INTEGRATION (REMOVED - 410 GONE)
   // ==========================================
-
-  // In-memory sliding TTL cache for ClickUp proxy endpoints (120s TTL)
-  interface ClickupCacheEntry {
-    data: any;
-    expiresAt: number;
-  }
-  const clickupCache = new Map<string, ClickupCacheEntry>();
-  const CLICKUP_CACHE_TTL_MS = 120 * 1000;
-
-  function getFromClickupCache(key: string): any | null {
-    const entry = clickupCache.get(key);
-    if (!entry) return null;
-    if (Date.now() > entry.expiresAt) {
-      clickupCache.delete(key);
-      return null;
-    }
-    return entry.data;
-  }
-
-  function setClickupCache(key: string, data: any, ttlMs: number = CLICKUP_CACHE_TTL_MS) {
-    clickupCache.set(key, { data, expiresAt: Date.now() + ttlMs });
-    if (clickupCache.size > 200) {
-      const now = Date.now();
-      for (const [k, e] of clickupCache.entries()) {
-        if (now > e.expiresAt) clickupCache.delete(k);
-      }
-    }
-  }
-
-  function invalidateClickupCache(prefix?: string) {
-    if (!prefix) {
-      clickupCache.clear();
-      return;
-    }
-    for (const k of clickupCache.keys()) {
-      if (k.includes(prefix)) clickupCache.delete(k);
-    }
-  }
-
-  // API: Verify Personal ClickUp API Token & retrieve teams
-  app.post('/api/clickup/verify', async (req: Request, res: Response) => {
-    const { apiKey } = req.body;
-    if (!apiKey || typeof apiKey !== 'string') {
-      return res.status(400).json({ error: 'ClickUp API key is required' });
-    }
-
-    try {
-      const cleanKey = apiKey.trim();
-      const userRes = await fetch('https://api.clickup.com/api/v2/user', {
-        headers: { Authorization: cleanKey },
-      });
-
-      if (!userRes.ok) {
-        return res.status(401).json({ error: 'Invalid or unauthorized ClickUp API Token' });
-      }
-
-      const userData = await userRes.json();
-      const teamRes = await fetch('https://api.clickup.com/api/v2/team', {
-        headers: { Authorization: cleanKey },
-      });
-      const teamData = teamRes.ok ? await teamRes.json() : { teams: [] };
-
-      res.json({
-        valid: true,
-        user: userData.user,
-        teams: teamData.teams || [],
-      });
-    } catch (err: any) {
-      console.error('[ClickUp] Verify error:', err);
-      res.status(500).json({ error: err.message || 'Error communicating with ClickUp API' });
-    }
-  });
-
-  // API: Get Spaces for a ClickUp Workspace/Team
-  app.get('/api/clickup/spaces', async (req: Request, res: Response) => {
-    const apiKey = (req.headers['x-clickup-api-key'] as string) || (req.query.apiKey as string);
-    const teamId = req.query.teamId as string;
-
-    if (!apiKey) {
-      return res.status(400).json({ error: 'ClickUp API key is required' });
-    }
-
-    const cleanKey = apiKey.trim();
-    const cacheKey = `spaces:${cleanKey.slice(-10)}:${teamId || 'default'}`;
-    const cached = getFromClickupCache(cacheKey);
-    if (cached) {
-      return res.json(cached);
-    }
-
-    try {
-      let targetTeamId = teamId;
-
-      if (!targetTeamId) {
-        const teamRes = await fetch('https://api.clickup.com/api/v2/team', {
-          headers: { Authorization: cleanKey },
-        });
-        if (teamRes.ok) {
-          const teamData = await teamRes.json();
-          targetTeamId = teamData.teams?.[0]?.id;
-        }
-      }
-
-      if (!targetTeamId) {
-        return res.json({ spaces: [] });
-      }
-
-      const spacesRes = await fetch(`https://api.clickup.com/api/v2/team/${targetTeamId}/space`, {
-        headers: { Authorization: cleanKey },
-      });
-
-      if (!spacesRes.ok) {
-        return res.status(spacesRes.status).json({ error: 'Failed to retrieve spaces from ClickUp' });
-      }
-
-      const data = await spacesRes.json();
-      const result = { spaces: data.spaces || [], teamId: targetTeamId };
-      setClickupCache(cacheKey, result);
-      res.json(result);
-    } catch (err: any) {
-      console.error('[ClickUp] Spaces fetch error:', err);
-      res.status(500).json({ error: err.message || 'Error fetching ClickUp spaces' });
-    }
-  });
-
-  // API: Get Workspace Members from ClickUp
-  app.get('/api/clickup/members', async (req: Request, res: Response) => {
-    let apiKey = (req.headers['x-clickup-api-key'] as string) || (req.query.apiKey as string);
-
-    if (!apiKey) {
-      const userWithKey = store.users.find(u => u.clickupApiKey);
-      if (userWithKey?.clickupApiKey) {
-        apiKey = userWithKey.clickupApiKey;
-      }
-    }
-
-    if (!apiKey) {
-      return res.status(400).json({ error: 'ClickUp API key is required' });
-    }
-
-    const cleanKey = apiKey.trim();
-    const cacheKey = `members:${cleanKey.slice(-10)}`;
-    const cached = getFromClickupCache(cacheKey);
-    if (cached) {
-      return res.json(cached);
-    }
-
-    try {
-      const teamRes = await fetch('https://api.clickup.com/api/v2/team', {
-        headers: { Authorization: cleanKey },
-      });
-
-      if (!teamRes.ok) {
-        return res.status(teamRes.status).json({ error: 'Failed to retrieve teams from ClickUp' });
-      }
-
-      const teamData = await teamRes.json();
-      const memberMap = new Map<string, any>();
-
-      for (const team of teamData.teams || []) {
-        for (const m of team.members || []) {
-          if (m?.user && m.user.id) {
-            const uId = String(m.user.id);
-            if (!memberMap.has(uId)) {
-              memberMap.set(uId, {
-                id: uId,
-                username: m.user.username || m.user.email?.split('@')[0] || 'ClickUp User',
-                email: m.user.email || '',
-                color: m.user.color,
-                profilePicture: m.user.profilePicture,
-                initials: m.user.initials,
-              });
-            }
-          }
-        }
-      }
-
-      const result = { members: Array.from(memberMap.values()) };
-      setClickupCache(cacheKey, result);
-      res.json(result);
-    } catch (err: any) {
-      console.error('[ClickUp] Members fetch error:', err);
-      res.status(500).json({ error: err.message || 'Error fetching ClickUp members' });
-    }
-  });
-
-  // API: Get Folders and Folderless Lists for a ClickUp Space
-  app.get('/api/clickup/folders-and-lists', async (req: Request, res: Response) => {
-    const apiKey = (req.headers['x-clickup-api-key'] as string) || (req.query.apiKey as string);
-    const spaceId = req.query.spaceId as string;
-
-    if (!apiKey || !spaceId) {
-      return res.status(400).json({ error: 'apiKey and spaceId are required' });
-    }
-
-    const cleanKey = apiKey.trim();
-    const cacheKey = `folders-lists:${cleanKey.slice(-10)}:${spaceId}`;
-    const cached = getFromClickupCache(cacheKey);
-    if (cached) {
-      return res.json(cached);
-    }
-
-    try {
-      const [foldersRes, listsRes] = await Promise.all([
-        fetch(`https://api.clickup.com/api/v2/space/${spaceId}/folder`, {
-          headers: { Authorization: cleanKey },
-        }),
-        fetch(`https://api.clickup.com/api/v2/space/${spaceId}/list`, {
-          headers: { Authorization: cleanKey },
-        }),
-      ]);
-
-      const foldersData = foldersRes.ok ? await foldersRes.json() : { folders: [] };
-      const listsData = listsRes.ok ? await listsRes.json() : { lists: [] };
-
-      const result = {
-        folders: foldersData.folders || [],
-        folderlessLists: listsData.lists || [],
-      };
-      setClickupCache(cacheKey, result);
-      res.json(result);
-    } catch (err: any) {
-      console.error('[ClickUp] Folders & Lists fetch error:', err);
-      res.status(500).json({ error: err.message || 'Error fetching folders and lists' });
-    }
-  });
-
-  // API: Get Custom Fields (specifically "Task Type") from ClickUp
-  app.get('/api/clickup/custom-fields', async (req: Request, res: Response) => {
-    let apiKey = (req.headers['x-clickup-api-key'] as string) || (req.query.apiKey as string);
-    const listId = req.query.listId as string;
-    const spaceId = req.query.spaceId as string;
-    const folderId = req.query.folderId as string;
-
-    if (!apiKey) {
-      const userWithKey = store.users.find(u => u.clickupApiKey);
-      if (userWithKey?.clickupApiKey) {
-        apiKey = userWithKey.clickupApiKey;
-      }
-    }
-
-    if (!apiKey) {
-      return res.status(400).json({ error: 'ClickUp API key is required' });
-    }
-
-    const cleanKey = apiKey.trim();
-    const cacheKey = `cf:${cleanKey.slice(-10)}:${listId || spaceId || folderId}`;
-    const cached = getFromClickupCache(cacheKey);
-    if (cached) {
-      return res.json(cached);
-    }
-
-    try {
-      let url = '';
-      if (listId) {
-        url = `https://api.clickup.com/api/v2/list/${listId}/field`;
-      } else if (spaceId) {
-        url = `https://api.clickup.com/api/v2/space/${spaceId}/field`;
-      } else if (folderId) {
-        url = `https://api.clickup.com/api/v2/folder/${folderId}/field`;
-      } else {
-        return res.status(400).json({ error: 'listId, spaceId, or folderId is required' });
-      }
-
-      const response = await fetch(url, {
-        headers: { Authorization: cleanKey },
-      });
-
-      if (!response.ok) {
-        return res.status(response.status).json({ error: 'Failed to fetch custom fields from ClickUp' });
-      }
-
-      const data = await response.json();
-      const fields = data.fields || [];
-
-      // Find the "Task Type" field (case-insensitive)
-      const taskTypeField = fields.find((f: any) => 
-        (f.name || '').toLowerCase().trim() === 'task type' || (f.name || '').toLowerCase().includes('task type')
-      );
-
-      const options = taskTypeField?.type_config?.options || [];
-
-      const result = {
-        fields,
-        taskTypeField: taskTypeField ? {
-          id: taskTypeField.id,
-          name: taskTypeField.name,
-          type: taskTypeField.type,
-          options,
-        } : null,
-        options,
-      };
-      setClickupCache(cacheKey, result);
-      res.json(result);
-    } catch (err: any) {
-      console.error('[ClickUp] Custom fields error:', err);
-      res.status(500).json({ error: err.message || 'Error fetching custom fields' });
-    }
-  });
-
-  // API: Create a new List in ClickUp (under a folder or folderless under a space)
-  app.post('/api/clickup/lists', async (req: Request, res: Response) => {
-    const { apiKey, spaceId, folderId, name } = req.body;
-
-    if (!apiKey || !name || (!spaceId && !folderId)) {
-      return res.status(400).json({ error: 'apiKey, name, and spaceId or folderId are required' });
-    }
-
-    try {
-      const cleanKey = apiKey.trim();
-      const cleanName = sanitizeString(name);
-      const url = folderId
-        ? `https://api.clickup.com/api/v2/folder/${folderId}/list`
-        : `https://api.clickup.com/api/v2/space/${spaceId}/list`;
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: cleanKey,
-        },
-        body: JSON.stringify({ name: cleanName }),
-      });
-
-      if (spaceId) invalidateClickupCache(spaceId);
-
-      if (!response.ok) {
-        const text = await response.text();
-        return res.status(response.status).json({ error: text });
-      }
-
-      const list = await response.json();
-      res.status(201).json({ list });
-    } catch (err: any) {
-      console.error('[ClickUp] Create list error:', err);
-      res.status(500).json({ error: err.message || 'Error creating list in ClickUp' });
-    }
-  });
-
-  // API: Sync tasks for a specific user with ClickUp
-  app.post('/api/clickup/sync-user-tasks', async (req: Request, res: Response) => {
-    const { userId, apiKey } = req.body;
-    if (!userId) {
-      return res.status(400).json({ error: 'userId is required' });
-    }
-
-    const user = store.users.find(u => u.id === userId);
-    const callerId = (req.body.callerUserId as string) || (req.headers['x-caller-user-id'] as string) || '';
-    const callerToken = ((req.headers['x-clickup-api-key'] as string) || apiKey || '').trim();
-    const token = (user?.clickupApiKey || callerToken || '').trim();
-
-    if (!token) {
-      return res.status(400).json({ error: 'ClickUp API key is not connected for this user' });
-    }
-
-    const userTasks = store.tasks.filter(t => t.userId === userId);
-    let syncedCount = 0;
-    let archivedCount = 0;
-    const modifiedTasks: Task[] = [];
-
-    for (const task of userTasks) {
-      // 1. Archive sync exception: Check if task in done is completed on ClickUp
-      if (task.status === 'done' && task.clickupTaskId) {
-        try {
-          const cRes = await fetch(`https://api.clickup.com/api/v2/task/${task.clickupTaskId}`, {
-            headers: { Authorization: token },
-          });
-          if (cRes.ok) {
-            const cTask = await cRes.json();
-            const cuStatus = (cTask.status?.status || '').toLowerCase();
-            const cuType = (cTask.status?.type || '').toLowerCase();
-
-            if (cuStatus === 'complete' || cuStatus === 'closed' || cuType === 'closed') {
-              task.status = 'archived';
-              task.updatedAt = new Date().toISOString();
-              if (!task.activityLog) task.activityLog = [];
-              task.activityLog.unshift({
-                id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-                timestamp: new Date().toISOString(),
-                action: 'status_change',
-                from: 'done',
-                to: 'archived',
-                details: 'Archived via ClickUp task completion sync',
-              });
-              if (task.activityLog.length > 15) task.activityLog = task.activityLog.slice(0, 15);
-              archivedCount++;
-              modifiedTasks.push(task);
-              continue;
-            }
-          }
-        } catch (err) {
-          console.warn(`[ClickUp Sync] Error checking task ${task.id} status:`, err);
-        }
-      }
-
-      // 2. Push active tasks with assigned list to ClickUp
-      if (task.clickupListId) {
-        await syncTaskToClickUp(task, callerToken || token, user, callerId);
-        syncedCount++;
-      }
-    }
-
-    if (modifiedTasks.length > 0) {
-      saveStore(store);
-      dbBatchSaveTasks(modifiedTasks).catch(e => console.error('Firestore batch save err:', e));
-      broadcastEvent('tasks_reordered', modifiedTasks);
-    }
-
-    res.json({
-      success: true,
-      syncedCount,
-      archivedCount,
-      message: `Synced ${syncedCount} task(s), archived ${archivedCount} completed task(s).`,
-    });
-  });
-
-  // =========================================================================
-  // ClickUp Inbound Webhook Listener & Registration Endpoints
-  // =========================================================================
-
-  // API: Inbound ClickUp Webhook Listener (zero-friction status, assignee, and task sync)
-  app.post('/api/clickup/webhook', (req: Request, res: Response) => {
-    const registration = webhookRegistry.get(req.body?.webhook_id);
-    if (!validSignature((req as Request & { rawBody?: Buffer }).rawBody, req.get('x-signature'), registration?.secret)) {
-      return res.status(401).json({ error: 'Invalid webhook signature' });
-    }
-    res.status(200).json({ received: true });
-
-    webhookEventsCount++;
-    lastWebhookEventAt = new Date().toISOString();
-    lastWebhookAction = req.body.event || 'webhook_received';
-
-    const rawTaskId = req.body.task_id || req.body.taskId || req.body.task?.id;
-    const taskId = typeof rawTaskId === 'string' ? rawTaskId.trim() : '';
-    const eventType = req.body.event || 'unknown';
-    const historyItems = Array.isArray(req.body.history_items) ? req.body.history_items : [];
-
-    // 2. Asynchronously process payload without blocking HTTP connection
-    (async () => {
-      try {
-        await processClickupWebhookEvent({
-          taskId,
-          eventType,
-          historyItems,
-          rawBody: req.body,
-          ip: req.ip,
-        });
-      } catch (err) {
-        console.error('[ClickUp Webhook Error]:', err);
-      }
-    })();
-  });
-
-  // API: Register ClickUp Webhook for Workspace Team
-  app.post('/api/clickup/webhook/register', async (req: Request, res: Response) => {
-    try {
-      let apiKey = (req.headers['x-clickup-api-key'] as string) || (req.body.apiKey as string);
-      if (!apiKey) {
-        const u = store.users.find(usr => usr.clickupApiKey);
-        if (u?.clickupApiKey) apiKey = u.clickupApiKey;
-      }
-
-      if (!apiKey) {
-        return res.status(400).json({ error: 'ClickUp API key is required to register webhook' });
-      }
-
-      const cleanKey = apiKey.trim();
-
-      // Retrieve team id if not provided
-      let teamId = req.body.teamId;
-      if (!teamId) {
-        const teamRes = await fetch('https://api.clickup.com/api/v2/team', {
-          headers: { Authorization: cleanKey },
-        });
-        if (teamRes.ok) {
-          const tData = await teamRes.json();
-          teamId = tData.teams?.[0]?.id;
-        }
-      }
-
-      if (!teamId) {
-        return res.status(400).json({ error: 'Failed to retrieve ClickUp team ID' });
-      }
-
-      // Determine webhook endpoint URL
-      const host = req.get('host') || 'localhost:3000';
-      const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-      const endpoint = req.body.endpoint || `${proto}://${host}/api/clickup/webhook`;
-
-      const webhookPayload = {
-        endpoint,
-        events: [
-          'taskCreated',
-          'taskUpdated',
-          'taskStatusUpdated',
-          'taskAssigneeUpdated',
-          'taskDueDateUpdated',
-          'taskDeleted',
-          'taskTimeTrackedUpdated',
-          'taskMoved',
-        ],
-      };
-
-      const cuRes = await fetch(`https://api.clickup.com/api/v2/team/${teamId}/webhook`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: cleanKey,
-        },
-        body: JSON.stringify(webhookPayload),
-      });
-
-      const responseData = await cuRes.json();
-      if (!cuRes.ok) {
-        return res.status(cuRes.status).json({
-          error: responseData.err || responseData.error || 'Failed to register webhook in ClickUp',
-          details: responseData,
-        });
-      }
-
-      const registration = responseData.webhook || responseData;
-      if (typeof registration.id !== 'string' || typeof registration.secret !== 'string' || !registration.secret) {
-        return res.status(502).json({ error: 'ClickUp did not return a webhook signing secret' });
-      }
-      await webhookRegistry.save({ id: registration.id, secret: registration.secret, endpoint }, adminDb);
-      registeredWebhookId = registration.id;
-      activeWebhookEndpoint = endpoint;
-
-      appendAuditLog({
-        category: 'webhook',
-        action: 'clickup_webhook_registered',
-        actor: { ip: req.ip },
-        targetId: registeredWebhookId || 'webhook',
-        targetType: 'webhook',
-        details: `ClickUp webhook successfully registered with endpoint ${endpoint}`,
-        metadata: { teamId, endpoint, webhookId: registeredWebhookId },
-      });
-
-      res.json({
-        success: true,
-        webhookId: registeredWebhookId,
-        endpoint,
-        message: 'ClickUp real-time webhook registered successfully.',
-      });
-    } catch (err: any) {
-      console.error('[ClickUp Webhook Register Error]:', err);
-      res.status(500).json({ error: err.message || 'Internal server error registering webhook' });
-    }
-  });
-
-  // API: Get ClickUp Webhook Status
-  app.get('/api/clickup/webhook/status', (req: Request, res: Response) => {
-    const host = req.get('host') || 'localhost:3000';
-    const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-    const defaultEndpoint = `${proto}://${host}/api/clickup/webhook`;
-
-    res.json({
-      listening: true,
-      registered: Boolean(registeredWebhookId),
-      webhookId: registeredWebhookId,
-      endpointUrl: activeWebhookEndpoint || defaultEndpoint,
-      totalEventsCount: webhookEventsCount,
-      lastEventAt: lastWebhookEventAt,
-      lastEventAction: lastWebhookAction,
-      supportedEvents: [
-        'taskCreated',
-        'taskUpdated',
-        'taskStatusUpdated',
-        'taskAssigneeUpdated',
-        'taskDueDateUpdated',
-        'taskDeleted',
-        'taskTimeTrackedUpdated',
-        'taskMoved',
-      ],
-    });
-  });
-
-  // API: Delete ClickUp Webhook
-  app.delete('/api/clickup/webhook/:id', async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
-      let apiKey = (req.headers['x-clickup-api-key'] as string) || (req.query.apiKey as string);
-      if (!apiKey) {
-        const u = store.users.find(usr => usr.clickupApiKey);
-        if (u?.clickupApiKey) apiKey = u.clickupApiKey;
-      }
-      if (!apiKey) return res.status(400).json({ error: 'ClickUp API key required' });
-
-      const cuRes = await fetch(`https://api.clickup.com/api/v2/webhook/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: apiKey.trim() },
-      });
-      if (cuRes.ok) {
-        await webhookRegistry.remove(id, adminDb);
-        if (registeredWebhookId === id) {
-          registeredWebhookId = null;
-          activeWebhookEndpoint = null;
-        }
-        appendAuditLog({
-          category: 'webhook',
-          action: 'clickup_webhook_deleted',
-          actor: { ip: req.ip },
-          targetId: id,
-          targetType: 'webhook',
-          details: `ClickUp webhook ${id} deleted`,
-        });
-        return res.json({ success: true, message: `Webhook ${id} deleted` });
-      }
-      const data = await cuRes.json();
-      res.status(cuRes.status).json({ error: data.err || 'Failed to delete webhook from ClickUp' });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message || 'Error deleting webhook' });
-    }
+  app.all('/api/clickup/*', (_req: Request, res: Response) => {
+    res.status(410).json({ error: 'ClickUp integration has been removed. ZenFlow operates in standalone mode.' });
   });
 
   // =========================================================================
@@ -3701,7 +2153,6 @@ async function startServer() {
       await initFirestore();
       if (!adminDb) return res.status(503).json({ success: false, message: 'Firebase Admin initialization failed' });
       await syncFromFirestore();
-      await webhookRegistry.load(adminDb);
 
       res.json({
         success: true,

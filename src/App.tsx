@@ -11,7 +11,6 @@ import { DeleteUserModal } from './components/DeleteUserModal';
 import { BillableHoursModal } from './components/BillableHoursModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MarqueeRibbon } from './components/MarqueeRibbon';
-import { UnassignedListRibbon } from './components/UnassignedListRibbon';
 import { EditUserModal } from './components/EditUserModal';
 import { DuplicateTaskModal } from './components/DuplicateTaskModal';
 import { DeleteTaskModal } from './components/DeleteTaskModal';
@@ -46,8 +45,6 @@ function DashboardContent() {
     rescheduleTask,
     activeBoardId,
     setActiveBoardId,
-    showClickupPrompt,
-    setShowClickupPrompt,
   } = useDashboard();
 
   // Modals state
@@ -340,14 +337,7 @@ function DashboardContent() {
       title: string,
       status: TaskStatus,
       cognitiveLoad: 'low' | 'medium' | 'high',
-      dueDate?: string,
-      clickupDetails?: {
-        clickupFolderId?: string;
-        clickupFolderName?: string;
-        clickupListId?: string;
-        clickupListName?: string;
-        clickupSpaceId?: string;
-      }
+      dueDate?: string
     ) => {
       await createTask({
         userId,
@@ -355,11 +345,6 @@ function DashboardContent() {
         status,
         cognitiveLoad,
         dueDate,
-        clickupFolderId: clickupDetails?.clickupFolderId,
-        clickupFolderName: clickupDetails?.clickupFolderName,
-        clickupListId: clickupDetails?.clickupListId,
-        clickupListName: clickupDetails?.clickupListName,
-        clickupSpaceId: clickupDetails?.clickupSpaceId,
       });
     },
     [createTask]
@@ -479,11 +464,6 @@ function DashboardContent() {
         <div className="sticky top-16 sm:top-20 z-20 w-full">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-2 space-y-1.5">
             <MarqueeRibbon
-              tasks={tasks}
-              users={users}
-              onTaskClick={handleEditTask}
-            />
-            <UnassignedListRibbon
               tasks={tasks}
               users={users}
               onTaskClick={handleEditTask}
@@ -613,11 +593,8 @@ function DashboardContent() {
         />
 
         <FirestoreModal
-          isOpen={firestoreModalOpen || showClickupPrompt}
-          onClose={() => {
-            setFirestoreModalOpen(false);
-            setShowClickupPrompt(false);
-          }}
+          isOpen={firestoreModalOpen}
+          onClose={() => setFirestoreModalOpen(false)}
         />
 
         <EditUserModal

@@ -28,20 +28,18 @@ test('client deduplicates session exchange and strips identity assertions from A
   await Promise.all(Array.from({ length: 10 }, () => fixture.api.ensureApiSession()));
   assert.equal(fixture.calls.length, 1);
   assert.equal(fixture.api.getApiMemberId(), 'alice');
-  await fixture.api.apiFetch('/api/state', { headers: { 'x-clickup-api-key': 'old-key', 'x-is-superadmin': 'true', 'x-caller-email': 'spoof' } });
+  await fixture.api.apiFetch('/api/state', { headers: { 'x-is-superadmin': 'true', 'x-caller-email': 'spoof' } });
   const request = fixture.calls.at(-1);
-  assert.equal(request.options.headers.get('x-clickup-api-key'), null);
   assert.equal(request.options.headers.get('x-is-superadmin'), null);
   assert.equal(request.options.headers.get('x-zenflow-request'), '1');
   assert.equal(request.options.credentials, 'same-origin');
 });
-test('cached profiles cannot authenticate requests and offline queue migration removes old tokens', async () => {
-  const fixture = clientFixture({ team_dash_current_user_v1: JSON.stringify({ id: 'alice', clickupApiKey: 'saved-secret' }), zenflow_clickup_api_key: 'saved-secret',
-    zenflow_mutation_queue_v1: JSON.stringify([{ type: 'update_task', payload: { title: 'Keep my edit', clickupApiKey: 'saved-secret' } }]) });
+test('cached profiles cannot authenticate requests and offline queue migration preserves pending work', async () => {
+  const fixture = clientFixture({ team_dash_current_user_v1: JSON.stringify({ id: 'alice' }),
+    zenflow_mutation_queue_v1: JSON.stringify([{ type: 'update_task', payload: { title: 'Keep my edit' } }]) });
   fixture.setUser(null);
   await assert.rejects(fixture.api.apiFetch('/api/state'), /Google authentication required/);
   assert.equal(fixture.calls.length, 0);
-  assert.ok(!JSON.stringify([...fixture.data]).includes('saved-secret'));
   assert.match(fixture.data.get('zenflow_mutation_queue_v1:alice')!, /Keep my edit/);
 });
 test('account/token changes revalidate the session instead of reusing another member identity', async () => {

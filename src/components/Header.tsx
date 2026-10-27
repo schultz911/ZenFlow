@@ -37,8 +37,6 @@ const HeaderComponent: React.FC<HeaderProps> = ({
     isSuperadmin,
     isCreativeDirector,
     canManageMembers,
-    isZensciencesUser,
-    isClickupConnected,
   } = useDashboard();
 
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
@@ -140,14 +138,14 @@ const HeaderComponent: React.FC<HeaderProps> = ({
             </button>
           </div>
 
-          {/* Right Actions: ClickUp Space Dropdown, Realtime status, Theme toggle, User Profile */}
+          {/* Right Actions: Realtime status, Theme toggle, User Profile */}
           <div className="flex items-center gap-2">
 
-            {/* Unified Connection Status Button (Firestore & ClickUp) */}
+            {/* Database & Sync Status Button */}
             <button
               id="connection-status-button"
               onClick={onOpenFirestoreModal}
-              title={`Connection Status: Firestore (${syncStatus === 'connected' ? 'Connected' : 'Connecting'}) · ClickUp (${isClickupConnected ? 'Connected' : 'Not Connected'})`}
+              title={`Database Status: ${syncStatus === 'connected' ? 'Connected (Firestore)' : 'Connecting...'}`}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-100 hover:bg-neutral-200 dark:bg-white/5 dark:hover:bg-white/10 text-xs font-medium text-neutral-700 dark:text-white/80 transition-colors cursor-pointer"
             >
               <Cloud
@@ -161,18 +159,14 @@ const HeaderComponent: React.FC<HeaderProps> = ({
               />
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
-                  syncStatus === 'connected' && (!isZensciencesUser || isClickupConnected)
+                  syncStatus === 'connected'
                     ? 'bg-emerald-500'
-                    : syncStatus === 'connected'
-                    ? 'bg-blue-500'
                     : 'bg-amber-500 animate-pulse'
                 }`}
               />
               <span className="hidden sm:inline text-[11px]">
-                {syncStatus === 'connected' && (!isZensciencesUser || isClickupConnected)
+                {syncStatus === 'connected'
                   ? 'Connected'
-                  : syncStatus === 'connected'
-                  ? 'Cloud Sync'
                   : 'Syncing...'}
               </span>
             </button>
@@ -296,7 +290,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                       className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-neutral-700 dark:text-white/80 hover:bg-neutral-50 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
                     >
                       <Database className="h-3.5 w-3.5 text-blue-500" />
-                      <span>Connections & Compliance</span>
+                      <span>Database & Compliance</span>
                     </button>
 
                     <button

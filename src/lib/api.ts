@@ -12,14 +12,9 @@ try {
   const legacyQueue = localStorage.getItem('zenflow_mutation_queue_v1');
   if (legacyQueue && cached?.id) {
     const queue = JSON.parse(legacyQueue);
-    if (Array.isArray(queue)) localStorage.setItem(`zenflow_mutation_queue_v1:${cached.id}`, JSON.stringify(queue, (key, value) => key === 'clickupApiKey' || key === 'apiKey' ? undefined : value));
+    if (Array.isArray(queue)) localStorage.setItem(`zenflow_mutation_queue_v1:${cached.id}`, JSON.stringify(queue));
   }
   localStorage.removeItem('zenflow_mutation_queue_v1');
-  localStorage.removeItem('zenflow_clickup_api_key');
-  if (cached) {
-    delete cached.clickupApiKey;
-    localStorage.setItem('team_dash_current_user_v1', JSON.stringify(cached));
-  }
 } catch { /* Browser storage may be unavailable. */ }
 
 export async function ensureApiSession(): Promise<void> {
@@ -60,8 +55,6 @@ export async function apiFetch(input: RequestInfo | URL, init: RequestInit = {})
   await ensureApiSession();
   const headers = new Headers(init.headers);
   headers.set('x-zenflow-request', '1');
-  // Saved personal keys are never read back into the browser or sent as caller assertions.
-  headers.delete('x-clickup-api-key');
   headers.delete('x-is-superadmin');
   headers.delete('x-caller-email');
   headers.delete('x-caller-user-id');

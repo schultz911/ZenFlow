@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Task, User } from '../types';
-import { AlertTriangle, Trash2, X, Loader2, CornerDownRight, ExternalLink } from 'lucide-react';
+import { AlertTriangle, Trash2, X, Loader2, CornerDownRight } from 'lucide-react';
 
 interface DeleteTaskModalProps {
   task: Task | null;
@@ -125,12 +125,6 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
               </span>
             </div>
 
-            {task.clickupTaskId && (
-              <div className="flex items-center gap-1.5 text-[11px] text-purple-600 dark:text-purple-400 pt-1 border-t border-neutral-200/60 dark:border-white/5">
-                <ExternalLink className="h-3 w-3 shrink-0" />
-                <span>Linked ClickUp Task #{task.clickupTaskId}</span>
-              </div>
-            )}
           </div>
 
           <div className="rounded-xl bg-red-50/80 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 p-3 text-xs text-red-600 dark:text-red-400">

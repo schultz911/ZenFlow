@@ -1,8 +1,7 @@
 // Prototype policy: all app data is served by the authenticated ZenFlow backend.
-// users/{id}: User profile plus private ClickUp token; never a public profile document.
+// users/{id}: User profile document.
 // tasks/{id}: Task records, timer fields and 15-entry activity history.
 // compliance_audit_logs/{id}: immutable application audit records.
-// server_secrets/{id}: private webhook registrations; Admin SDK only.
 // Existing typed validators document the schema. Admin SDK uses IAM and bypasses rules.
 rules_version = '2';
 service cloud.firestore {
@@ -24,12 +23,7 @@ service cloud.firestore {
              data.createdAt is string && data.createdAt.size() <= 40 &&
              (!('avatarColor' in data) || (data.avatarColor is string && data.avatarColor.size() <= 100)) &&
              (!('isCreativeDirector' in data) || (data.isCreativeDirector is bool)) &&
-             (!('creativeDirectorId' in data) || (data.creativeDirectorId is string && data.creativeDirectorId.size() <= 128)) &&
-             (!('clickupApiKey' in data) || (data.clickupApiKey is string && data.clickupApiKey.size() <= 200)) &&
-             (!('selectedClickupSpaceId' in data) || (data.selectedClickupSpaceId is string && data.selectedClickupSpaceId.size() <= 100)) &&
-             (!('selectedClickupSpaceName' in data) || (data.selectedClickupSpaceName is string && data.selectedClickupSpaceName.size() <= 200)) &&
-             (!('clickupUserId' in data) || (data.clickupUserId is string && data.clickupUserId.size() <= 64)) &&
-             (!('clickupUsername' in data) || (data.clickupUsername is string && data.clickupUsername.size() <= 100));
+             (!('creativeDirectorId' in data) || (data.creativeDirectorId is string && data.creativeDirectorId.size() <= 128));
     }
 
     function isValidTask(data) {
@@ -47,19 +41,8 @@ service cloud.firestore {
              (!('inProgressStartedAt' in data) || (data.inProgressStartedAt is string && data.inProgressStartedAt.size() <= 40)) &&
              (!('inProgressDurationMs' in data) || (data.inProgressDurationMs is number)) &&
              (!('activityLog' in data) || (data.activityLog is list)) &&
-             (!('clickupTaskId' in data) || (data.clickupTaskId is string && data.clickupTaskId.size() <= 100)) &&
-             (!('clickupFolderId' in data) || (data.clickupFolderId is string && data.clickupFolderId.size() <= 100)) &&
-             (!('clickupFolderName' in data) || (data.clickupFolderName is string && data.clickupFolderName.size() <= 200)) &&
-             (!('clickupListId' in data) || (data.clickupListId is string && data.clickupListId.size() <= 100)) &&
-             (!('clickupListName' in data) || (data.clickupListName is string && data.clickupListName.size() <= 200)) &&
-             (!('clickupSpaceId' in data) || (data.clickupSpaceId is string && data.clickupSpaceId.size() <= 100)) &&
-             (!('clickupUrl' in data) || (data.clickupUrl is string && data.clickupUrl.size() <= 500)) &&
-             (!('clickupTaskType' in data) || (data.clickupTaskType is string && data.clickupTaskType.size() <= 100)) &&
-             (!('clickupTaskTypeId' in data) || (data.clickupTaskTypeId is string && data.clickupTaskTypeId.size() <= 64)) &&
-             (!('clickupTaskTypeFieldId' in data) || (data.clickupTaskTypeFieldId is string && data.clickupTaskTypeFieldId.size() <= 64)) &&
              (!('parentTaskId' in data) || (data.parentTaskId is string && data.parentTaskId.size() <= 100)) &&
              (!('parentTaskTitle' in data) || (data.parentTaskTitle is string && data.parentTaskTitle.size() <= 300)) &&
-             (!('clickupParentTaskId' in data) || (data.clickupParentTaskId is string && data.clickupParentTaskId.size() <= 100)) &&
              (!('isSubtask' in data) || (data.isSubtask is bool));
     }
 

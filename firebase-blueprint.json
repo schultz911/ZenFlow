@@ -39,26 +39,6 @@
         "creativeDirectorId": {
           "type": "string",
           "description": "ID of the Creative Director this user is mapped to"
-        },
-        "clickupApiKey": {
-          "type": "string",
-          "description": "Personal ClickUp API Token"
-        },
-        "selectedClickupSpaceId": {
-          "type": "string",
-          "description": "Active ClickUp space ID"
-        },
-        "selectedClickupSpaceName": {
-          "type": "string",
-          "description": "Active ClickUp space name"
-        },
-        "clickupUserId": {
-          "type": "string",
-          "description": "Mapped ClickUp Member ID"
-        },
-        "clickupUsername": {
-          "type": "string",
-          "description": "Mapped ClickUp Username"
         }
       },
       "required": ["id", "name", "email", "role", "createdAt"]
@@ -120,46 +100,6 @@
           "type": "array",
           "description": "Audit trail of task lifecycle state transitions and assignments"
         },
-        "clickupTaskId": {
-          "type": "string",
-          "description": "Associated ClickUp task ID"
-        },
-        "clickupFolderId": {
-          "type": "string",
-          "description": "Associated ClickUp folder ID"
-        },
-        "clickupFolderName": {
-          "type": "string",
-          "description": "Associated ClickUp folder name"
-        },
-        "clickupListId": {
-          "type": "string",
-          "description": "Associated ClickUp list ID"
-        },
-        "clickupListName": {
-          "type": "string",
-          "description": "Associated ClickUp list name"
-        },
-        "clickupSpaceId": {
-          "type": "string",
-          "description": "Associated ClickUp space ID"
-        },
-        "clickupUrl": {
-          "type": "string",
-          "description": "URL to the task on ClickUp"
-        },
-        "clickupTaskType": {
-          "type": "string",
-          "description": "Selected ClickUp Task Type name"
-        },
-        "clickupTaskTypeId": {
-          "type": "string",
-          "description": "Selected ClickUp Task Type custom field option ID"
-        },
-        "clickupTaskTypeFieldId": {
-          "type": "string",
-          "description": "ClickUp Task Type custom field ID"
-        },
         "parentTaskId": {
           "type": "string",
           "description": "Source parent task ID if this task is a subtask"
@@ -167,10 +107,6 @@
         "parentTaskTitle": {
           "type": "string",
           "description": "Source parent task title for display"
-        },
-        "clickupParentTaskId": {
-          "type": "string",
-          "description": "Associated parent ClickUp task ID"
         },
         "isSubtask": {
           "type": "boolean",

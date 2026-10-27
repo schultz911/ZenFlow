@@ -28,8 +28,8 @@ try {
   assert.equal((await fetch(url + '/api/state')).status, 401);
   assert.equal((await fetch(url + '/api/events')).status, 401);
   assert.equal((await fetch(url + '/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-is-superadmin': 'true' }, body: JSON.stringify({ email: 'spoof@example.invalid' }) })).status, 401);
-  assert.equal((await fetch(url + '/api/clickup/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 401);
-  console.log('Compiled production server: health passes; anonymous API/SSE/mutations and unsigned webhook rejected. No live services used.');
+  assert.equal((await fetch(url + '/api/clickup/webhook', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' })).status, 410);
+  console.log('Compiled production server: health passes; anonymous API/SSE/mutations rejected and legacy ClickUp endpoints return 410. No live services used.');
 } finally {
   child.kill('SIGTERM');
   if (child.exitCode === null) await new Promise<void>(resolve => child.once('exit', () => resolve()));

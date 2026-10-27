@@ -4,7 +4,6 @@ import ts from 'typescript';
 import express from 'express';
 import { createApiSecurity, redactPayload, SUPERADMIN_EMAIL, SESSION_COOKIE, sameOriginMutation } from '../server/security';
 import { writeSse } from '../server/resources';
-import { WebhookRegistry } from '../server/webhooks';
 
 const source = ts.createSourceFile('server.ts', fs.readFileSync('server.ts', 'utf8'), ts.ScriptTarget.Latest, true);
 const handlers = new Map<string, string>();
@@ -22,7 +21,7 @@ const compile = (text: string) => ts.transpileModule(text, { compilerOptions: { 
 export function fixtureTask(id: string, userId: string, status = 'todo') {
   return { id, userId, title: id, status, cognitiveLoad: 'medium', order: 0, createdAt: '2026-10-20T00:00:00Z', updatedAt: '2026-10-20T00:00:00Z', inProgressDurationMs: 0, activityLog: [] };
 }
-export async function fixtureServer(directory: string) {
+export async function fixtureServer(_directory: string) {
   const store: any = {
     users: [
       { id: 'root', name: 'Root', email: SUPERADMIN_EMAIL, role: 'content', isCreativeDirector: true },
@@ -35,31 +34,26 @@ export async function fixtureServer(directory: string) {
   const events: any[] = [], audit: any[] = [];
   const noop = () => {};
   const asyncNoop = async () => {};
-  const registry = new WebhookRegistry(`${directory}/webhooks.json`);
   const ctx: any = {
     store, stateRevision: 1, maybeArchive: noop, deduplicateUsers: noop,
     saveStore: noop, dbSaveUser: asyncNoop, dbSaveTask: asyncNoop,
     dbDeleteUser: asyncNoop, dbDeleteTask: asyncNoop, dbBatchDeleteTasks: asyncNoop,
     dbBatchSaveTasks: asyncNoop, dbBatchSaveUsers: asyncNoop,
-    syncTaskToClickUp: asyncNoop, SUPERADMIN_EMAIL,
+    SUPERADMIN_EMAIL,
     broadcastEvent: (type: string, payload: any) => events.push({ type, payload: redactPayload(payload) }),
     appendAuditLog: async (entry: any) => { audit.push(entry); },
     console: { log: noop, warn: noop, error: noop },
-    AVATAR_COLORS: ['blue'], ZENFLOW_TO_CLICKUP_STATUS: { todo: 'to do', retainer: 'in progress' },
+    AVATAR_COLORS: ['blue'],
     COGNITIVE_LOAD_ESTIMATES_MS: { medium: 86400000 },
-    fetch: async () => ({ ok: true, json: async () => ({ teams: [], assignees: [], status: { status: 'to do' } }) }),
-    webhookRegistry: registry, webhookEventsCount: 0, lastWebhookEventAt: null, lastWebhookAction: null,
     clients: [], nextClientId: 1, MAX_SSE_CLIENTS: 100,
     writeSse, redactPayload, setInterval, clearInterval,
   };
-  for (const name of ['sanitizeString', 'formatBillableHoursServer', 'processClickupWebhookEvent']) {
+  for (const name of ['sanitizeString', 'formatBillableHoursServer']) {
     ctx[name] = vm.runInNewContext(compile(functions.get(name)!) + `; ${name}`, ctx);
   }
-  const { validSignature } = await import('../server/security');
-  ctx.validSignature = validSignature;
   const app = express();
   app.set('case sensitive routing', true);
-  app.use(express.json({ verify: (req, _res, buffer) => { (req as any).rawBody = Buffer.from(buffer); } }));
+  app.use(express.json());
   const verify = async (token: string) => {
     if (token === 'invalid') throw new Error('bad signature');
     const member = store.users.find((user: any) => user.id === token);
@@ -81,7 +75,7 @@ export async function fixtureServer(directory: string) {
   const routes = ['get /api/health', 'get /api/state', 'get /api/users', 'post /api/users',
     'put /api/users/:id', 'delete /api/users/:id', 'get /api/tasks', 'post /api/tasks',
     'put /api/tasks/:id', 'delete /api/tasks/:id', 'post /api/tasks/reorder',
-    'post /api/tasks/:id/duplicate', 'post /api/clickup/webhook', 'get /api/events'];
+    'post /api/tasks/:id/duplicate', 'get /api/events'];
   for (const route of routes) {
     const handler = vm.runInNewContext(compile(`var handler = ${handlers.get(route)}`) + '; handler', ctx);
     const [method, routePath] = route.split(' ');
@@ -89,12 +83,15 @@ export async function fixtureServer(directory: string) {
       try { Promise.resolve(handler(req, res)).catch(next); } catch (error) { next(error); }
     });
   }
+  app.all('/api/clickup/*', (_req: any, res: any) => {
+    res.status(410).json({ error: 'ClickUp integration has been removed. ZenFlow operates in standalone mode.' });
+  });
   app.use((_error: any, _req: any, res: any, _next: any) => res.status(500).json({ error: 'fixture handler failed' }));
   const server = app.listen(0, '127.0.0.1');
   await new Promise<void>(resolve => server.on('listening', resolve));
   const address = server.address() as any;
   const url = `http://127.0.0.1:${address.port}`;
-  return { store, events, audit, ctx, registry, url,
+  return { store, events, audit, ctx, url,
     enableLiveBroadcast: () => { ctx.broadcastEvent = vm.runInNewContext(compile(functions.get('broadcastEvent')!) + '; broadcastEvent', ctx); },
     request: (route: string, who = 'alice', method = 'GET', body?: any, headers: Record<string, string> = {}) => fetch(url + '/api' + route, {
       method, headers: { ...(who ? { Authorization: `Bearer ${who}` } : {}), 'Content-Type': 'application/json', ...headers },

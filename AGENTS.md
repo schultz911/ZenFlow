@@ -6,6 +6,24 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
+### Sweep 53: 2026-10-27 (Complete ClickUp Decoupling, Pure Standalone Architecture & Native Cloud Firestore Storage)
+
+- **ARCH-01 (Complete Removal of ClickUp Integration & Standalone Decoupling):**
+  - Purged all ClickUp API syncing, token management, proxy endpoints (`/api/clickup/*`), member mapping, unassigned list ribbons, and HMAC webhook engines from both server and frontend.
+  - Legacy `/api/clickup/*` endpoints respond with HTTP 410 Gone (`Integration removed`).
+  - Deleted obsolete files: `src/components/ClickupMemberPicker.tsx`, `src/components/UnassignedListRibbon.tsx`, and `server/webhooks.ts`.
+  - Streamlined UI components: stripped all ClickUp breadcrumbs, destination pickers, token inputs, and sync buttons across [`TaskModal.tsx`](file:///c:/ZenFlow/src/components/TaskModal.tsx), [`TaskCard.tsx`](file:///c:/ZenFlow/src/components/TaskCard.tsx), [`RetainerSwimlane.tsx`](file:///c:/ZenFlow/src/components/RetainerSwimlane.tsx), [`Swimlane.tsx`](file:///c:/ZenFlow/src/components/Swimlane.tsx), [`DuplicateTaskModal.tsx`](file:///c:/ZenFlow/src/components/DuplicateTaskModal.tsx), [`EditUserModal.tsx`](file:///c:/ZenFlow/src/components/EditUserModal.tsx), [`LoginModal.tsx`](file:///c:/ZenFlow/src/components/LoginModal.tsx), and [`FirestoreModal.tsx`](file:///c:/ZenFlow/src/components/FirestoreModal.tsx).
+- **DATA-19 (Server-Owned Cloud Firestore Persistence & Resilient Startup):**
+  - All workspace state (`users`, `tasks`) and immutable compliance audit logs (`compliance_audit_logs`) persist directly to Google Cloud Firestore via Firebase Admin SDK.
+  - Startup resilience: eliminates hard crashes when `FIREBASE_SERVICE_ACCOUNT_KEY` is not present in local dev environments by falling back smoothly to local atomic storage (`data/store.json`, `data/compliance-audit.jsonl`).
+  - Dynamic credential onboarding: Superadmins can configure service account keys via [`FirestoreModal.tsx`](file:///c:/ZenFlow/src/components/FirestoreModal.tsx) (`POST /api/firestore/credentials`) to hot-connect Cloud Firestore without restarting the server.
+- **WORKFLOW-05 (Native Cross-Board Subtask Delegation):**
+  - Cross-board subtask delegation operates as a first-class native feature (`parentTaskId`, `parentTaskTitle`, `isSubtask: true`) for all team members, recording non-repudiation compliance audit logs and broadcasting live state transitions over SSE.
+- **AUDIT-12 (Zero-Defect Verification & Production Build Certification):**
+  - Strict static analysis: certified 0 warnings and 0 errors across `npm run lint` and `npx tsc --noEmit --noUnusedLocals --noUnusedParameters`.
+  - Production build: confirmed 100% clean builds for both Vite client and esbuild server bundles (`npm run build`).
+  - Automated test suite: verified all 25 unit, security, session, and resource tests passing (`npm test`), and verified production server smoke testing (`node --import tsx tests/smoke-production.ts`).
+
 ### Sweep 52: 2026-10-25 (Verified API Identity, Private ClickUp Credentials, Server-Owned Firebase, Signed Webhooks and Bounded Resources)
 
 - **SEC-16 (Verified Backend Identity and Authorization):** Firebase identities are verified against the fixed Google login project, independently of configurable storage credentials. HttpOnly same-origin sessions protect REST, downloads and SSE. Server-owned role and ownership checks replace client header assertions, including atomic batch validation. Universal authenticated cross-board subtask delegation remains available (AUTH-07).
