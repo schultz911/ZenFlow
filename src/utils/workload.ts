@@ -1,4 +1,4 @@
-import { Task, WorkloadBreakdown, TaskScoreItem, CognitiveLoad, Role } from '../types';
+import { Task, User, WorkloadBreakdown, TaskScoreItem, CognitiveLoad, Role } from '../types';
 
 export const COGNITIVE_LOAD_WEIGHTS: Record<CognitiveLoad, number> = {
   low: 1.0,
@@ -960,4 +960,241 @@ export function calculateWeeklyVelocity(userTasks: Task[]): WeeklyVelocityMetric
     hasData: totalCompleted7d > 0,
   };
 }
+
+// ============================================================================
+// Workspace Analytics, Utilization, Efficiency & Key Metrics Engine
+// ============================================================================
+
+/**
+ * Calculates working days (Monday-Friday) between two dates inclusive.
+ * If start date is after end date or working days is 0, defaults to 1.
+ */
+export function getWorkingDaysCount(startDateStr: string, endDateStr: string): number {
+  const start = new Date(startDateStr);
+  const end = new Date(endDateStr);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return 1;
+
+  const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const finish = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  if (cur > finish) return 1;
+
+  let count = 0;
+  while (cur <= finish) {
+    const day = cur.getDay(); // 0 is Sun, 6 is Sat
+    if (day !== 0 && day !== 6) {
+      count++;
+    }
+    cur.setDate(cur.getDate() + 1);
+  }
+  return Math.max(1, count);
+}
+
+export function isWorkingDay(d: Date): boolean {
+  const day = d.getDay();
+  return day !== 0 && day !== 6;
+}
+
+/**
+ * Returns estimated daily hours allocated to a task split equally across its working days.
+ */
+export function getTaskDailyEstimatedHours(task: Task, onDate?: Date): number {
+  if (!task.estimatedHours || task.estimatedHours <= 0) return 0;
+  const start = task.createdAt ? new Date(task.createdAt) : new Date();
+  const end = task.dueDate ? new Date(task.dueDate) : start;
+  const workingDays = getWorkingDaysCount(start.toISOString(), end.toISOString());
+  const dailyHours = task.estimatedHours / workingDays;
+
+  if (!onDate) return Math.round(dailyHours * 10) / 10;
+
+  const dStart = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+  const dEnd = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
+  const target = new Date(onDate.getFullYear(), onDate.getMonth(), onDate.getDate()).getTime();
+
+  if (isWorkingDay(onDate) && target >= dStart && target <= dEnd) {
+    return Math.round(dailyHours * 10) / 10;
+  }
+  return 0;
+}
+
+/**
+ * Computes a user's total assigned hours per day across tasks on a given date.
+ */
+export function getUserDailyAssignedHours(user: User, tasks: Task[], onDate: Date = new Date()): number {
+  let totalDailyHours = 0;
+  const targetDateStr = onDate.toISOString().slice(0, 10);
+  const isTargetToday = targetDateStr === new Date().toISOString().slice(0, 10);
+
+  for (const t of tasks) {
+    if (!t || t.userId !== user.id) continue;
+    if (!t.estimatedHours || t.estimatedHours <= 0) continue;
+
+    if (isTargetToday) {
+      // For today: include active tasks
+      if (t.status === 'todo' || t.status === 'in_progress' || t.status === 'in_review') {
+        const start = t.createdAt ? new Date(t.createdAt) : new Date();
+        const end = t.dueDate ? new Date(t.dueDate) : start;
+        const workingDays = getWorkingDaysCount(start.toISOString(), end.toISOString());
+        totalDailyHours += (t.estimatedHours / workingDays);
+      }
+    } else {
+      const daily = getTaskDailyEstimatedHours(t, onDate);
+      totalDailyHours += daily;
+    }
+  }
+
+  return Math.round(totalDailyHours * 10) / 10;
+}
+
+/**
+ * Checks whether a user is utilized (> 3 hours estimated / day).
+ */
+export function isUserUtilized(user: User, tasks: Task[], onDate: Date = new Date()): boolean {
+  return getUserDailyAssignedHours(user, tasks, onDate) > 3;
+}
+
+/**
+ * Computes teamwise utilization percentage.
+ */
+export function calculateTeamUtilization(teamUsers: User[], tasks: Task[], onDate: Date = new Date()) {
+  if (teamUsers.length === 0) {
+    return { utilizationPercent: 0, utilizedCount: 0, totalCount: 0, underutilizedUsers: [] };
+  }
+
+  const underutilizedUsers: Array<{ user: User; assignedHours: number }> = [];
+  let utilizedCount = 0;
+
+  for (const u of teamUsers) {
+    const assignedHours = getUserDailyAssignedHours(u, tasks, onDate);
+    if (assignedHours > 3) {
+      utilizedCount++;
+    } else {
+      underutilizedUsers.push({ user: u, assignedHours });
+    }
+  }
+
+  const utilizationPercent = Math.round((utilizedCount / teamUsers.length) * 100);
+  return {
+    utilizationPercent,
+    utilizedCount,
+    totalCount: teamUsers.length,
+    underutilizedUsers,
+  };
+}
+
+/**
+ * Calculates efficiency across a collection of tasks (Aggregate time taken / time estimated).
+ */
+export function calculateTasksEfficiency(taskList: Task[]): {
+  efficiencyPercent: number;
+  totalTimeTakenHours: number;
+  totalEstimatedHours: number;
+} {
+  let totalTimeTakenMs = 0;
+  let totalEstimatedHours = 0;
+
+  for (const t of taskList) {
+    if (!t) continue;
+    const billableMs = getTaskBillableMs(t);
+    totalTimeTakenMs += billableMs;
+    if (t.estimatedHours && t.estimatedHours > 0) {
+      totalEstimatedHours += t.estimatedHours;
+    }
+  }
+
+  const totalTimeTakenHours = Math.round((totalTimeTakenMs / (1000 * 60 * 60)) * 10) / 10;
+  totalEstimatedHours = Math.round(totalEstimatedHours * 10) / 10;
+
+  let efficiencyPercent = 0;
+  if (totalEstimatedHours > 0) {
+    efficiencyPercent = Math.round((totalTimeTakenHours / totalEstimatedHours) * 100);
+  } else if (totalTimeTakenHours > 0) {
+    efficiencyPercent = 100;
+  }
+
+  return {
+    efficiencyPercent,
+    totalTimeTakenHours,
+    totalEstimatedHours,
+  };
+}
+
+/**
+ * Formats ratio annotation as (Billable hours / Time estimated) eg "2h / 6h"
+ */
+export function formatHoursRatio(billableHours: number, estimatedHours: number): string {
+  const b = Math.round(billableHours * 10) / 10;
+  const e = Math.round(estimatedHours * 10) / 10;
+  return `(${b}h / ${e}h)`;
+}
+
+export interface DeliveryUnitInfo {
+  id: string;
+  name: string;
+  type: 'cd_team' | 'video' | 'ui_ux' | 'research' | 'accounts' | 'general';
+  userIds: string[];
+}
+
+/**
+ * Extracts delivery units across all boards and shared teams.
+ */
+export function getDeliveryUnits(users: User[], creativeDirectors: User[]): DeliveryUnitInfo[] {
+  const units: DeliveryUnitInfo[] = [];
+
+  // 1. Creative Director Teams
+  for (const cd of creativeDirectors) {
+    const cdTeamUserIds = users
+      .filter(u => (u.id === cd.id || u.creativeDirectorId === cd.id) && u.role !== 'video' && u.role !== 'ui_ux' && u.role !== 'research')
+      .map(u => u.id);
+
+    units.push({
+      id: `cd-${cd.id}`,
+      name: `${cd.name}'s Team`,
+      type: 'cd_team',
+      userIds: cdTeamUserIds,
+    });
+  }
+
+  // 2. Video Team
+  const videoUserIds = users.filter(u => u.role === 'video').map(u => u.id);
+  if (videoUserIds.length > 0) {
+    units.push({
+      id: 'unit-video',
+      name: 'Video Team',
+      type: 'video',
+      userIds: videoUserIds,
+    });
+  }
+
+  // 3. UI/UX Team
+  const uiUxUserIds = users.filter(u => u.role === 'ui_ux').map(u => u.id);
+  if (uiUxUserIds.length > 0) {
+    units.push({
+      id: 'unit-ui_ux',
+      name: 'UI/UX Team',
+      type: 'ui_ux',
+      userIds: uiUxUserIds,
+    });
+  }
+
+  // 4. Research Team
+  const researchUserIds = users.filter(u => u.role === 'research').map(u => u.id);
+  if (researchUserIds.length > 0) {
+    units.push({
+      id: 'unit-research',
+      name: 'Research Team',
+      type: 'research',
+      userIds: researchUserIds,
+    });
+  }
+
+  return units;
+}
+
+/**
+ * Determines which delivery unit a user belongs to.
+ */
+export function getUserDeliveryUnit(user: User, deliveryUnits: DeliveryUnitInfo[]): DeliveryUnitInfo | undefined {
+  return deliveryUnits.find(du => du.userIds.includes(user.id));
+}
+
 

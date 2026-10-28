@@ -93,9 +93,29 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [dueDate, setDueDate] = useState('');
   const [cognitiveLoad, setCognitiveLoad] = useState<CognitiveLoad>('medium');
   const [status, setStatus] = useState<TaskStatus>('todo');
+  const [client, setClient] = useState('');
+  const [project, setProject] = useState('');
+  const [estimatedHours, setEstimatedHours] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+
+  // Autocomplete suggestions from existing tasks
+  const existingClients = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of tasks) {
+      if (t && t.client && t.client.trim()) set.add(t.client.trim());
+    }
+    return Array.from(set).sort();
+  }, [tasks]);
+
+  const existingProjects = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of tasks) {
+      if (t && t.project && t.project.trim()) set.add(t.project.trim());
+    }
+    return Array.from(set).sort();
+  }, [tasks]);
 
   const canEdit = useMemo(() => {
     if (!taskToEdit) return true;
@@ -110,6 +130,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setDueDate(taskToEdit.dueDate || '');
       setCognitiveLoad(taskToEdit.cognitiveLoad || 'medium');
       setStatus(taskToEdit.status || 'todo');
+      setClient(taskToEdit.client || '');
+      setProject(taskToEdit.project || '');
+      setEstimatedHours(taskToEdit.estimatedHours !== undefined ? String(taskToEdit.estimatedHours) : '');
     } else {
       setTitle('');
       setDescription('');
@@ -118,6 +141,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setDueDate('');
       setCognitiveLoad('medium');
       setStatus(defaultStatus || 'todo');
+      setClient('');
+      setProject('');
+      setEstimatedHours('');
     }
     setShowConfirmDelete(false);
     setSubmitError(null);
@@ -190,6 +216,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     setIsSubmitting(true);
     setSubmitError(null);
     const finalDueDate = (status === 'pipeline' || status === 'retainer') ? undefined : (dueDate.trim() || undefined);
+    const parsedEstimated = estimatedHours.trim() ? Math.max(0, parseFloat(estimatedHours)) : undefined;
 
     try {
       if (taskToEdit) {
@@ -200,6 +227,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           dueDate: finalDueDate,
           cognitiveLoad,
           status,
+          client: client.trim() || undefined,
+          project: project.trim() || undefined,
+          estimatedHours: parsedEstimated,
         });
       } else {
         await createTask({
@@ -209,6 +239,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           dueDate: finalDueDate,
           cognitiveLoad,
           status,
+          client: client.trim() || undefined,
+          project: project.trim() || undefined,
+          estimatedHours: parsedEstimated,
         });
       }
       onClose();
@@ -447,6 +480,80 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     </select>
                     <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
                   </div>
+                </div>
+              </div>
+
+              {/* Client & Project */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Client / Account */}
+                <div>
+                  <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                    Client / Account
+                  </label>
+                  <input
+                    id="task-client-input"
+                    type="text"
+                    list="client-suggestions"
+                    value={client}
+                    onChange={e => setClient(e.target.value)}
+                    placeholder="e.g. Acme Corp"
+                    className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
+                  />
+                  <datalist id="client-suggestions">
+                    {existingClients.map(c => (
+                      <option key={c} value={c} />
+                    ))}
+                  </datalist>
+                </div>
+
+                {/* Project */}
+                <div>
+                  <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                    Project
+                  </label>
+                  <input
+                    id="task-project-input"
+                    type="text"
+                    list="project-suggestions"
+                    value={project}
+                    onChange={e => setProject(e.target.value)}
+                    placeholder="e.g. Q4 Rebrand"
+                    className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
+                  />
+                  <datalist id="project-suggestions">
+                    {existingProjects.map(p => (
+                      <option key={p} value={p} />
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+
+              {/* Estimated Time (Hours) */}
+              <div>
+                <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <Timer className="h-3.5 w-3.5 text-blue-500" />
+                    <span>Time Estimated (Hours)</span>
+                  </span>
+                  <span className="text-[10px] text-neutral-400 font-normal lowercase">
+                    Split equally across working days until deadline
+                  </span>
+                </label>
+                <div className="relative">
+                  <input
+                    id="task-estimated-hours-input"
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    max="1000"
+                    value={estimatedHours}
+                    onChange={e => setEstimatedHours(e.target.value)}
+                    placeholder="e.g. 6.0"
+                    className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 pl-3 pr-8 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-neutral-400 dark:text-white/40">
+                    hrs
+                  </span>
                 </div>
               </div>
 

@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task, TaskStatus } from '../types';
-import { getUserTag } from '../utils/workload';
+import { getUserTag, getUserDailyAssignedHours } from '../utils/workload';
 import {
   Users,
   ChevronDown,
@@ -48,17 +48,14 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
     });
   };
 
-  // Compute active task counts (To-Do + In Progress) for each user across ALL boards
+  // Compute utilization (< 3h/day assigned) and task counts for each user across ALL boards
   const { freeUsers, userStats } = useMemo(() => {
-    const activeCounts = new Map<string, number>();
     const inReviewCounts = new Map<string, number>();
     const pipelineCounts = new Map<string, number>();
 
     for (const t of tasks) {
       if (!t || !t.userId) continue;
-      if (t.status === 'todo' || t.status === 'in_progress') {
-        activeCounts.set(t.userId, (activeCounts.get(t.userId) || 0) + 1);
-      } else if (t.status === 'in_review') {
+      if (t.status === 'in_review') {
         inReviewCounts.set(t.userId, (inReviewCounts.get(t.userId) || 0) + 1);
       } else if (t.status === 'pipeline') {
         pipelineCounts.set(t.userId, (pipelineCounts.get(t.userId) || 0) + 1);
@@ -66,17 +63,18 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
     }
 
     const free: User[] = [];
-    const stats = new Map<string, { inReview: number; pipeline: number }>();
+    const stats = new Map<string, { inReview: number; pipeline: number; assignedHours: number }>();
 
     for (const u of users) {
-      const active = activeCounts.get(u.id) || 0;
+      const assignedHours = getUserDailyAssignedHours(u, tasks);
       stats.set(u.id, {
         inReview: inReviewCounts.get(u.id) || 0,
         pipeline: pipelineCounts.get(u.id) || 0,
+        assignedHours,
       });
 
-      // Free pool: resources with ZERO tasks in To-Do and In Progress
-      if (active === 0) {
+      // Free pool: People with less than 3 hours per day assigned appear in the freepool
+      if (assignedHours < 3) {
         free.push(u);
       }
     }
@@ -275,12 +273,12 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                     )}
                   </div>
                   <p className="text-xs font-semibold text-neutral-800 dark:text-white">
-                    {freeUsers.length === 0 ? 'All resources are active' : `No free ${roleFilter} members`}
+                    {freeUsers.length === 0 ? 'All resources fully utilized' : `No free ${roleFilter} members`}
                   </p>
                   <p className="mt-0.5 text-[10px] text-neutral-500 dark:text-white/40 max-w-xs mx-auto">
                     {freeUsers.length === 0
-                      ? 'Every team member across all boards has active tasks in To-Do or In Progress.'
-                      : `Try switching to another role tab or wait for tasks to complete.`}
+                      ? 'Every team member across all boards has > 3 hours estimated per day assigned.'
+                      : `Try switching to another role tab or wait for task assignments to update.`}
                   </p>
                 </div>
               ) : (
@@ -321,12 +319,16 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                           </div>
 
                           <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 dark:text-white/40 mt-0.5">
+                            <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                              {stats?.assignedHours !== undefined ? `${stats.assignedHours}h/day` : '0h/day'}
+                            </span>
+                            <span>·</span>
                             {stats && stats.inReview > 0 ? (
                               <span>{stats.inReview} in review</span>
                             ) : stats && stats.pipeline > 0 ? (
                               <span>{stats.pipeline} in pipeline</span>
                             ) : (
-                              <span className="text-emerald-600 dark:text-emerald-400 font-medium">All lanes clear</span>
+                              <span className="text-neutral-500 dark:text-white/40 font-medium">Underutilized (&lt; 3h/day)</span>
                             )}
                           </div>
                         </div>

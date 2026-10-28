@@ -146,7 +146,9 @@ interface DashboardContextType {
     dueDate?: string;
     cognitiveLoad: 'low' | 'medium' | 'high';
     status: TaskStatus;
-
+    client?: string;
+    project?: string;
+    estimatedHours?: number;
   }) => Promise<Task>;
   updateTask: (id: string, updates: Partial<Task>) => Promise<Task>;
   adjustBillableHours: (taskId: string, newDurationMs: number, reason?: string) => Promise<Task>;
@@ -1013,7 +1015,9 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     dueDate?: string;
     cognitiveLoad: 'low' | 'medium' | 'high';
     status: TaskStatus;
-
+    client?: string;
+    project?: string;
+    estimatedHours?: number;
   }): Promise<Task> => {
     const realId = `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const currentTasks = tasksRef.current;
@@ -1042,7 +1046,9 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       completedAt: isCompleted ? now : undefined,
       inProgressStartedAt: isInProgress ? now : undefined,
       inProgressDurationMs: 0,
-
+      client: data.client,
+      project: data.project,
+      estimatedHours: data.estimatedHours,
       createdAt: now,
       updatedAt: now,
       activityLog: [initialActivity],

@@ -55,6 +55,32 @@ export interface Task {
   parentTaskId?: string;
   parentTaskTitle?: string;
   isSubtask?: boolean;
+  client?: string;
+  project?: string;
+  estimatedHours?: number;
+}
+
+export type AnalyticsScope = 'all' | 'client' | 'delivery_unit' | 'project' | 'user';
+export type AnalyticsTimeframe = 'today' | 'week' | 'custom';
+
+export interface HistoricalAnalyticsSnapshot {
+  id: string; // e.g. "daily-2026-10-28" or "weekly-2026-W43"
+  type: 'daily' | 'weekly';
+  periodKey: string;
+  startDate: string;
+  endDate: string;
+  locked: boolean;
+  lockedAt?: string;
+  totalEmployees: number;
+  totalUtilization: number;
+  totalEfficiency: number;
+  topAccounts: Array<{
+    client: string;
+    billableHours: number;
+    estimatedHours: number;
+    keyHours: number;
+  }>;
+  createdAt: string;
 }
 
 export interface QueuedMutation {

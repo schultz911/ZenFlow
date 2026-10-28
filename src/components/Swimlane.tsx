@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task, TaskStatus, DragTaskInfo, CognitiveLoad } from '../types';
-import { calculateUserWorkload, compareTasksByDeadline, getUserTag } from '../utils/workload';
+import { calculateUserWorkload, compareTasksByDeadline, getUserTag, calculateTasksEfficiency, formatHoursRatio } from '../utils/workload';
 import { TaskCard } from './TaskCard';
 import { PipelineSwimlane } from './PipelineSwimlane';
 import { RetainerSwimlane } from './RetainerSwimlane';
@@ -272,6 +272,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   }, [userTasks]);
 
   const workload = useMemo(() => calculateUserWorkload(userTasks), [userTasks]);
+  const userEfficiency = useMemo(() => calculateTasksEfficiency(userTasks), [userTasks]);
   const archivedTasks = useMemo(() => tasksByColumn.archived, [tasksByColumn]);
 
   const isCrossUserDrag = Boolean(activeDragInfo && activeDragInfo.sourceUserId !== user.id);
@@ -683,6 +684,32 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 />
               </div>
             </button>
+
+            {/* Individual Efficiency Score Pill */}
+            <div
+              title={`Individual Efficiency: Aggregate time taken (${userEfficiency.totalTimeTakenHours}h) vs time estimated (${userEfficiency.totalEstimatedHours}h) across all tasks`}
+              className="flex items-center gap-2 rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-[#141414] px-3 py-1.5 select-none"
+            >
+              <div className="text-left">
+                <span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-white/40 block">
+                  Efficiency
+                </span>
+                <div className="flex items-baseline gap-1.5">
+                  <span className={`text-base font-bold ${
+                    userEfficiency.efficiencyPercent >= 75
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : userEfficiency.efficiencyPercent >= 50
+                      ? 'text-blue-600 dark:text-blue-400'
+                      : 'text-rose-600 dark:text-red-400'
+                  }`}>
+                    {userEfficiency.efficiencyPercent}%
+                  </span>
+                  <span className="text-[10px] text-neutral-400 dark:text-white/40">
+                    {formatHoursRatio(userEfficiency.totalTimeTakenHours, userEfficiency.totalEstimatedHours)}
+                  </span>
+                </div>
+              </div>
+            </div>
 
             {/* 2. Add Task Button for this user */}
             {canEdit && (

@@ -1,6 +1,13 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useDashboard } from '../context/DashboardContext';
-import { exportWorkspaceXLS, exportWorkspaceJSON, quickWorkloadScore } from '../utils/workload';
+import {
+  exportWorkspaceXLS,
+  exportWorkspaceJSON,
+  quickWorkloadScore,
+  calculateTeamUtilization,
+  calculateTasksEfficiency,
+  formatHoursRatio,
+} from '../utils/workload';
 import {
   Search,
   Download,
@@ -11,16 +18,19 @@ import {
   ChevronDown,
   Check,
   ShieldCheck,
+  BarChart3,
 } from 'lucide-react';
 
 interface OverviewBarProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
+  onOpenAnalytics: () => void;
 }
 
 export const OverviewBar: React.FC<OverviewBarProps> = ({
   searchQuery,
   onSearchChange,
+  onOpenAnalytics,
 }) => {
   const {
     activeRoleTab,
@@ -130,6 +140,20 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
     return { inProgressCount: inProgress, todoCount: todo };
   }, [displayedUsers, tasks]);
 
+  // Team tasks, utilization, and efficiency metrics
+  const teamTasks = useMemo(() => {
+    const displayedUserIds = new Set(displayedUsers.map(u => u.id));
+    return tasks.filter(t => displayedUserIds.has(t.userId));
+  }, [displayedUsers, tasks]);
+
+  const teamUtilization = useMemo(() => {
+    return calculateTeamUtilization(displayedUsers, tasks);
+  }, [displayedUsers, tasks]);
+
+  const teamEfficiency = useMemo(() => {
+    return calculateTasksEfficiency(teamTasks);
+  }, [teamTasks]);
+
   return (
     <div className="mb-6 space-y-4">
       {/* Top Banner: Metrics & Team Velocity */}
@@ -175,6 +199,52 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
             <span className="text-sm font-semibold text-neutral-900 dark:text-white">
               {avgWorkload} pts
             </span>
+          </div>
+
+          <div
+            title={`Team Utilization: ${teamUtilization.utilizedCount} of ${teamUtilization.totalCount} members assigned > 3 hours/day estimated`}
+            className="rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414] px-3.5 py-2"
+          >
+            <span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-white/40 block">
+              Utilization
+            </span>
+            <div className="flex items-baseline gap-1">
+              <span className={`text-sm font-semibold ${
+                teamUtilization.utilizationPercent >= 75
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : teamUtilization.utilizationPercent >= 40
+                  ? 'text-blue-600 dark:text-blue-400'
+                  : 'text-amber-600 dark:text-yellow-400'
+              }`}>
+                {teamUtilization.utilizationPercent}%
+              </span>
+              <span className="text-[10px] text-neutral-400 dark:text-white/40">
+                ({teamUtilization.utilizedCount}/{teamUtilization.totalCount})
+              </span>
+            </div>
+          </div>
+
+          <div
+            title={`Team Efficiency: Aggregate time taken (${teamEfficiency.totalTimeTakenHours}h) / time estimated (${teamEfficiency.totalEstimatedHours}h)`}
+            className="rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414] px-3.5 py-2"
+          >
+            <span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-white/40 block">
+              Efficiency
+            </span>
+            <div className="flex items-baseline gap-1">
+              <span className={`text-sm font-semibold ${
+                teamEfficiency.efficiencyPercent >= 75
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : teamEfficiency.efficiencyPercent >= 50
+                  ? 'text-blue-600 dark:text-blue-400'
+                  : 'text-rose-600 dark:text-red-400'
+              }`}>
+                {teamEfficiency.efficiencyPercent}%
+              </span>
+              <span className="text-[10px] text-neutral-400 dark:text-white/40">
+                {formatHoursRatio(teamEfficiency.totalTimeTakenHours, teamEfficiency.totalEstimatedHours)}
+              </span>
+            </div>
           </div>
 
           <div className="rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414] px-3.5 py-2">
@@ -280,6 +350,17 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
               )}
             </div>
           )}
+
+          {/* View Analytics Modal Button */}
+          <button
+            id="view-analytics-btn"
+            onClick={onOpenAnalytics}
+            title="Open executive workspace analytics modal"
+            className="flex items-center gap-1.5 rounded-xl border border-blue-500/30 bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/50 px-3 py-2 text-xs font-semibold text-blue-600 dark:text-blue-400 transition-colors shadow-xs cursor-pointer"
+          >
+            <BarChart3 className="h-3.5 w-3.5" />
+            <span>View Analytics</span>
+          </button>
 
           {/* Export Workspace Dropdown */}
           <div className="relative" ref={exportMenuRef}>

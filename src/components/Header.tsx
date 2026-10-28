@@ -16,7 +16,7 @@ import {
   Layout,
   Search,
 } from 'lucide-react';
-import { getUserTag } from '../utils/workload';
+import { getUserTag, calculateTeamUtilization } from '../utils/workload';
 
 interface HeaderProps {
   onOpenLoginModal: () => void;
@@ -32,6 +32,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
   const {
     currentUser,
     users,
+    tasks,
     activeRoleTab,
     setActiveRoleTab,
     darkMode,
@@ -63,6 +64,12 @@ const HeaderComponent: React.FC<HeaderProps> = ({
   const videoUsers = useMemo(() => users.filter(u => u.role === 'video'), [users]);
   const uiUxUsers = useMemo(() => users.filter(u => u.role === 'ui_ux'), [users]);
   const researchUsers = useMemo(() => users.filter(u => u.role === 'research'), [users]);
+
+  const contentUtil = useMemo(() => calculateTeamUtilization(contentUsers, tasks).utilizationPercent, [contentUsers, tasks]);
+  const designUtil = useMemo(() => calculateTeamUtilization(designUsers, tasks).utilizationPercent, [designUsers, tasks]);
+  const videoUtil = useMemo(() => calculateTeamUtilization(videoUsers, tasks).utilizationPercent, [videoUsers, tasks]);
+  const uiUxUtil = useMemo(() => calculateTeamUtilization(uiUxUsers, tasks).utilizationPercent, [uiUxUsers, tasks]);
+  const researchUtil = useMemo(() => calculateTeamUtilization(researchUsers, tasks).utilizationPercent, [researchUsers, tasks]);
 
   const currentUserTag = useMemo(() => getUserTag(currentUser), [currentUser]);
 
@@ -119,7 +126,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                   ? 'bg-blue-500/15 text-blue-600 dark:text-blue-300'
                   : 'bg-neutral-200 dark:bg-white/5 text-neutral-600 dark:text-white/40'
               }`}>
-                {contentUsers.length}
+                {contentUsers.length} · {contentUtil}%
               </span>
             </button>
 
@@ -139,7 +146,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                   ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300'
                   : 'bg-neutral-200 dark:bg-white/5 text-neutral-600 dark:text-white/40'
               }`}>
-                {designUsers.length}
+                {designUsers.length} · {designUtil}%
               </span>
             </button>
 
@@ -159,7 +166,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                   ? 'bg-violet-500/15 text-violet-600 dark:text-violet-300'
                   : 'bg-neutral-200 dark:bg-white/5 text-neutral-600 dark:text-white/40'
               }`}>
-                {videoUsers.length}
+                {videoUsers.length} · {videoUtil}%
               </span>
             </button>
 
@@ -179,7 +186,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                   ? 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300'
                   : 'bg-neutral-200 dark:bg-white/5 text-neutral-600 dark:text-white/40'
               }`}>
-                {uiUxUsers.length}
+                {uiUxUsers.length} · {uiUxUtil}%
               </span>
             </button>
 
@@ -199,7 +206,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                   ? 'bg-teal-500/15 text-teal-600 dark:text-teal-300'
                   : 'bg-neutral-200 dark:bg-white/5 text-neutral-600 dark:text-white/40'
               }`}>
-                {researchUsers.length}
+                {researchUsers.length} · {researchUtil}%
               </span>
             </button>
           </div>
@@ -384,7 +391,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                   : 'text-neutral-500 dark:text-white/40'
               }`}
             >
-              Content ({contentUsers.length})
+              Content ({contentUsers.length} · {contentUtil}%)
             </button>
             <button
               onClick={() => setActiveRoleTab('design')}
@@ -394,7 +401,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                   : 'text-neutral-500 dark:text-white/40'
               }`}
             >
-              Design ({designUsers.length})
+              Design ({designUsers.length} · {designUtil}%)
             </button>
             <button
               onClick={() => setActiveRoleTab('video')}
@@ -404,7 +411,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                   : 'text-neutral-500 dark:text-white/40'
               }`}
             >
-              Video ({videoUsers.length})
+              Video ({videoUsers.length} · {videoUtil}%)
             </button>
             <button
               onClick={() => setActiveRoleTab('ui_ux')}
@@ -414,7 +421,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                   : 'text-neutral-500 dark:text-white/40'
               }`}
             >
-              UI/UX ({uiUxUsers.length})
+              UI/UX ({uiUxUsers.length} · {uiUxUtil}%)
             </button>
             <button
               onClick={() => setActiveRoleTab('research')}
@@ -424,7 +431,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                   : 'text-neutral-500 dark:text-white/40'
               }`}
             >
-              Research ({researchUsers.length})
+              Research ({researchUsers.length} · {researchUtil}%)
             </button>
           </div>
         </div>

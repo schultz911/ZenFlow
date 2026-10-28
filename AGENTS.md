@@ -6,6 +6,42 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
+### Sweep 57: 2026-10-28 (Teamwise Utilization & Efficiency Metrics, Search Engine Repair & Executive Workspace Analytics Modal)
+
+- **UTIL-01 (Daily Estimated Hours Working Days Split & Teamwise Utilization):**
+  - Added working days calculation (`getWorkingDaysCount`, Monday to Friday inclusive) in [`workload.ts`](file:///c:/ZenFlow/src/utils/workload.ts).
+  - Time estimated on tasks is split equally across working days between creation date and deadline (`getTaskDailyEstimatedHours`).
+  - Added teamwise utilization (in percentage) calculated by number of team members assigned > 3 hours estimated per day across tasks divided by total team members (`calculateTeamUtilization`).
+  - Rendered team utilization badge in [`OverviewBar.tsx`](file:///c:/ZenFlow/src/components/OverviewBar.tsx) and across role switcher tabs in [`Header.tsx`](file:///c:/ZenFlow/src/components/Header.tsx).
+- **FREEPOOL-02 (Underutilized Free Pool Criterion):**
+  - Updated [`FreePoolContainer.tsx`](file:///c:/ZenFlow/src/components/FreePoolContainer.tsx) so team members with < 3 hours per day assigned appear in the Free Pool with live daily workload annotations (e.g. `1.5h/day assigned`).
+- **EFFICIENCY-01 (Aggregate Team & Individual Efficiency Scores):**
+  - Added team efficiency (in percentage) calculated as aggregate time taken / time estimated across all tasks in the team (`calculateTasksEfficiency`).
+  - Added individual efficiency score pill to each user's tab/swimlane header in [`Swimlane.tsx`](file:///c:/ZenFlow/src/components/Swimlane.tsx) with color coding (green/blue/red) and `(Billable hours / Time estimated)` annotations.
+- **SEARCH-02 (Comprehensive Search Across Tasks, Clients, Projects & Members):**
+  - Rebuilt search indexing in [`App.tsx`](file:///c:/ZenFlow/src/App.tsx) to search `task.title`, `task.description`, `task.client`, `task.project`, `user.name`, `user.email`, `user.designation`, and `user.role`.
+  - Swimlanes intelligently filter to show matching members or members with matching tasks, hiding irrelevant empty swimlanes during search.
+  - Added real-time cross-team search ribbon showing match counts across Content, Design, Video, UI/UX, and Research with 1-click tab switching and search clearance.
+- **DATA-20 (Task Client, Project & Estimated Hours Integration):**
+  - Extended `Task` type in [`types.ts`](file:///c:/ZenFlow/src/types.ts) and backend storage in [`server.ts`](file:///c:/ZenFlow/server.ts) with `client`, `project`, and `estimatedHours`.
+  - Added autocomplete inputs and datalists in [`TaskModal.tsx`](file:///c:/ZenFlow/src/components/TaskModal.tsx).
+  - Added Client, Project, and Estimated Hours badges to cards in [`TaskCard.tsx`](file:///c:/ZenFlow/src/components/TaskCard.tsx).
+- **ANALYTICS-01 (Executive Workspace Analytics Modal):**
+  - Added "View Analytics" button next to "Export Report" in [`OverviewBar.tsx`](file:///c:/ZenFlow/src/components/OverviewBar.tsx).
+  - Built comprehensive [`AnalyticsModal.tsx`](file:///c:/ZenFlow/src/components/AnalyticsModal.tsx) with:
+    - Timeframe selection: Today (locks 11:59 PM), This Week (locks 11:59 PM Sunday), and custom calendar tool with historical lock badges.
+    - Graphical Top Section: Total employees, Total utilization, Total efficiency, Top accounts horizontal distribution chart.
+    - Section 1 (Utilization): Employees with < 3h/day listed with specific dates within range.
+    - Section 2 (Efficiency): Employees with < 50% efficiency listed with specific dates within range.
+    - Section 3 & 4 (Key Accounts & Key Delivery Units): Context-aware views adapting dynamically for All, Per Client, Per Delivery Unit, Per Project, and Per User.
+    - Section 5 (Pressure Metrics): Teams ranked by highest average workload scores with top contributing projects/tasks.
+    - Standardized `(Billable hours / Time estimated)` annotations everywhere.
+    - Historical snapshots persistence backend endpoint (`GET /api/analytics/snapshots`, `POST /api/analytics/snapshots`).
+- **AUDIT-16 (Zero-Defect Verification & Production Build Certification):**
+  - Static analysis: certified 0 warnings and 0 errors across `npm run lint` (`tsc --noEmit`).
+  - Production build: confirmed 100% clean builds for both Vite client and esbuild server bundles (`npm run build`).
+  - Automated test suite: verified all 30 unit, security, session, resource, and analytics tests passing (`npm test`), plus production server smoke testing (`node --import tsx tests/smoke-production.ts`).
+
 ### Sweep 56: 2026-10-28 (Banner Cleanup, Subtext Revisions, Special Roles Renaming, Auto Account Manager & Business Lead Isolation)
 
 - **BRAND-03 (Banner & Modal Header Sanitization):**

@@ -61,6 +61,9 @@ interface Task {
   parentTaskId?: string;
   parentTaskTitle?: string;
   isSubtask?: boolean;
+  client?: string;
+  project?: string;
+  estimatedHours?: number;
 }
 
 interface AppStore {
@@ -94,6 +97,7 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const DATA_DIR = process.env.ZENFLOW_DATA_DIR || path.join(process.cwd(), 'data');
 const DATA_FILE = path.join(DATA_DIR, 'store.json');
 const AUDIT_LOG_FILE = path.join(DATA_DIR, 'compliance-audit.jsonl');
+const ANALYTICS_SNAPSHOT_FILE = path.join(DATA_DIR, 'analytics_snapshots.json');
 // Identity trust is deliberately independent of the configurable Firestore credentials.
 const identityApp = getAdminApps().find(app => app.name === 'zenflow-identity') ||
   initializeAdminApp({ projectId: 'zen-flow-7173d' }, 'zenflow-identity');
@@ -220,6 +224,35 @@ function saveStore(storeToSave: AppStore) {
       }
     }
   }, 50);
+}
+
+function loadAnalyticsSnapshots(): any[] {
+  try {
+    if (fs.existsSync(ANALYTICS_SNAPSHOT_FILE)) {
+      const data = fs.readFileSync(ANALYTICS_SNAPSHOT_FILE, 'utf-8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (err) {
+    console.error('Error loading analytics snapshots:', err);
+  }
+  return [];
+}
+
+async function saveAnalyticsSnapshotLocal(snapshot: any) {
+  try {
+    const snapshots = loadAnalyticsSnapshots();
+    const existingIndex = snapshots.findIndex((s: any) => s.id === snapshot.id);
+    if (existingIndex >= 0) {
+      snapshots[existingIndex] = snapshot;
+    } else {
+      snapshots.push(snapshot);
+    }
+    await fs.promises.mkdir(DATA_DIR, { recursive: true });
+    await fs.promises.writeFile(ANALYTICS_SNAPSHOT_FILE, JSON.stringify(snapshots, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Error saving analytics snapshot local:', err);
+  }
 }
 
 // Input sanitizer to prevent XSS / malicious injection in titles & descriptions
@@ -1633,6 +1666,9 @@ async function startServer() {
       dueDate,
       cognitiveLoad,
       status,
+      client,
+      project,
+      estimatedHours,
     } = req.body;
 
     // Idempotency guard for offline mutation replay: if task with this ID already exists, return it
@@ -1676,6 +1712,12 @@ async function startServer() {
       details: `Created in ${cleanStatus.replace('_', ' ')}`,
     };
 
+    const parsedEstimatedHours = (typeof estimatedHours === 'number' && !isNaN(estimatedHours) && estimatedHours >= 0)
+      ? Math.round(Number(estimatedHours) * 10) / 10
+      : (typeof estimatedHours === 'string' && !isNaN(Number(estimatedHours)) && Number(estimatedHours) >= 0
+        ? Math.round(Number(estimatedHours) * 10) / 10
+        : undefined);
+
     const newTask: Task = {
       id: taskId,
       userId,
@@ -1688,6 +1730,9 @@ async function startServer() {
       completedAt: isDone ? new Date().toISOString() : undefined,
       inProgressStartedAt: isInProgress ? new Date().toISOString() : undefined,
       inProgressDurationMs: 0,
+      client: client ? sanitizeString(client) : undefined,
+      project: project ? sanitizeString(project) : undefined,
+      estimatedHours: parsedEstimatedHours,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       activityLog: [initialActivity],
@@ -1768,6 +1813,9 @@ async function startServer() {
       isSubtask: true,
       parentTaskId: sourceTask.id,
       parentTaskTitle: sourceTask.title,
+      client: req.body.client !== undefined ? (req.body.client ? sanitizeString(req.body.client) : undefined) : sourceTask.client,
+      project: req.body.project !== undefined ? (req.body.project ? sanitizeString(req.body.project) : undefined) : sourceTask.project,
+      estimatedHours: req.body.estimatedHours !== undefined ? (typeof req.body.estimatedHours === 'number' ? req.body.estimatedHours : (Number(req.body.estimatedHours) || undefined)) : sourceTask.estimatedHours,
       createdAt: now,
       updatedAt: now,
       activityLog: [initialActivity],
@@ -1834,6 +1882,9 @@ async function startServer() {
       inProgressStartedAt: reqStartedAt,
       adjustmentReason,
       actorName,
+      client,
+      project,
+      estimatedHours,
     } = req.body;
 
     if (title !== undefined) {
@@ -1966,6 +2017,14 @@ async function startServer() {
       });
     }
 
+    const parsedEstimatedHours = estimatedHours !== undefined
+      ? (typeof estimatedHours === 'number' && !isNaN(estimatedHours) && estimatedHours >= 0
+        ? Math.round(Number(estimatedHours) * 10) / 10
+        : (typeof estimatedHours === 'string' && !isNaN(Number(estimatedHours)) && Number(estimatedHours) >= 0
+          ? Math.round(Number(estimatedHours) * 10) / 10
+          : undefined))
+      : currentTask.estimatedHours;
+
     const updatedTask: Task = {
       ...currentTask,
       title: title !== undefined ? sanitizeString(title) : currentTask.title,
@@ -1978,6 +2037,9 @@ async function startServer() {
       completedAt,
       inProgressStartedAt,
       inProgressDurationMs,
+      client: client !== undefined ? (client ? sanitizeString(client) : undefined) : currentTask.client,
+      project: project !== undefined ? (project ? sanitizeString(project) : undefined) : currentTask.project,
+      estimatedHours: parsedEstimatedHours,
       updatedAt: new Date().toISOString(),
       activityLog: activityEntries.slice(0, 15),
     };
@@ -2151,6 +2213,30 @@ async function startServer() {
     broadcastEvent('tasks_reordered', modifiedTasks);
 
     res.json({ success: true, tasks: modifiedTasks });
+  });
+
+  // API: Get historical analytics snapshots
+  app.get('/api/analytics/snapshots', (_req: Request, res: Response) => {
+    const snapshots = loadAnalyticsSnapshots();
+    res.json(snapshots);
+  });
+
+  // API: Save or lock historical analytics snapshot
+  app.post('/api/analytics/snapshots', async (req: Request, res: Response) => {
+    const snapshot = req.body;
+    if (!snapshot || !snapshot.id) {
+      return res.status(400).json({ error: 'Valid snapshot payload with id is required' });
+    }
+    await saveAnalyticsSnapshotLocal(snapshot);
+    try {
+      if (!adminDb) await initFirestore();
+      if (adminDb) {
+        await adminDb.collection('analytics_snapshots').doc(snapshot.id).set(cleanDocData(snapshot), { merge: true });
+      }
+    } catch (err) {
+      console.error('Firestore save analytics snapshot error:', err);
+    }
+    res.json({ success: true, snapshot });
   });
 
   // ==========================================

@@ -334,6 +334,14 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           </div>
 
           {/* Billable Hours badge (top right of card - clickable to manually correct hours) */}
+          {task.estimatedHours !== undefined && task.estimatedHours > 0 && (
+            <span
+              title={`Estimated: ${task.estimatedHours}h`}
+              className="inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-medium bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border border-neutral-200/50 dark:border-white/5 shrink-0"
+            >
+              Est: {task.estimatedHours}h
+            </span>
+          )}
           {billableMs > 0 || task.status === 'in_progress' ? (
             <button
               type="button"
@@ -375,6 +383,23 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         >
           <CornerDownRight className="h-2.5 w-2.5 shrink-0" />
           <span className="truncate">Subtask of: {task.parentTaskTitle || 'Parent Task'}</span>
+        </div>
+      )}
+
+      {/* Client & Project Badge */}
+      {(task.client || task.project) && (
+        <div className="mb-1 flex items-center gap-1.5 text-[10px] text-neutral-500 dark:text-neutral-400 font-medium truncate">
+          {task.client && (
+            <span className="font-semibold text-neutral-700 dark:text-neutral-300 truncate">
+              {task.client}
+            </span>
+          )}
+          {task.client && task.project && <span className="opacity-40">·</span>}
+          {task.project && (
+            <span className="truncate opacity-80">
+              {task.project}
+            </span>
+          )}
         </div>
       )}
 

@@ -15,6 +15,7 @@ import { EditUserModal } from './components/EditUserModal';
 import { DuplicateTaskModal } from './components/DuplicateTaskModal';
 import { DeleteTaskModal } from './components/DeleteTaskModal';
 import { FreePoolContainer } from './components/FreePoolContainer';
+import { AnalyticsModal } from './components/AnalyticsModal';
 import { User, Task, TaskStatus } from './types';
 import { UserPlus, FileText, Palette, Video as VideoIcon, Layout, Search, Loader2, Trash2 } from 'lucide-react';
 import { testConnection } from './lib/firebase';
@@ -63,6 +64,7 @@ function DashboardContent() {
   const [taskToDuplicate, setTaskToDuplicate] = useState<Task | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [isHoveringDeleteZone, setIsHoveringDeleteZone] = useState(false);
+  const [analyticsModalOpen, setAnalyticsModalOpen] = useState(false);
 
   // Stable refs for currentUser and users — allow keyboard effect and task modal handler to have empty dep arrays
   const currentUserRef = useRef(currentUser);
@@ -110,14 +112,100 @@ function DashboardContent() {
     }
   });
 
+  // Fast O(1) lookup map of user names for search queries
+  const userNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const u of users) {
+      map.set(u.id, u.name.toLowerCase());
+    }
+    return map;
+  }, [users]);
+
+  // Filter tasks by search query across tasks, clients, projects, and members
+  const filteredTasks = useMemo(() => {
+    const trimmed = searchQuery.trim().toLowerCase();
+    if (!trimmed) return tasks;
+
+    const map = new Map<string, Task>();
+    for (const task of tasks) {
+      if (!task || !task.id) continue;
+      const matchesTitle = task.title.toLowerCase().includes(trimmed);
+      const matchesDesc = task.description ? task.description.toLowerCase().includes(trimmed) : false;
+      const matchesClient = task.client ? task.client.toLowerCase().includes(trimmed) : false;
+      const matchesProject = task.project ? task.project.toLowerCase().includes(trimmed) : false;
+      const userName = userNameMap.get(task.userId);
+      const matchesUser = userName ? userName.includes(trimmed) : false;
+
+      if (matchesTitle || matchesDesc || matchesClient || matchesProject || matchesUser) {
+        map.set(task.id, task);
+      }
+    }
+    return Array.from(map.values());
+  }, [tasks, searchQuery, userNameMap]);
+
+  // Cross-role search result counts for global navigation
+  const searchRoleMatches = useMemo(() => {
+    const trimmed = searchQuery.trim().toLowerCase();
+    if (!trimmed) return null;
+
+    const counts: Record<string, number> = {
+      content: 0,
+      design: 0,
+      video: 0,
+      ui_ux: 0,
+      research: 0,
+    };
+
+    const taskMatchesSet = new Set(filteredTasks.map(t => t.id));
+    for (const t of tasks) {
+      if (!taskMatchesSet.has(t.id)) continue;
+      const u = users.find(usr => usr.id === t.userId);
+      if (u && u.role && counts[u.role] !== undefined) {
+        counts[u.role]++;
+      }
+    }
+
+    for (const u of users) {
+      if (
+        u.name.toLowerCase().includes(trimmed) ||
+        u.email.toLowerCase().includes(trimmed) ||
+        (u.designation && u.designation.toLowerCase().includes(trimmed))
+      ) {
+        if (u.role && counts[u.role] !== undefined) {
+          counts[u.role]++;
+        }
+      }
+    }
+
+    return counts;
+  }, [searchQuery, filteredTasks, tasks, users]);
+
   // Filter users by role tab and active team board (video, UI/UX, and research are shared teams across all boards)
+  // When search is active, show only users who match the query or have matching tasks
   const roleFilteredUsers = useMemo(() => {
+    const trimmed = searchQuery.trim().toLowerCase();
     let boardUsers = users;
     const isSharedSection = activeRoleTab === 'video' || activeRoleTab === 'ui_ux' || activeRoleTab === 'research';
-    if (activeBoardId !== 'all' && !isSharedSection) {
+    
+    // When searching, allow finding members across boards in the active role tab
+    if (activeBoardId !== 'all' && !isSharedSection && !trimmed) {
       boardUsers = users.filter(u => u.id === activeBoardId || u.creativeDirectorId === activeBoardId);
     }
-    const filtered = boardUsers.filter(u => u.role === activeRoleTab);
+
+    let filtered = boardUsers.filter(u => u.role === activeRoleTab);
+
+    // If search is active, only show users who match query or have matching tasks
+    if (trimmed) {
+      const usersWithMatchingTasks = new Set(filteredTasks.map(t => t.userId));
+      filtered = filtered.filter(u => {
+        const matchesName = u.name.toLowerCase().includes(trimmed);
+        const matchesEmail = u.email.toLowerCase().includes(trimmed);
+        const matchesDesignation = u.designation ? u.designation.toLowerCase().includes(trimmed) : false;
+        const hasTasks = usersWithMatchingTasks.has(u.id);
+        return matchesName || matchesEmail || matchesDesignation || hasTasks;
+      });
+    }
+
     const pinnedUser = currentUser ? filtered.find(u => u.id === currentUser.id) : null;
     const reorderableUsers = pinnedUser ? filtered.filter(u => u.id !== currentUser.id) : filtered;
 
@@ -140,37 +228,10 @@ function DashboardContent() {
     });
 
     return pinnedUser ? [pinnedUser, ...sortedReorderable] : sortedReorderable;
-  }, [users, activeRoleTab, customUserOrder, currentUser, activeBoardId]);
+  }, [users, activeRoleTab, customUserOrder, currentUser, activeBoardId, searchQuery, filteredTasks]);
 
   const roleFilteredUsersRef = useRef(roleFilteredUsers);
   roleFilteredUsersRef.current = roleFilteredUsers;
-
-  // Fast O(1) lookup map of user names for search queries
-  const userNameMap = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const u of users) {
-      map.set(u.id, u.name.toLowerCase());
-    }
-    return map;
-  }, [users]);
-
-  // Filter tasks by search query with deduplication - O(T + U) single pass
-  const filteredTasks = useMemo(() => {
-    const trimmed = searchQuery.trim().toLowerCase();
-    if (!trimmed) return tasks;
-
-    const map = new Map<string, Task>();
-    for (const task of tasks) {
-      if (!task || !task.id) continue;
-      const matchesTitle = task.title.toLowerCase().includes(trimmed);
-      const matchesDesc = task.description ? task.description.toLowerCase().includes(trimmed) : false;
-      const userName = userNameMap.get(task.userId);
-      const matchesUser = userName ? userName.includes(trimmed) : false;
-      if (!matchesTitle && !matchesDesc && !matchesUser) continue;
-      map.set(task.id, task);
-    }
-    return Array.from(map.values());
-  }, [tasks, searchQuery, userNameMap]);
 
   const prevTasksByUserIdRef = useRef<Map<string, Task[]>>(new Map());
 
@@ -221,6 +282,7 @@ function DashboardContent() {
         setUserToDelete(null);
         setEditingUser(null);
         setAdjustBillableTask(null);
+        setAnalyticsModalOpen(false);
       }
 
       // Ctrl+N / Cmd+N: Quick create task
@@ -495,13 +557,55 @@ function DashboardContent() {
           <OverviewBar
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
+            onOpenAnalytics={() => setAnalyticsModalOpen(true)}
           />
+
+          {/* Search Results Summary & Cross-Tab Navigation Ribbon */}
+          {searchQuery.trim() && (
+            <div className="mb-4 rounded-xl border border-blue-500/20 bg-blue-50/60 dark:bg-blue-950/20 p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <Search className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                <span>
+                  Showing results for &ldquo;<span className="font-semibold text-neutral-900 dark:text-white">{searchQuery.trim()}</span>&rdquo;:
+                  {' '}<span className="font-semibold text-blue-600 dark:text-blue-400">{filteredTasks.length} task{filteredTasks.length === 1 ? '' : 's'}</span> across <span className="font-semibold text-blue-600 dark:text-blue-400">{roleFilteredUsers.length} member{roleFilteredUsers.length === 1 ? '' : 's'}</span> in current view.
+                </span>
+              </div>
+
+              {/* Cross-role matches links */}
+              {searchRoleMatches && (
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-[11px] text-neutral-500 dark:text-white/40">Matches in teams:</span>
+                  {(['content', 'design', 'video', 'ui_ux', 'research'] as const).map(role => {
+                    const count = searchRoleMatches[role] || 0;
+                    if (count === 0 && role !== activeRoleTab) return null;
+                    const roleLabel = role === 'ui_ux' ? 'UI/UX' : role.charAt(0).toUpperCase() + role.slice(1);
+                    return (
+                      <button
+                        key={role}
+                        type="button"
+                        onClick={() => setActiveRoleTab(role)}
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
+                          role === activeRoleTab
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-white dark:bg-white/10 text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/20 border border-neutral-200 dark:border-white/10'
+                        }`}
+                      >
+                        {roleLabel} ({count})
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* User Swimlanes List */}
           {roleFilteredUsers.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#0D0D0D] p-12 text-center shadow-sm dark:shadow-2xl">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-[#141414] border border-neutral-200 dark:border-white/5 text-neutral-500 dark:text-white/50 mb-3">
-                {activeRoleTab === 'content' ? (
+                {searchQuery.trim() ? (
+                  <Search className="h-6 w-6 text-blue-500" />
+                ) : activeRoleTab === 'content' ? (
                   <FileText className="h-6 w-6 text-blue-500" />
                 ) : activeRoleTab === 'design' ? (
                   <Palette className="h-6 w-6 text-indigo-500" />
@@ -514,12 +618,24 @@ function DashboardContent() {
                 )}
               </div>
               <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">
-                No members in {activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab === 'video' ? 'Video' : activeRoleTab === 'content' ? 'Content' : activeRoleTab === 'design' ? 'Design' : activeRoleTab === 'research' ? 'Research' : activeRoleTab} yet
+                {searchQuery.trim()
+                  ? `No matching tasks, clients, projects, or members found in ${activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab.charAt(0).toUpperCase() + activeRoleTab.slice(1)}`
+                  : `No members in ${activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab === 'video' ? 'Video' : activeRoleTab === 'content' ? 'Content' : activeRoleTab === 'design' ? 'Design' : activeRoleTab === 'research' ? 'Research' : activeRoleTab} yet`}
               </h3>
               <p className="mt-1 text-xs text-neutral-500 dark:text-white/40 max-w-sm">
-                Add a new member with the {activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab === 'research' ? 'Research' : activeRoleTab} role to generate their dedicated swimlane.
+                {searchQuery.trim()
+                  ? 'Try searching with different keywords, check other team tabs above, or clear the search query.'
+                  : `Add a new member with the ${activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab === 'research' ? 'Research' : activeRoleTab} role to generate their dedicated swimlane.`}
               </p>
-              {canManageMembers && (
+              {searchQuery.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="mt-4 px-3.5 py-1.5 rounded-xl border border-neutral-300 dark:border-white/10 text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-white/5 cursor-pointer"
+                >
+                  Clear Search
+                </button>
+              ) : canManageMembers && (
                 <button
                   onClick={handleOpenNewUser}
                   className="mt-4 flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 transition-colors shadow-md shadow-blue-900/20 cursor-pointer"
@@ -605,6 +721,11 @@ function DashboardContent() {
         <FirestoreModal
           isOpen={firestoreModalOpen}
           onClose={() => setFirestoreModalOpen(false)}
+        />
+
+        <AnalyticsModal
+          isOpen={analyticsModalOpen}
+          onClose={() => setAnalyticsModalOpen(false)}
         />
 
         <EditUserModal
