@@ -26,7 +26,7 @@ export const canEdit = (caller: Member, owner: Member | undefined) => {
   if (!owner) return false;
   if (isSuperadmin(caller) || caller.isAdministrator || caller.role === 'administrator' || caller.isBusinessLead) return true;
   // Account Manager cannot edit boards
-  if (caller.isAccountManager || caller.designation === 'account_manager') return false;
+  if (caller.isAccountManager || caller.designation === 'account_manager' || caller.role === 'account_manager') return false;
   // Creative Director and Cluster Lead edit their teams
   if (caller.isCreativeDirector && owner.creativeDirectorId === caller.id) return true;
   if (caller.isClusterLead && (owner.clusterLeadId === caller.id || owner.creativeDirectorId === caller.id)) return true;

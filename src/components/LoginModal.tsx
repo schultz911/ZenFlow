@@ -19,7 +19,6 @@ import {
   Layers,
   Lock,
   Users,
-  UserCheck,
   Search,
 } from 'lucide-react';
 
@@ -55,12 +54,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [role, setRole] = useState<Role | undefined>('content');
   const [isAdminPrivilege, setIsAdminPrivilege] = useState(false);
 
-  // Designations
+  // Special Roles
   const [isBusinessLead, setIsBusinessLead] = useState(false);
   const [isCD, setIsCD] = useState(false);
   const [isClusterLead, setIsClusterLead] = useState(false);
   const [isTeamLead, setIsTeamLead] = useState(false);
-  const [isAccountManager, setIsAccountManager] = useState(false);
 
   // Assigned Leaders
   const [selectedCDId, setSelectedCDId] = useState<string>(() => {
@@ -132,6 +130,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     setIsSubmitting(true);
     try {
       if (isNewAccountOnly) {
+        const isAccountMgr = role === 'account_manager';
         const designation = isBusinessLead
           ? 'Business Lead'
           : isCD
@@ -140,7 +139,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           ? 'Cluster Lead'
           : isTeamLead
           ? 'Team Lead'
-          : isAccountManager
+          : isAccountMgr
           ? 'Account Manager'
           : isAdminPrivilege
           ? 'Administrator'
@@ -155,10 +154,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           isCreativeDirector: isCD,
           isClusterLead,
           isTeamLead,
-          isAccountManager,
+          isAccountManager: isAccountMgr,
           designation,
-          creativeDirectorId: isCD ? undefined : (selectedCDId || undefined),
-          clusterLeadId: isClusterLead ? undefined : (selectedClusterLeadId || undefined),
+          creativeDirectorId: isBusinessLead ? undefined : (isCD ? undefined : (selectedCDId || undefined)),
+          clusterLeadId: isBusinessLead ? undefined : (isClusterLead ? undefined : (selectedClusterLeadId || undefined)),
         });
       } else {
         await login(cleanName, role || 'content', cleanEmail);
@@ -171,7 +170,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       setIsCD(false);
       setIsClusterLead(false);
       setIsTeamLead(false);
-      setIsAccountManager(false);
       setSelectedCDId('');
       setSelectedClusterLeadId('');
       onClose();
@@ -197,7 +195,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     {
       id: 'content',
       label: 'Content',
-      desc: 'Writing & Strategy',
+      desc: 'Writing & Concept',
       icon: <FileText className="h-4 w-4 text-blue-500" />,
       tooltip: 'Content writing, editorial, and storytelling team',
     },
@@ -286,11 +284,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-neutral-500 dark:text-white/40 mt-0.5">
-                    {isNewAccountOnly
-                      ? 'Provision a team member, select role, and configure leadership designations.'
-                      : 'Workflow Management System'}
-                  </p>
+                  {isNewAccountOnly && (
+                    <p className="text-xs text-neutral-500 dark:text-white/40 mt-0.5">
+                      Provision a team member, select roles, and configure permissions.
+                    </p>
+                  )}
                 </div>
               </div>
               {isNewAccountOnly && onClose && (
@@ -480,12 +478,12 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   </div>
                 </div>
 
-                {/* Designation: Role-led */}
+                {/* Special Roles: Role-led */}
                 <div className="rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-50/50 dark:bg-white/[0.02] p-3.5 space-y-3">
                   <div className="flex items-center gap-1.5">
                     <Award className="w-3.5 h-3.5 text-amber-500" />
-                    <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 uppercase tracking-wider" title="Configure member leadership designation">
-                      Designation
+                    <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 uppercase tracking-wider" title="Configure member special roles">
+                      Special Roles
                     </span>
                   </div>
 
@@ -537,26 +535,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                       <Users className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                       <span className="text-xs font-medium text-neutral-800 dark:text-neutral-200">Team Lead</span>
                     </label>
-
-                    {/* Account Manager */}
-                    <label className="flex items-center gap-2 p-2.5 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
-                      <input
-                        type="checkbox"
-                        checked={isAccountManager}
-                        onChange={e => setIsAccountManager(e.target.checked)}
-                        className="rounded border-neutral-300 dark:border-neutral-700 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
-                      />
-                      <UserCheck className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-                      <span className="text-xs font-medium text-neutral-800 dark:text-neutral-200">Account Manager</span>
-                    </label>
                   </div>
                 </div>
 
-                {/* Delivery Lead: Assigned Creative Director (Boards follow Creative Director) */}
-                {!isCD && (
+                {/* Delivery Lead: Assigned Creative Director */}
+                {!isCD && !isBusinessLead && (
                   <div>
-                    <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5" title="Select the Delivery lead who manages this member's cluster board">
-                      Assigned Creative Director (Delivery lead)
+                    <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5" title="Select the delivery lead who manages this member's cluster board">
+                      Assigned Creative Director
                     </label>
                     <select
                       value={selectedCDId}
@@ -572,13 +558,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                       ))}
                     </select>
                     <p className="text-[10px] text-neutral-500 dark:text-white/40 mt-1">
-                      Boards follow the Creative Director as the Delivery lead of a cluster.
+                      Boards follow the Creative Director as the delivery lead of a cluster.
                     </p>
                   </div>
                 )}
 
                 {/* Input for Assigned Cluster Lead */}
-                {!isClusterLead && (
+                {!isClusterLead && !isBusinessLead && (
                   <div>
                     <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
                       Assigned Cluster Lead

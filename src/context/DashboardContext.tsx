@@ -304,7 +304,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     // Administrator and Business Lead - can access all boards, edit all boards
     if (isSuperadmin || isAdministrator || isBusinessLead) return true;
     // Account Manager - cannot edit boards
-    if (currentUser.isAccountManager || currentUser.designation === 'account_manager') {
+    if (currentUser.isAccountManager || currentUser.designation === 'account_manager' || currentUser.role === 'account_manager') {
       return false;
     }
     // Cluster Lead and Creative Director - can access all boards, edit boards of their teams

@@ -98,9 +98,6 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                   Flow
                 </span>
               </div>
-              <p className="text-[11px] font-medium text-neutral-500 dark:text-white/40 tracking-normal mt-0.5">
-                Workflow Management System
-              </p>
             </div>
           </div>
 

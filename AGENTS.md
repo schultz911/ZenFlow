@@ -6,6 +6,24 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
+### Sweep 56: 2026-10-28 (Banner Cleanup, Subtext Revisions, Special Roles Renaming, Auto Account Manager & Business Lead Isolation)
+
+- **BRAND-03 (Banner & Modal Header Sanitization):**
+  - Removed "Workflow Management System" description paragraph from the application header banner in [`Header.tsx`](file:///c:/ZenFlow/src/components/Header.tsx).
+  - Updated Add Team Member modal subtext to `"Provision a team member, select roles, and configure permissions."` in [`LoginModal.tsx`](file:///c:/ZenFlow/src/components/LoginModal.tsx).
+  - Removed `"Cloud Firestore Database & SOC2 Audit Stream"` subtitle from the Database & Compliance connection modal in [`FirestoreModal.tsx`](file:///c:/ZenFlow/src/components/FirestoreModal.tsx).
+- **TEAM-03 (Content Discipline Subtext & Auto Account Manager Mapping):**
+  - Updated Content team description subtext to `"Writing & Concept"` in both [`LoginModal.tsx`](file:///c:/ZenFlow/src/components/LoginModal.tsx) and [`EditUserModal.tsx`](file:///c:/ZenFlow/src/components/EditUserModal.tsx).
+  - Removed `Account Manager` from designation toggles. Selecting the `Accounts` team (`role === 'account_manager'`) automatically assigns account manager status, tag badges, and permissions across backend (`server/security.ts`), frontend context (`DashboardContext.tsx`), and workload tagging (`workload.ts`).
+- **AUTH-12 (Special Roles Renaming & Leadership Hierarchy Refinement):**
+  - Renamed "Designation" section header to **"Special Roles"** across both [`LoginModal.tsx`](file:///c:/ZenFlow/src/components/LoginModal.tsx) and [`EditUserModal.tsx`](file:///c:/ZenFlow/src/components/EditUserModal.tsx).
+  - Business Leads (`isBusinessLead`) no longer have an assigned Creative Director or Cluster Lead; both selector dropdowns are automatically hidden and cleared upon assignment.
+  - Stripped bracketed text from Assigned Creative Director label: updated to `"Assigned Creative Director"` with standardized subtext `"Boards follow the Creative Director as the delivery lead of a cluster."`.
+- **AUDIT-15 (Zero-Defect Verification & Production Build Certification):**
+  - Static analysis: certified 0 warnings and 0 errors across `npm run lint` and `npx tsc --noEmit --noUnusedLocals --noUnusedParameters`.
+  - Production build: confirmed 100% clean builds for both Vite client and esbuild server bundles (`npm run build`).
+  - Automated test suite: verified all 25 unit, security, session, and resource tests passing (`npm test`), plus production server smoke testing (`node --import tsx tests/smoke-production.ts`).
+
 ### Sweep 55: 2026-10-28 (Research Shared Team, Admin Privilege Toggle, Role-Led Designations & Granular Matrix)
 
 - **TEAM-02 (Shared Cross-Functional Research Section):**
