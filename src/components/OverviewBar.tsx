@@ -192,15 +192,6 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
 
         {/* Team Aggregate Badges with Add Member and New Task stacked next to To Do pill */}
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-          <div className="rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414] px-3.5 py-2">
-            <span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-white/40 block">
-              Avg Workload
-            </span>
-            <span className="text-sm font-semibold text-neutral-900 dark:text-white">
-              {avgWorkload} pts
-            </span>
-          </div>
-
           <div
             title={`Team Utilization: ${teamUtilization.utilizedCount} of ${teamUtilization.totalCount} members assigned > 3 hours/day estimated`}
             className="rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414] px-3.5 py-2"
@@ -245,6 +236,15 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                 {formatHoursRatio(teamEfficiency.totalTimeTakenHours, teamEfficiency.totalEstimatedHours)}
               </span>
             </div>
+          </div>
+
+          <div className="rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414] px-3.5 py-2">
+            <span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-white/40 block">
+              Avg Workload
+            </span>
+            <span className="text-sm font-semibold text-neutral-900 dark:text-white">
+              {avgWorkload} pts
+            </span>
           </div>
 
           <div className="rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414] px-3.5 py-2">
