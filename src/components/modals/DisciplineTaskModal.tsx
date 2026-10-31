@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../../context/DashboardContext';
-import { Role, CognitiveLoad, TaskDisciplineMetadata } from '../../types';
+import { Role, TaskDisciplineMetadata } from '../../types';
 import { getLastDayOfMonth } from '../../utils/workload';
 import {
   X,
@@ -11,8 +11,6 @@ import {
   Layout,
   Search,
   Plus,
-  Trash2,
-  Calendar,
   AlertCircle,
   Link as LinkIcon,
   Sparkles,
@@ -306,9 +304,6 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                 <h3 className="text-base font-semibold text-neutral-900 dark:text-white">
                   Create Team Pipeline Task
                 </h3>
-                <p className="text-xs text-neutral-500 dark:text-white/40">
-                  Enters {selectedDiscipline.toUpperCase()} pipeline as unassigned for Creative Director estimation.
-                </p>
               </div>
             </div>
             <button

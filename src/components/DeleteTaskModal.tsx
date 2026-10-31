@@ -78,9 +78,6 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
               <h2 className="text-base font-semibold tracking-tight text-neutral-900 dark:text-white">
                 Delete Task
               </h2>
-              <p className="text-xs text-neutral-500 dark:text-white/40 mt-0.5">
-                Confirm Task Removal
-              </p>
             </div>
           </div>
           <button

@@ -100,9 +100,6 @@ export const DeadlineDemandModal: React.FC<DeadlineDemandModalProps> = ({
               <h3 className="text-base font-bold text-neutral-900 dark:text-white">
                 Deadline Required
               </h3>
-              <p className="text-xs text-neutral-500 dark:text-white/50 mt-0.5">
-                Active workflow tasks cannot proceed without an established deadline.
-              </p>
             </div>
           </div>
 

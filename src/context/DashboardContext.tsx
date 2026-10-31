@@ -1669,9 +1669,18 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   // Nuclear purge of all database data (tasks + non-root users) exclusive to Superadmin
   const purgeAllDatabaseData = useCallback(async (): Promise<{ success: boolean; message: string; deletedTaskCount?: number; deletedUserCount?: number }> => {
     try {
+      const email = currentUserRef.current?.email || '';
+      const callerId = currentUserRef.current?.id || '';
       const res = await fetch('/api/firestore/purge', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'x-zenflow-request': '1',
+          'x-caller-email': email,
+          'x-caller-user-id': callerId,
+          'x-is-superadmin': isSuperadmin ? 'true' : 'false',
+        },
+        credentials: 'same-origin',
       });
       const data = await res.json();
       if (!res.ok) {
@@ -1683,7 +1692,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     } catch (err: any) {
       throw err;
     }
-  }, [fetchState, refreshFirestoreStatus]);
+  }, [fetchState, refreshFirestoreStatus, isSuperadmin]);
 
   const contextValue = useMemo(
     () => ({

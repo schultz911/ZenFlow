@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 import {
   getWorkingDaysCount,
   getTaskDailyEstimatedHours,
-  getUserDailyAssignedHours,
   isUserUtilized,
   calculateTeamUtilization,
   calculateTasksEfficiency,

@@ -557,9 +557,6 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                         </option>
                       ))}
                   </select>
-                  <p className="mt-1 text-[10px] text-neutral-400 dark:text-neutral-500">
-                    Boards follow the Creative Director as the delivery lead of a cluster.
-                  </p>
                 </div>
               )}
 
@@ -583,9 +580,6 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                         </option>
                       ))}
                   </select>
-                  <p className="mt-1 text-[10px] text-neutral-400 dark:text-neutral-500">
-                    Optionally map to an assigned Cluster Lead for multi-lead clusters.
-                  </p>
                 </div>
               )}
 

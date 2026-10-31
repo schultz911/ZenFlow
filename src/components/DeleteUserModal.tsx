@@ -99,9 +99,6 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({
               <h2 className="text-base font-semibold tracking-tight text-neutral-900 dark:text-white">
                 Delete Member
               </h2>
-              <p className="text-xs text-neutral-500 dark:text-white/40 mt-0.5">
-                Cascade User & Task Removal
-              </p>
             </div>
           </div>
           <button

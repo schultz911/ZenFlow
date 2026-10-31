@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
 import { User, Task, AnalyticsScope, AnalyticsTimeframe } from '../types';
 import {
-  calculateTeamUtilization,
   calculateTasksEfficiency,
   formatHoursRatio,
   getDeliveryUnits,
@@ -21,18 +20,13 @@ import {
   Lock,
   Unlock,
   Users,
-  TrendingUp,
   Activity,
-  Layers,
   Building2,
   FolderGit2,
   CheckCircle2,
-  AlertTriangle,
-  Clock,
   Briefcase,
   ChevronDown,
   BarChart3,
-  Timer,
   Zap,
 } from 'lucide-react';
 
@@ -587,9 +581,6 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                     <span>{lockLabel}</span>
                   </span>
                 </div>
-                <p className="text-xs text-neutral-500 dark:text-white/40">
-                  Realtime utilization, efficiency thresholds, key accounts & pressure metrics.
-                </p>
               </div>
             </div>
 
@@ -876,7 +867,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
 
             {/* SECTION 1: UTILIZATION (< 3h/day assigned with dates) */}
             <div className="rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414] p-5 shadow-xs">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <div className="h-2.5 w-2.5 rounded-full bg-amber-500" />
                   <h3 className="text-sm font-semibold tracking-tight text-neutral-900 dark:text-white">
@@ -887,9 +878,6 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                   {underutilizedEmployees.length} member{underutilizedEmployees.length === 1 ? '' : 's'} flagged
                 </span>
               </div>
-              <p className="text-xs text-neutral-500 dark:text-white/40 mb-4">
-                Team members assigned less than 3 hours of estimated time per day within the timeframe (split equally across task working days).
-              </p>
 
               {underutilizedEmployees.length === 0 ? (
                 <div className="py-6 text-center text-xs text-neutral-400 dark:text-white/40 flex items-center justify-center gap-2">
@@ -945,7 +933,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
 
             {/* SECTION 2: EFFICIENCY (< 50% with dates) */}
             <div className="rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414] p-5 shadow-xs">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <div className="h-2.5 w-2.5 rounded-full bg-rose-500" />
                   <h3 className="text-sm font-semibold tracking-tight text-neutral-900 dark:text-white">
@@ -956,9 +944,6 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                   {lowEfficiencyEmployees.length} member{lowEfficiencyEmployees.length === 1 ? '' : 's'} flagged
                 </span>
               </div>
-              <p className="text-xs text-neutral-500 dark:text-white/40 mb-4">
-                Team members with aggregate efficiency below 50% (aggregate time taken vs time estimated across assigned tasks).
-              </p>
 
               {lowEfficiencyEmployees.length === 0 ? (
                 <div className="py-6 text-center text-xs text-neutral-400 dark:text-white/40 flex items-center justify-center gap-2">
@@ -1021,15 +1006,12 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               {/* Left Column: Section 3 */}
               <div className="rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414] p-5 shadow-xs">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold tracking-tight text-neutral-900 dark:text-white flex items-center gap-2">
                     <Building2 className="h-4 w-4 text-blue-500" />
                     <span>{sections3And4Data.section3Title}</span>
                   </h3>
                 </div>
-                <p className="text-xs text-neutral-500 dark:text-white/40 mb-3">
-                  Ranked by highest of billable hours or time estimated. Annotated as (Billable hours / Time estimated).
-                </p>
 
                 <div className="space-y-2.5 max-h-72 overflow-y-auto">
                   {/* If all view */}
@@ -1094,15 +1076,12 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
 
               {/* Right Column: Section 4 */}
               <div className="rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414] p-5 shadow-xs">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold tracking-tight text-neutral-900 dark:text-white flex items-center gap-2">
                     <FolderGit2 className="h-4 w-4 text-purple-500" />
                     <span>{sections3And4Data.section4Title}</span>
                   </h3>
                 </div>
-                <p className="text-xs text-neutral-500 dark:text-white/40 mb-3">
-                  Ranked by highest of billable hours or time estimated. Annotated as (Billable hours / Time estimated).
-                </p>
 
                 <div className="space-y-2.5 max-h-72 overflow-y-auto">
                   {/* If all delivery units */}
@@ -1196,7 +1175,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
 
             {/* SECTION 5: PRESSURE METRICS (Highest Average Workload Scores & Top Contributors) */}
             <div className="rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414] p-5 shadow-xs">
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <div className="h-2.5 w-2.5 rounded-full bg-indigo-500" />
                   <h3 className="text-sm font-semibold tracking-tight text-neutral-900 dark:text-white">
@@ -1204,9 +1183,6 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                   </h3>
                 </div>
               </div>
-              <p className="text-xs text-neutral-500 dark:text-white/40 mb-4">
-                Teams and members ranked by average workload scores across members, with top contributing projects and tasks.
-              </p>
 
               {/* Mode: Members with Projects (General, Delivery Unit, Client views) */}
               {pressureMetrics.mode === 'members_with_projects' && (

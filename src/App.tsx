@@ -51,8 +51,6 @@ function DashboardContent() {
     activeBoardId,
     setActiveBoardId,
     canManageMembers,
-    canCreatePipelineTask,
-    canAssignTask,
   } = useDashboard();
 
   // Modals state

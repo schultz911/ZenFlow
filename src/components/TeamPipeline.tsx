@@ -1,21 +1,17 @@
 import React, { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
-import { Task, User, Role, CognitiveLoad } from '../types';
+import { Task, User, Role } from '../types';
 import { getCognitiveLoadLabel } from '../utils/workload';
 import {
   Inbox,
   Plus,
   Search,
-  Filter,
-  UserCheck,
   UserX,
-  Brain,
   Clock,
   Edit2,
   Trash2,
   GripVertical,
-  ChevronRight,
   Shield,
   Tag,
   Briefcase,
@@ -23,7 +19,6 @@ import {
   Palette,
   Video as VideoIcon,
   Layout,
-  ExternalLink,
 } from 'lucide-react';
 
 interface TeamPipelineProps {
@@ -55,14 +50,13 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
   onOpenAssignmentModal,
   onEditTask,
   onDeleteTask,
-  onMoveTask,
+  onMoveTask: _onMoveTask,
   onDragTaskStart,
   onDragTaskEnd,
 }) => {
   const {
     canCreatePipelineTask,
     canAssignTask,
-    canEditUserTasks,
     updateTask,
   } = useDashboard();
 
@@ -196,18 +190,13 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 shrink-0">
             <DisciplineIcon className="h-4 w-4" />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-neutral-900 dark:text-white">
-                {teamLabel} Team Pipeline
-              </h3>
-              <span className="rounded-full bg-neutral-200 dark:bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-neutral-700 dark:text-white/60">
-                {totalCount} total
-              </span>
-            </div>
-            <p className="text-[11px] text-neutral-500 dark:text-white/40">
-              Shared discipline backlog · Unscheduled client deliverables and ready-to-assign queue
-            </p>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-bold text-neutral-900 dark:text-white">
+              {teamLabel} Team Pipeline
+            </h3>
+            <span className="rounded-full bg-neutral-200 dark:bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-neutral-700 dark:text-white/60">
+              {totalCount} total
+            </span>
           </div>
         </div>
 

@@ -70,9 +70,6 @@ export const WipLimitModal: React.FC<WipLimitModalProps> = ({
               <h3 className="text-base font-bold text-neutral-900 dark:text-white">
                 In-Progress Limit Reached
               </h3>
-              <p className="text-xs text-neutral-500 dark:text-white/50 mt-0.5">
-                Maximum 2 concurrent active tasks
-              </p>
             </div>
           </div>
 

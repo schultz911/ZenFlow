@@ -3,7 +3,7 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import compression from 'compression';
-import { createApiSecurity, redactPayload, SESSION_COOKIE, sameOriginMutation, canCreatePipelineTask } from './server/security';
+import { createApiSecurity, redactPayload, SESSION_COOKIE, sameOriginMutation } from './server/security';
 import { readAuditTail, writeSse } from './server/resources';
 import { initializeApp as initializeAdminApp, getApps as getAdminApps } from 'firebase-admin/app';
 import { getAuth as getAdminAuth } from 'firebase-admin/auth';

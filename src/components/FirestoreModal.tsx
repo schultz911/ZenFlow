@@ -462,9 +462,6 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                       <h3 className="text-xs font-semibold text-neutral-900 dark:text-white truncate">
                         SOC2 Compliance Audit Stream
                       </h3>
-                      <p className="text-[11px] text-neutral-500 dark:text-white/40 truncate">
-                        Append-only audit trail mirrored to Firestore & NDJSON disk
-                      </p>
                     </div>
                   </div>
 
@@ -584,9 +581,6 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                             Superadmin
                           </span>
                         </div>
-                        <p className="text-[11px] text-red-600/70 dark:text-red-400/60 truncate">
-                          Wipe all tasks and member accounts with 5s hold protection
-                        </p>
                       </div>
                     </div>
 

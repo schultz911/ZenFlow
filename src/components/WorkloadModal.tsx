@@ -94,9 +94,6 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                   {getUserTag(user).label}
                 </span>
               </h2>
-              <p className="text-xs text-neutral-500 dark:text-white/40 mt-0.5">
-                Workload Analytics & Task Overview
-              </p>
             </div>
           </div>
           <button

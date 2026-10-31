@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
-import { Task, CognitiveLoad, User } from '../types';
+import { Task, CognitiveLoad } from '../types';
 import {
   getUserDailyAssignedHours,
   COGNITIVE_LOAD_WEIGHTS,
@@ -13,7 +13,6 @@ import {
   Brain,
   Clock,
   AlertCircle,
-  Sparkles,
   ShieldAlert,
 } from 'lucide-react';
 
@@ -131,9 +130,6 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                 <h3 className="text-base font-semibold text-neutral-900 dark:text-white">
                   Assign Task & Workload Estimate
                 </h3>
-                <p className="text-xs text-neutral-500 dark:text-white/40">
-                  Assign to matching-discipline members across all teams.
-                </p>
               </div>
             </div>
             <button

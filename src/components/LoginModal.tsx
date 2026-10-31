@@ -284,11 +284,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                       </span>
                     )}
                   </div>
-                  {isNewAccountOnly && (
-                    <p className="text-xs text-neutral-500 dark:text-white/40 mt-0.5">
-                      Provision a team member, select roles, and configure permissions.
-                    </p>
-                  )}
                 </div>
               </div>
               {isNewAccountOnly && onClose && (
@@ -557,9 +552,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                         </option>
                       ))}
                     </select>
-                    <p className="text-[10px] text-neutral-500 dark:text-white/40 mt-1">
-                      Boards follow the Creative Director as the delivery lead of a cluster.
-                    </p>
                   </div>
                 )}
 
@@ -581,9 +573,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                         </option>
                       ))}
                     </select>
-                    <p className="text-[10px] text-neutral-500 dark:text-white/40 mt-1">
-                      Optionally map to an assigned Cluster Lead for multi-lead clusters.
-                    </p>
                   </div>
                 )}
 

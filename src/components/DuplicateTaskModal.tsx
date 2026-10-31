@@ -272,9 +272,6 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                     CD & Superadmin
                   </span>
                 </h3>
-                <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">
-                  Creates an independent subtask under this task on the recipient&apos;s board.
-                </p>
               </div>
             </div>
             <button
