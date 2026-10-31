@@ -96,6 +96,7 @@ interface DashboardContextType {
   authError: string | null;
   setAuthError: (err: string | null) => void;
   syncWithFirestore: () => Promise<{ success: boolean; message: string }>;
+  purgeAllDatabaseData: () => Promise<{ success: boolean; message: string; deletedTaskCount?: number; deletedUserCount?: number }>;
   login: (name: string, role: Role, email: string) => Promise<User>;
   loginWithGoogle: () => Promise<User>;
   logout: () => void;
@@ -1665,6 +1666,25 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, [fetchState, refreshFirestoreStatus]);
 
+  // Nuclear purge of all database data (tasks + non-root users) exclusive to Superadmin
+  const purgeAllDatabaseData = useCallback(async (): Promise<{ success: boolean; message: string; deletedTaskCount?: number; deletedUserCount?: number }> => {
+    try {
+      const res = await fetch('/api/firestore/purge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || data.message || 'Database purge failed');
+      }
+      await fetchState();
+      await refreshFirestoreStatus();
+      return data;
+    } catch (err: any) {
+      throw err;
+    }
+  }, [fetchState, refreshFirestoreStatus]);
+
   const contextValue = useMemo(
     () => ({
       currentUser,
@@ -1684,6 +1704,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       setActiveDragInfo,
       refreshFirestoreStatus,
       syncWithFirestore,
+      purgeAllDatabaseData,
       login,
       loginWithGoogle,
       logout,
@@ -1739,6 +1760,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       activeDragInfo,
       refreshFirestoreStatus,
       syncWithFirestore,
+      purgeAllDatabaseData,
       login,
       loginWithGoogle,
       logout,

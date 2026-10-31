@@ -19,6 +19,7 @@ import { AnalyticsModal } from './components/AnalyticsModal';
 import { TeamPipeline } from './components/TeamPipeline';
 import { DisciplineTaskModal } from './components/modals/DisciplineTaskModal';
 import { TaskAssignmentModal } from './components/TaskAssignmentModal';
+import { SuperadminPurgeModal } from './components/SuperadminPurgeModal';
 import { User, Task, TaskStatus } from './types';
 import { UserPlus, FileText, Palette, Video as VideoIcon, Layout, Search, Loader2, Trash2 } from 'lucide-react';
 import { testConnection } from './lib/firebase';
@@ -72,6 +73,7 @@ function DashboardContent() {
   const [analyticsModalOpen, setAnalyticsModalOpen] = useState(false);
   const [disciplineModalOpen, setDisciplineModalOpen] = useState(false);
   const [selectedTaskForAssignment, setSelectedTaskForAssignment] = useState<Task | null>(null);
+  const [purgeModalOpen, setPurgeModalOpen] = useState(false);
 
   // Stable refs for currentUser and users — allow keyboard effect and task modal handler to have empty dep arrays
   const currentUserRef = useRef(currentUser);
@@ -531,6 +533,7 @@ function DashboardContent() {
           onOpenLoginModal={handleOpenLogin}
           onOpenNewUserModal={handleOpenNewUser}
           onOpenFirestoreModal={handleOpenFirestore}
+          onOpenPurgeModal={() => setPurgeModalOpen(true)}
         />
 
         {/* Pinned Ribbons — sticky just below the header */}
@@ -744,6 +747,11 @@ function DashboardContent() {
         <FirestoreModal
           isOpen={firestoreModalOpen}
           onClose={() => setFirestoreModalOpen(false)}
+        />
+
+        <SuperadminPurgeModal
+          isOpen={purgeModalOpen}
+          onClose={() => setPurgeModalOpen(false)}
         />
 
         <AnalyticsModal

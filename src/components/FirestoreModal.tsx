@@ -16,7 +16,9 @@ import {
   Download,
   ChevronDown,
   ChevronUp,
+  ShieldAlert,
 } from 'lucide-react';
+import { HoldToPurgeButton } from './HoldToPurgeButton';
 
 interface FirestoreModalProps {
   isOpen: boolean;
@@ -34,11 +36,16 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
     canManageMembers,
     fetchAuditLogs,
     downloadAuditLogs,
+    purgeAllDatabaseData,
   } = useDashboard();
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Superadmin Nuclear Purge states
+  const [isPurgingData, setIsPurgingData] = useState(false);
+  const [purgeFeedback, setPurgeFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // Service Account Credentials Upload state
   const [serviceAccountInput, setServiceAccountInput] = useState('');
@@ -54,6 +61,7 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     firestore: false,
     audit: false,
+    danger: false,
   });
 
   const toggleSection = (section: string) => {
@@ -67,13 +75,13 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isSyncing && !isUploadingKey) {
+      if (e.key === 'Escape' && !isSyncing && !isUploadingKey && !isPurgingData) {
         onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, isSyncing, isUploadingKey]);
+  }, [isOpen, onClose, isSyncing, isUploadingKey, isPurgingData]);
 
   // Refresh status and collapse details when modal opens
   useEffect(() => {
@@ -81,14 +89,35 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
       refreshFirestoreStatus();
       setFeedback(null);
       setKeyFeedback(null);
+      setPurgeFeedback(null);
       setServiceAccountInput('');
       setShowAuditFeed(false);
       setExpandedSections({
         firestore: false,
         audit: false,
+        danger: false,
       });
     }
   }, [isOpen, refreshFirestoreStatus]);
+
+  const handlePurgeInFirestoreModal = async () => {
+    setIsPurgingData(true);
+    setPurgeFeedback(null);
+    try {
+      const res = await purgeAllDatabaseData();
+      setPurgeFeedback({
+        type: 'success',
+        message: res.message || 'Database successfully purged. All deliverables wiped.',
+      });
+    } catch (err: any) {
+      setPurgeFeedback({
+        type: 'error',
+        message: err.message || 'Database purge failed.',
+      });
+    } finally {
+      setIsPurgingData(false);
+    }
+  };
 
   const handleManualSync = async () => {
     setIsSyncing(true);
@@ -533,6 +562,77 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                   </div>
                 )}
               </div>
+
+              {/* SECTION 3: Superadmin Nuclear Purge (Superadmin Only) */}
+              {isSuperadmin && (
+                <div className="rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50/20 dark:bg-red-950/20 overflow-hidden transition-all">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection('danger')}
+                    className="w-full flex items-center justify-between p-3.5 hover:bg-red-100/40 dark:hover:bg-red-950/40 transition-colors cursor-pointer text-left"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-600 dark:text-red-400">
+                        <ShieldAlert className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-xs font-semibold text-red-700 dark:text-red-400 truncate">
+                            Danger Zone: Purge Database
+                          </h3>
+                          <span className="text-[9px] uppercase font-mono px-1.5 py-0.2 rounded bg-red-950/60 border border-red-800 text-red-300 font-bold tracking-wider">
+                            Superadmin
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-red-600/70 dark:text-red-400/60 truncate">
+                          Wipe all tasks and member accounts with 5s hold protection
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="rounded-md bg-red-100 dark:bg-red-950/60 border border-red-300 dark:border-red-800/80 px-2 py-0.5 text-[10px] font-mono text-red-700 dark:text-red-300 font-semibold">
+                        5s Hold
+                      </span>
+                      {expandedSections.danger ? (
+                        <ChevronUp className="h-4 w-4 text-red-400" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-red-400" />
+                      )}
+                    </div>
+                  </button>
+
+                  {expandedSections.danger && (
+                    <div className="p-4 pt-1 border-t border-red-200 dark:border-red-900/30 space-y-4">
+                      <div className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed bg-white/50 dark:bg-neutral-900/60 p-3 rounded-lg border border-red-200/50 dark:border-red-950">
+                        Permanently deletes all <span className="font-semibold text-red-600 dark:text-red-400">{tasks.length} tasks</span> and{' '}
+                        <span className="font-semibold text-red-600 dark:text-red-400">
+                          {users.filter(u => u.email.toLowerCase() !== 'kiran.s@zensciences.com').length} team accounts
+                        </span>{' '}
+                        from Cloud Firestore and local persistence. The root superadmin account (<span className="font-mono text-neutral-900 dark:text-white">kiran.s@zensciences.com</span>) is permanently protected.
+                      </div>
+
+                      {purgeFeedback && (
+                        <div
+                          className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
+                            purgeFeedback.type === 'success'
+                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+                              : 'bg-red-500/10 border-red-500/30 text-red-700 dark:text-red-300'
+                          }`}
+                        >
+                          <AlertCircle className="h-4 w-4 shrink-0" />
+                          <span>{purgeFeedback.message}</span>
+                        </div>
+                      )}
+
+                      <HoldToPurgeButton
+                        onPurgeConfirm={handlePurgeInFirestoreModal}
+                        isLoading={isPurgingData}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Modal Footer */}

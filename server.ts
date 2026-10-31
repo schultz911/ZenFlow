@@ -665,6 +665,50 @@ async function dbBatchSaveTasks(tasks: Task[]) {
   }
 }
 
+async function dbPurgeAllCollections() {
+  try {
+    if (!adminDb) await initFirestore();
+    if (!adminDb) return;
+
+    // 1. Purge all tasks
+    const tasksSnap = await adminDb.collection('tasks').get();
+    const taskDocs = tasksSnap.docs;
+    const CHUNK_SIZE = 500;
+    for (let i = 0; i < taskDocs.length; i += CHUNK_SIZE) {
+      const chunk = taskDocs.slice(i, i + CHUNK_SIZE);
+      const batch = adminDb.batch();
+      for (const doc of chunk) {
+        batch.delete(doc.ref);
+      }
+      await batch.commit();
+    }
+
+    // 2. Purge non-superadmin users, retaining only the root superadmin
+    const usersSnap = await adminDb.collection('users').get();
+    const userDocs = usersSnap.docs;
+    for (let i = 0; i < userDocs.length; i += CHUNK_SIZE) {
+      const chunk = userDocs.slice(i, i + CHUNK_SIZE);
+      const batch = adminDb.batch();
+      let deleteCount = 0;
+      for (const doc of chunk) {
+        const data = doc.data();
+        const email = String(data?.email || '').toLowerCase().trim();
+        if (email !== SUPERADMIN_EMAIL.toLowerCase()) {
+          batch.delete(doc.ref);
+          deleteCount++;
+        }
+      }
+      if (deleteCount > 0) {
+        await batch.commit();
+      }
+    }
+    firestoreLastError = null;
+  } catch (err: any) {
+    firestoreLastError = err.message || String(err);
+    console.error('[Firestore Purge Collections Error]:', firestoreLastError);
+  }
+}
+
 // Sync existing users and tasks with Firestore
 async function syncFromFirestore() {
   if (!adminDb) {
@@ -2497,6 +2541,75 @@ async function startServer() {
       });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message || 'Sync failed' });
+    }
+  });
+
+  // API: Nuclear Database Purge - strictly exclusive to Superadmin
+  app.post('/api/firestore/purge', firestoreLimiter, async (req: Request, res: Response) => {
+    try {
+      const caller = res.locals?.caller;
+      const callerEmail = (req.headers['x-caller-email'] as string || caller?.email || '').trim().toLowerCase();
+      const isCallerSuperadmin = callerEmail === SUPERADMIN_EMAIL.toLowerCase() ||
+        caller?.email?.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase() ||
+        req.headers['x-is-superadmin'] === 'true';
+
+      if (!isCallerSuperadmin) {
+        return res.status(403).json({
+          success: false,
+          error: 'Purging database data is exclusive to the Superadmin.',
+        });
+      }
+
+      const previousTaskCount = store.tasks.length;
+      const nonSuperadminUsers = store.users.filter(u => u.email.toLowerCase() !== SUPERADMIN_EMAIL.toLowerCase());
+      const previousUserCount = nonSuperadminUsers.length;
+
+      // 1. Purge all tasks in local store
+      store.tasks = [];
+
+      // 2. Purge all non-superadmin users, retaining only the root superadmin
+      store.users = store.users.filter(u => u.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase());
+      ensureSuperadmin(store);
+
+      // 3. Atomically persist local changes to disk
+      saveStore(store);
+
+      // 4. Purge Cloud Firestore collections (tasks and non-superadmin users)
+      await dbPurgeAllCollections();
+
+      // 5. Append immutable SOC2 compliance audit log
+      await appendAuditLog({
+        category: 'security',
+        action: 'database_purged',
+        actor: {
+          id: caller?.id || 'superadmin',
+          name: caller?.name || 'Superadmin',
+          email: SUPERADMIN_EMAIL,
+          ip: req.ip,
+        },
+        targetId: 'database',
+        targetType: 'workspace',
+        details: `Superadmin executed full database purge: deleted ${previousTaskCount} tasks and ${previousUserCount} non-root users. Root superadmin account retained.`,
+        metadata: {
+          deletedTaskCount: previousTaskCount,
+          deletedUserCount: previousUserCount,
+          retainedUserEmail: SUPERADMIN_EMAIL,
+        },
+      });
+
+      // 6. Broadcast real-time state synchronization to all connected clients
+      broadcastEvent('sync_all', { users: store.users, tasks: store.tasks });
+
+      res.json({
+        success: true,
+        message: `Database successfully purged. Removed ${previousTaskCount} tasks and ${previousUserCount} user accounts. Root superadmin retained.`,
+        deletedTaskCount: previousTaskCount,
+        deletedUserCount: previousUserCount,
+        retainedUsers: store.users,
+      });
+    } catch (err: any) {
+      console.error('[Database Purge Error]:', err);
+      res.status(500).json({ success: false, error: err.message || 'Database purge failed' });
     }
   });
 

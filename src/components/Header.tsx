@@ -15,6 +15,7 @@ import {
   Video as VideoIcon,
   Layout,
   Search,
+  Trash2,
 } from 'lucide-react';
 import { getUserTag } from '../utils/workload';
 
@@ -22,12 +23,14 @@ interface HeaderProps {
   onOpenLoginModal: () => void;
   onOpenNewUserModal: () => void;
   onOpenFirestoreModal: () => void;
+  onOpenPurgeModal?: () => void;
 }
 
 const HeaderComponent: React.FC<HeaderProps> = ({
   onOpenLoginModal,
   onOpenNewUserModal,
   onOpenFirestoreModal,
+  onOpenPurgeModal,
 }) => {
   const {
     currentUser,
@@ -354,6 +357,19 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                       <Database className="h-3.5 w-3.5 text-blue-500" />
                       <span>Database & Compliance</span>
                     </button>
+
+                    {isSuperadmin && onOpenPurgeModal && (
+                      <button
+                        onClick={() => {
+                          setUserDropdownOpen(false);
+                          onOpenPurgeModal();
+                        }}
+                        className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors cursor-pointer font-medium"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-red-500" />
+                        <span>Purge All Data (5s Hold)</span>
+                      </button>
+                    )}
 
                     <button
                       onClick={() => {

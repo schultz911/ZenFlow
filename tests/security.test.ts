@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fixtureServer, fixtureTask } from './fixtures';
-import { publicMember } from '../server/security';
+import { publicMember, SUPERADMIN_EMAIL } from '../server/security';
 
 async function withServer(run: (server: Awaited<ReturnType<typeof fixtureServer>>) => Promise<void>) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'zenflow-security-'));
@@ -164,4 +164,31 @@ test('pipeline and retainer tasks retain deadline and timer behavior', async () 
   await server.request('/tasks/timer', 'alice', 'PUT', { status: 'in_review' });
   assert.equal(server.store.tasks.at(-1).inProgressStartedAt, undefined);
   assert.ok(server.store.tasks.at(-1).inProgressDurationMs >= 0);
+}));
+
+test('database purge: exclusive to superadmin; non-superadmins are rejected with 403', async () => withServer(async server => {
+  // Alice (regular user) receives 403
+  const aliceRes = await server.request('/firestore/purge', 'alice', 'POST', {});
+  assert.equal(aliceRes.status, 403);
+
+  // Creative Director (non-superadmin) receives 403
+  const cdRes = await server.request('/firestore/purge', 'cd', 'POST', {});
+  assert.equal(cdRes.status, 403);
+
+  // Initial state check: has tasks and multiple users
+  assert.ok(server.store.tasks.length > 0);
+  assert.ok(server.store.users.length > 1);
+
+  // Superadmin (root) calling purge succeeds
+  const rootRes = await server.request('/firestore/purge', 'root', 'POST', {});
+  assert.equal(rootRes.status, 200);
+  const data = await rootRes.json();
+  assert.equal(data.success, true);
+  assert.ok(data.deletedTaskCount > 0);
+  assert.ok(data.deletedUserCount > 0);
+
+  // Store is purged: 0 tasks, exactly 1 user (the root superadmin)
+  assert.equal(server.store.tasks.length, 0);
+  assert.equal(server.store.users.length, 1);
+  assert.equal(server.store.users[0].email, SUPERADMIN_EMAIL);
 }));

@@ -39,6 +39,14 @@ export async function fixtureServer(_directory: string) {
     saveStore: noop, dbSaveUser: asyncNoop, dbSaveTask: asyncNoop,
     dbDeleteUser: asyncNoop, dbDeleteTask: asyncNoop, dbBatchDeleteTasks: asyncNoop,
     dbBatchSaveTasks: asyncNoop, dbBatchSaveUsers: asyncNoop,
+    dbPurgeAllCollections: asyncNoop,
+    firestoreLimiter: (_req: any, _res: any, next: any) => next(),
+    ensureSuperadmin: (s: any) => {
+      s.users = s.users.filter((u: any) => u.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase());
+      if (s.users.length === 0) {
+        s.users.push({ id: 'root', name: 'Root', email: SUPERADMIN_EMAIL, role: 'content', isCreativeDirector: true });
+      }
+    },
     SUPERADMIN_EMAIL,
     broadcastEvent: (type: string, payload: any) => events.push({ type, payload: redactPayload(payload) }),
     appendAuditLog: async (entry: any) => { audit.push(entry); },
@@ -75,7 +83,7 @@ export async function fixtureServer(_directory: string) {
   const routes = ['get /api/health', 'get /api/state', 'get /api/users', 'post /api/users',
     'put /api/users/:id', 'delete /api/users/:id', 'get /api/tasks', 'post /api/tasks',
     'put /api/tasks/:id', 'delete /api/tasks/:id', 'post /api/tasks/reorder',
-    'post /api/tasks/:id/duplicate', 'get /api/events'];
+    'post /api/tasks/:id/duplicate', 'post /api/firestore/purge', 'get /api/events'];
   for (const route of routes) {
     const handler = vm.runInNewContext(compile(`var handler = ${handlers.get(route)}`) + '; handler', ctx);
     const [method, routePath] = route.split(' ');
