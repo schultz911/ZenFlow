@@ -1,3 +1,4 @@
+import { DialogPanel } from './ui/DialogPanel';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
@@ -272,19 +273,19 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs overflow-y-auto"
+          className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
           onClick={e => {
             if (e.target === e.currentTarget && !isSubmitting && !isRemapping) onClose();
           }}
         >
-          <motion.div
+          <DialogPanel aria-label="Edit team member" onClose={onClose} busy={isSubmitting || isRemapping}
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
             onClick={e => e.stopPropagation()}
             id="edit-user-modal"
-            className="w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#111111] shadow-2xl p-6 text-neutral-900 dark:text-white transition-all"
+            className="w-full max-w-lg overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 "
           >
             {/* Header */}
             <div className="flex items-center justify-between pb-4 border-b border-neutral-100 dark:border-white/5">
@@ -296,12 +297,12 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                   <h2 className="text-base font-semibold tracking-tight">
                     Edit Team Member
                   </h2>
-                  <p className="text-xs text-neutral-500 dark:text-white/40">
+                  <p className="text-xs text-[var(--text-secondary)]">
                     {user.email}
                   </p>
                 </div>
               </div>
-              <button
+              <button aria-label="Close dialog"
                 onClick={onClose}
                 disabled={isSubmitting || isRemapping}
                 className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white transition-colors cursor-pointer"
@@ -321,11 +322,11 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
               {/* Email Address */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40">
+                  <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)]" htmlFor="editusermodal-field-1">
                     Email Address
                   </label>
                   {isSuperadmin && !isTargetSuperadmin && (
-                    <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[10px] px-2 py-0.5 font-semibold border border-amber-500/20">
+                    <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] px-2 py-0.5 font-semibold border border-amber-500/20">
                       <KeyRound className="w-3 h-3" />
                       Superadmin Editable
                     </span>
@@ -345,22 +346,22 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                     placeholder="e.g. member@zensciences.com"
                     className={`w-full rounded-xl pl-9 pr-3 py-2 text-xs transition-colors ${
                       isSuperadmin && !isTargetSuperadmin
-                        ? 'border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500'
-                        : 'border border-neutral-200 dark:border-white/5 bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-neutral-400 cursor-not-allowed'
-                    }`}
+                        ? 'border border-neutral-300 dark:border-white/10 bg-[var(--surface)] text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500'
+                        : 'border border-[var(--border)] bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-neutral-400 cursor-not-allowed'
+                    }`} id="editusermodal-field-1"
                   />
                 </div>
 
                 {isTargetSuperadmin ? (
-                  <p className="mt-1 text-[10px] text-neutral-400 dark:text-neutral-500">
+                  <p className="mt-1 text-[11px] text-neutral-400 dark:text-neutral-500">
                     The primary Superadmin email address is the root workspace anchor and cannot be modified.
                   </p>
                 ) : isSuperadmin ? (
-                  <p className="mt-1 text-[10px] text-neutral-400 dark:text-neutral-500">
+                  <p className="mt-1 text-[11px] text-neutral-400 dark:text-neutral-500">
                     As Superadmin, you can correct mistyped emails. Any tasks mapped to the wrong email will be preserved and remapped.
                   </p>
                 ) : (
-                  <p className="mt-1 text-[10px] text-neutral-400 dark:text-neutral-500">
+                  <p className="mt-1 text-[11px] text-neutral-400 dark:text-neutral-500">
                     Registered email is anchored to Google Workspace authentication. Only the Superadmin can edit it.
                   </p>
                 )}
@@ -391,7 +392,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
 
               {/* Full Name */}
               <div>
-                <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5" htmlFor="editusermodal-field-2">
                   Full Name
                 </label>
                 <input
@@ -400,7 +401,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                   value={name}
                   onChange={e => setName(e.target.value)}
                   placeholder="e.g. Alex Morgan"
-                  className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] px-3 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] px-3 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" id="editusermodal-field-2"
                 />
               </div>
 
@@ -408,10 +409,10 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
               <div
                 className={`rounded-xl border p-3 flex items-center justify-between transition-all ${
                   !canAssignAdmin
-                    ? 'opacity-50 bg-neutral-100/50 dark:bg-white/[0.02] border-neutral-200 dark:border-white/5'
+                    ? 'opacity-50 bg-neutral-100/50 dark:bg-white/[0.02] border-[var(--border)]'
                     : isAdminPrivilege
                     ? 'border-rose-500/40 bg-rose-500/5 dark:bg-rose-500/10'
-                    : 'border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414]'
+                    : 'border-[var(--border)] bg-[var(--surface)]'
                 }`}
                 title={canAssignAdmin ? "Grant administrator privileges with full board and account access" : "Administrator privileges are restricted to Superadmins and other Administrators"}
               >
@@ -424,7 +425,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                       <span className="text-xs font-semibold text-neutral-900 dark:text-white">Administrator Privileges</span>
                       {!canAssignAdmin && <Lock className="w-3 h-3 text-neutral-400" />}
                     </div>
-                    <p className="text-[10px] text-neutral-500 dark:text-white/40">System & Ops — Full board access, team management, and workspace settings</p>
+                    <p className="text-[11px] text-[var(--text-secondary)]">System & Ops — Full board access, team management, and workspace settings</p>
                   </div>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
@@ -443,10 +444,10 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
               {/* Role / Team Selection: 6 functional teams (optional) */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40" title="Select the member's functional team (click selected team to deselect)">
+                  <label className="text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)]" title="Select the member's functional team (click selected team to deselect)">
                     TEAM
                   </label>
-                  <span className="text-[10px] text-neutral-400 dark:text-white/40">
+                  <span className="text-[11px] text-[var(--text-secondary)]">
                     {role ? '(click selected to deselect)' : '(no team selected)'}
                   </span>
                 </div>
@@ -460,7 +461,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                       className={`flex items-start gap-2 rounded-xl border p-2 text-left transition-all ${
                         role === opt.id
                           ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 ring-1 ring-blue-500 cursor-pointer'
-                          : 'border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414] text-neutral-600 dark:text-white/60 hover:border-neutral-300 cursor-pointer'
+                          : 'border-[var(--border)] bg-[var(--surface)] text-neutral-600 dark:text-white/60 hover:border-neutral-300 cursor-pointer'
                       }`}
                     >
                       <div className="rounded-lg p-1 bg-neutral-200/50 dark:bg-white/5 shrink-0">
@@ -468,7 +469,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                       </div>
                       <div className="min-w-0">
                         <p className="text-xs font-semibold truncate">{opt.label}</p>
-                        <p className="text-[10px] text-neutral-400 dark:text-white/40 truncate">{opt.desc}</p>
+                        <p className="text-[11px] text-[var(--text-secondary)] truncate">{opt.desc}</p>
                       </div>
                     </button>
                   ))}
@@ -476,7 +477,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
               </div>
 
               {/* Special Roles Section: Role-led */}
-              <div className="rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-50/50 dark:bg-white/[0.02] p-3.5 space-y-3">
+              <div className="rounded-xl border border-[var(--border)] bg-neutral-50/50 dark:bg-white/[0.02] p-3.5 space-y-3">
                 <div className="flex items-center gap-1.5">
                   <Award className="w-3.5 h-3.5 text-amber-500" />
                   <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 uppercase tracking-wider" title="Configure member special roles">
@@ -486,7 +487,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                   {/* Business Lead */}
-                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
+                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
                     <input
                       type="checkbox"
                       checked={isBusinessLead}
@@ -498,7 +499,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                   </label>
 
                   {/* Creative Director Status */}
-                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
+                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
                     <input
                       type="checkbox"
                       checked={isTargetSuperadmin ? true : isCD}
@@ -511,7 +512,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                   </label>
 
                   {/* Cluster Lead */}
-                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
+                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
                     <input
                       type="checkbox"
                       checked={isClusterLead}
@@ -523,7 +524,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                   </label>
 
                   {/* Team Lead */}
-                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
+                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
                     <input
                       type="checkbox"
                       checked={isTeamLead}
@@ -539,14 +540,14 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
               {/* Delivery Lead: Assigned Creative Director */}
               {!isCD && !isTargetSuperadmin && !isBusinessLead && (
                 <div>
-                  <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5" title="Select the delivery lead who manages this member's cluster board">
+                  <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5" title="Select the delivery lead who manages this member's cluster board" htmlFor="editusermodal-field-3">
                     Assigned Creative Director
                   </label>
                   <select
                     value={selectedCDId}
                     onChange={e => setSelectedCDId(e.target.value)}
                     title="Delivery lead for this cluster delivery board"
-                    className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                    className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none cursor-pointer" id="editusermodal-field-3"
                   >
                     <option value="">Independent / Direct Board</option>
                     {creativeDirectors
@@ -563,13 +564,13 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
               {/* Input for Assigned Cluster Lead */}
               {!isClusterLead && !isBusinessLead && (
                 <div>
-                  <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                  <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5" htmlFor="editusermodal-field-4">
                     Assigned Cluster Lead
                   </label>
                   <select
                     value={selectedClusterLeadId}
                     onChange={e => setSelectedClusterLeadId(e.target.value)}
-                    className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                    className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="editusermodal-field-4"
                   >
                     <option value="">None / Direct</option>
                     {clusterLeads
@@ -594,7 +595,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                     >
                       <ArrowRightLeft className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
                       <span>Task Remapping Tool</span>
-                      <span className="text-[10px] text-purple-600 dark:text-purple-400 font-normal">
+                      <span className="text-[11px] text-purple-600 dark:text-purple-400 font-normal">
                         {showRemapTool ? '(Collapse)' : '(Remap tasks from another account)'}
                       </span>
                     </button>
@@ -607,13 +608,13 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                       </p>
 
                       <div>
-                        <label className="block text-[11px] uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1">
+                        <label className="block text-[11px] uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1" htmlFor="editusermodal-field-5">
                           Source Member / Account
                         </label>
                         <select
                           value={remapSourceUserId}
                           onChange={e => setRemapSourceUserId(e.target.value)}
-                          className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-purple-500 focus:outline-none"
+                          className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-purple-500 focus:outline-none" id="editusermodal-field-5"
                         >
                           <option value="">-- Select member with misassigned tasks --</option>
                           {otherUsers.map(u => {
@@ -679,7 +680,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                   type="button"
                   onClick={onClose}
                   disabled={isSubmitting || isRemapping}
-                  className="rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-100 dark:bg-[#141414] px-3.5 py-2 text-xs font-medium text-neutral-600 dark:text-white/50 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                  className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2 text-xs font-medium text-neutral-600 dark:text-white/50 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200 dark:hover:bg-white/5 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -687,7 +688,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                   type="submit"
                   id="edit-user-submit-btn"
                   disabled={isSubmitting || isRemapping || !name.trim()}
-                  className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-blue-900/20 hover:bg-blue-500 transition-colors disabled:opacity-50 cursor-pointer"
+                  className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-500 transition-colors disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmitting ? (
                     <>
@@ -703,7 +704,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                 </button>
               </div>
             </form>
-          </motion.div>
+          </DialogPanel>
         </motion.div>
       )}
     </AnimatePresence>

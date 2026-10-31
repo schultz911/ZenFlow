@@ -70,7 +70,7 @@ const COLUMNS: ColumnConfig[] = [
   {
     status: 'todo',
     title: 'To Do',
-    icon: <Circle className="h-3 w-3 text-neutral-400 dark:text-white/40" />,
+    icon: <Circle className="h-3 w-3 text-[var(--text-secondary)]" />,
     headerColor: 'text-neutral-600 dark:text-white/50',
     dotColor: 'bg-neutral-400 dark:bg-white/40',
   },
@@ -518,12 +518,12 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
-      className={`rounded-2xl border bg-white dark:bg-[#0D0D0D] shadow-sm dark:shadow-2xl transition-all ${
+      className={`surface rounded-2xl border bg-[var(--surface)] shadow-sm transition-all ${
         dragOverHeader
           ? 'border-blue-500 ring-2 ring-blue-500/40 bg-blue-50/20 dark:bg-blue-950/10'
           : isCurrentUser
           ? 'border-blue-500/50 ring-1 ring-blue-500/20 shadow-blue-500/5'
-          : 'border-neutral-200 dark:border-white/5'
+          : 'border-[var(--border)]'
       }`}
     >
       {/* Swimlane Header: User Info, Workload Score, Add Task, and User Drop Target */}
@@ -541,7 +541,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
         <div className="flex items-center gap-3.5">
           {/* User Workspace Reordering Buttons */}
             {(onMoveUserUp || onMoveUserDown) && !isCurrentUser && (
-              <div className="flex flex-col gap-0.5 border border-neutral-200/80 dark:border-white/10 rounded-lg p-0.5 bg-neutral-50 dark:bg-[#141414] shrink-0">
+              <div className="flex flex-col gap-0.5 border border-neutral-200/80 dark:border-white/10 rounded-lg p-0.5 bg-[var(--surface-muted)] shrink-0">
                 <button
                   type="button"
                   disabled={!canMoveUp}
@@ -566,7 +566,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
             <div
               className={`relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-tr ${
                 user.avatarColor || 'from-blue-600 to-indigo-600'
-              } text-white font-semibold text-sm border border-neutral-200 dark:border-white/10 shadow-sm`}
+              } text-white font-semibold text-sm border border-[var(--border)] shadow-sm`}
             >
               {user.name
                 .split(' ')
@@ -588,17 +588,17 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                   {user.name}
                 </h3>
                 {isCurrentUser && (
-                  <span className="rounded-md bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                  <span className="rounded-md bg-blue-600 px-1.5 py-0.5 text-[11px] font-semibold text-white">
                     You
                   </span>
                 )}
-                <span className={`rounded-full border px-2 py-0.5 text-[10px] tracking-wide ${getUserTag(user).badgeClass}`}>
+                <span className={`rounded-full border px-2 py-0.5 text-[11px] tracking-wide ${getUserTag(user).badgeClass}`}>
                   {getUserTag(user).label}
                 </span>
 
                 {/* Collapsed Workspace Summary Pills */}
                 {isCollapsed && (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 px-2.5 py-0.5 text-[10px] font-medium text-neutral-600 dark:text-white/60">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-neutral-100 dark:bg-white/5 border border-[var(--border)] px-2.5 py-0.5 text-[11px] font-medium text-neutral-600 dark:text-white/60">
                     <span>{userTasks.length} tasks</span>
                     <span>·</span>
                     <span>{tasksByColumn.pipeline.length} pipeline</span>
@@ -611,7 +611,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 {workload.level === 'overloaded' && (
                   <span
                     title="Cognitive capacity exceeded (>12 pts). Consider rebalancing tasks."
-                    className="inline-flex items-center gap-1 rounded-full bg-red-500/10 border border-red-500/30 px-2 py-0.5 text-[10px] font-semibold text-red-500 dark:text-red-400 animate-pulse"
+                    className="inline-flex items-center gap-1 rounded-full bg-red-500/10 border border-red-500/30 px-2 py-0.5 text-[11px] font-semibold text-red-500 dark:text-red-400"
                   >
                     <Activity className="h-2.5 w-2.5" />
                     <span>Capacity Exceeded</span>
@@ -620,13 +620,13 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
 
                 {/* Cross-user drag indicator when dragging over header */}
                 {isCrossUserDrag && (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 px-2 py-0.5 text-[10px] font-medium animate-pulse">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-blue-500/15 text-blue-600 dark:text-blue-400 border border-blue-500/30 px-2 py-0.5 text-[11px] font-medium">
                     <UserCheck className="h-3 w-3" />
                     <span>Drop to reassign</span>
                   </span>
                 )}
               </div>
-              <p className="text-xs text-neutral-500 dark:text-white/40 truncate max-w-xs mt-0.5">
+              <p className="text-xs text-[var(--text-secondary)] truncate max-w-xs mt-0.5">
                 {user.email}
               </p>
             </div>
@@ -639,17 +639,17 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               id={`workload-btn-${user.id}`}
               onClick={() => onOpenWorkloadModal(user)}
               title="Click to view workload breakdown"
-              className={`flex items-center gap-2.5 rounded-xl border px-3 py-1.5 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer ${workload.badgeBg}`}
+              className={`flex items-center gap-2.5 rounded-xl border px-3 py-1.5 transition-all  cursor-pointer ${workload.badgeBg}`}
             >
               <div className="text-left">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-[10px] uppercase tracking-wider text-neutral-600 dark:text-white/40">
+                  <span className="text-[11px] uppercase tracking-wider text-neutral-600 dark:text-white/40">
                     Workload Score
                   </span>
-                  <HelpCircle className="h-3 w-3 text-neutral-400 dark:text-white/30" />
+                  <HelpCircle className="h-3 w-3 text-[var(--text-secondary)]" />
                 </div>
                 <div className="flex items-baseline gap-1.5">
-                  <span className="text-base font-bold text-neutral-900 dark:text-white">
+                  <span className="text-base font-semibold text-neutral-900 dark:text-white">
                     {workload.totalScore}
                   </span>
                   <span className={`text-[11px] font-semibold ${workload.badgeText}`}>
@@ -678,14 +678,14 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
             {/* Individual Efficiency Score Pill */}
             <div
               title={`Individual Efficiency: Aggregate time taken (${userEfficiency.totalTimeTakenHours}h) vs time estimated (${userEfficiency.totalEstimatedHours}h) across all tasks`}
-              className="flex items-center gap-2 rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-[#141414] px-3 py-1.5 select-none"
+              className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1.5 select-none"
             >
               <div className="text-left">
-                <span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-white/40 block">
+                <span className="text-[11px] uppercase tracking-wider text-[var(--text-secondary)] block">
                   Efficiency
                 </span>
                 <div className="flex items-baseline gap-1.5">
-                  <span className={`text-base font-bold ${
+                  <span className={`text-base font-semibold ${
                     userEfficiency.efficiencyPercent >= 75
                       ? 'text-emerald-600 dark:text-emerald-400'
                       : userEfficiency.efficiencyPercent >= 50
@@ -694,7 +694,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                   }`}>
                     {userEfficiency.efficiencyPercent}%
                   </span>
-                  <span className="text-[10px] text-neutral-400 dark:text-white/40">
+                  <span className="text-[11px] text-[var(--text-secondary)]">
                     {formatHoursRatio(userEfficiency.totalTimeTakenHours, userEfficiency.totalEstimatedHours)}
                   </span>
                 </div>
@@ -707,7 +707,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 id={`add-task-btn-${user.id}`}
                 onClick={() => onAddTask(user.id, 'todo')}
                 title="Add new task"
-                className="flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 px-3.5 py-2 text-xs font-semibold text-white shadow-md shadow-blue-900/20 transition-all cursor-pointer"
+                className="flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 px-3.5 py-2 text-xs font-semibold text-white shadow-xs transition-all cursor-pointer"
               >
                 <Plus className="h-3.5 w-3.5" />
                 <span>Add Task</span>
@@ -742,7 +742,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
             {archivedTasks.length > 0 && (
               <button
                 onClick={() => setShowArchived(prev => !prev)}
-                className="flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-900 dark:text-white/50 dark:hover:text-white px-2.5 py-1.5 rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-[#141414] transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 text-xs text-neutral-500 hover:text-neutral-900 dark:text-white/50 dark:hover:text-white px-2.5 py-1.5 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] transition-colors cursor-pointer"
               >
                 <Archive className="h-3.5 w-3.5" />
                 <span>Completed ({archivedTasks.length})</span>
@@ -759,7 +759,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               id={`collapse-btn-${user.id}`}
               onClick={toggleCollapse}
               title={isCollapsed ? 'Expand workspace' : 'Collapse workspace'}
-              className="flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900 dark:text-white/50 dark:hover:text-white p-2 rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-[#141414] hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+              className="flex items-center gap-1 text-xs text-neutral-500 hover:text-neutral-900 dark:text-white/50 dark:hover:text-white p-2 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
             >
               {isCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
             </button>
@@ -793,8 +793,8 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               {/* Sections sorted by status columns */}
               <div className="p-4 sm:p-6 overflow-x-auto">
                 <div
-                  className={`grid gap-4 min-w-[760px] ${
-                    showArchived ? 'grid-cols-5' : 'grid-cols-4'
+                  className={`board-columns ${
+                    showArchived ? 'board-columns-with-archive' : ''
                   }`}
                 >
                   {COLUMNS.map(col => {
@@ -810,17 +810,17 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                         className={`flex flex-col rounded-xl border p-2.5 transition-all duration-200 min-h-[220px] ${
                           isDropActive
                             ? 'border-blue-500 bg-blue-50/70 dark:bg-[#1C1F2E] ring-2 ring-blue-500/30 shadow-md'
-                            : 'border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414]'
+                            : 'border-[var(--border)] bg-[var(--surface-muted)]'
                         }`}
                       >
                         {/* Status Column Header */}
-                        <div className="flex items-center justify-between pb-2.5 mb-2 border-b border-neutral-200 dark:border-white/5 px-1">
+                        <div className="flex items-center justify-between pb-2.5 mb-2 border-b border-[var(--border)] px-1">
                           <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
                             {col.icon}
                             <h4 className={`text-[11px] uppercase tracking-wider font-semibold truncate ${col.headerColor}`}>
                               {col.title}
                             </h4>
-                            <span className="rounded-full px-1.5 py-0.2 text-[10px] border shrink-0 transition-colors bg-neutral-200 dark:bg-white/5 text-neutral-600 dark:text-white/40 border-neutral-300 dark:border-white/5">
+                            <span className="rounded-full px-1.5 py-0.2 text-[11px] border shrink-0 transition-colors bg-neutral-200 dark:bg-white/5 text-neutral-600 dark:text-white/40 border-neutral-300 dark:border-white/5">
                               {columnTasks.length}
                             </span>
                           </div>
@@ -841,7 +841,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                             className={`rounded-md p-1 transition-colors cursor-pointer shrink-0 ${
                               quickAddStatus === col.status
                                 ? 'bg-blue-600 text-white shadow-xs'
-                                : 'text-neutral-400 dark:text-white/30 hover:bg-neutral-200 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white'
+                                : 'text-[var(--text-secondary)] hover:bg-neutral-200 dark:hover:bg-white/5 hover:text-neutral-900 dark:hover:text-white'
                             }`}
                           >
                             <Plus className="h-3 w-3" />
@@ -853,7 +853,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                           <motion.div
                             initial={{ opacity: 0, y: -4 }}
                             animate={{ opacity: 1, y: 0 }}
-                            className="mb-2 rounded-lg p-2 text-center text-[10px] font-medium flex items-center justify-center gap-1.5 border bg-blue-600/10 border-blue-500/30 text-blue-600 dark:text-blue-400"
+                            className="mb-2 rounded-lg p-2 text-center text-[11px] font-medium flex items-center justify-center gap-1.5 border bg-blue-600/10 border-blue-500/30 text-blue-600 dark:text-blue-400"
                           >
                             <ArrowDownToLine className="h-3 w-3" />
                             <span>
@@ -887,14 +887,14 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                   }
                                 }}
                                 placeholder="Task title... (Enter to save, Esc to cancel)"
-                                className="w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-[#121212] px-2.5 py-1.5 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none"
+                                className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-2.5 py-1.5 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none"
                               />
 
                               {/* Quick Deadline Selector (Mandatory for main swimlanes) */}
-                              <div className="flex items-center justify-between gap-1 text-[10px] pt-1.5 border-t border-neutral-100 dark:border-white/5">
-                                <div className="flex items-center gap-1 text-neutral-500 dark:text-white/40 shrink-0">
+                              <div className="flex items-center justify-between gap-1 text-[11px] pt-1.5 border-t border-neutral-100 dark:border-white/5">
+                                <div className="flex items-center gap-1 text-[var(--text-secondary)] shrink-0">
                                   <Calendar className="h-3 w-3 text-amber-500 shrink-0" />
-                                  <span className="font-semibold text-[10px] text-neutral-700 dark:text-white/70">Due *:</span>
+                                  <span className="font-semibold text-[11px] text-neutral-700 dark:text-white/70">Due *:</span>
                                 </div>
                                 <div className="flex items-center gap-1 flex-wrap justify-end">
                                   {([
@@ -910,10 +910,10 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                         key={preset.label}
                                         type="button"
                                         onClick={() => setQuickAddDueDate(dateStr)}
-                                        className={`rounded px-1.5 py-0.5 text-[9px] font-medium border transition-colors cursor-pointer ${
+                                        className={`rounded px-1.5 py-0.5 text-[11px] font-medium border transition-colors cursor-pointer ${
                                           isSelected
                                             ? 'bg-blue-600 text-white border-blue-600 shadow-2xs font-semibold'
-                                            : 'border-neutral-200 dark:border-white/10 text-neutral-600 dark:text-white/60 hover:bg-neutral-100 dark:hover:bg-white/5'
+                                            : 'border-[var(--border)] text-neutral-600 dark:text-white/60 hover:bg-neutral-100 dark:hover:bg-white/5'
                                         }`}
                                       >
                                         {preset.label}
@@ -924,7 +924,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                     type="date"
                                     value={quickAddDueDate}
                                     onChange={e => setQuickAddDueDate(e.target.value)}
-                                    className="rounded border border-neutral-200 dark:border-white/10 bg-transparent px-1 py-0.5 text-[9px] text-neutral-800 dark:text-white/90 cursor-pointer focus:outline-none"
+                                    className="rounded border border-[var(--border)] bg-transparent px-1 py-0.5 text-[11px] text-neutral-800 dark:text-white/90 cursor-pointer focus:outline-none"
                                   />
                                 </div>
                               </div>
@@ -936,7 +936,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                       key={load}
                                       type="button"
                                       onClick={() => setQuickAddLoad(load)}
-                                      className={`rounded px-1.5 py-0.5 text-[9px] font-medium border capitalize transition-all cursor-pointer ${
+                                      className={`rounded px-1.5 py-0.5 text-[11px] font-medium border capitalize transition-all cursor-pointer ${
                                         quickAddLoad === load
                                           ? load === 'high'
                                             ? 'bg-red-500/15 border-red-500/40 text-red-500'
@@ -959,7 +959,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                       onAddTask(user.id, col.status);
                                     }}
                                     title="Open full form with details & due date"
-                                    className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                                    className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
                                   >
                                     Full form...
                                   </button>
@@ -967,7 +967,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                     type="button"
                                     disabled={!quickAddTitle.trim() || !quickAddDueDate || isSubmittingQuickAdd}
                                     onClick={() => handleCommitQuickAdd(col.status)}
-                                    className="rounded-lg bg-blue-600 hover:bg-blue-500 px-2.5 py-1 text-[10px] font-semibold text-white shadow-xs transition-colors cursor-pointer disabled:opacity-40"
+                                    className="rounded-lg bg-blue-600 hover:bg-blue-500 px-2.5 py-1 text-[11px] font-semibold text-white shadow-xs transition-colors cursor-pointer disabled:opacity-40"
                                   >
                                     Add
                                   </button>
@@ -992,14 +992,14 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                 className={`flex h-28 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed p-3 text-center transition-all ${
                                   isDropActive
                                     ? 'border-blue-500 bg-blue-100/50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 scale-[1.02]'
-                                    : 'border-neutral-300 dark:border-white/10 text-neutral-400 dark:text-white/30 hover:border-neutral-400 dark:hover:border-white/20 hover:bg-neutral-100 dark:hover:bg-white/5'
+                                    : 'border-neutral-300 dark:border-white/10 text-[var(--text-secondary)] hover:border-neutral-400 dark:hover:border-white/20 hover:bg-neutral-100 dark:hover:bg-white/5'
                                 }`}
                               >
-                                <Plus className="h-4 w-4 mb-1 text-neutral-400 dark:text-white/30" />
+                                <Plus className="h-4 w-4 mb-1 text-[var(--text-secondary)]" />
                                 <p className="text-[11px] font-medium text-neutral-600 dark:text-white/50">
                                   {isDropActive ? `Drop to assign to ${user.name.split(' ')[0]}` : 'No tasks'}
                                 </p>
-                                <p className="text-[10px] text-neutral-400 dark:text-white/30">
+                                <p className="text-[11px] text-[var(--text-secondary)]">
                                   {isDropActive ? `in ${col.title}` : 'Click for quick add or drop here'}
                                 </p>
                               </motion.div>
@@ -1068,16 +1068,16 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                       className={`flex flex-col rounded-xl border p-2.5 transition-all min-h-[220px] ${
                         dragOverColumn === 'archived'
                           ? 'border-blue-500 bg-blue-50/70 dark:bg-[#1C1F2E] ring-2 ring-blue-500/30'
-                          : 'border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414]'
+                          : 'border-[var(--border)] bg-[var(--surface-muted)]'
                       }`}
                     >
-                      <div className="flex items-center justify-between pb-2.5 mb-2 border-b border-neutral-200 dark:border-white/5 px-1">
-                        <div className="flex items-center gap-1.5 text-neutral-500 dark:text-white/40">
+                      <div className="flex items-center justify-between pb-2.5 mb-2 border-b border-[var(--border)] px-1">
+                        <div className="flex items-center gap-1.5 text-[var(--text-secondary)]">
                           <Archive className="h-3 w-3" />
-                          <h4 className="text-[11px] uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40">
+                          <h4 className="text-[11px] uppercase tracking-wider font-semibold text-[var(--text-secondary)]">
                             Completed
                           </h4>
-                          <span className="rounded-full bg-neutral-200 dark:bg-white/5 px-1.5 py-0.2 text-[10px] text-neutral-600 dark:text-white/40 border border-neutral-300 dark:border-white/5">
+                          <span className="rounded-full bg-neutral-200 dark:bg-white/5 px-1.5 py-0.2 text-[11px] text-neutral-600 dark:text-white/40 border border-neutral-300 dark:border-white/5">
                             {archivedTasks.length}
                           </span>
                         </div>
@@ -1092,7 +1092,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                               initial={{ opacity: 0 }}
                               animate={{ opacity: 1 }}
                               exit={{ opacity: 0 }}
-                              className="flex h-28 flex-col items-center justify-center rounded-lg border border-dashed border-neutral-300 dark:border-white/10 p-3 text-center text-[11px] text-neutral-400 dark:text-white/30"
+                              className="flex h-28 flex-col items-center justify-center rounded-lg border border-dashed border-neutral-300 dark:border-white/10 p-3 text-center text-[11px] text-[var(--text-secondary)]"
                             >
                               <p>No completed tasks</p>
                             </motion.div>

@@ -1,3 +1,4 @@
+import { DialogPanel } from './ui/DialogPanel';
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -16,9 +17,8 @@ import {
   Download,
   ChevronDown,
   ChevronUp,
-  ShieldAlert,
 } from 'lucide-react';
-import { HoldToPurgeButton } from './HoldToPurgeButton';
+import { SuperadminPurgeModal } from './SuperadminPurgeModal';
 
 interface FirestoreModalProps {
   isOpen: boolean;
@@ -36,16 +36,13 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
     canManageMembers,
     fetchAuditLogs,
     downloadAuditLogs,
-    purgeAllDatabaseData,
   } = useDashboard();
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // Superadmin Nuclear Purge states
-  const [isPurgingData, setIsPurgingData] = useState(false);
-  const [purgeFeedback, setPurgeFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [purgeModalOpen, setPurgeModalOpen] = useState(false);
 
   // Service Account Credentials Upload state
   const [serviceAccountInput, setServiceAccountInput] = useState('');
@@ -61,7 +58,6 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     firestore: false,
     audit: false,
-    danger: false,
   });
 
   const toggleSection = (section: string) => {
@@ -75,49 +71,29 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isSyncing && !isUploadingKey && !isPurgingData) {
+      if (e.key === 'Escape' && !isSyncing && !isUploadingKey && !purgeModalOpen) {
         onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, isSyncing, isUploadingKey, isPurgingData]);
+  }, [isOpen, onClose, isSyncing, isUploadingKey, purgeModalOpen]);
 
   // Refresh status and collapse details when modal opens
   useEffect(() => {
     if (isOpen) {
+      setPurgeModalOpen(false);
       refreshFirestoreStatus();
       setFeedback(null);
       setKeyFeedback(null);
-      setPurgeFeedback(null);
       setServiceAccountInput('');
       setShowAuditFeed(false);
       setExpandedSections({
         firestore: false,
         audit: false,
-        danger: false,
       });
     }
   }, [isOpen, refreshFirestoreStatus]);
-
-  const handlePurgeInFirestoreModal = async () => {
-    setIsPurgingData(true);
-    setPurgeFeedback(null);
-    try {
-      const res = await purgeAllDatabaseData();
-      setPurgeFeedback({
-        type: 'success',
-        message: res.message || 'Database successfully purged. All deliverables wiped.',
-      });
-    } catch (err: any) {
-      setPurgeFeedback({
-        type: 'error',
-        message: err.message || 'Database purge failed.',
-      });
-    } finally {
-      setIsPurgingData(false);
-    }
-  };
 
   const handleManualSync = async () => {
     setIsSyncing(true);
@@ -224,22 +200,22 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/65 backdrop-blur-xs overflow-y-auto"
+          className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
           onClick={e => {
-            if (e.target === e.currentTarget && !isSyncing && !isUploadingKey) onClose();
+            if (e.target === e.currentTarget && !isSyncing && !isUploadingKey && !purgeModalOpen) onClose();
           }}
         >
-          <motion.div
+          <DialogPanel aria-label="Database & Compliance" onClose={onClose} busy={isSyncing || isUploadingKey || purgeModalOpen}
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
             onClick={e => e.stopPropagation()}
             id="workspace-connections-modal"
-            className="w-full max-w-xl max-h-[90vh] my-auto flex flex-col rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#111111] shadow-2xl transition-all text-neutral-900 dark:text-white overflow-hidden"
+            className="w-full max-w-xl my-auto flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden"
           >
             {/* Fixed Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 dark:border-white/5 shrink-0 bg-white dark:bg-[#111111]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 dark:border-white/5 shrink-0 bg-[var(--surface)]">
               <div className="flex items-center gap-2.5">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
                   <Layers className="h-5 w-5" />
@@ -252,6 +228,7 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
               </div>
               <button
                 onClick={onClose}
+                disabled={isSyncing || isUploadingKey || purgeModalOpen}
                 aria-label="Close modal"
                 className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white transition-colors cursor-pointer"
               >
@@ -262,10 +239,12 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
             {/* Scrollable Body */}
             <div className="px-6 py-5 overflow-y-auto flex-1 space-y-3">
               {/* SECTION 1: Cloud Storage (Firestore) */}
-              <div className="rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-50/50 dark:bg-[#161616] overflow-hidden transition-all">
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] overflow-hidden transition-all">
                 <button
                   type="button"
                   onClick={() => toggleSection('firestore')}
+                  aria-expanded={expandedSections.firestore}
+                  aria-controls="firestore-settings"
                   className="w-full flex items-center justify-between p-3.5 hover:bg-neutral-100/70 dark:hover:bg-white/5 transition-colors cursor-pointer text-left"
                 >
                   <div className="flex items-center gap-3 min-w-0">
@@ -276,7 +255,7 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                       <h3 className="text-xs font-semibold text-neutral-900 dark:text-white truncate">
                         Cloud Storage (Firestore)
                       </h3>
-                      <p className="text-[11px] text-neutral-500 dark:text-white/40 truncate">
+                      <p className="text-[11px] text-[var(--text-secondary)] truncate">
                         {displayProject} · {users.length} members · {tasks.length} tasks
                       </p>
                     </div>
@@ -284,7 +263,7 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
 
                   <div className="flex items-center gap-2 shrink-0">
                     <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
                         isConnected
                           ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
                           : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
@@ -292,7 +271,7 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                     >
                       <span
                         className={`h-1.5 w-1.5 rounded-full ${
-                          isConnected ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'
+                          isConnected ? 'bg-emerald-500' : 'bg-amber-500'
                         }`}
                       />
                       {isConnected ? 'Live Sync' : 'Local / Standby'}
@@ -306,7 +285,7 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                 </button>
 
                 {expandedSections.firestore && (
-                  <div className="p-4 pt-2 border-t border-neutral-200/60 dark:border-white/5 space-y-3 bg-white dark:bg-[#121212]">
+                  <div id="firestore-settings" className="p-4 pt-2 border-t border-neutral-200/60 dark:border-white/5 space-y-3 bg-[var(--surface)]">
                     {/* Feedback Alert for Firestore */}
                     {feedback && (
                       <div
@@ -326,23 +305,23 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                     )}
 
                     {/* Metadata Card */}
-                    <div className="rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#161616] p-3.5 space-y-2 text-xs">
+                    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3.5 space-y-2 text-xs">
                       <div className="flex items-center justify-between">
-                        <span className="text-neutral-500 dark:text-white/40">Project ID</span>
+                        <span className="text-[var(--text-secondary)]">Project ID</span>
                         <span className="font-mono text-[11px] font-semibold text-neutral-800 dark:text-white/90">
                           {firestoreStatus?.projectId || 'Not set'}
                         </span>
                       </div>
 
                       <div className="flex items-center justify-between">
-                        <span className="text-neutral-500 dark:text-white/40">Database ID</span>
+                        <span className="text-[var(--text-secondary)]">Database ID</span>
                         <span className="font-mono text-[11px] text-neutral-800 dark:text-white/90">
                           {firestoreStatus?.databaseId || '(default)'}
                         </span>
                       </div>
 
                       <div className="flex items-center justify-between">
-                        <span className="text-neutral-500 dark:text-white/40">Persistence Mode</span>
+                        <span className="text-[var(--text-secondary)]">Persistence Mode</span>
                         <span className="font-medium text-neutral-800 dark:text-white/90">
                           {firestoreStatus?.mode === 'admin'
                             ? 'Cloud Firestore Admin'
@@ -352,7 +331,7 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
 
                       {firestoreStatus?.lastSyncTime && (
                         <div className="flex items-center justify-between">
-                          <span className="text-neutral-500 dark:text-white/40">Last Synchronized</span>
+                          <span className="text-[var(--text-secondary)]">Last Synchronized</span>
                           <span className="text-neutral-600 dark:text-white/60">
                             {new Date(firestoreStatus.lastSyncTime).toLocaleTimeString()}
                           </span>
@@ -387,7 +366,7 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                         onClick={handleRefreshStatus}
                         disabled={isRefreshing}
                         title="Refresh database status"
-                        className="flex items-center justify-center rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-neutral-800/60 text-neutral-700 dark:text-white/80 hover:bg-neutral-50 dark:hover:bg-neutral-800 p-2 transition-colors cursor-pointer"
+                        className="flex items-center justify-center rounded-xl border border-[var(--border)] bg-white dark:bg-neutral-800/60 text-neutral-700 dark:text-white/80 hover:bg-neutral-50 dark:hover:bg-neutral-800 p-2 transition-colors cursor-pointer"
                       >
                         <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
                       </button>
@@ -396,10 +375,10 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                     {/* Superadmin: Configure Service Account Key */}
                     {isSuperadmin && (
                       <div className="pt-2 border-t border-neutral-200/60 dark:border-white/5 space-y-2">
-                        <label className="block text-xs font-semibold text-neutral-800 dark:text-white/90">
+                        <label htmlFor="firestore-credentials" className="block text-xs font-semibold text-neutral-800 dark:text-white/90">
                           Configure Firebase Admin Service Account Key
                         </label>
-                        <p className="text-[11px] text-neutral-500 dark:text-white/40 leading-relaxed">
+                        <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
                           Provide Google Cloud Service Account JSON credentials to connect cloud Firestore persistence.
                         </p>
 
@@ -422,24 +401,28 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
 
                         <form onSubmit={handleUploadServiceAccount} className="space-y-2">
                           <textarea
+                            id="firestore-credentials"
                             value={serviceAccountInput}
                             onChange={e => setServiceAccountInput(e.target.value)}
                             placeholder='Paste service account JSON: { "type": "service_account", "project_id": "...", ... }'
                             rows={3}
-                            className="w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-[#161616] p-2.5 text-[11px] font-mono text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none"
+                            className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-2.5 text-[11px] font-mono text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none"
                           />
-                          <button
-                            type="submit"
-                            disabled={isUploadingKey || !serviceAccountInput.trim()}
-                            className="flex items-center gap-1.5 rounded-lg bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 px-3 py-1.5 text-xs font-semibold hover:bg-neutral-800 dark:hover:bg-neutral-100 transition-colors cursor-pointer disabled:opacity-40 shadow-xs"
-                          >
-                            {isUploadingKey ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Key className="h-3 w-3" />
-                            )}
-                            <span>{isUploadingKey ? 'Connecting...' : 'Apply Firestore Credentials'}</span>
-                          </button>
+                          <div className="firestore-actions">
+                            <button
+                              type="submit"
+                              disabled={isUploadingKey || !serviceAccountInput.trim()}
+                              className="flex items-center gap-1.5 rounded-lg bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 px-3 py-1.5 text-xs font-semibold hover:bg-neutral-800 dark:hover:bg-neutral-100 transition-colors cursor-pointer disabled:opacity-40 shadow-xs"
+                            >
+                              {isUploadingKey ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Key className="h-3 w-3" />
+                              )}
+                              <span>{isUploadingKey ? 'Connecting...' : 'Apply Firestore Credentials'}</span>
+                            </button>
+                            <button type="button" className="button-danger-outline" disabled={isUploadingKey || isSyncing} onClick={() => setPurgeModalOpen(true)}>Purge Database</button>
+                          </div>
                         </form>
                       </div>
                     )}
@@ -448,10 +431,11 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
               </div>
 
               {/* SECTION 2: SOC2 Compliance Audit Stream */}
-              <div className="rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-50/50 dark:bg-[#161616] overflow-hidden transition-all">
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] overflow-hidden transition-all">
                 <button
                   type="button"
                   onClick={() => toggleSection('audit')}
+                  aria-expanded={expandedSections.audit}
                   className="w-full flex items-center justify-between p-3.5 hover:bg-neutral-100/70 dark:hover:bg-white/5 transition-colors cursor-pointer text-left"
                 >
                   <div className="flex items-center gap-3 min-w-0">
@@ -466,7 +450,7 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-purple-500/15 text-purple-700 dark:text-purple-300">
+                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-purple-500/15 text-purple-700 dark:text-purple-300">
                       <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
                       Append-Only Active
                     </span>
@@ -479,17 +463,17 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                 </button>
 
                 {expandedSections.audit && (
-                  <div className="p-4 pt-2 border-t border-neutral-200/60 dark:border-white/5 space-y-3 bg-white dark:bg-[#121212]">
-                    <div className="rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#161616] p-3.5 space-y-2 text-xs">
+                  <div className="p-4 pt-2 border-t border-neutral-200/60 dark:border-white/5 space-y-3 bg-[var(--surface)]">
+                    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3.5 space-y-2 text-xs">
                       <div className="flex items-center justify-between">
-                        <span className="text-neutral-500 dark:text-white/40">Persistence Storage</span>
+                        <span className="text-[var(--text-secondary)]">Persistence Storage</span>
                         <span className="font-mono text-[11px] text-neutral-800 dark:text-white/90">
                           Firestore /compliance_audit_logs & local audit log
                         </span>
                       </div>
 
                       <div className="flex items-center justify-between">
-                        <span className="text-neutral-500 dark:text-white/40">Audit Coverage</span>
+                        <span className="text-[var(--text-secondary)]">Audit Coverage</span>
                         <span className="text-neutral-600 dark:text-white/60">
                           Reassignments, hours overrides, permissions & deletions
                         </span>
@@ -510,7 +494,7 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                         type="button"
                         onClick={handleToggleAuditFeed}
                         disabled={isLoadingAudit || !canManageMembers}
-                        className="flex items-center justify-center gap-1 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-neutral-800/60 text-neutral-700 dark:text-white/80 hover:bg-neutral-50 dark:hover:bg-neutral-800 py-2 px-3 text-xs font-medium transition-colors cursor-pointer"
+                        className="flex items-center justify-center gap-1 rounded-xl border border-[var(--border)] bg-white dark:bg-neutral-800/60 text-neutral-700 dark:text-white/80 hover:bg-neutral-50 dark:hover:bg-neutral-800 py-2 px-3 text-xs font-medium transition-colors cursor-pointer"
                       >
                         {isLoadingAudit ? (
                           <Loader2 className="h-3 w-3 animate-spin" />
@@ -525,8 +509,8 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
 
                     {/* Expandable Recent Audit Log Feed */}
                     {showAuditFeed && (
-                      <div className="rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-900 text-neutral-100 p-3 text-[11px] font-mono space-y-2 max-h-56 overflow-y-auto">
-                        <div className="flex items-center justify-between text-[10px] text-neutral-400 border-b border-neutral-800 pb-1">
+                      <div className="rounded-xl border border-[var(--border)] bg-neutral-900 text-neutral-100 p-3 text-[11px] font-mono space-y-2 max-h-56 overflow-y-auto">
+                        <div className="flex items-center justify-between text-[11px] text-neutral-400 border-b border-neutral-800 pb-1">
                           <span>Recent Audit Events ({auditLogs.length})</span>
                           <span>Immutable Stream</span>
                         </div>
@@ -536,18 +520,18 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                           auditLogs.slice(0, 20).map(entry => (
                             <div key={entry.id} className="border-b border-neutral-800/50 pb-1.5 last:border-0 last:pb-0">
                               <div className="flex items-center justify-between text-neutral-400">
-                                <span className="text-purple-400 uppercase text-[9px] font-semibold tracking-wider">
+                                <span className="text-purple-400 uppercase text-[11px] font-semibold tracking-wider">
                                   [{entry.category}] {entry.action}
                                 </span>
-                                <span className="text-[9px] text-neutral-500">
+                                <span className="text-[11px] text-neutral-500">
                                   {new Date(entry.timestamp).toLocaleTimeString()}
                                 </span>
                               </div>
-                              <div className="text-neutral-300 text-[10px] truncate mt-0.5">
+                              <div className="text-neutral-300 text-[11px] truncate mt-0.5">
                                 {entry.details || `${entry.targetType}:${entry.targetId}`}
                               </div>
                               {entry.actor?.name && (
-                                <div className="text-[9px] text-neutral-500">
+                                <div className="text-[11px] text-neutral-500">
                                   Actor: {entry.actor.name} ({entry.actor.email || 'system'})
                                 </div>
                               )}
@@ -560,93 +544,28 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                 )}
               </div>
 
-              {/* SECTION 3: Superadmin Nuclear Purge (Superadmin Only) */}
-              {isSuperadmin && (
-                <div className="rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50/20 dark:bg-red-950/20 overflow-hidden transition-all">
-                  <button
-                    type="button"
-                    onClick={() => toggleSection('danger')}
-                    className="w-full flex items-center justify-between p-3.5 hover:bg-red-100/40 dark:hover:bg-red-950/40 transition-colors cursor-pointer text-left"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-500/10 text-red-600 dark:text-red-400">
-                        <ShieldAlert className="h-4 w-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-xs font-semibold text-red-700 dark:text-red-400 truncate">
-                            Danger Zone: Purge Database
-                          </h3>
-                          <span className="text-[9px] uppercase font-mono px-1.5 py-0.2 rounded bg-red-950/60 border border-red-800 text-red-300 font-bold tracking-wider">
-                            Superadmin
-                          </span>
-                        </div>
-                      </div>
-                    </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="rounded-md bg-red-100 dark:bg-red-950/60 border border-red-300 dark:border-red-800/80 px-2 py-0.5 text-[10px] font-mono text-red-700 dark:text-red-300 font-semibold">
-                        5s Hold
-                      </span>
-                      {expandedSections.danger ? (
-                        <ChevronUp className="h-4 w-4 text-red-400" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4 text-red-400" />
-                      )}
-                    </div>
-                  </button>
-
-                  {expandedSections.danger && (
-                    <div className="p-4 pt-1 border-t border-red-200 dark:border-red-900/30 space-y-4">
-                      <div className="text-xs text-neutral-600 dark:text-neutral-300 leading-relaxed bg-white/50 dark:bg-neutral-900/60 p-3 rounded-lg border border-red-200/50 dark:border-red-950">
-                        Permanently deletes all <span className="font-semibold text-red-600 dark:text-red-400">{tasks.length} tasks</span> and{' '}
-                        <span className="font-semibold text-red-600 dark:text-red-400">
-                          {users.filter(u => u.email.toLowerCase() !== 'kiran.s@zensciences.com').length} team accounts
-                        </span>{' '}
-                        from Cloud Firestore and local persistence. The root superadmin account (<span className="font-mono text-neutral-900 dark:text-white">kiran.s@zensciences.com</span>) is permanently protected.
-                      </div>
-
-                      {purgeFeedback && (
-                        <div
-                          className={`p-3 rounded-xl border text-xs flex items-center gap-2 ${
-                            purgeFeedback.type === 'success'
-                              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
-                              : 'bg-red-500/10 border-red-500/30 text-red-700 dark:text-red-300'
-                          }`}
-                        >
-                          <AlertCircle className="h-4 w-4 shrink-0" />
-                          <span>{purgeFeedback.message}</span>
-                        </div>
-                      )}
-
-                      <HoldToPurgeButton
-                        onPurgeConfirm={handlePurgeInFirestoreModal}
-                        isLoading={isPurgingData}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-3.5 border-t border-neutral-100 dark:border-white/5 bg-neutral-50/50 dark:bg-[#141414] flex justify-end">
+            <div className="px-6 py-3.5 border-t border-neutral-100 dark:border-white/5 bg-[var(--surface-muted)] flex justify-end">
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-neutral-800 text-neutral-700 dark:text-white py-1.5 px-4 text-xs font-medium hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
+                disabled={isSyncing || isUploadingKey || purgeModalOpen}
+                className="rounded-xl border border-[var(--border)] bg-white dark:bg-neutral-800 text-neutral-700 dark:text-white py-1.5 px-4 text-xs font-medium hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
               >
                 Close
               </button>
             </div>
-          </motion.div>
+          </DialogPanel>
         </motion.div>
       )}
     </AnimatePresence>
   );
 
   if (typeof document !== 'undefined') {
-    return createPortal(modalContent, document.body);
+    return <>{createPortal(modalContent, document.body)}<SuperadminPurgeModal isOpen={isOpen && purgeModalOpen} onClose={() => setPurgeModalOpen(false)} /></>;
   }
 
   return modalContent;

@@ -1,3 +1,4 @@
+import { DialogPanel } from './ui/DialogPanel';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
@@ -237,21 +238,21 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs overflow-y-auto"
+          className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
           onClick={e => {
             if (e.target === e.currentTarget && !isSubmitting && !isGoogleSigningIn && (isNewAccountOnly || Boolean(currentUser))) {
               onClose();
             }
           }}
         >
-          <motion.div
+          <DialogPanel aria-label="Account access" onClose={() => { if (isNewAccountOnly || currentUser) onClose(); }} busy={isSubmitting || isGoogleSigningIn}
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
             onClick={e => e.stopPropagation()}
             id="login-modal"
-            className="w-full max-w-lg max-h-[92vh] overflow-y-auto rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] p-6 shadow-2xl transition-all text-neutral-900 dark:text-white"
+            className="w-full max-w-lg overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 "
           >
             <div className="flex items-center justify-between pb-3 border-b border-neutral-100 dark:border-white/5">
               <div className="flex items-center gap-3">
@@ -275,11 +276,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 )}
                 <div>
                   <div className="flex items-baseline leading-none">
-                    <span className="text-lg font-bold tracking-tight text-neutral-900 dark:text-white">
+                    <span className="text-lg font-semibold tracking-tight text-neutral-900 dark:text-white">
                       {isNewAccountOnly ? 'Add Team Member' : 'zen'}
                     </span>
                     {!isNewAccountOnly && (
-                      <span className="font-flowy text-xl font-bold text-blue-600 dark:text-blue-400 ml-0.5 select-none">
+                      <span className="font-flowy text-xl font-semibold text-blue-600 dark:text-blue-400 ml-0.5 select-none">
                         Flow
                       </span>
                     )}
@@ -287,7 +288,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 </div>
               </div>
               {isNewAccountOnly && onClose && (
-                <button
+                <button aria-label="Close dialog"
                   onClick={onClose}
                   disabled={isSubmitting || isGoogleSigningIn}
                   className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white transition-colors cursor-pointer"
@@ -347,7 +348,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   )}
                 </button>
 
-                <div className="rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-white/[0.02] p-3 text-[11px] text-neutral-500 dark:text-neutral-400 text-center leading-relaxed">
+                <div className="rounded-xl border border-[var(--border)] bg-neutral-50 dark:bg-white/[0.02] p-3 text-[11px] text-neutral-500 dark:text-neutral-400 text-center leading-relaxed">
                   Access is restricted to pre-registered accounts (<strong className="text-neutral-700 dark:text-neutral-200">@zensciences.com</strong> or authorized team members).
                 </div>
               </div>
@@ -355,11 +356,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
               <form onSubmit={handleSubmit} className="space-y-4 pt-1">
                 {/* Name Field */}
                 <div>
-                  <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                  <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5" htmlFor="login-name-input">
                     Full Name
                   </label>
                   <div className="relative">
-                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-neutral-400 dark:text-white/40">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--text-secondary)]">
                       <UserIcon className="h-4 w-4" />
                     </div>
                     <input
@@ -368,7 +369,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                       value={name}
                       onChange={e => setName(e.target.value)}
                       placeholder="e.g. Maya Sterling"
-                      className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 pl-9 pr-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
+                      className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] py-2 pl-9 pr-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
                       required
                     />
                   </div>
@@ -376,11 +377,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
                 {/* Official Email Address */}
                 <div>
-                  <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                  <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5" htmlFor="login-email-input">
                     Official Email Address
                   </label>
                   <div className="relative">
-                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-neutral-400 dark:text-white/40">
+                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--text-secondary)]">
                       <Mail className="h-4 w-4" />
                     </div>
                     <input
@@ -389,7 +390,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                       value={email}
                       onChange={e => setEmail(e.target.value)}
                       placeholder="name@zensciences.com"
-                      className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 pl-9 pr-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
+                      className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] py-2 pl-9 pr-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
                       required
                     />
                   </div>
@@ -400,10 +401,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   <div
                     className={`rounded-xl border p-3 flex items-center justify-between transition-all ${
                       !canAssignAdmin
-                        ? 'opacity-50 bg-neutral-100/50 dark:bg-white/[0.02] border-neutral-200 dark:border-white/5'
+                        ? 'opacity-50 bg-neutral-100/50 dark:bg-white/[0.02] border-[var(--border)]'
                         : isAdminPrivilege
                         ? 'border-rose-500/40 bg-rose-500/5 dark:bg-rose-500/10'
-                        : 'border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414]'
+                        : 'border-[var(--border)] bg-[var(--surface)]'
                     }`}
                     title={canAssignAdmin ? "Grant administrator privileges with full board and account access" : "Administrator privileges are restricted to Superadmins and other Administrators"}
                   >
@@ -416,7 +417,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                           <span className="text-xs font-semibold text-neutral-900 dark:text-white">Administrator Privileges</span>
                           {!canAssignAdmin && <Lock className="w-3 h-3 text-neutral-400" />}
                         </div>
-                        <p className="text-[10px] text-neutral-500 dark:text-white/40">System & Ops — Full board access, team management, and workspace settings</p>
+                        <p className="text-[11px] text-[var(--text-secondary)]">System & Ops — Full board access, team management, and workspace settings</p>
                       </div>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
@@ -436,10 +437,10 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 {/* Role / Team Selection: 6 functional teams (optional) */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40" title="Select the member's functional team (click selected team to deselect)">
+                    <label className="text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)]" title="Select the member's functional team (click selected team to deselect)">
                       TEAM
                     </label>
-                    <span className="text-[10px] text-neutral-400 dark:text-white/40">
+                    <span className="text-[11px] text-[var(--text-secondary)]">
                       {role ? '(click selected to deselect)' : '(no team selected)'}
                     </span>
                   </div>
@@ -454,7 +455,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                         className={`flex items-start gap-2 rounded-xl border p-2.5 text-left transition-all ${
                           role === opt.id
                             ? 'border-blue-500/50 bg-blue-50 dark:bg-blue-500/10 ring-1 ring-blue-500/30 cursor-pointer'
-                            : 'border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414] hover:border-neutral-300 dark:hover:border-white/10 cursor-pointer'
+                            : 'border-[var(--border)] bg-[var(--surface-muted)] hover:border-neutral-300 dark:hover:border-white/10 cursor-pointer'
                         }`}
                       >
                         <div className="rounded-lg p-1 bg-neutral-200/50 dark:bg-white/5 shrink-0">
@@ -464,7 +465,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                           <p className="text-xs font-semibold text-neutral-900 dark:text-white truncate">
                             {opt.label}
                           </p>
-                          <p className="text-[10px] text-neutral-500 dark:text-white/40 truncate">
+                          <p className="text-[11px] text-[var(--text-secondary)] truncate">
                             {opt.desc}
                           </p>
                         </div>
@@ -474,7 +475,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 </div>
 
                 {/* Special Roles: Role-led */}
-                <div className="rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-50/50 dark:bg-white/[0.02] p-3.5 space-y-3">
+                <div className="rounded-xl border border-[var(--border)] bg-neutral-50/50 dark:bg-white/[0.02] p-3.5 space-y-3">
                   <div className="flex items-center gap-1.5">
                     <Award className="w-3.5 h-3.5 text-amber-500" />
                     <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 uppercase tracking-wider" title="Configure member special roles">
@@ -484,7 +485,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {/* Business Lead */}
-                    <label className="flex items-center gap-2 p-2.5 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
+                    <label className="flex items-center gap-2 p-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
                       <input
                         type="checkbox"
                         checked={isBusinessLead}
@@ -496,7 +497,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                     </label>
 
                     {/* Creative Director */}
-                    <label className="flex items-center gap-2 p-2.5 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
+                    <label className="flex items-center gap-2 p-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
                       <input
                         type="checkbox"
                         checked={isCD}
@@ -508,7 +509,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                     </label>
 
                     {/* Cluster Lead */}
-                    <label className="flex items-center gap-2 p-2.5 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
+                    <label className="flex items-center gap-2 p-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
                       <input
                         type="checkbox"
                         checked={isClusterLead}
@@ -520,7 +521,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                     </label>
 
                     {/* Team Lead */}
-                    <label className="flex items-center gap-2 p-2.5 rounded-lg border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#141414] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
+                    <label className="flex items-center gap-2 p-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
                       <input
                         type="checkbox"
                         checked={isTeamLead}
@@ -536,14 +537,14 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 {/* Delivery Lead: Assigned Creative Director */}
                 {!isCD && !isBusinessLead && (
                   <div>
-                    <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5" title="Select the delivery lead who manages this member's cluster board">
+                    <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5" title="Select the delivery lead who manages this member's cluster board" htmlFor="loginmodal-field-1">
                       Assigned Creative Director
                     </label>
                     <select
                       value={selectedCDId}
                       onChange={e => setSelectedCDId(e.target.value)}
                       title="Delivery lead for this cluster delivery board"
-                      className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none cursor-pointer"
+                      className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] py-2 px-3 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none cursor-pointer" id="loginmodal-field-1"
                     >
                       <option value="">None / Independent Board</option>
                       {creativeDirectors.map(cd => (
@@ -558,13 +559,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 {/* Input for Assigned Cluster Lead */}
                 {!isClusterLead && !isBusinessLead && (
                   <div>
-                    <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                    <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5" htmlFor="loginmodal-field-2">
                       Assigned Cluster Lead
                     </label>
                     <select
                       value={selectedClusterLeadId}
                       onChange={e => setSelectedClusterLeadId(e.target.value)}
-                      className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] py-2 px-3 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="loginmodal-field-2"
                     >
                       <option value="">None / Direct</option>
                       {clusterLeads.map(cl => (
@@ -580,7 +581,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                   type="submit"
                   id="login-submit-button"
                   disabled={isSubmitting || isGoogleSigningIn}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-xs font-semibold text-white shadow-md shadow-blue-900/20 hover:bg-blue-500 focus:outline-none transition-all disabled:opacity-50 cursor-pointer"
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-500 focus:outline-none transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmitting ? (
                     <span>Processing...</span>
@@ -593,7 +594,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                 </button>
               </form>
             )}
-          </motion.div>
+          </DialogPanel>
         </motion.div>
       )}
     </AnimatePresence>

@@ -1,3 +1,4 @@
+import { DialogPanel } from './ui/DialogPanel';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Task, User } from '../types';
@@ -54,19 +55,19 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs overflow-y-auto"
+          className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
           onClick={e => {
             if (e.target === e.currentTarget && !isDeleting) onClose();
           }}
         >
-          <motion.div
+          <DialogPanel aria-label="Delete task" onClose={onClose} busy={isDeleting}
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
             onClick={e => e.stopPropagation()}
             id="delete-task-modal"
-            className="w-full max-w-md rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] p-6 shadow-2xl transition-all text-neutral-900 dark:text-white"
+            className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 "
           >
         {/* Header */}
         <div className="flex items-start justify-between pb-4 border-b border-neutral-100 dark:border-white/5">
@@ -80,7 +81,7 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
               </h2>
             </div>
           </div>
-          <button
+          <button aria-label="Close dialog"
             onClick={onClose}
             disabled={isDeleting}
             className="rounded-lg p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white transition-colors disabled:opacity-50 cursor-pointer"
@@ -91,12 +92,12 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
 
         {/* Task Details Card */}
         <div className="py-4 space-y-3">
-          <div className="rounded-xl border border-neutral-200/80 dark:border-white/10 bg-neutral-50 dark:bg-[#161616] p-3.5 space-y-2">
+          <div className="rounded-xl border border-neutral-200/80 dark:border-white/10 bg-[var(--surface-muted)] p-3.5 space-y-2">
             <div>
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-white/40">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
                 Task Name
               </span>
-              <h4 className="text-xs font-bold text-neutral-900 dark:text-white mt-0.5 line-clamp-2">
+              <h4 className="text-xs font-semibold text-neutral-900 dark:text-white mt-0.5 line-clamp-2">
                 {task.title}
               </h4>
             </div>
@@ -109,14 +110,14 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
             )}
 
             <div className="flex items-center justify-between text-xs pt-1.5 border-t border-neutral-200/60 dark:border-white/5">
-              <span className="text-neutral-500 dark:text-white/40">Owner</span>
+              <span className="text-[var(--text-secondary)]">Owner</span>
               <span className="font-semibold text-neutral-800 dark:text-neutral-200">
                 {owner?.name || 'Unassigned'}
               </span>
             </div>
 
             <div className="flex items-center justify-between text-xs">
-              <span className="text-neutral-500 dark:text-white/40">Status</span>
+              <span className="text-[var(--text-secondary)]">Status</span>
               <span className="font-medium capitalize text-neutral-700 dark:text-neutral-300">
                 {task.status === 'done' ? 'Sent' : task.status === 'archived' ? 'Completed' : task.status.replace('_', ' ')}
               </span>
@@ -135,7 +136,7 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
             type="button"
             onClick={onClose}
             disabled={isDeleting}
-            className="rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-100 dark:bg-[#141414] px-4 py-2 text-xs font-medium text-neutral-600 dark:text-white/60 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200 dark:hover:bg-white/5 transition-colors disabled:opacity-50 cursor-pointer"
+            className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-2 text-xs font-medium text-neutral-600 dark:text-white/60 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200 dark:hover:bg-white/5 transition-colors disabled:opacity-50 cursor-pointer"
           >
             Cancel
           </button>
@@ -158,7 +159,7 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
             )}
           </button>
         </div>
-      </motion.div>
+      </DialogPanel>
     </motion.div>
   )}
 </AnimatePresence>

@@ -2,10 +2,166 @@
 
 @variant dark (&:where(.dark, .dark *));
 
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1.5;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.5;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5;
+  --default-transition-duration: 150ms;
+  --default-transition-timing-function: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
 @layer base {
   :root {
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    font-family: var(--font-sans);
+    color-scheme: light;
+    --canvas: #f5f5f7;
+    --surface: #ffffff;
+    --surface-muted: #f7f7f9;
+    --surface-raised: #ffffff;
+    --text-primary: #202127;
+    --text-secondary: #60636d;
+    --border: #e2e3e8;
+    --radius-panel: 16px;
+    --radius-card: 12px;
+    --radius-control: 10px;
+    --control-height: 36px;
+    --focus: #2563eb;
+    --shadow-surface: 0 1px 3px #181b2507, 0 3px 12px #181b2504;
+    --shadow-dialog: 0 24px 80px #1014252b, 0 2px 8px #10142514;
+    --header-height: 7.5rem;
   }
+
+  :root.dark {
+    color-scheme: dark;
+    --canvas: #141518;
+    --surface: #1c1d21;
+    --surface-muted: #232429;
+    --surface-raised: #292a30;
+    --text-primary: #f1f2f5;
+    --text-secondary: #a6a9b4;
+    --border: #373940;
+    --focus: #7eabff;
+    --shadow-surface: 0 1px 3px #00000014;
+    --shadow-dialog: 0 24px 80px #00000066, 0 2px 8px #00000033;
+  }
+
+  @media (min-width: 1280px) {
+    :root { --header-height: 4rem; }
+  }
+
+  body { background: var(--canvas); color: var(--text-primary); line-height: 1.5; }
+  button, input, select, textarea, a { -webkit-tap-highlight-color: transparent; }
+  button, [role='button'] { touch-action: manipulation; }
+  button:not(:disabled), select { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+  button, input, select { min-height: 32px; }
+  input, select, textarea { min-width: 0; accent-color: var(--focus); }
+  input[type='checkbox'], input[type='radio'] { min-height: auto; }
+  textarea { resize: vertical; }
+  :where(button, a, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid var(--focus) !important;
+    outline-offset: 3px;
+  }
+  ::selection { background: #3b82f63d; }
+}
+
+@layer components {
+  .workspace-surface { background: var(--canvas); color: var(--text-primary); }
+  .surface { background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-surface); border-radius: var(--radius-panel); }
+  .surface-inset { background: var(--surface-muted); border: 1px solid var(--border); border-radius: var(--radius-card); }
+  .menu-surface { background: var(--surface-raised); border-color: var(--border); box-shadow: 0 8px 32px #0000001f; }
+  .dialog-backdrop { background: #0c102052; backdrop-filter: blur(4px); }
+  .dialog-panel {
+    background: var(--surface);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-dialog);
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    outline: none;
+    min-width: 0;
+  }
+  .dialog-panel > :is(header, footer) { flex-shrink: 0; }
+  .dialog-panel:focus { outline: none !important; }
+  .dialog-panel :is(input, select, textarea) { max-width: 100%; }
+  .dialog-panel :is(h2, h3) { text-wrap: balance; }
+  .button-secondary, .button-danger-outline, .button-primary {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    min-height: var(--control-height); padding: 7px 12px; border: 1px solid var(--border); border-radius: var(--radius-control);
+    font-size: 12px; line-height: 1.5; font-weight: 500;
+    transition: background-color 150ms, border-color 150ms, box-shadow 150ms;
+  }
+  .button-secondary { background: var(--surface); color: var(--text-primary); }
+  .button-secondary:hover { background: var(--surface-muted); }
+  .button-primary { background: #2563eb; border-color: #2563eb; color: white; }
+  .button-primary:hover { background: #1d4ed8; }
+  .button-danger-outline { background: transparent; border-color: #dc262659; color: #b91c1c; }
+  .dark .button-danger-outline { color: #fca5a5; border-color: #f8717166; }
+  .button-danger-outline:hover { background: #ef444410; }
+  :is(.button-secondary, .button-primary, .button-danger-outline):disabled { opacity: .5; }
+  .icon-button { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 8px; color: var(--text-secondary); }
+  .icon-button:hover { background: var(--surface-muted); color: var(--text-primary); }
+  .icon-button:disabled { opacity: .4; }
+  .firestore-actions { display: flex; align-items: stretch; gap: 8px; }
+  .firestore-actions > button { flex: 1; min-width: 0; min-height: 40px; font-size: 12px; padding-inline: 8px; }
+  .hold-confirm {
+    position: relative; display: flex; align-items: center; justify-content: center;
+    width: 100%; min-height: 44px; padding: 10px 16px; overflow: hidden; border-radius: var(--radius-control);
+    background: #b91c1c; border: 1px solid #991b1b; color: white;
+    font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums;
+    touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+    transition: background-color 150ms;
+  }
+  .hold-confirm:hover:not(:disabled) { background: #a71919; }
+  .hold-confirm:disabled { cursor: default; }
+  .hold-confirm-fill { position: absolute; inset: 0; background: #7f1d1d; transform-origin: left; pointer-events: none; }
+  .hold-confirm-success { background: #166534; border-color: #166534; }
+  .hold-confirm-success .hold-confirm-fill { background: #166534; }
+  .hold-feedback { min-height: 1.25rem; margin-top: 6px; text-align: center; color: var(--text-secondary); font-size: 11px; }
+  .hold-confirm[aria-busy='true'] { opacity: .8; }
+  .metric-card { min-width: 0; padding: 16px; border-radius: var(--radius-card); background: var(--surface-muted); }
+  .metric-label { color: var(--text-secondary); font-size: 12px; font-weight: 500; }
+  .metric-value { font-size: 24px; line-height: 1.25; font-weight: 600; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+  .metric-detail { color: var(--text-secondary); font-size: 11px; margin-top: 6px; }
+  .metric-track { height: 4px; background: var(--border); border-radius: 99px; overflow: hidden; margin-top: 12px; }
+  .metric-fill { height: 100%; border-radius: inherit; background: #2563eb; transition: width 180ms ease-out; }
+  .task-card { box-shadow: var(--shadow-surface); }
+  .task-card:focus-within { border-color: var(--focus); }
+  .card-actions button { min-width: 28px; }
+  .free-pool-filters { overflow-x: auto; }
+  .free-pool-filters button { flex-shrink: 0; white-space: nowrap; }
+  .mobile-team-navigation { height: 3.5rem; }
+  .mobile-team-navigation button { flex: 0 0 auto; white-space: nowrap; }
+  .mobile-team-navigation > div { min-width: max-content; }
+  .board-columns { display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 12px; }
+  .board-columns-with-archive { grid-template-columns: repeat(5, minmax(180px, 1fr)); }
+  @media (max-width: 639px) {
+    .metric-card { padding: 12px; }
+    .board-columns { display: flex; scroll-snap-type: x proximity; }
+    .board-columns > div { flex: 0 0 min(78vw, 300px); scroll-snap-align: start; }
+    .dialog-panel { max-height: calc(100dvh - 1.5rem); }
+    .dialog-panel :is(input:not([type='checkbox']):not([type='radio']), select, textarea) { font-size: 16px; }
+  }
+  @media (hover: none) {
+    .card-actions { opacity: 1; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .animate-marquee { animation: none !important; width: 100%; overflow-x: auto; }
+  .hold-confirm-fill { transform: none !important; clip-path: inset(0 calc((1 - var(--hold-progress, 0)) * 100%) 0 0); }
 }
 
 .font-flowy {
@@ -70,7 +226,7 @@
   }
 }
 
-/* Custom dropdown reset - eliminate native browser arrow hover/focus outlines */
+/* Custom select appearance; shared keyboard focus styling is preserved. */
 select {
   appearance: none;
   -webkit-appearance: none;
@@ -80,11 +236,6 @@ select {
 
 select::-ms-expand {
   display: none;
-}
-
-select:focus,
-select:focus-visible {
-  outline: none !important;
 }
 
 /* Hide scrollbar while preserving scroll functionality — used by marquee and ribbon overflow fallback paths */

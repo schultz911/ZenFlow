@@ -1,5 +1,6 @@
+import { DialogPanel } from '../ui/DialogPanel';
 import React, { useState, useEffect, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
 import { useDashboard } from '../../context/DashboardContext';
 import { Role, TaskDisciplineMetadata } from '../../types';
 import { getLastDayOfMonth } from '../../utils/workload';
@@ -286,16 +287,16 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/60 backdrop-blur-xs">
-        <motion.div
+      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/60 ">
+        <DialogPanel aria-label="Create team task" onClose={onClose} busy={isSubmitting}
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
           transition={{ duration: 0.2 }}
-          className="relative w-full max-w-2xl max-h-[92vh] flex flex-col rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#121212] shadow-2xl overflow-hidden"
+          className="relative w-full max-w-2xl flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden"
         >
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-neutral-200 dark:border-white/10 px-6 py-4 bg-neutral-50/50 dark:bg-white/[0.02]">
+          <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-4 bg-neutral-50/50 dark:bg-white/[0.02]">
             <div className="flex items-center gap-2.5">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
                 <Sparkles className="h-5 w-5" />
@@ -306,7 +307,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                 </h3>
               </div>
             </div>
-            <button
+            <button aria-label="Close dialog"
               type="button"
               onClick={onClose}
               className="rounded-lg p-1.5 text-neutral-400 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
@@ -316,7 +317,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
           </div>
 
           {/* Discipline Switcher Tabs */}
-          <div className="flex items-center gap-1.5 px-6 pt-3.5 pb-2 border-b border-neutral-200 dark:border-white/5 overflow-x-auto bg-neutral-50/30 dark:bg-white/[0.01]">
+          <div className="flex items-center gap-1.5 px-6 pt-3.5 pb-2 border-b border-[var(--border)] overflow-x-auto bg-neutral-50/30 dark:bg-white/[0.01]">
             {DISCIPLINE_TABS.map(tab => {
               const Icon = tab.icon;
               const isSelected = selectedDiscipline === tab.role;
@@ -350,7 +351,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
             {/* Shared Section: Task Basics */}
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-1">
                   Task Title <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -369,12 +370,12 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       ? 'Design System Navigation & Checkout Flow'
                       : 'AI Enterprise Tooling Competitive Matrix'
                   }`}
-                  className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-[#181818] px-3.5 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none"
+                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-1"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-2">
                   Description / Brief Overview
                 </label>
                 <textarea
@@ -382,14 +383,14 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                   value={description}
                   onChange={e => setDescription(e.target.value)}
                   placeholder="Summarize the core requirements, goals, and context for this task..."
-                  className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-[#181818] px-3.5 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none resize-none"
+                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none resize-none" id="disciplinetaskmodal-field-2"
                 />
               </div>
 
               {/* Account / Client & Project */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-3">
                     Account / Client
                   </label>
                   <input
@@ -398,7 +399,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                     value={client}
                     onChange={e => setClient(e.target.value)}
                     placeholder="e.g. Acme Corp, FinTech Global"
-                    className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-[#181818] px-3.5 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-3"
                   />
                   <datalist id="discipline-client-options">
                     {existingClients.map(c => (
@@ -408,7 +409,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-4">
                     Project / Campaign
                   </label>
                   <input
@@ -417,7 +418,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                     value={project}
                     onChange={e => setProject(e.target.value)}
                     placeholder="e.g. Q4 Rebrand, Global Launch"
-                    className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-[#181818] px-3.5 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-4"
                   />
                   <datalist id="discipline-project-options">
                     {existingProjects.map(p => (
@@ -446,7 +447,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                               : p === 'medium'
                               ? 'bg-amber-500/15 border-amber-500 text-amber-600 dark:text-amber-400'
                               : 'bg-emerald-500/15 border-emerald-500 text-emerald-600 dark:text-emerald-400'
-                            : 'border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-[#181818] text-neutral-500 dark:text-white/40 hover:text-neutral-900 dark:hover:text-white'
+                            : 'border-[var(--border)] bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-neutral-900 dark:hover:text-white'
                         }`}
                       >
                         {p}
@@ -457,30 +458,30 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-semibold text-neutral-700 dark:text-white/80">
+                    <label className="text-xs font-semibold text-neutral-700 dark:text-white/80" htmlFor="disciplinetaskmodal-field-5">
                       Target Deadline (Optional)
                     </label>
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
                         onClick={() => setQuickDate(1)}
-                        className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                        className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
                       >
                         Tomorrow
                       </button>
-                      <span className="text-[10px] text-neutral-300 dark:text-white/20">·</span>
+                      <span className="text-[11px] text-neutral-300 dark:text-white/20">·</span>
                       <button
                         type="button"
                         onClick={() => setQuickDate(7)}
-                        className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                        className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
                       >
                         1W
                       </button>
-                      <span className="text-[10px] text-neutral-300 dark:text-white/20">·</span>
+                      <span className="text-[11px] text-neutral-300 dark:text-white/20">·</span>
                       <button
                         type="button"
                         onClick={() => setQuickDate(null, true)}
-                        className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                        className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
                       >
                         End Month
                       </button>
@@ -491,14 +492,14 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       type="date"
                       value={dueDate}
                       onChange={e => setDueDate(e.target.value)}
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-[#181818] px-3.5 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-5"
                     />
                     {dueDate && (
                       <button
                         type="button"
                         onClick={() => setDueDate('')}
                         title="Clear deadline"
-                        className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-white text-[10px]"
+                        className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-white text-[11px]"
                       >
                         ✕
                       </button>
@@ -510,7 +511,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
               {/* Attachments & Reference Links */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-neutral-700 dark:text-white/80">
+                  <label className="text-xs font-semibold text-neutral-700 dark:text-white/80" htmlFor="disciplinetaskmodal-field-6">
                     Attachments & Reference Links
                   </label>
                   {!isAddingAttachment && (
@@ -538,7 +539,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                         }
                       }}
                       placeholder="Paste link (Google Drive, Figma, Notion, Miro...)"
-                      className="flex-1 rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-6"
                     />
                     <button
                       type="button"
@@ -553,7 +554,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                         setIsAddingAttachment(false);
                         setNewAttachmentUrl('');
                       }}
-                      className="px-2 py-1.5 rounded-xl border border-neutral-200 dark:border-white/10 text-xs text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
+                      className="px-2 py-1.5 rounded-xl border border-[var(--border)] text-xs text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
                     >
                       Cancel
                     </button>
@@ -565,7 +566,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                     {attachments.map((att, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 text-xs text-neutral-700 dark:text-white/80 max-w-full"
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-100 dark:bg-white/5 border border-[var(--border)] text-xs text-neutral-700 /80 max-w-full"
                       >
                         <LinkIcon className="h-3 w-3 text-blue-500 shrink-0" />
                         <span className="truncate max-w-[260px]">{att}</span>
@@ -586,10 +587,10 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
             {/* Divider */}
             <div className="relative py-1">
               <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-neutral-200 dark:border-white/10" />
+                <div className="w-full border-t border-[var(--border)]" />
               </div>
               <div className="relative flex justify-center text-xs">
-                <span className="bg-white dark:bg-[#121212] px-3 font-semibold text-neutral-500 dark:text-white/40 uppercase tracking-wider text-[10px]">
+                <span className="bg-[var(--surface)] px-3 font-semibold text-[var(--text-secondary)] uppercase tracking-wider text-[11px]">
                   {selectedDiscipline.toUpperCase()} Specifications
                 </span>
               </div>
@@ -600,7 +601,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
               <div className="space-y-3.5 rounded-xl border border-blue-500/20 bg-blue-50/30 dark:bg-blue-950/10 p-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-7">
                       Content Type
                     </label>
                     <input
@@ -609,7 +610,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       value={contentType}
                       onChange={e => setContentType(e.target.value)}
                       placeholder="e.g. Blog Post, Case Study, Whitepaper"
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-7"
                     />
                     <datalist id="content-type-options">
                       <option value="Blog Post" />
@@ -624,7 +625,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-8">
                       Deliverable Format
                     </label>
                     <input
@@ -633,7 +634,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       value={deliverable}
                       onChange={e => setDeliverable(e.target.value)}
                       placeholder="e.g. Google Doc Draft, Notion Page"
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-8"
                     />
                     <datalist id="content-deliverable-options">
                       <option value="Google Doc Draft" />
@@ -647,7 +648,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-9">
                       Brief / Outline URL
                     </label>
                     <input
@@ -655,12 +656,12 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       value={brief}
                       onChange={e => setBrief(e.target.value)}
                       placeholder="Link to document brief or outline..."
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-9"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-10">
                       Word Count Target
                     </label>
                     <input
@@ -670,13 +671,13 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       value={wordCount}
                       onChange={e => setWordCount(e.target.value)}
                       placeholder="e.g. 800, 1500"
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-10"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-11">
                     Relevant Requirements & Guidelines
                   </label>
                   <textarea
@@ -684,7 +685,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                     value={relevantRequirements}
                     onChange={e => setRelevantRequirements(e.target.value)}
                     placeholder="Keywords, target persona, tone of voice, call to action requirements..."
-                    className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none resize-none"
+                    className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none resize-none" id="disciplinetaskmodal-field-11"
                   />
                 </div>
               </div>
@@ -694,7 +695,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
               <div className="space-y-3.5 rounded-xl border border-indigo-500/20 bg-indigo-50/30 dark:bg-indigo-950/10 p-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-12">
                       Asset Type
                     </label>
                     <input
@@ -703,7 +704,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       value={assetType}
                       onChange={e => setAssetType(e.target.value)}
                       placeholder="e.g. Social Banner, Infographic"
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-12"
                     />
                     <datalist id="design-asset-options">
                       <option value="Social Media Banner" />
@@ -717,7 +718,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-13">
                       Dimensions / Aspect Ratio
                     </label>
                     <input
@@ -726,7 +727,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       value={dimensions}
                       onChange={e => setDimensions(e.target.value)}
                       placeholder="e.g. 1080x1080, 1920x1080, A4"
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-13"
                     />
                     <datalist id="design-dim-options">
                       <option value="1080x1080 (Square 1:1)" />
@@ -740,7 +741,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-14">
                       Deliverable Format
                     </label>
                     <input
@@ -749,7 +750,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       value={format}
                       onChange={e => setFormat(e.target.value)}
                       placeholder="e.g. Figma, PSD, AI, PNG, SVG, PDF"
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-14"
                     />
                     <datalist id="design-format-options">
                       <option value="Figma Source + PNG Export" />
@@ -761,7 +762,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-15">
                       Quantity of Assets
                     </label>
                     <input
@@ -770,13 +771,13 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       value={quantity}
                       onChange={e => setQuantity(e.target.value)}
                       placeholder="e.g. 1, 3, 5"
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-15"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-16">
                     Design Specifications & Brand Notes
                   </label>
                   <textarea
@@ -784,7 +785,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                     value={designSpecifications}
                     onChange={e => setDesignSpecifications(e.target.value)}
                     placeholder="Color palette, font pairings, visual reference links, bleed/margins..."
-                    className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none resize-none"
+                    className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none resize-none" id="disciplinetaskmodal-field-16"
                   />
                 </div>
               </div>
@@ -794,7 +795,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
               <div className="space-y-3.5 rounded-xl border border-violet-500/20 bg-violet-50/30 dark:bg-violet-950/10 p-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-17">
                       Video Type
                     </label>
                     <input
@@ -803,7 +804,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       value={videoType}
                       onChange={e => setVideoType(e.target.value)}
                       placeholder="e.g. Explainer, Reel / Short"
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-17"
                     />
                     <datalist id="video-type-options">
                       <option value="Social Reel / Short (Vertical)" />
@@ -816,7 +817,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-18">
                       Expected Duration
                     </label>
                     <input
@@ -825,7 +826,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       value={duration}
                       onChange={e => setDuration(e.target.value)}
                       placeholder="e.g. 15s, 30s, 60s, 2-3 mins"
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-18"
                     />
                     <datalist id="video-dur-options">
                       <option value="15s" />
@@ -840,7 +841,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-19">
                       Aspect Ratio
                     </label>
                     <input
@@ -849,7 +850,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       value={aspectRatio}
                       onChange={e => setAspectRatio(e.target.value)}
                       placeholder="e.g. 9:16 (Vertical), 16:9 (Landscape)"
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-19"
                     />
                     <datalist id="video-aspect-options">
                       <option value="9:16 (Vertical / Reels / TikTok)" />
@@ -860,7 +861,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-20">
                       Deliverables
                     </label>
                     <input
@@ -869,7 +870,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       value={videoDeliverables}
                       onChange={e => setVideoDeliverables(e.target.value)}
                       placeholder="e.g. 4K MP4, ProRes, Project Files"
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-20"
                     />
                     <datalist id="video-deliv-options">
                       <option value="4K MP4 + High-Res Thumbnail" />
@@ -881,7 +882,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-21">
                     Production Requirements & Script Notes
                   </label>
                   <textarea
@@ -889,7 +890,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                     value={productionRequirements}
                     onChange={e => setProductionRequirements(e.target.value)}
                     placeholder="Voiceover specs, music track style, closed captioning (.srt), branding overlays..."
-                    className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none resize-none"
+                    className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none resize-none" id="disciplinetaskmodal-field-21"
                   />
                 </div>
               </div>
@@ -899,7 +900,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
               <div className="space-y-3.5 rounded-xl border border-cyan-500/20 bg-cyan-50/30 dark:bg-cyan-950/10 p-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-22">
                       Design Type
                     </label>
                     <input
@@ -908,7 +909,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       value={designType}
                       onChange={e => setDesignType(e.target.value)}
                       placeholder="e.g. Web App, Mobile App, Landing Page"
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-22"
                     />
                     <datalist id="ui-type-options">
                       <option value="Web Application" />
@@ -920,7 +921,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-23">
                       Platform Target
                     </label>
                     <input
@@ -929,7 +930,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       value={platform}
                       onChange={e => setPlatform(e.target.value)}
                       placeholder="e.g. Web Desktop, iOS Native, Responsive"
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-23"
                     />
                     <datalist id="ui-platform-options">
                       <option value="Web Desktop (1440px)" />
@@ -942,7 +943,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-24">
                       Estimated Screen Count
                     </label>
                     <input
@@ -951,12 +952,12 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       value={screens}
                       onChange={e => setScreens(e.target.value)}
                       placeholder="e.g. 3, 8, 15"
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-24"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-25">
                       Prototype Deliverable
                     </label>
                     <input
@@ -965,7 +966,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       value={prototypeRequirements}
                       onChange={e => setPrototypeRequirements(e.target.value)}
                       placeholder="e.g. Clickable Figma, Wireframes"
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-25"
                     />
                     <datalist id="ui-proto-options">
                       <option value="Clickable Figma Prototype" />
@@ -977,7 +978,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-26">
                     User Flows & Key Journey Details
                   </label>
                   <textarea
@@ -985,7 +986,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                     value={userFlows}
                     onChange={e => setUserFlows(e.target.value)}
                     placeholder="Step-by-step user paths, decision trees, edge cases, error states..."
-                    className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none resize-none"
+                    className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none resize-none" id="disciplinetaskmodal-field-26"
                   />
                 </div>
               </div>
@@ -995,7 +996,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
               <div className="space-y-3.5 rounded-xl border border-teal-500/20 bg-teal-50/30 dark:bg-teal-950/10 p-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-27">
                       Research Type
                     </label>
                     <input
@@ -1004,7 +1005,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       value={researchType}
                       onChange={e => setResearchType(e.target.value)}
                       placeholder="e.g. Competitive Analysis, User Interviews"
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-27"
                     />
                     <datalist id="research-type-options">
                       <option value="Competitive Benchmarking" />
@@ -1016,7 +1017,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-28">
                       Methodology
                     </label>
                     <input
@@ -1025,7 +1026,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       value={methodology}
                       onChange={e => setMethodology(e.target.value)}
                       placeholder="e.g. Qualitative, Quantitative Survey"
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-28"
                     />
                     <datalist id="research-method-options">
                       <option value="Secondary / Desk Research" />
@@ -1038,7 +1039,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-29">
                       Objectives & Hypotheses
                     </label>
                     <textarea
@@ -1046,12 +1047,12 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       value={objectives}
                       onChange={e => setObjectives(e.target.value)}
                       placeholder="Primary questions to answer, assumptions to validate..."
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none resize-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none resize-none" id="disciplinetaskmodal-field-29"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-30">
                       Scope & Target Cohorts
                     </label>
                     <textarea
@@ -1059,13 +1060,13 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       value={scope}
                       onChange={e => setScope(e.target.value)}
                       placeholder="Target demographic, competitor list, market geography..."
-                      className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none resize-none"
+                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none resize-none" id="disciplinetaskmodal-field-30"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
+                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-31">
                     Expected Outputs & Artifacts
                   </label>
                   <input
@@ -1073,22 +1074,22 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                     value={expectedOutputs}
                     onChange={e => setExpectedOutputs(e.target.value)}
                     placeholder="e.g. Executive Summary Deck (PDF), Raw Matrix Sheet"
-                    className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                    className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="disciplinetaskmodal-field-31"
                   />
                 </div>
               </div>
             )}
 
             {/* Footer Buttons */}
-            <div className="flex items-center justify-between pt-2 border-t border-neutral-200 dark:border-white/10">
-              <span className="text-[11px] text-neutral-500 dark:text-white/40">
+            <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+              <span className="text-[11px] text-[var(--text-secondary)]">
                 Created into <span className="font-semibold text-neutral-800 dark:text-white capitalize">{selectedDiscipline} Pipeline</span> as Unassigned.
               </span>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 rounded-xl border border-neutral-200 dark:border-white/10 text-xs font-semibold text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-xl border border-[var(--border)] text-xs font-semibold text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -1102,7 +1103,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
               </div>
             </div>
           </form>
-        </motion.div>
+        </DialogPanel>
       </div>
     </AnimatePresence>
   );

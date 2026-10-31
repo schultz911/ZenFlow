@@ -1,3 +1,4 @@
+import { DialogPanel } from './ui/DialogPanel';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
@@ -243,20 +244,20 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs overflow-y-auto"
+          className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
           onClick={e => {
             if (e.target === e.currentTarget && !isSubmitting) {
               onClose();
             }
           }}
         >
-          <motion.div
+          <DialogPanel aria-label="Duplicate task" onClose={onClose} busy={isSubmitting}
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
             onClick={e => e.stopPropagation()}
-            className="w-full max-w-xl rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414] shadow-2xl p-6 relative overflow-hidden"
+            className="w-full max-w-xl rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 relative overflow-hidden"
           >
           {/* Header */}
           <div className="flex items-start justify-between pb-4 border-b border-neutral-100 dark:border-white/5">
@@ -265,16 +266,16 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                 <CopyPlus className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-neutral-900 dark:text-white flex items-center gap-2">
+                <h3 className="text-base font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
                   <span>Create and Assign Subtask</span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-500/20 px-2 py-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-500/20 px-2 py-0.5 text-[11px] font-semibold text-blue-600 dark:text-blue-400">
                     <Shield className="h-2.5 w-2.5" />
                     CD & Superadmin
                   </span>
                 </h3>
               </div>
             </div>
-            <button
+            <button aria-label="Close dialog"
               onClick={onClose}
               className="rounded-lg p-1 text-neutral-400 hover:text-neutral-700 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
             >
@@ -286,18 +287,18 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
           <form onSubmit={handleDuplicate} className="space-y-4 pt-4">
 
             {/* Source Parent Task Summary Card */}
-            <div className="rounded-xl border border-neutral-200/80 dark:border-white/10 bg-neutral-50 dark:bg-[#1A1A1A] p-3.5 space-y-2.5">
+            <div className="rounded-xl border border-neutral-200/80 dark:border-white/10 bg-[var(--surface-muted)] p-3.5 space-y-2.5">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-white/40">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
                     Parent Task
                   </span>
-                  <h4 className="text-xs font-bold text-neutral-900 dark:text-white mt-0.5 line-clamp-1">
+                  <h4 className="text-xs font-semibold text-neutral-900 dark:text-white mt-0.5 line-clamp-1">
                     {task.title}
                   </h4>
                 </div>
                 <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium border ${task.cognitiveLoad === 'high'
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium border ${task.cognitiveLoad === 'high'
                       ? 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20'
                       : task.cognitiveLoad === 'medium'
                         ? 'bg-yellow-50 dark:bg-yellow-950/30 text-yellow-600 dark:text-yellow-400 border-yellow-200 dark:border-yellow-500/20'
@@ -319,13 +320,13 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
               {/* Source Owner & Board metadata */}
               <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-neutral-200/50 dark:border-white/5">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-neutral-400 dark:text-white/40 shrink-0">Parent Owner:</span>
+                  <span className="text-[var(--text-secondary)] shrink-0">Parent Owner:</span>
                   <span className="font-semibold text-neutral-800 dark:text-white truncate">
                     {sourceUser?.name || 'Unassigned'}
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-neutral-400 dark:text-white/40 shrink-0">Parent Board:</span>
+                  <span className="text-[var(--text-secondary)] shrink-0">Parent Board:</span>
                   <span className="font-semibold text-neutral-800 dark:text-white truncate">
                     {sourceBoard ? `${sourceBoard.name}'s Team` : 'Direct / Independent'}
                   </span>
@@ -337,7 +338,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
             <div className="space-y-3.5">
               {/* Step 1: Destination Board */}
               <div>
-                <label className="block text-xs font-semibold text-neutral-900 dark:text-white mb-1.5 flex items-center gap-1.5">
+                <label className="block text-xs font-semibold text-neutral-900 dark:text-white mb-1.5 flex items-center gap-1.5" htmlFor="duplicatetaskmodal-field-1">
                   <Layers className="h-3.5 w-3.5 text-blue-500" />
                   <span>1. Select Destination Board (Team)</span>
                 </label>
@@ -345,7 +346,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                   value={selectedBoardId}
                   onChange={e => setSelectedBoardId(e.target.value)}
                   disabled={isSubmitting || feedback?.type === 'success'}
-                  className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#1A1A1A] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer disabled:opacity-50"
+                  className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface-raised)] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer disabled:opacity-50" id="duplicatetaskmodal-field-1"
                 >
                   {availableBoards.map(b => (
                     <option key={b.id} value={b.id}>
@@ -357,7 +358,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
 
               {/* Step 2: Destination Assignee on that Board */}
               <div>
-                <label className="block text-xs font-semibold text-neutral-900 dark:text-white mb-1.5 flex items-center gap-1.5">
+                <label className="block text-xs font-semibold text-neutral-900 dark:text-white mb-1.5 flex items-center gap-1.5" htmlFor="duplicatetaskmodal-field-2">
                   <UserCheck className="h-3.5 w-3.5 text-blue-500" />
                   <span>2. Select Subtask Owner on Destination Board</span>
                 </label>
@@ -367,7 +368,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                       value={selectedUserId}
                       onChange={e => setSelectedUserId(e.target.value)}
                       disabled={isSubmitting || feedback?.type === 'success'}
-                      className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#1A1A1A] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer disabled:opacity-50"
+                      className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface-raised)] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer disabled:opacity-50" id="duplicatetaskmodal-field-2"
                     >
                       {availableUsers.map(u => (
                         <option key={u.id} value={u.id}>
@@ -381,7 +382,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                       <div className="flex items-center justify-between rounded-lg bg-neutral-100 dark:bg-white/5 px-2.5 py-1.5 text-[11px] border border-neutral-200/60 dark:border-white/5">
                         <div className="flex items-center gap-2">
                           <div
-                            className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold text-white bg-gradient-to-br ${selectedTargetUser.avatarColor || 'from-blue-600 to-indigo-600'
+                            className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold text-white bg-gradient-to-br ${selectedTargetUser.avatarColor || 'from-blue-600 to-indigo-600'
                               }`}
                           >
                             {selectedTargetUser.name.charAt(0).toUpperCase()}
@@ -389,7 +390,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                           <span className="font-medium text-neutral-800 dark:text-neutral-200">
                             {selectedTargetUser.name}
                           </span>
-                          <span className="rounded bg-neutral-200 dark:bg-white/10 px-1 py-0.2 text-[9px] uppercase font-semibold text-neutral-600 dark:text-neutral-300">
+                          <span className="rounded bg-neutral-200 dark:bg-white/10 px-1 py-0.2 text-[11px] uppercase font-semibold text-neutral-600 dark:text-neutral-300">
                             {selectedTargetUser.role}
                           </span>
                         </div>
@@ -406,7 +407,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
 
               {/* Step 3: Subtask Title */}
               <div>
-                <label className="block text-xs font-semibold text-neutral-900 dark:text-white mb-1.5 flex items-center justify-between">
+                <label className="block text-xs font-semibold text-neutral-900 dark:text-white mb-1.5 flex items-center justify-between" htmlFor="duplicatetaskmodal-field-3">
                   <span className="flex items-center gap-1.5">
                     <GitFork className="h-3.5 w-3.5 text-blue-500" />
                     <span>3. Subtask Title</span>
@@ -415,7 +416,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                     <button
                       type="button"
                       onClick={() => setSubtaskTitle(task.title)}
-                      className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                      className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
                     >
                       Reset to parent title
                     </button>
@@ -427,22 +428,22 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                   onChange={e => setSubtaskTitle(e.target.value)}
                   placeholder={task.title}
                   disabled={isSubmitting || feedback?.type === 'success'}
-                  className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#1A1A1A] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors disabled:opacity-50"
-                  required
+                  className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface-raised)] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors disabled:opacity-50"
+                  required id="duplicatetaskmodal-field-3"
                 />
               </div>
 
               {/* Step 4: Workflow Initial Status & Due Date */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-900 dark:text-white mb-1.5">
+                  <label className="block text-xs font-semibold text-neutral-900 dark:text-white mb-1.5" htmlFor="duplicatetaskmodal-field-4">
                     Initial Status on Board
                   </label>
                   <select
                     value={targetStatus}
                     onChange={e => setTargetStatus(e.target.value as TaskStatus)}
                     disabled={isSubmitting || feedback?.type === 'success'}
-                    className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#1A1A1A] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer capitalize disabled:opacity-50"
+                    className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface-raised)] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer capitalize disabled:opacity-50" id="duplicatetaskmodal-field-4"
                   >
                     {task.status !== 'retainer' && (
                       <option value={task.status}>Keep Original ({task.status.replace('_', ' ')})</option>
@@ -455,10 +456,10 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-neutral-900 dark:text-white mb-1.5 flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-neutral-900 dark:text-white mb-1.5 flex items-center justify-between" htmlFor="duplicatetaskmodal-field-5">
                     <span>Deadline</span>
                     {targetDueDate && (
-                      <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium">
+                      <span className="text-[11px] text-blue-600 dark:text-blue-400 font-medium">
                         {formatDateOnly(targetDueDate)}
                       </span>
                     )}
@@ -469,7 +470,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                       value={targetDueDate}
                       onChange={e => setTargetDueDate(e.target.value)}
                       disabled={isSubmitting || feedback?.type === 'success'}
-                      className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#1A1A1A] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer disabled:opacity-50"
+                      className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface-raised)] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer disabled:opacity-50" id="duplicatetaskmodal-field-5"
                     />
                   </div>
                   {/* Quick Preset Buttons */}
@@ -478,7 +479,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                       type="button"
                       onClick={() => setTargetDueDate(task.dueDate || '')}
                       disabled={isSubmitting || feedback?.type === 'success'}
-                      className="rounded px-1.5 py-0.5 text-[9px] font-medium bg-neutral-100 dark:bg-white/5 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
+                      className="rounded px-1.5 py-0.5 text-[11px] font-medium bg-neutral-100 dark:bg-white/5 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
                     >
                       Original
                     </button>
@@ -486,7 +487,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                       type="button"
                       onClick={() => handleSetQuickDeadline(1)}
                       disabled={isSubmitting || feedback?.type === 'success'}
-                      className="rounded px-1.5 py-0.5 text-[9px] font-medium bg-neutral-100 dark:bg-white/5 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
+                      className="rounded px-1.5 py-0.5 text-[11px] font-medium bg-neutral-100 dark:bg-white/5 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
                     >
                       +1d
                     </button>
@@ -494,7 +495,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                       type="button"
                       onClick={() => handleSetQuickDeadline(3)}
                       disabled={isSubmitting || feedback?.type === 'success'}
-                      className="rounded px-1.5 py-0.5 text-[9px] font-medium bg-neutral-100 dark:bg-white/5 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
+                      className="rounded px-1.5 py-0.5 text-[11px] font-medium bg-neutral-100 dark:bg-white/5 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
                     >
                       +3d
                     </button>
@@ -502,7 +503,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                       type="button"
                       onClick={() => handleSetQuickDeadline(7)}
                       disabled={isSubmitting || feedback?.type === 'success'}
-                      className="rounded px-1.5 py-0.5 text-[9px] font-medium bg-neutral-100 dark:bg-white/5 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
+                      className="rounded px-1.5 py-0.5 text-[11px] font-medium bg-neutral-100 dark:bg-white/5 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
                     >
                       +1w
                     </button>
@@ -510,7 +511,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                       type="button"
                       onClick={handleSetEndOfMonth}
                       disabled={isSubmitting || feedback?.type === 'success'}
-                      className="rounded px-1.5 py-0.5 text-[9px] font-medium bg-neutral-100 dark:bg-white/5 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
+                      className="rounded px-1.5 py-0.5 text-[11px] font-medium bg-neutral-100 dark:bg-white/5 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
                     >
                       EOM
                     </button>
@@ -564,7 +565,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-100 dark:bg-[#141414] px-4 py-2 text-xs font-medium text-neutral-600 dark:text-white/60 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                  className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-2 text-xs font-medium text-neutral-600 dark:text-white/60 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200 dark:hover:bg-white/5 transition-colors cursor-pointer"
                 >
                   {feedback?.type === 'success' ? 'Close' : 'Cancel'}
                 </button>
@@ -573,7 +574,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                   <button
                     type="submit"
                     disabled={isSubmitting || !selectedUserId || (targetStatus !== 'pipeline' && !targetDueDate.trim())}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white px-4 py-2 text-xs font-semibold shadow-md shadow-blue-900/20 transition-all cursor-pointer disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white px-4 py-2 text-xs font-semibold shadow-xs transition-all cursor-pointer disabled:cursor-not-allowed"
                   >
                     {isSubmitting ? (
                       <>
@@ -591,7 +592,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
               </div>
             </div>
           </form>
-        </motion.div>
+        </DialogPanel>
       </motion.div>
       )}
     </AnimatePresence>

@@ -1,3 +1,4 @@
+import { MetricBar } from './ui/MetricBar';
 import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useDashboard } from '../context/DashboardContext';
 import {
@@ -48,6 +49,16 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const [isBoardDropdownOpen, setIsBoardDropdownOpen] = useState(false);
   const boardDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const dismiss = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      if (showExportMenu) { setShowExportMenu(false); document.getElementById('export-workspace-btn')?.focus(); }
+      if (isBoardDropdownOpen) { setIsBoardDropdownOpen(false); document.getElementById('board-selector-btn')?.focus(); }
+    };
+    document.addEventListener('keydown', dismiss);
+    return () => document.removeEventListener('keydown', dismiss);
+  }, [showExportMenu, isBoardDropdownOpen]);
 
   // Close board dropdown when clicking outside
   useEffect(() => {
@@ -155,135 +166,68 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
   }, [teamTasks]);
 
   return (
-    <div className="mb-6 space-y-4">
-      {/* Top Banner: Metrics & Team Velocity */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#0D0D0D] p-5 sm:px-6 shadow-sm dark:shadow-2xl transition-colors">
-        <div>
-          <div className="flex items-center gap-2.5">
-            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-neutral-900 dark:text-white">
-              {activeRoleTab === 'content'
-                ? 'Content'
-                : activeRoleTab === 'design'
-                ? 'Design'
-                : activeRoleTab === 'video'
-                ? 'Video'
-                : activeRoleTab === 'ui_ux'
-                ? 'UI/UX'
-                : activeRoleTab === 'research'
-                ? 'Research'
-                : activeRoleTab}
-            </h1>
-            <span className="rounded-full bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/10 px-2.5 py-0.5 text-xs text-neutral-600 dark:text-white/50">
-              {displayedUsers.length} {displayedUsers.length === 1 ? 'member' : 'members'}
-            </span>
-
-            {/* Cognitive Overload Threshold Alert Badge */}
-            {overloadedMembersCount > 0 && (
-              <span
-                title={`${overloadedMembersCount} team member(s) exceed 12-point workload capacity.`}
-                className="inline-flex items-center gap-1 rounded-full bg-red-500/10 border border-red-500/30 px-2.5 py-0.5 text-xs font-semibold text-red-500 dark:text-red-400 animate-pulse"
-              >
-                <AlertTriangle className="h-3 w-3" />
-                <span>{overloadedMembersCount} Overloaded</span>
-              </span>
-            )}
+    <div className="mb-5 space-y-4">
+      <section className="surface p-4 sm:p-5" aria-label="Team overview">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-baseline gap-3">
+            <h1 className="text-xl font-semibold tracking-tight">{activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab.charAt(0).toUpperCase() + activeRoleTab.slice(1)}</h1>
+            <span className="text-xs text-[var(--text-secondary)]">{displayedUsers.length} {displayedUsers.length === 1 ? 'member' : 'members'}</span>
+          </div>
+          {overloadedMembersCount > 0 && <span className="flex items-center gap-1.5 text-xs font-medium text-red-700 dark:text-red-300"><AlertTriangle aria-hidden="true" className="h-3.5 w-3.5" />{overloadedMembersCount} {overloadedMembersCount === 1 ? 'member needs' : 'members need'} workload review</span>}
+        </div>
+        <div className="grid grid-cols-6 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
+          <div className="metric-card col-span-3 sm:col-span-1">
+            <h2 className="metric-label">Utilization</h2>
+            <p className="metric-value mt-2">{teamUtilization.utilizationPercent}<span className="text-sm tracking-normal">%</span></p>
+            <MetricBar label="Team utilization" value={teamUtilization.utilizationPercent} detail={`${teamUtilization.utilizedCount} of ${teamUtilization.totalCount} members assigned over 3 hours per day`} tone="green" />
+            <p className="metric-detail">{teamUtilization.utilizedCount} of {teamUtilization.totalCount} above 3h/day</p>
+          </div>
+          <div className="metric-card col-span-3 sm:col-span-1">
+            <h2 className="metric-label">Efficiency</h2>
+            <p className="metric-value mt-2">{teamEfficiency.totalEstimatedHours > 0 ? <>{teamEfficiency.efficiencyPercent}<span className="text-sm tracking-normal">%</span></> : '—'}</p>
+            <MetricBar label="Team efficiency" value={teamEfficiency.efficiencyPercent} detail={`${teamEfficiency.efficiencyPercent} percent; billable hours divided by estimated hours`} tone="blue" />
+            <p className="metric-detail">{teamEfficiency.totalEstimatedHours > 0 ? formatHoursRatio(teamEfficiency.totalTimeTakenHours, teamEfficiency.totalEstimatedHours) : 'No estimates yet'}</p>
+          </div>
+          <div className="metric-card col-span-2 sm:col-span-1">
+            <h2 className="metric-label">Avg workload</h2>
+            <p className="metric-value mt-2">{avgWorkload}<span className="text-xs tracking-normal font-normal"> pts</span></p>
+            <MetricBar label="Average workload" value={avgWorkload} max={12} detail={`${avgWorkload} points; overload threshold is 12 points`} tone={avgWorkload >= 12 ? 'red' : avgWorkload >= 8 ? 'amber' : 'blue'} />
+            <p className="metric-detail">12 pts overload threshold</p>
+          </div>
+          <div className="metric-card col-span-2 sm:col-span-1">
+            <h2 className="metric-label">In progress</h2>
+            <p className="metric-value mt-2">{inProgressCount}</p>
+            <MetricBar label="Assigned tasks in progress" value={inProgressCount} max={teamTasks.length || 1} detail={`${inProgressCount} of ${teamTasks.length} assigned tasks in progress`} />
+            <p className="metric-detail">{teamTasks.length} assigned tasks total</p>
+          </div>
+          <div className="metric-card col-span-2 sm:col-span-1">
+            <h2 className="metric-label">To do</h2>
+            <p className="metric-value mt-2">{todoCount}</p>
+            <MetricBar label="Assigned tasks to do" value={todoCount} max={teamTasks.length || 1} detail={`${todoCount} of ${teamTasks.length} assigned tasks to do`} tone="amber" />
+            <p className="metric-detail">Ready to be picked up</p>
           </div>
         </div>
-
-        {/* Team Aggregate Badges with Add Member and New Task stacked next to To Do pill */}
-        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
-          <div
-            title={`Team Utilization: ${teamUtilization.utilizedCount} of ${teamUtilization.totalCount} members assigned > 3 hours/day estimated`}
-            className="rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414] px-3.5 py-2"
-          >
-            <span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-white/40 block">
-              Utilization
-            </span>
-            <div className="flex items-baseline gap-1">
-              <span className={`text-sm font-semibold ${
-                teamUtilization.utilizationPercent >= 75
-                  ? 'text-emerald-600 dark:text-emerald-400'
-                  : teamUtilization.utilizationPercent >= 40
-                  ? 'text-blue-600 dark:text-blue-400'
-                  : 'text-amber-600 dark:text-yellow-400'
-              }`}>
-                {teamUtilization.utilizationPercent}%
-              </span>
-              <span className="text-[10px] text-neutral-400 dark:text-white/40">
-                ({teamUtilization.utilizedCount}/{teamUtilization.totalCount})
-              </span>
-            </div>
-          </div>
-
-          <div
-            title={`Team Efficiency: Aggregate time taken (${teamEfficiency.totalTimeTakenHours}h) / time estimated (${teamEfficiency.totalEstimatedHours}h)`}
-            className="rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414] px-3.5 py-2"
-          >
-            <span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-white/40 block">
-              Efficiency
-            </span>
-            <div className="flex items-baseline gap-1">
-              <span className={`text-sm font-semibold ${
-                teamEfficiency.efficiencyPercent >= 75
-                  ? 'text-emerald-600 dark:text-emerald-400'
-                  : teamEfficiency.efficiencyPercent >= 50
-                  ? 'text-blue-600 dark:text-blue-400'
-                  : 'text-rose-600 dark:text-red-400'
-              }`}>
-                {teamEfficiency.efficiencyPercent}%
-              </span>
-              <span className="text-[10px] text-neutral-400 dark:text-white/40">
-                {formatHoursRatio(teamEfficiency.totalTimeTakenHours, teamEfficiency.totalEstimatedHours)}
-              </span>
-            </div>
-          </div>
-
-          <div className="rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414] px-3.5 py-2">
-            <span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-white/40 block">
-              Avg Workload
-            </span>
-            <span className="text-sm font-semibold text-neutral-900 dark:text-white">
-              {avgWorkload} pts
-            </span>
-          </div>
-
-          <div className="rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414] px-3.5 py-2">
-            <span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-white/40 block">
-              In Progress
-            </span>
-            <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">
-              {inProgressCount} tasks
-            </span>
-          </div>
-
-          <div className="rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414] px-3.5 py-2">
-            <span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-white/40 block">
-              To Do
-            </span>
-            <span className="text-sm font-semibold text-neutral-800 dark:text-white/80">
-              {todoCount} tasks
-            </span>
-          </div>
-        </div>
-      </div>
+      </section>
 
       {/* Search Bar & Export Audit Utilities */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         {/* Search input with debounced query */}
         <div className="relative w-full sm:w-80">
-          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-neutral-400 dark:text-white/30">
+          <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--text-secondary)]">
             <Search className="h-3.5 w-3.5" />
           </div>
           <input
             id="task-search-input"
+            aria-label="Search tasks, members, clients, and projects"
             type="text"
             value={localSearch}
             onChange={e => setLocalSearch(e.target.value)}
             placeholder="Search tasks, members (Ctrl+F)..."
-            className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414] py-2 pl-9 pr-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
+            className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface)] py-2 pl-9 pr-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
           />
           {localSearch && (
             <button
+              aria-label="Clear workspace search"
               onClick={() => {
                 setLocalSearch('');
                 onSearchChange('');
@@ -296,14 +240,15 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
         </div>
 
         {/* Right Action Utilities: Team Board Selector & Export Workspace */}
-        <div className="flex items-center gap-2">
+        <div className="flex w-full sm:w-auto flex-wrap items-center gap-2">
           {/* Team Board Selector (Superadmin & Creative Directors - hidden on shared teams Video & UI/UX) */}
           {canSwitchBoards && !isSharedSection && (
             <div className="relative" ref={boardDropdownRef}>
               <button
                 id="board-selector-btn"
+                aria-expanded={isBoardDropdownOpen}
                 onClick={() => setIsBoardDropdownOpen(prev => !prev)}
-                className="flex items-center gap-1.5 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414] hover:bg-neutral-50 dark:hover:bg-white/5 px-3 py-2 text-xs font-medium text-neutral-800 dark:text-neutral-200 transition-colors shadow-xs cursor-pointer"
+                className="flex items-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:bg-neutral-50 dark:hover:bg-white/5 px-3 py-2 text-xs font-medium text-neutral-800 dark:text-neutral-200 transition-colors shadow-xs cursor-pointer"
               >
                 <Users className="h-3.5 w-3.5 text-neutral-500 dark:text-neutral-400" />
                 <span className="max-w-[140px] truncate">{currentBoardLabel}</span>
@@ -311,8 +256,8 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
               </button>
 
               {isBoardDropdownOpen && (
-                <div className="absolute right-0 sm:left-0 sm:right-auto mt-1.5 w-52 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] py-1.5 shadow-xl z-30">
-                  <div className="px-3 py-1.5 text-[10px] font-semibold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider">
+                <div className="absolute right-0 sm:left-0 sm:right-auto mt-1.5 w-52 rounded-xl border border-[var(--border)] bg-[var(--surface)] py-1.5 shadow-xl z-30">
+                  <div className="px-3 py-1.5 text-[11px] font-semibold text-neutral-400 dark:text-neutral-500 uppercase tracking-wider">
                     Select Team Board
                   </div>
                   {isSuperadmin && (
@@ -366,16 +311,17 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
           <div className="relative" ref={exportMenuRef}>
             <button
               id="export-workspace-btn"
+              aria-expanded={showExportMenu}
               onClick={() => setShowExportMenu(prev => !prev)}
               title="Export workspace or audit reports"
-              className="flex items-center gap-1.5 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414] hover:bg-neutral-50 dark:hover:bg-white/5 px-3 py-2 text-xs font-medium text-neutral-700 dark:text-white/70 transition-colors shadow-xs cursor-pointer"
+              className="flex items-center gap-1.5 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:bg-neutral-50 dark:hover:bg-white/5 px-3 py-2 text-xs font-medium text-neutral-700 dark:text-white/70 transition-colors shadow-xs cursor-pointer"
             >
               <Download className="h-3.5 w-3.5" />
               <span>Export Report</span>
             </button>
 
             {showExportMenu && (
-              <div className="absolute right-0 mt-1.5 w-52 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] p-1.5 shadow-xl z-20">
+              <div className="absolute right-0 mt-1.5 w-52 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1.5 shadow-xl z-20">
                 <button
                   onClick={() => {
                     setShowExportMenu(false);

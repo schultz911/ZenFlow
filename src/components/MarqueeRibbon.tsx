@@ -72,8 +72,8 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
     >
       {/* Fixed Alert Pill on the Left */}
       <div className="flex items-center gap-1.5 rounded-xl bg-red-600 px-2.5 py-1 text-white shadow-xs shrink-0 z-10 select-none">
-        <AlertTriangle className="h-3.5 w-3.5 animate-pulse" />
-        <span className="text-[11px] font-bold uppercase tracking-wider">
+        <AlertTriangle className="h-3.5 w-3.5" />
+        <span className="text-[11px] font-semibold uppercase tracking-wider">
           {overdueCount > 0 ? `${overdueCount} Overdue` : `${dueTodayCount} Due Today`}
         </span>
       </div>
@@ -97,14 +97,14 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
                 type="button"
                 onClick={() => onTaskClick(task)}
                 title={`Click to inspect or reschedule "${task.title}" (Assigned to ${user?.name || 'Unassigned'})`}
-                className="flex items-center gap-2 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#121212] hover:border-blue-500 dark:hover:border-blue-400 px-3 py-1 shadow-xs hover:shadow-md transition-all cursor-pointer shrink-0 group"
+                className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:border-blue-500 dark:hover:border-blue-400 px-3 py-1 shadow-xs hover:shadow-sm transition-all cursor-pointer shrink-0 group"
               >
                 {/* Assignee Avatar & Name */}
                 <div className="flex items-center gap-1.5">
                   <div
                     className={`h-4.5 w-4.5 rounded-full bg-gradient-to-tr ${
                       user?.avatarColor || 'from-blue-600 to-indigo-600'
-                    } text-[9px] font-bold text-white flex items-center justify-center shrink-0 border border-white/10`}
+                    } text-[11px] font-semibold text-white flex items-center justify-center shrink-0 border border-white/10`}
                   >
                     {user?.name ? user.name[0].toUpperCase() : '?'}
                   </div>
@@ -113,7 +113,7 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
                   </span>
                 </div>
 
-                <span className="text-neutral-300 dark:text-white/20 text-[10px]">•</span>
+                <span className="text-neutral-300 dark:text-white/20 text-[11px]">•</span>
 
                 {/* Task Title */}
                 <span className="text-neutral-700 dark:text-white/80 max-w-[200px] truncate text-[11px] group-hover:text-blue-500 transition-colors">
@@ -122,7 +122,7 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
 
                 {/* Urgency Badge */}
                 <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider border ${
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider border ${
                     isOverdue
                       ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-500/15 dark:text-red-400 dark:border-red-500/20'
                       : 'bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-500/15 dark:text-orange-400 dark:border-orange-500/20'

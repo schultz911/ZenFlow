@@ -19,7 +19,6 @@ import { AnalyticsModal } from './components/AnalyticsModal';
 import { TeamPipeline } from './components/TeamPipeline';
 import { DisciplineTaskModal } from './components/modals/DisciplineTaskModal';
 import { TaskAssignmentModal } from './components/TaskAssignmentModal';
-import { SuperadminPurgeModal } from './components/SuperadminPurgeModal';
 import { User, Task, TaskStatus } from './types';
 import { UserPlus, FileText, Palette, Video as VideoIcon, Layout, Search, Loader2, Trash2 } from 'lucide-react';
 import { testConnection } from './lib/firebase';
@@ -71,7 +70,6 @@ function DashboardContent() {
   const [analyticsModalOpen, setAnalyticsModalOpen] = useState(false);
   const [disciplineModalOpen, setDisciplineModalOpen] = useState(false);
   const [selectedTaskForAssignment, setSelectedTaskForAssignment] = useState<Task | null>(null);
-  const [purgeModalOpen, setPurgeModalOpen] = useState(false);
 
   // Stable refs for currentUser and users — allow keyboard effect and task modal handler to have empty dep arrays
   const currentUserRef = useRef(currentUser);
@@ -481,7 +479,7 @@ function DashboardContent() {
 
   if (isAuthChecking) {
     return (
-      <div className="min-h-screen bg-neutral-50 dark:bg-[#0A0A0A] flex flex-col items-center justify-center p-4 selection:bg-blue-500/30 selection:text-white transition-colors">
+      <div className="min-h-screen bg-[var(--canvas)] flex flex-col items-center justify-center p-4 selection:bg-blue-500/30 selection:text-white transition-colors">
         <div className="flex flex-col items-center gap-3.5 text-center">
           <div
             id="zenflow-loading-logo"
@@ -501,18 +499,18 @@ function DashboardContent() {
           </div>
           <div>
             <div className="flex items-baseline justify-center leading-none">
-              <span className="text-2xl font-bold tracking-tight text-neutral-900 dark:text-white">
+              <span className="text-2xl font-semibold tracking-tight text-neutral-900 dark:text-white">
                 zen
               </span>
-              <span className="font-flowy text-3xl font-bold text-blue-600 dark:text-blue-400 ml-0.5 select-none">
+              <span className="font-flowy text-3xl font-semibold text-blue-600 dark:text-blue-400 ml-0.5 select-none">
                 Flow
               </span>
             </div>
-            <p className="text-[11px] font-medium text-neutral-500 dark:text-white/40 tracking-normal mt-1">
+            <p className="text-[11px] font-medium text-[var(--text-secondary)] tracking-normal mt-1">
               Workflow Management System
             </p>
           </div>
-          <div className="flex items-center gap-2 mt-2 text-xs text-neutral-400 dark:text-white/40">
+          <div className="flex items-center gap-2 mt-2 text-xs text-[var(--text-secondary)]">
             <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
             <span>Verifying session...</span>
           </div>
@@ -525,17 +523,16 @@ function DashboardContent() {
 
   return (
     <>
-      <div className={`min-h-screen bg-neutral-50 dark:bg-[#0A0A0A] text-neutral-900 dark:text-[#E5E5E5] font-sans antialiased selection:bg-blue-500/30 selection:text-white transition-colors relative ${!currentUser ? 'overflow-hidden pointer-events-none select-none filter blur-[2px]' : ''}`}>
+      <div className={`min-h-screen bg-[var(--canvas)] text-neutral-900 dark:text-[#E5E5E5] font-sans antialiased selection:bg-blue-500/30 selection:text-white transition-colors relative ${!currentUser ? 'overflow-hidden pointer-events-none select-none filter blur-[2px]' : ''}`}>
         {/* Sticky Header */}
         <Header
           onOpenLoginModal={handleOpenLogin}
           onOpenNewUserModal={handleOpenNewUser}
           onOpenFirestoreModal={handleOpenFirestore}
-          onOpenPurgeModal={() => setPurgeModalOpen(true)}
         />
 
         {/* Pinned Ribbons — sticky just below the header */}
-        <div className="sticky top-16 sm:top-20 z-20 w-full">
+        <div className="sticky top-[var(--header-height)] z-20 w-full">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-2 space-y-1.5">
             <MarqueeRibbon
               tasks={tasks}
@@ -584,7 +581,7 @@ function DashboardContent() {
               {/* Cross-role matches links */}
               {searchRoleMatches && (
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[11px] text-neutral-500 dark:text-white/40">Matches in teams:</span>
+                  <span className="text-[11px] text-[var(--text-secondary)]">Matches in teams:</span>
                   {(['content', 'design', 'video', 'ui_ux', 'research'] as const).map(role => {
                     const count = searchRoleMatches[role] || 0;
                     if (count === 0 && role !== activeRoleTab) return null;
@@ -594,10 +591,10 @@ function DashboardContent() {
                         key={role}
                         type="button"
                         onClick={() => setActiveRoleTab(role)}
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer ${
+                        className={`px-2 py-0.5 rounded-full text-[11px] font-semibold transition-all cursor-pointer ${
                           role === activeRoleTab
                             ? 'bg-blue-600 text-white'
-                            : 'bg-white dark:bg-white/10 text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/20 border border-neutral-200 dark:border-white/10'
+                            : 'bg-white dark:bg-white/10 text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/20 border border-[var(--border)]'
                         }`}
                       >
                         {roleLabel} ({count})
@@ -625,8 +622,8 @@ function DashboardContent() {
 
           {/* User Swimlanes List */}
           {roleFilteredUsers.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#0D0D0D] p-12 text-center shadow-sm dark:shadow-2xl">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-[#141414] border border-neutral-200 dark:border-white/5 text-neutral-500 dark:text-white/50 mb-3">
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-12 text-center shadow-sm">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-[#141414] border border-[var(--border)] text-neutral-500 dark:text-white/50 mb-3">
                 {searchQuery.trim() ? (
                   <Search className="h-6 w-6 text-blue-500" />
                 ) : activeRoleTab === 'content' ? (
@@ -646,7 +643,7 @@ function DashboardContent() {
                   ? `No matching tasks, clients, projects, or members found in ${activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab.charAt(0).toUpperCase() + activeRoleTab.slice(1)}`
                   : `No members in ${activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab === 'video' ? 'Video' : activeRoleTab === 'content' ? 'Content' : activeRoleTab === 'design' ? 'Design' : activeRoleTab === 'research' ? 'Research' : activeRoleTab} yet`}
               </h3>
-              <p className="mt-1 text-xs text-neutral-500 dark:text-white/40 max-w-sm">
+              <p className="mt-1 text-xs text-[var(--text-secondary)] max-w-sm">
                 {searchQuery.trim()
                   ? 'Try searching with different keywords, check other team tabs above, or clear the search query.'
                   : `Add a new member with the ${activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab === 'research' ? 'Research' : activeRoleTab} role to generate their dedicated swimlane.`}
@@ -662,7 +659,7 @@ function DashboardContent() {
               ) : canManageMembers && (
                 <button
                   onClick={handleOpenNewUser}
-                  className="mt-4 flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 transition-colors shadow-md shadow-blue-900/20 cursor-pointer"
+                  className="mt-4 flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 transition-colors shadow-xs cursor-pointer"
                 >
                   <UserPlus className="h-3.5 w-3.5" />
                   <span>Add {activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab === 'video' ? 'Video' : activeRoleTab === 'content' ? 'Content' : activeRoleTab === 'design' ? 'Design' : activeRoleTab === 'research' ? 'Research' : activeRoleTab} Member</span>
@@ -747,10 +744,7 @@ function DashboardContent() {
           onClose={() => setFirestoreModalOpen(false)}
         />
 
-        <SuperadminPurgeModal
-          isOpen={purgeModalOpen}
-          onClose={() => setPurgeModalOpen(false)}
-        />
+
 
         <AnalyticsModal
           isOpen={analyticsModalOpen}

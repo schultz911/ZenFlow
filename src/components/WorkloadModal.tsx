@@ -1,3 +1,4 @@
+import { DialogPanel } from './ui/DialogPanel';
 import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task } from '../types';
@@ -58,19 +59,19 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs overflow-y-auto"
+          className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
           onClick={e => {
             if (e.target === e.currentTarget) onClose();
           }}
         >
-          <motion.div
+          <DialogPanel aria-label="Member workload" onClose={onClose} busy={false}
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
             onClick={e => e.stopPropagation()}
             id="workload-breakdown-modal"
-            className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] p-6 shadow-2xl transition-all text-neutral-900 dark:text-white"
+            className="w-full max-w-2xl overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 "
           >
         {/* Header */}
         <div className="flex items-start justify-between border-b border-neutral-100 dark:border-white/5 pb-4">
@@ -78,7 +79,7 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
             <div
               className={`flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-tr ${
                 user.avatarColor || 'from-blue-600 to-indigo-600'
-              } text-white font-semibold text-sm border border-neutral-200 dark:border-white/10`}
+              } text-white font-semibold text-sm border border-[var(--border)]`}
             >
               {user.name
                 .split(' ')
@@ -90,13 +91,13 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
             <div>
               <h2 className="text-base font-semibold tracking-tight text-neutral-900 dark:text-white flex items-center gap-2">
                 <span>{user.name}</span>
-                <span className={`rounded-full border px-2 py-0.5 text-[10px] tracking-wide ${getUserTag(user).badgeClass}`}>
+                <span className={`rounded-full border px-2 py-0.5 text-[11px] tracking-wide ${getUserTag(user).badgeClass}`}>
                   {getUserTag(user).label}
                 </span>
               </h2>
             </div>
           </div>
-          <button
+          <button aria-label="Close dialog"
             onClick={onClose}
             className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white transition-colors"
           >
@@ -105,17 +106,17 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
         </div>
 
         {/* Workload Score Banner */}
-        <div className="mt-4 rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414] p-5">
+        <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <span className="text-[10px] uppercase tracking-wider text-neutral-500 dark:text-white/40">
+              <span className="text-[11px] uppercase tracking-wider text-[var(--text-secondary)]">
                 Current Workload Index
               </span>
               <div className="mt-1 flex items-baseline gap-2">
-                <span className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-white">
+                <span className="text-3xl font-semibold tracking-tight text-neutral-900 dark:text-white">
                   {workload.totalScore}
                 </span>
-                <span className="text-xs text-neutral-500 dark:text-white/40">
+                <span className="text-xs text-[var(--text-secondary)]">
                   points
                 </span>
                 <span className={`ml-2 inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${workload.badgeBg} ${workload.badgeText}`}>
@@ -125,21 +126,21 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
             </div>
 
             {/* Quick Metrics */}
-            <div className="flex items-center gap-4 text-xs border-t sm:border-t-0 sm:border-l border-neutral-200 dark:border-white/5 pt-2 sm:pt-0 sm:pl-4">
+            <div className="flex items-center gap-4 text-xs border-t sm:border-t-0 sm:border-l border-[var(--border)] pt-2 sm:pt-0 sm:pl-4">
               <div>
-                <p className="text-neutral-500 dark:text-white/40 text-[10px] uppercase tracking-wider">In Progress</p>
+                <p className="text-[var(--text-secondary)] text-[11px] uppercase tracking-wider">In Progress</p>
                 <p className="font-semibold text-blue-600 dark:text-blue-400 mt-0.5">{workload.inProgressCount} tasks</p>
               </div>
               <div>
-                <p className="text-neutral-500 dark:text-white/40 text-[10px] uppercase tracking-wider">To Do (Deadline)</p>
+                <p className="text-[var(--text-secondary)] text-[11px] uppercase tracking-wider">To Do (Deadline)</p>
                 <p className="font-semibold text-neutral-800 dark:text-white/80 mt-0.5">{workload.todoWithDeadlineCount} tasks</p>
               </div>
               <div>
-                <p className="text-neutral-500 dark:text-white/40 text-[10px] uppercase tracking-wider">To Do (No Date)</p>
-                <p className="font-semibold text-neutral-500 dark:text-white/40 mt-0.5">{workload.todoNoDeadlineCount} tasks</p>
+                <p className="text-[var(--text-secondary)] text-[11px] uppercase tracking-wider">To Do (No Date)</p>
+                <p className="font-semibold text-[var(--text-secondary)] mt-0.5">{workload.todoNoDeadlineCount} tasks</p>
               </div>
               <div>
-                <p className="text-neutral-500 dark:text-white/40 text-[10px] uppercase tracking-wider">In Review</p>
+                <p className="text-[var(--text-secondary)] text-[11px] uppercase tracking-wider">In Review</p>
                 <p className="font-semibold text-purple-600 dark:text-purple-400 mt-0.5">{workload.inReviewCount} tasks</p>
               </div>
             </div>
@@ -147,7 +148,7 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
 
           {/* Visual capacity indicator */}
           <div className="mt-4">
-            <div className="flex justify-between text-[10px] text-neutral-500 dark:text-white/40 mb-1.5 font-medium">
+            <div className="flex justify-between text-[11px] text-[var(--text-secondary)] mb-1.5 font-medium">
               <span>Light (0 - 3.9)</span>
               <span>Optimal (4 - 7.9)</span>
               <span>Heavy (8 - 11.9)</span>
@@ -171,7 +172,7 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
         </div>
 
         {/* 7-Day Velocity & Throughput Micro-Sparkline */}
-        <div className="mt-4 rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414] p-5">
+        <div className="mt-4 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-5">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-neutral-200/60 dark:border-white/5">
             <div className="flex items-center gap-2">
               <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
@@ -185,14 +186,14 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
                 <CheckCircle2 className="h-3 w-3" />
                 <span>{velocity.totalCompleted7d} {velocity.totalCompleted7d === 1 ? 'task' : 'tasks'} cleared</span>
-                <span className="text-[10px] opacity-75">({velocity.totalPointsCleared7d} pts)</span>
+                <span className="text-[11px] opacity-75">({velocity.totalPointsCleared7d} pts)</span>
               </span>
               {velocity.avgLeadTimeStr && (
                 <span
                   title="Average lead time from task creation to completion"
                   className="inline-flex items-center gap-1 rounded-full bg-neutral-200/70 dark:bg-white/5 border border-neutral-300 dark:border-white/10 px-2.5 py-0.5 text-[11px] font-medium text-neutral-700 dark:text-white/70"
                 >
-                  <Clock className="h-3 w-3 text-neutral-400 dark:text-white/40" />
+                  <Clock className="h-3 w-3 text-[var(--text-secondary)]" />
                   <span>Avg Lead Time: {velocity.avgLeadTimeStr}</span>
                 </span>
               )}
@@ -277,7 +278,7 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                         x={barX + barWidth / 2}
                         y={barY - 6}
                         textAnchor="middle"
-                        className="text-[11px] font-bold fill-neutral-800 dark:fill-white select-none transition-all"
+                        className="text-[11px] font-semibold fill-neutral-800 dark:fill-white select-none transition-all"
                       >
                         {day.completedCount}
                       </text>
@@ -288,9 +289,9 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                       x={slotX + colWidth / 2}
                       y={112}
                       textAnchor="middle"
-                      className={`text-[10px] select-none transition-colors ${
+                      className={`text-[11px] select-none transition-colors ${
                         day.isToday
-                          ? 'font-bold fill-blue-600 dark:fill-blue-400'
+                          ? 'font-semibold fill-blue-600 dark:fill-blue-400'
                           : isHovered
                           ? 'font-semibold fill-neutral-900 dark:fill-white'
                           : 'font-medium fill-neutral-500 dark:fill-white/40'
@@ -304,7 +305,7 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                       x={slotX + colWidth / 2}
                       y={124}
                       textAnchor="middle"
-                      className="text-[9px] fill-neutral-400 dark:fill-white/30 select-none"
+                      className="text-[11px] fill-neutral-400 dark:fill-white/30 select-none"
                     >
                       {day.displayDate.split(' ')[1]}
                     </text>
@@ -323,15 +324,15 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                       {activeHoverDay.completedCount} {activeHoverDay.completedCount === 1 ? 'task' : 'tasks'} completed ({activeHoverDay.completedPoints} cognitive points)
                     </span>
                   ) : (
-                    <span className="text-neutral-400 dark:text-white/40">No completed tasks</span>
+                    <span className="text-[var(--text-secondary)]">No completed tasks</span>
                   )}
                 </p>
               ) : !velocity.hasData ? (
-                <p className="text-[11px] text-neutral-400 dark:text-white/40">
+                <p className="text-[11px] text-[var(--text-secondary)]">
                   No completed tasks in the last 7 days. Completing tasks will chart throughput here.
                 </p>
               ) : (
-                <p className="text-[10px] text-neutral-400 dark:text-white/40">
+                <p className="text-[11px] text-[var(--text-secondary)]">
                   Hover over bars to view daily task completions and cognitive output.
                 </p>
               )}
@@ -341,22 +342,22 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
 
         {/* Task by Task Breakdown Table: Active Tasks */}
         <div className="mt-5">
-          <h3 className="text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-2">
+          <h3 className="text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-2">
             Active Tasks ({workload.items.length})
           </h3>
           {workload.items.length === 0 ? (
-            <p className="rounded-xl border border-dashed border-neutral-200 dark:border-white/10 p-4 text-center text-xs text-neutral-400 dark:text-white/30">
+            <p className="rounded-xl border border-dashed border-[var(--border)] p-4 text-center text-xs text-[var(--text-secondary)]">
               No active tasks contributing to workload score.
             </p>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#141414]">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-neutral-100 dark:bg-[#1A1A1A] text-[10px] uppercase tracking-wider text-neutral-500 dark:text-white/40 border-b border-neutral-200 dark:border-white/5">
+            <div role="region" aria-label="Active task workload breakdown. Scroll horizontally to see all columns." tabIndex={0} className="overflow-x-auto rounded-xl border border-[var(--border)] bg-[var(--surface-muted)]">
+              <table className="w-full min-w-[560px] text-left text-xs">
+                <thead className="bg-[var(--surface-muted)] text-[11px] uppercase tracking-wider text-[var(--text-secondary)] border-b border-[var(--border)]">
                   <tr>
-                    <th className="py-2.5 px-3 font-semibold">Task</th>
-                    <th className="py-2.5 px-3 font-semibold">Status</th>
-                    <th className="py-2.5 px-3 font-semibold">Cognitive Load</th>
-                    <th className="py-2.5 px-3 font-semibold">Due Date & Proximity</th>
+                    <th scope="col" className="py-2.5 px-3 font-semibold">Task</th>
+                    <th scope="col" className="py-2.5 px-3 font-semibold">Status</th>
+                    <th scope="col" className="py-2.5 px-3 font-semibold">Cognitive Load</th>
+                    <th scope="col" className="py-2.5 px-3 font-semibold">Due Date & Proximity</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-neutral-200 dark:divide-white/5">
@@ -366,11 +367,11 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
 
                     return (
                       <tr key={item.taskId} className="hover:bg-neutral-100/50 dark:hover:bg-white/5 transition-colors">
-                        <td className="py-2 px-3 font-medium text-neutral-900 dark:text-white max-w-[180px] truncate">
+                        <td className="py-2 px-3 font-medium max-w-[180px] truncate">
                           {item.title}
                         </td>
                         <td className="py-2 px-3">
-                          <span className="rounded bg-neutral-200/70 dark:bg-white/5 border border-neutral-300 dark:border-white/10 px-1.5 py-0.5 text-[10px] capitalize text-neutral-700 dark:text-white/70">
+                          <span className="rounded bg-neutral-200/70 dark:bg-white/5 border border-neutral-300 dark:border-white/10 px-1.5 py-0.5 text-[11px] capitalize text-neutral-700 dark:text-white/70">
                             {item.status.replace('_', ' ')}
                           </span>
                         </td>
@@ -389,7 +390,7 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                               {dueInfo.text}
                             </span>
                           ) : (
-                            <span className="text-neutral-400 dark:text-white/30">None</span>
+                            <span className="text-[var(--text-secondary)]">None</span>
                           )}
                         </td>
                       </tr>
@@ -404,12 +405,12 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
         <div className="mt-5 flex justify-end">
           <button
             onClick={onClose}
-            className="rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-blue-900/20 transition-all"
+            className="rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2 text-xs font-semibold text-white shadow-xs transition-all"
           >
             Close Breakdown
           </button>
         </div>
-          </motion.div>
+          </DialogPanel>
         </motion.div>
       )}
     </AnimatePresence>

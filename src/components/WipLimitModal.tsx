@@ -1,3 +1,4 @@
+import { DialogPanel } from './ui/DialogPanel';
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, CheckCircle2, ArrowLeft, Layers } from 'lucide-react';
@@ -40,21 +41,21 @@ export const WipLimitModal: React.FC<WipLimitModalProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-xs overflow-y-auto"
+          className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
           onClick={e => {
             if (e.target === e.currentTarget) onClose();
           }}
         >
-          <motion.div
+          <DialogPanel aria-label="Work in progress limit" onClose={onClose} busy={false}
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
             onClick={e => e.stopPropagation()}
-            className="relative w-full max-w-md rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#121212] p-6 shadow-2xl space-y-4 text-neutral-900 dark:text-white"
+            className="relative w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 space-y-4 "
           >
           {/* Close button */}
-          <button
+          <button aria-label="Close dialog"
             onClick={onClose}
             className="absolute top-4 right-4 rounded-lg p-1.5 text-neutral-400 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
           >
@@ -67,7 +68,7 @@ export const WipLimitModal: React.FC<WipLimitModalProps> = ({
               <Layers className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-neutral-900 dark:text-white">
+              <h3 className="text-base font-semibold text-neutral-900 dark:text-white">
                 In-Progress Limit Reached
               </h3>
             </div>
@@ -80,20 +81,20 @@ export const WipLimitModal: React.FC<WipLimitModalProps> = ({
 
           {/* Active Tasks In Progress list */}
           <div>
-            <div className="text-[11px] uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-2">
+            <div className="text-[11px] uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-2">
               Currently in progress ({inProgressTasks.length}/2):
             </div>
             <div className="space-y-2">
               {inProgressTasks.map(t => (
                 <div
                   key={t.id}
-                  className="flex items-center justify-between gap-2 rounded-xl border border-neutral-200 dark:border-white/5 bg-neutral-50 dark:bg-[#181818] p-2.5 text-xs"
+                  className="flex items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-2.5 text-xs"
                 >
                   <div className="min-w-0">
                     <div className="font-semibold text-neutral-900 dark:text-white truncate">
                       {t.title}
                     </div>
-                    <div className="text-[10px] text-neutral-400 dark:text-white/40 capitalize">
+                    <div className="text-[11px] text-[var(--text-secondary)] capitalize">
                       {t.cognitiveLoad} load · {t.dueDate ? `Due ${t.dueDate}` : 'No deadline'}
                     </div>
                   </div>
@@ -108,7 +109,7 @@ export const WipLimitModal: React.FC<WipLimitModalProps> = ({
                           onClose();
                         }}
                         title="Move back to To Do"
-                        className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-medium text-neutral-600 dark:text-white/60 bg-neutral-200/80 dark:bg-white/10 hover:bg-neutral-300 dark:hover:bg-white/15 transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-neutral-600 dark:text-white/60 bg-neutral-200/80 dark:bg-white/10 hover:bg-neutral-300 dark:hover:bg-white/15 transition-colors cursor-pointer"
                       >
                         <ArrowLeft className="h-3 w-3" />
                         <span>To Do</span>
@@ -122,7 +123,7 @@ export const WipLimitModal: React.FC<WipLimitModalProps> = ({
                           onClose();
                         }}
                         title="Mark as Done"
-                        className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[10px] font-medium text-green-700 dark:text-green-300 bg-green-500/15 hover:bg-green-500/25 transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-green-700 dark:text-green-300 bg-green-500/15 hover:bg-green-500/25 transition-colors cursor-pointer"
                       >
                         <CheckCircle2 className="h-3 w-3" />
                         <span>Done</span>
@@ -139,12 +140,12 @@ export const WipLimitModal: React.FC<WipLimitModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2 text-xs font-semibold text-white shadow-md shadow-blue-900/20 transition-all cursor-pointer"
+              className="rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2 text-xs font-semibold text-white shadow-xs transition-all cursor-pointer"
             >
               Understood
             </button>
           </div>
-        </motion.div>
+        </DialogPanel>
       </motion.div>
     )}
   </AnimatePresence>

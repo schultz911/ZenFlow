@@ -1,3 +1,4 @@
+import { DialogPanel } from './ui/DialogPanel';
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
@@ -309,29 +310,29 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-xs overflow-y-auto"
+          className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/60 overflow-y-auto"
           onClick={e => {
             if (e.target === e.currentTarget) onClose();
           }}
         >
-          <motion.div
+          <DialogPanel aria-label="Task details" onClose={onClose} busy={isSubmitting}
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 10 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
             onClick={e => e.stopPropagation()}
             id="task-modal"
-            className="w-full max-w-lg max-h-[92vh] my-auto flex flex-col rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#111111] shadow-2xl transition-all text-neutral-900 dark:text-white overflow-hidden"
+            className="w-full max-w-lg my-auto flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden"
           >
             {/* Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 dark:border-white/5 shrink-0 bg-white dark:bg-[#111111]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 dark:border-white/5 shrink-0 bg-[var(--surface)]">
               <div className="flex items-center gap-2.5">
                 <h2 className="text-base font-semibold tracking-tight text-neutral-900 dark:text-white">
                   {taskToEdit ? 'Edit Task' : 'Create New Task'}
                 </h2>
                 {taskToEdit && (
                   <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                    className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${
                       taskToEdit.status === 'done'
                         ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
                         : taskToEdit.status === 'in_progress'
@@ -349,7 +350,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   </span>
                 )}
                 {taskToEdit?.isSubtask && (
-                  <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
+                  <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20">
                     <CornerDownRight className="w-2.5 h-2.5" />
                     <span>Subtask</span>
                   </span>
@@ -441,7 +442,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             <form onSubmit={handleSubmit} className="px-6 py-5 overflow-y-auto flex-1 space-y-4">
               {/* Task Name */}
               <div>
-                <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5" htmlFor="task-title-input">
                   Task Name <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -450,7 +451,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   value={title}
                   onChange={e => setTitle(e.target.value)}
                   placeholder="e.g. Redesign navigation menu for mobile screens"
-                  className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
+                  className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] py-2 px-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
                   required
                   autoFocus
                 />
@@ -460,16 +461,16 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Assignee Selection */}
                 <div>
-                  <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5 flex items-center justify-between">
+                  <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5 flex items-center justify-between" htmlFor="task-assignee-select">
                     <span>Assignee {status !== 'pipeline' && <span className="text-red-500">*</span>}</span>
-                    <span className="text-[10px] text-blue-500 font-medium capitalize">{taskDiscipline} Team</span>
+                    <span className="text-[11px] text-blue-500 font-medium capitalize">{taskDiscipline} Team</span>
                   </label>
                   <div className="relative">
                     <select
                       id="task-assignee-select"
                       value={userId}
                       onChange={e => setUserId(e.target.value)}
-                      className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 pl-3 pr-8 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer"
+                      className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] py-2 pl-3 pr-8 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer"
                     >
                       <option value="">-- Unassigned in Team Pipeline --</option>
                       {eligibleUsers.map(u => (
@@ -478,13 +479,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                         </option>
                       ))}
                     </select>
-                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
+                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-secondary)]" />
                   </div>
                 </div>
 
                 {/* Workflow Status */}
                 <div>
-                  <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                  <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5" htmlFor="task-status-select">
                     Status
                   </label>
                   <div className="relative">
@@ -492,7 +493,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       id="task-status-select"
                       value={status}
                       onChange={e => setStatus(e.target.value as TaskStatus)}
-                      className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 pl-3 pr-8 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer"
+                      className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] py-2 pl-3 pr-8 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer"
                     >
                       <option value="pipeline">Pipeline (Backlog)</option>
                       <option value="retainer">Ongoing (No deadline)</option>
@@ -502,7 +503,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       <option value="done">Done</option>
                       <option value="archived">Archived</option>
                     </select>
-                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400 dark:text-white/40" />
+                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-secondary)]" />
                   </div>
                 </div>
               </div>
@@ -511,7 +512,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Client / Account */}
                 <div>
-                  <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                  <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5" htmlFor="task-client-input">
                     Client / Account
                   </label>
                   <input
@@ -521,7 +522,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     value={client}
                     onChange={e => setClient(e.target.value)}
                     placeholder="e.g. Acme Corp"
-                    className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
+                    className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] py-2 px-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
                   />
                   <datalist id="client-suggestions">
                     {existingClients.map(c => (
@@ -532,7 +533,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
                 {/* Project */}
                 <div>
-                  <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                  <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5" htmlFor="task-project-input">
                     Project
                   </label>
                   <input
@@ -542,7 +543,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     value={project}
                     onChange={e => setProject(e.target.value)}
                     placeholder="e.g. Q4 Rebrand"
-                    className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
+                    className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] py-2 px-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
                   />
                   <datalist id="project-suggestions">
                     {existingProjects.map(p => (
@@ -554,12 +555,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
               {/* Estimated Time (Hours) */}
               <div>
-                <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5 flex items-center justify-between">
+                <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5 flex items-center justify-between" htmlFor="task-estimated-hours-input">
                   <span className="flex items-center gap-1.5">
                     <Timer className="h-3.5 w-3.5 text-blue-500" />
                     <span>Time Estimated (Hours)</span>
                   </span>
-                  <span className="text-[10px] text-neutral-400 font-normal lowercase">
+                  <span className="text-[11px] text-neutral-400 font-normal lowercase">
                     Split equally across working days until deadline
                   </span>
                 </label>
@@ -573,9 +574,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     value={estimatedHours}
                     onChange={e => setEstimatedHours(e.target.value)}
                     placeholder="e.g. 6.0"
-                    className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 pl-3 pr-8 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
+                    className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] py-2 pl-3 pr-8 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none transition-colors"
                   />
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-neutral-400 dark:text-white/40">
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[var(--text-secondary)]">
                     hrs
                   </span>
                 </div>
@@ -583,7 +584,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
               {/* Priority */}
               <div>
-                <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5">
                   Priority
                 </label>
                 <div className="grid grid-cols-3 gap-2">
@@ -601,7 +602,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                               : p === 'medium'
                               ? 'bg-amber-500/15 border-amber-500 text-amber-600 dark:text-amber-400'
                               : 'bg-emerald-500/15 border-emerald-500 text-emerald-600 dark:text-emerald-400'
-                            : 'border-neutral-200 dark:border-white/10 bg-neutral-50/50 dark:bg-white/5 text-neutral-500 dark:text-white/40'
+                            : 'border-[var(--border)] bg-neutral-50/50 dark:bg-white/5 text-[var(--text-secondary)]'
                         }`}
                       >
                         {p}
@@ -613,8 +614,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
               {/* Discipline Metadata (Read / Inspection) */}
               {taskToEdit?.disciplineMetadata && (
-                <div className="rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-50/50 dark:bg-white/[0.02] p-3 space-y-1.5 text-xs">
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-blue-600 dark:text-blue-400">
+                <div className="rounded-xl border border-[var(--border)] bg-neutral-50/50 dark:bg-white/[0.02] p-3 space-y-1.5 text-xs">
+                  <span className="text-[11px] uppercase font-semibold tracking-wider text-blue-600 dark:text-blue-400">
                     {taskDiscipline.toUpperCase()} Specifications
                   </span>
                   <div className="grid grid-cols-2 gap-2 text-[11px]">
@@ -622,7 +623,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       if (!v) return null;
                       return (
                         <div key={k} className="flex flex-col">
-                          <span className="text-neutral-400 dark:text-white/30 capitalize text-[10px]">
+                          <span className="text-[var(--text-secondary)] capitalize text-[11px]">
                             {k.replace(/([A-Z])/g, ' $1')}
                           </span>
                           <span className="font-medium text-neutral-800 dark:text-white/90 break-words">
@@ -637,7 +638,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
               {/* Cognitive Load */}
               <div>
-                <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5 flex items-center gap-1.5">
+                <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5 flex items-center gap-1.5">
                   <Brain className="h-3.5 w-3.5 text-indigo-500" />
                   <span>Cognitive Load</span>
                 </label>
@@ -656,11 +657,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                               : level === 'medium'
                               ? 'border-yellow-500/40 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 font-semibold shadow-xs'
                               : 'border-green-500/40 bg-green-500/10 text-green-600 dark:text-green-400 font-semibold shadow-xs'
-                            : 'border-neutral-200 dark:border-white/5 bg-neutral-50/50 dark:bg-white/5 text-neutral-500 dark:text-white/40 hover:border-neutral-300 dark:hover:border-white/15'
+                            : 'border-[var(--border)] bg-neutral-50/50 dark:bg-white/5 text-[var(--text-secondary)] hover:border-neutral-300 dark:hover:border-white/15'
                         }`}
                       >
                         <span className="text-xs capitalize font-medium">{level}</span>
-                        <span className="text-[10px] opacity-70">
+                        <span className="text-[11px] opacity-70">
                           {level === 'low' ? 'Quick win' : level === 'medium' ? 'Standard' : 'Complex'}
                         </span>
                       </button>
@@ -672,7 +673,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               {/* Deadline */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 flex items-center gap-1.5">
+                  <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] flex items-center gap-1.5" htmlFor="task-due-date-input">
                     <Calendar className="h-3.5 w-3.5 text-blue-500" />
                     <span>
                       Deadline {status !== 'pipeline' && status !== 'retainer' && <span className="text-red-500">*</span>}
@@ -680,7 +681,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   </label>
 
                   {/* Quick Select Buttons */}
-                  <div className="flex items-center gap-1 text-[10px]">
+                  <div className="flex items-center gap-1 text-[11px]">
                     <button
                       type="button"
                       onClick={() => setQuickDate(1)}
@@ -720,14 +721,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   required={status !== 'pipeline' && status !== 'retainer'}
                   value={dueDate}
                   onChange={e => setDueDate(e.target.value)}
-                  className={`w-full rounded-xl border bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white focus:outline-none transition-colors ${
+                  className={`w-full rounded-xl border bg-[var(--surface)] py-2 px-3 text-xs text-neutral-900 dark:text-white focus:outline-none transition-colors ${
                     status !== 'pipeline' && status !== 'retainer' && !dueDate
                       ? 'border-amber-400 dark:border-amber-500/50 focus:border-amber-500'
                       : 'border-neutral-300 dark:border-white/10 focus:border-blue-500'
                   }`}
                 />
                 {status !== 'pipeline' && status !== 'retainer' && !dueDate && (
-                  <p className="mt-1 text-[10px] text-amber-600 dark:text-amber-400">
+                  <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-400">
                     A deadline is required to add tasks directly into active workflow lanes.
                   </p>
                 )}
@@ -741,7 +742,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
               {/* Context / Description */}
               <div>
-                <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5" htmlFor="task-description-input">
                   Context (if any)
                 </label>
                 <textarea
@@ -750,7 +751,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   onChange={e => setDescription(e.target.value)}
                   placeholder="Key requirements, scope, or delivery specifications..."
                   rows={2}
-                  className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 px-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none resize-none transition-colors"
+                  className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] py-2 px-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none resize-none transition-colors"
                 />
               </div>
 
@@ -763,17 +764,17 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       <span>Delegated Subtasks ({delegatedSubtasks.length})</span>
                     </span>
                   </div>
-                  <div className="space-y-1.5 max-h-36 overflow-y-auto rounded-xl border border-neutral-200/70 dark:border-white/5 bg-neutral-50 dark:bg-[#121212] p-2">
+                  <div className="space-y-1.5 max-h-36 overflow-y-auto rounded-xl border border-neutral-200/70 dark:border-white/5 bg-[var(--surface-muted)] p-2">
                     {delegatedSubtasks.map(st => {
                       const assignee = users.find(u => u.id === st.userId);
                       return (
                         <div
                           key={st.id}
-                          className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-white dark:bg-[#1A1A1A] border border-neutral-200/50 dark:border-white/5 text-xs"
+                          className="flex items-center justify-between gap-2 p-1.5 rounded-lg bg-[var(--surface-raised)] border border-neutral-200/50 dark:border-white/5 text-xs"
                         >
                           <div className="flex items-center gap-2 min-w-0">
                             <div
-                              className={`flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-bold text-white bg-gradient-to-br ${
+                              className={`flex h-4 w-4 items-center justify-center rounded-full text-[8px] font-semibold text-white bg-gradient-to-br ${
                                 assignee?.avatarColor || 'from-blue-600 to-indigo-600'
                               } shrink-0`}
                             >
@@ -783,7 +784,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                               {st.title}
                             </span>
                           </div>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 shrink-0">
+                          <span className="text-[11px] px-1.5 py-0.5 rounded uppercase font-semibold bg-neutral-100 dark:bg-white/5 text-[var(--text-secondary)] shrink-0">
                             {typeof st.status === 'string' ? st.status.replace('_', ' ') : 'todo'}
                           </span>
                         </div>
@@ -797,12 +798,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               {taskToEdit && (
                 <div className="pt-3 border-t border-neutral-100 dark:border-white/5 space-y-2.5">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-white/40">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
                       <History className="h-3.5 w-3.5 text-blue-500" />
                       <span>Activity & Cycle Time</span>
                     </div>
                     {cycleMetrics && (
-                      <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-medium text-neutral-400 dark:text-white/40">
+                      <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-medium text-[var(--text-secondary)]">
                         <span className="flex items-center gap-1 bg-neutral-100 dark:bg-white/5 px-2 py-0.5 rounded-md border border-neutral-200/50 dark:border-white/5">
                           <Clock className="h-3 w-3 text-neutral-500 dark:text-white/50" />
                           {cycleMetrics.isDone ? 'Completed in:' : 'Lead time:'} <strong className="text-neutral-700 dark:text-white/80">{cycleMetrics.totalLeadTimeStr}</strong>
@@ -827,11 +828,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   </div>
 
                   {activities.length === 0 ? (
-                    <div className="rounded-xl border border-neutral-200/70 dark:border-white/5 bg-neutral-50 dark:bg-[#121212] p-3 text-center text-[11px] text-neutral-400 dark:text-white/30">
+                    <div className="rounded-xl border border-neutral-200/70 dark:border-white/5 bg-[var(--surface-muted)] p-3 text-center text-[11px] text-[var(--text-secondary)]">
                       Created {formatActivityTime(taskToEdit.createdAt || '')} • No modifications recorded yet
                     </div>
                   ) : (
-                    <div className="max-h-36 overflow-y-auto rounded-xl border border-neutral-200/70 dark:border-white/5 bg-neutral-50 dark:bg-[#121212] p-2.5 space-y-2 text-xs divide-y divide-neutral-100 dark:divide-white/5">
+                    <div className="max-h-36 overflow-y-auto rounded-xl border border-neutral-200/70 dark:border-white/5 bg-[var(--surface-muted)] p-2.5 space-y-2 text-xs divide-y divide-neutral-100 dark:divide-white/5">
                       {activities.map((act, actIdx) => {
                         if (!act) return null;
                         let IconComponent = Clock;
@@ -875,7 +876,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                                     : act.action
                                 )}
                               </p>
-                              <div className="flex items-center gap-1.5 text-[10px] text-neutral-400 dark:text-white/40 mt-0.5">
+                              <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-secondary)] mt-0.5">
                                 <span>{act.actorName || 'System'}</span>
                                 <span>•</span>
                                 <span>{formatActivityTime(act.timestamp)}</span>
@@ -894,7 +895,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-xl border border-neutral-200 dark:border-white/10 px-4 py-2 text-xs font-medium text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                  className="rounded-xl border border-[var(--border)] px-4 py-2 text-xs font-medium text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -902,7 +903,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   id="task-submit-button"
                   type="submit"
                   disabled={isSubmitting || !title.trim() || !userId || (status !== 'pipeline' && status !== 'retainer' && !dueDate.trim()) || !canEdit}
-                  className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-5 py-2 text-xs font-semibold text-white shadow-md shadow-blue-900/20 hover:bg-blue-500 focus:outline-none transition-all disabled:opacity-50 cursor-pointer"
+                  className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-500 focus:outline-none transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmitting ? (
                     <span>Saving...</span>
@@ -912,7 +913,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 </button>
               </div>
             </form>
-          </motion.div>
+          </DialogPanel>
         </motion.div>
       )}
     </AnimatePresence>

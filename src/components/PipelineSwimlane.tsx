@@ -150,13 +150,13 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
           <div className="flex h-5 w-5 items-center justify-center rounded-md bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 shrink-0">
             <Inbox className="h-3 w-3" />
           </div>
-          <span className="text-[11px] font-bold uppercase tracking-wider text-neutral-700 dark:text-white/70 shrink-0">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-700 dark:text-white/70 shrink-0">
             Pipeline
           </span>
-          <span className="rounded-full bg-neutral-200/80 dark:bg-white/10 px-2 py-0.2 text-[10px] font-semibold text-neutral-600 dark:text-white/50 shrink-0">
+          <span className="rounded-full bg-neutral-200/80 dark:bg-white/10 px-2 py-0.2 text-[11px] font-semibold text-neutral-600 dark:text-white/50 shrink-0">
             {tasks.length}
           </span>
-          <span className="hidden 2xl:inline-block text-[10px] text-neutral-400 dark:text-white/30 truncate">
+          <span className="hidden 2xl:inline-block text-[11px] text-[var(--text-secondary)] truncate">
             No deadline · Zero capacity impact
           </span>
         </div>
@@ -197,7 +197,7 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
           initial={{ opacity: 0, y: -4 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -4 }}
-          className="mb-2.5 rounded-xl border border-indigo-500/50 bg-white dark:bg-[#1A1A1A] p-2.5 shadow-sm space-y-2"
+          className="mb-2.5 rounded-xl border border-indigo-500/50 bg-[var(--surface-raised)] p-2.5 shadow-sm space-y-2"
         >
           <input
             ref={inputRef}
@@ -213,7 +213,7 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
               }
             }}
             placeholder="Pipeline task name... (Enter to save, Esc to cancel)"
-            className="w-full rounded-lg border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-[#121212] px-2.5 py-1.5 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-indigo-500 focus:outline-none"
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] px-2.5 py-1.5 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-indigo-500 focus:outline-none"
           />
 
           <div className="flex items-center justify-between gap-2">
@@ -223,7 +223,7 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
                   key={load}
                   type="button"
                   onClick={() => setNewLoad(load)}
-                  className={`rounded px-2 py-0.5 text-[9px] font-medium border capitalize transition-all cursor-pointer ${
+                  className={`rounded px-2 py-0.5 text-[11px] font-medium border capitalize transition-all cursor-pointer ${
                     newLoad === load
                       ? load === 'high'
                         ? 'bg-red-500/15 border-red-500/40 text-red-500 font-semibold'
@@ -242,7 +242,7 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
               type="button"
               disabled={!newTitle.trim() || isSubmitting}
               onClick={handleCommitAdd}
-              className="rounded-lg bg-indigo-600 hover:bg-indigo-500 px-3 py-1 text-[10px] font-semibold text-white shadow-xs transition-colors cursor-pointer disabled:opacity-40"
+              className="rounded-lg bg-indigo-600 hover:bg-indigo-500 px-3 py-1 text-[11px] font-semibold text-white shadow-xs transition-colors cursor-pointer disabled:opacity-40"
             >
               Add Item
             </button>
@@ -255,7 +255,7 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
         {tasks.length === 0 && !isAdding ? (
           <div
             onClick={() => setIsAdding(true)}
-            className="flex h-12 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-neutral-300/80 dark:border-white/10 text-neutral-400 dark:text-white/30 hover:border-indigo-400 dark:hover:border-indigo-500/40 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors px-4 py-2"
+            className="flex h-12 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-neutral-300/80 dark:border-white/10 text-[var(--text-secondary)] hover:border-indigo-400 dark:hover:border-indigo-500/40 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors px-4 py-2"
           >
             <Plus className="h-3.5 w-3.5" />
             <span className="text-[11px] font-medium">
@@ -295,7 +295,7 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
                   onDragStart?.(task);
                 }}
                 onDragEndCapture={() => onDragEnd?.()}
-                className="group relative flex items-start gap-2 shrink-0 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#1A1A1A] px-2.5 py-1.5 shadow-2xs hover:shadow-md hover:border-indigo-400/50 dark:hover:border-indigo-500/30 transition-all select-none cursor-grab active:cursor-grabbing w-48 sm:w-52 max-w-[220px]"
+                className="group relative flex items-start gap-2 shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface-raised)] px-2.5 py-1.5 shadow-2xs hover:shadow-sm hover:border-indigo-400/50 dark:hover:border-indigo-500/30 transition-all select-none cursor-grab active:cursor-grabbing w-48 sm:w-52 max-w-[220px]"
               >
                 {/* Drag Grip */}
                 <div className="text-neutral-400 dark:text-white/20 group-hover:text-neutral-700 dark:group-hover:text-white/60 shrink-0 pt-0.5">
@@ -330,7 +330,7 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
                           }
                           setEditingTaskId(null);
                         }}
-                        className="w-full rounded border border-indigo-500 bg-white dark:bg-[#121212] px-1 py-0.5 text-xs text-neutral-900 dark:text-white focus:outline-none"
+                        className="w-full rounded border border-indigo-500 bg-[var(--surface)] px-1 py-0.5 text-xs text-neutral-900 dark:text-white focus:outline-none"
                       />
                     </div>
                   ) : (
@@ -360,7 +360,7 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
                     />
                     <span
                       title={`Cognitive Load: ${cognitiveLabel}`}
-                      className="text-[10px] text-neutral-500 dark:text-white/40 capitalize truncate"
+                      className="text-[11px] text-[var(--text-secondary)] capitalize truncate"
                     >
                       {task.cognitiveLoad}
                     </span>
@@ -368,7 +368,7 @@ const PipelineSwimlaneComponent: React.FC<PipelineSwimlaneProps> = ({
                 </div>
 
                 {/* Quick actions on hover */}
-                <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-0.5 shrink-0 ml-1">
+                <div className="flex items-center card-actions opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0 ml-1">
                   <button
                     type="button"
                     onClick={e => {

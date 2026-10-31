@@ -258,12 +258,12 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       draggable={effectivelyDraggable && !isEditingTitle}
       onDragStartCapture={handleDragStart}
       onDragEndCapture={handleDragEnd}
-      className={`group relative rounded-xl border p-3 select-none transform-gpu transition-all duration-150 shadow-xs hover:shadow-md ${showSnoozeFlyout ? 'z-40' : 'z-0'
+      className={`task-card group relative rounded-xl border p-3 select-none transform-gpu transition-all duration-150 shadow-xs hover:shadow-sm ${showSnoozeFlyout ? 'z-40' : 'z-0'
         } ${isDragging
           ? 'border-blue-500/60 bg-blue-50/50 dark:bg-blue-950/20 shadow-lg ring-2 ring-blue-500/20'
           : task.status === 'done'
-            ? 'bg-neutral-50/80 dark:bg-[#141414] opacity-80 border-neutral-200 dark:border-white/5 hover:border-neutral-300 dark:hover:border-white/10'
-            : 'bg-white dark:bg-[#1A1A1A] border-neutral-200 dark:border-white/5 hover:border-neutral-300 dark:hover:border-white/15 hover:bg-neutral-50/50 dark:hover:bg-[#202020]'
+            ? 'bg-neutral-50/80 dark:bg-[#141414] opacity-80 border-[var(--border)] hover:border-neutral-300 dark:hover:border-white/10'
+            : 'bg-[var(--surface-raised)] border-[var(--border)] hover:border-neutral-300 dark:hover:border-white/15 hover:bg-neutral-50/50 dark:hover:bg-[#202020]'
         }`}
     >
       {/* Top row: Drag grip, Due Clock icon badge & Cognitive load badge on same line, and Quick actions */}
@@ -281,7 +281,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           {/* Cognitive Load Dot Badge (compact micro size) */}
           <span
             title={`Cognitive Load: ${cognitiveLabel}`}
-            className="inline-flex items-center gap-1 rounded-full bg-neutral-100 dark:bg-white/5 px-1.5 py-0.5 text-[9px] font-medium text-neutral-600 dark:text-white/60 border border-neutral-200 dark:border-white/5"
+            className="inline-flex items-center gap-1 rounded-full bg-neutral-100 dark:bg-white/5 px-1.5 py-0.5 text-[11px] font-medium text-neutral-600 dark:text-white/60 border border-[var(--border)]"
           >
             <span
               className={`h-1.5 w-1.5 rounded-full ${task.cognitiveLoad === 'high'
@@ -298,7 +298,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         {/* Top Right: Actions & Billable Hours Badge */}
         <div className="flex items-center gap-1.5 shrink-0">
           {/* Quick Edit (Modal), Duplicate & Delete icons */}
-          <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-0.5 shrink-0">
+          <div className="flex items-center card-actions opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
             {canDuplicateToBoard && onDuplicateToBoard && (
               <button
                 onClick={e => {
@@ -306,7 +306,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   onDuplicateToBoard(task);
                 }}
                 title="Create and assign subtask"
-                className="rounded p-1 text-neutral-400 dark:text-white/40 hover:bg-blue-50 dark:hover:bg-blue-500/20 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                className="rounded p-1 text-[var(--text-secondary)] hover:bg-blue-50 dark:hover:bg-blue-500/20 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
               >
                 <CopyPlus className="h-3 w-3" />
               </button>
@@ -317,7 +317,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 onEdit(task);
               }}
               title="Edit task details"
-              className="rounded p-1 text-neutral-400 dark:text-white/40 hover:bg-neutral-100 dark:hover:bg-white/10 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+              className="rounded p-1 text-[var(--text-secondary)] hover:bg-neutral-100 dark:hover:bg-white/10 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
             >
               <Edit2 className="h-3 w-3" />
             </button>
@@ -327,7 +327,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 onDelete(task.id);
               }}
               title="Delete task"
-              className="rounded p-1 text-neutral-400 dark:text-white/40 hover:bg-red-50 dark:hover:bg-red-500/20 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer"
+              className="rounded p-1 text-[var(--text-secondary)] hover:bg-red-50 dark:hover:bg-red-500/20 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer"
             >
               <Trash2 className="h-3 w-3" />
             </button>
@@ -337,7 +337,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           {task.estimatedHours !== undefined && task.estimatedHours > 0 && (
             <span
               title={`Estimated: ${task.estimatedHours}h`}
-              className="inline-flex items-center rounded px-1.5 py-0.5 text-[9px] font-medium bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border border-neutral-200/50 dark:border-white/5 shrink-0"
+              className="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium bg-neutral-100 dark:bg-white/5 text-[var(--text-secondary)] border border-neutral-200/50 dark:border-white/5 shrink-0"
             >
               Est: {task.estimatedHours}h
             </span>
@@ -350,12 +350,12 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 onAdjustBillableHours?.(task);
               }}
               title={`Billable Duration: ${formatBillableDetailed(billableMs)} · Click to correct hours`}
-              className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium border select-none transition-all cursor-pointer shrink-0 group/timer ${task.status === 'in_progress'
+              className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium border select-none transition-all cursor-pointer shrink-0 group/timer ${task.status === 'in_progress'
                 ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30 shadow-2xs hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:border-blue-400'
-                : 'bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border-neutral-200/60 dark:border-white/5 hover:bg-neutral-200/80 dark:hover:bg-white/10 hover:text-neutral-800 dark:hover:text-white hover:border-neutral-300 dark:hover:border-white/20'
+                : 'bg-neutral-100 dark:bg-white/5 text-[var(--text-secondary)] border-neutral-200/60 dark:border-white/5 hover:bg-neutral-200/80 dark:hover:bg-white/10 hover:text-neutral-800 dark:hover:text-white hover:border-neutral-300 dark:hover:border-white/20'
                 }`}
             >
-              <Timer className={`h-2.5 w-2.5 ${task.status === 'in_progress' ? 'text-blue-500 animate-pulse' : 'text-neutral-400 dark:text-white/30 group-hover/timer:text-blue-500'}`} />
+              <Timer className={`h-2.5 w-2.5 ${task.status === 'in_progress' ? 'text-blue-500' : 'text-[var(--text-secondary)] group-hover/timer:text-blue-500'}`} />
               <span>{formatBillableHours(billableMs)}</span>
             </button>
           ) : (
@@ -366,9 +366,9 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 onAdjustBillableHours?.(task);
               }}
               title="Click to log billable hours"
-              className="opacity-0 group-hover:opacity-100 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium border border-dashed border-neutral-300 dark:border-white/15 bg-neutral-50 dark:bg-white/5 text-neutral-400 dark:text-white/40 hover:bg-neutral-100 dark:hover:bg-white/10 hover:text-neutral-700 dark:hover:text-white hover:border-neutral-400 transition-all cursor-pointer shrink-0"
+              className="card-actions opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium border border-dashed border-neutral-300 dark:border-white/15 bg-neutral-50 dark:bg-white/5 text-[var(--text-secondary)] hover:bg-neutral-100 dark:hover:bg-white/10 hover:text-neutral-700 dark:hover:text-white hover:border-neutral-400 transition-all cursor-pointer shrink-0"
             >
-              <Timer className="h-2.5 w-2.5 text-neutral-400 dark:text-white/30" />
+              <Timer className="h-2.5 w-2.5 text-[var(--text-secondary)]" />
               <span>0h</span>
             </button>
           )}
@@ -378,7 +378,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       {/* Subtask Hierarchy Indicator */}
       {task.isSubtask && (
         <div
-          className="mb-1 flex items-center gap-1 text-[10px] text-blue-600 dark:text-blue-400 font-medium truncate"
+          className="mb-1 flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 font-medium truncate"
           title={`Subtask of: ${task.parentTaskTitle || 'Parent Task'}`}
         >
           <CornerDownRight className="h-2.5 w-2.5 shrink-0" />
@@ -388,7 +388,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 
       {/* Client & Project Badge */}
       {(task.client || task.project) && (
-        <div className="mb-1 flex items-center gap-1.5 text-[10px] text-neutral-500 dark:text-neutral-400 font-medium truncate">
+        <div className="mb-1 flex items-center gap-1.5 text-[11px] text-neutral-500 dark:text-neutral-400 font-medium truncate">
           {task.client && (
             <span className="font-semibold text-neutral-700 dark:text-neutral-300 truncate">
               {task.client}
@@ -421,9 +421,9 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               }
             }}
             onBlur={handleCommitTitle}
-            className="w-full text-xs font-medium leading-snug rounded-md border border-blue-500 bg-white dark:bg-[#141414] px-2 py-1 text-neutral-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-xs"
+            className="w-full text-xs font-medium leading-snug rounded-md border border-blue-500 bg-[var(--surface)] px-2 py-1 text-neutral-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-xs"
           />
-          <div className="flex items-center justify-between text-[9px] text-neutral-400 dark:text-white/40 mt-1 px-0.5 select-none">
+          <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)] mt-1 px-0.5 select-none">
             <span>Enter to save</span>
             <span>Esc to cancel</span>
           </div>
@@ -436,18 +436,18 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           }}
           title="Click to edit task title directly"
           className={`text-xs font-medium leading-snug cursor-text rounded px-1 -mx-1 py-0.5 hover:bg-neutral-100/80 dark:hover:bg-white/5 transition-colors group/title flex items-center justify-between gap-1.5 ${task.status === 'done'
-            ? 'line-through text-neutral-400 dark:text-white/30'
+            ? 'line-through text-[var(--text-secondary)]'
             : 'text-neutral-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400'
             }`}
         >
           <span className="break-words">{task.title}</span>
-          <Edit2 className="h-2.5 w-2.5 opacity-0 group-hover/title:opacity-60 shrink-0 text-neutral-400 dark:text-white/40" />
+          <Edit2 className="h-2.5 w-2.5 opacity-0 group-hover/title:opacity-60 shrink-0 text-[var(--text-secondary)]" />
         </h4>
       )}
 
       {/* Optional Context snippet */}
       {task.description && (
-        <p className="mt-1 text-[11px] text-neutral-500 dark:text-white/40 line-clamp-2 leading-relaxed">
+        <p className="mt-1 text-[11px] text-[var(--text-secondary)] line-clamp-2 leading-relaxed">
           {task.description}
         </p>
       )}
@@ -466,7 +466,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   })}`
                   : 'Completed'
               }
-              className="inline-flex items-center gap-1.5 text-[10px] font-medium text-neutral-500 dark:text-white/40 py-0.5 select-none"
+              className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-secondary)] py-0.5 select-none"
             >
               <CheckCircle2 className="h-3 w-3 text-green-600/70 dark:text-green-400/70 shrink-0" />
               <span>{formatCompletedDate(task.completedAt || task.updatedAt)}</span>
@@ -485,7 +485,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 });
               }}
               title={`${pillInfo.label} — Click to adjust deadline`}
-              className="inline-flex items-center gap-1.5 text-[10px] font-medium text-neutral-500 dark:text-white/40 hover:text-neutral-800 dark:hover:text-white/90 transition-colors cursor-pointer py-0.5"
+              className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-secondary)] hover:text-neutral-800 dark:hover:text-white/90 transition-colors cursor-pointer py-0.5"
             >
               <span
                 className={`inline-flex items-center justify-center rounded-full p-0.5 border shrink-0 ${pillInfo.badgeClass}`}
@@ -503,9 +503,9 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               ref={flyoutMenuRef}
               style={{ top: `${flyoutPosition.top}px`, left: `${flyoutPosition.left}px` }}
               onClick={e => e.stopPropagation()}
-              className="fixed z-[9999] w-52 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#121212] p-1.5 shadow-2xl text-neutral-900 dark:text-white animate-in fade-in zoom-in-95 duration-150"
+              className="fixed z-[9999] w-52 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1.5 shadow-2xl text-neutral-900 dark:text-white animate-in fade-in zoom-in-95 duration-150"
             >
-              <div className="px-2 py-1 border-b border-neutral-100 dark:border-white/5 text-[10px] font-semibold text-neutral-400 dark:text-white/40 uppercase tracking-wider flex items-center justify-between">
+              <div className="px-2 py-1 border-b border-neutral-100 dark:border-white/5 text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider flex items-center justify-between">
                 <span>Quick Reschedule</span>
                 <Clock className="h-3 w-3 text-blue-500" />
               </div>
@@ -516,7 +516,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-[11px] text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/10 cursor-pointer transition-colors"
                 >
                   <span>Tomorrow</span>
-                  <span className="text-[10px] text-neutral-400 dark:text-white/40">+1d</span>
+                  <span className="text-[11px] text-[var(--text-secondary)]">+1d</span>
                 </button>
                 <button
                   type="button"
@@ -524,7 +524,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-[11px] text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/10 cursor-pointer transition-colors"
                 >
                   <span>In 2 days</span>
-                  <span className="text-[10px] text-neutral-400 dark:text-white/40">+2d</span>
+                  <span className="text-[11px] text-[var(--text-secondary)]">+2d</span>
                 </button>
                 <button
                   type="button"
@@ -532,7 +532,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-[11px] text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/10 cursor-pointer transition-colors"
                 >
                   <span>In 3 days</span>
-                  <span className="text-[10px] text-neutral-400 dark:text-white/40">+3d</span>
+                  <span className="text-[11px] text-[var(--text-secondary)]">+3d</span>
                 </button>
                 <button
                   type="button"
@@ -540,7 +540,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-[11px] text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/10 cursor-pointer transition-colors"
                 >
                   <span>Next week</span>
-                  <span className="text-[10px] text-neutral-400 dark:text-white/40">+7d</span>
+                  <span className="text-[11px] text-[var(--text-secondary)]">+7d</span>
                 </button>
                 <button
                   type="button"
@@ -548,12 +548,12 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-[11px] text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/10 cursor-pointer transition-colors"
                 >
                   <span>Last day of month</span>
-                  <span className="text-[10px] text-neutral-400 dark:text-white/40">EOM</span>
+                  <span className="text-[11px] text-[var(--text-secondary)]">EOM</span>
                 </button>
 
                 {/* Custom date picker input */}
                 <div className="pt-1.5 mt-1 border-t border-neutral-100 dark:border-white/5 px-2 pb-0.5">
-                  <label className="block text-[9px] uppercase tracking-wider font-semibold text-neutral-400 dark:text-white/40 mb-1">
+                  <label className="block text-[11px] uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1">
                     Pick Date
                   </label>
                   <div className="flex items-center gap-1">
@@ -570,14 +570,14 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                           setShowSnoozeFlyout(false);
                         }
                       }}
-                      className="flex-1 min-w-0 rounded-md border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-white/5 px-1.5 py-1 text-[11px] text-neutral-800 dark:text-white/90 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="flex-1 min-w-0 rounded-md border border-[var(--border)] bg-neutral-50 dark:bg-white/5 px-1.5 py-1 text-[11px] text-neutral-800 dark:text-white/90 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
                     />
                     <button
                       type="button"
                       disabled={!customDateDraft}
                       onClick={() => handleCustomDateSelect(customDateDraft)}
                       title="Set deadline"
-                      className="shrink-0 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white px-2 py-1 text-[10px] font-semibold transition-colors cursor-pointer disabled:cursor-not-allowed shadow-2xs"
+                      className="shrink-0 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer disabled:cursor-not-allowed shadow-2xs"
                     >
                       Set
                     </button>
@@ -598,7 +598,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 onMoveStatus(task.id, prevStatus);
               }}
               title={`Move back to ${prevStatus.replace('_', ' ')}`}
-              className="rounded p-1 text-neutral-400 dark:text-white/40 hover:bg-neutral-100 dark:hover:bg-white/10 hover:text-neutral-800 dark:hover:text-white transition-colors cursor-pointer"
+              className="rounded p-1 text-[var(--text-secondary)] hover:bg-neutral-100 dark:hover:bg-white/10 hover:text-neutral-800 dark:hover:text-white transition-colors cursor-pointer"
             >
               <ChevronLeft className="h-3 w-3" />
             </button>
@@ -611,7 +611,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 onMoveStatus(task.id, nextStatus);
               }}
               title={`Advance to ${nextStatus === 'done' ? 'Sent' : nextStatus.replace('_', ' ')}`}
-              className="inline-flex items-center gap-1 rounded-md bg-neutral-100 dark:bg-white/5 hover:bg-neutral-200 dark:hover:bg-white/10 border border-neutral-200 dark:border-white/10 px-1.5 py-0.5 text-[10px] font-medium text-neutral-700 dark:text-white/70 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 rounded-md bg-neutral-100 dark:bg-white/5 hover:bg-neutral-200 dark:hover:bg-white/10 border border-[var(--border)] px-1.5 py-0.5 text-[11px] font-medium text-neutral-700 dark:text-white/70 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
             >
               <span className="capitalize">{nextStatus === 'done' ? 'Sent' : nextStatus.replace('_', ' ')}</span>
               <ChevronRight className="h-2.5 w-2.5" />
@@ -623,7 +623,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 onMoveStatus(task.id, 'archived');
               }}
               title="Mark as complete"
-              className="inline-flex items-center gap-1 rounded-md bg-neutral-100 dark:bg-white/5 hover:bg-neutral-200 dark:hover:bg-white/10 border border-neutral-200 dark:border-white/10 px-1.5 py-0.5 text-[10px] text-neutral-500 dark:text-white/40 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 rounded-md bg-neutral-100 dark:bg-white/5 hover:bg-neutral-200 dark:hover:bg-white/10 border border-[var(--border)] px-1.5 py-0.5 text-[11px] text-[var(--text-secondary)] hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
             >
               <Archive className="h-2.5 w-2.5" />
               <span>Complete</span>

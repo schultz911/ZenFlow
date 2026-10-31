@@ -178,23 +178,23 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`mb-6 rounded-2xl border transition-all ${
+      className={`surface mb-5 rounded-2xl border transition-all ${
         isDragOver
           ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20 ring-2 ring-indigo-500/30'
-          : 'border-neutral-200 dark:border-white/10 bg-white dark:bg-[#0D0D0D] shadow-sm'
+          : 'border-[var(--border)] bg-[var(--surface)] shadow-sm'
       }`}
     >
       {/* Top Banner: Pipeline Information, Counters, and Actions */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-6 border-b border-neutral-200 dark:border-white/5 bg-neutral-50/50 dark:bg-white/[0.01]">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-6 border-b border-[var(--border)] bg-neutral-50/50 dark:bg-white/[0.01]">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 shrink-0">
             <DisciplineIcon className="h-4 w-4" />
           </div>
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold text-neutral-900 dark:text-white">
+            <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">
               {teamLabel} Team Pipeline
             </h3>
-            <span className="rounded-full bg-neutral-200 dark:bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-neutral-700 dark:text-white/60">
+            <span className="rounded-full bg-neutral-200 dark:bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-neutral-700 dark:text-white/60">
               {totalCount} total
             </span>
           </div>
@@ -203,13 +203,14 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
         {/* Filter Pills, Search & Create Task Button */}
         <div className="flex items-center gap-2 flex-wrap">
           {/* Quick Filter Modes */}
-          <div className="flex items-center rounded-xl bg-neutral-100 dark:bg-white/5 p-1 border border-neutral-200 dark:border-white/5 text-[11px] font-medium">
+          <div className="flex items-center rounded-xl bg-neutral-100 dark:bg-white/5 p-1 border border-[var(--border)] text-[11px] font-medium">
             <button
               type="button"
+              aria-pressed={filterMode === 'all'}
               onClick={() => setFilterMode('all')}
               className={`px-2.5 py-0.5 rounded-lg transition-colors cursor-pointer ${
                 filterMode === 'all'
-                  ? 'bg-white dark:bg-[#1A1A1A] text-neutral-900 dark:text-white font-semibold shadow-xs'
+                  ? 'bg-[var(--surface-raised)] text-neutral-900 dark:text-white font-semibold shadow-xs'
                   : 'text-neutral-500 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white'
               }`}
             >
@@ -217,10 +218,11 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
             </button>
             <button
               type="button"
+              aria-pressed={filterMode === 'unassigned'}
               onClick={() => setFilterMode('unassigned')}
               className={`px-2.5 py-0.5 rounded-lg transition-colors cursor-pointer ${
                 filterMode === 'unassigned'
-                  ? 'bg-white dark:bg-[#1A1A1A] text-amber-600 dark:text-amber-400 font-semibold shadow-xs'
+                  ? 'bg-[var(--surface-raised)] text-amber-600 dark:text-amber-400 font-semibold shadow-xs'
                   : 'text-neutral-500 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white'
               }`}
             >
@@ -228,10 +230,11 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
             </button>
             <button
               type="button"
+              aria-pressed={filterMode === 'assigned'}
               onClick={() => setFilterMode('assigned')}
               className={`px-2.5 py-0.5 rounded-lg transition-colors cursor-pointer ${
                 filterMode === 'assigned'
-                  ? 'bg-white dark:bg-[#1A1A1A] text-indigo-600 dark:text-indigo-400 font-semibold shadow-xs'
+                  ? 'bg-[var(--surface-raised)] text-indigo-600 dark:text-indigo-400 font-semibold shadow-xs'
                   : 'text-neutral-500 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white'
               }`}
             >
@@ -245,13 +248,15 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
               type="text"
               value={pipelineSearch}
               onChange={e => setPipelineSearch(e.target.value)}
+              aria-label="Search pipeline"
               placeholder="Search pipeline..."
-              className="w-32 sm:w-40 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414] pl-7 pr-2.5 py-1 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-indigo-500 focus:outline-none"
+              className="w-32 sm:w-40 rounded-xl border border-[var(--border)] bg-[var(--surface)] pl-7 pr-2.5 py-1 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-indigo-500 focus:outline-none"
             />
             <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-neutral-400" />
             {pipelineSearch && (
               <button
                 type="button"
+                aria-label="Clear pipeline search"
                 onClick={() => setPipelineSearch('')}
                 className="absolute right-2 top-1 text-xs text-neutral-400 hover:text-neutral-700 dark:hover:text-white"
               >
@@ -273,7 +278,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
           ) : (
             <div
               title="Task creation is restricted to Accounts team members and authorized leadership"
-              className="flex items-center gap-1.5 rounded-xl border border-neutral-200 dark:border-white/10 px-2.5 py-1 text-[11px] text-neutral-400 dark:text-white/30 bg-neutral-100/50 dark:bg-white/[0.02]"
+              className="flex items-center gap-1.5 rounded-xl border border-[var(--border)] px-2.5 py-1 text-[11px] text-[var(--text-secondary)] bg-neutral-100/50 dark:bg-white/[0.02]"
             >
               <Shield className="h-3 w-3" />
               <span>View-Only Pipeline</span>
@@ -305,7 +310,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                   ? 'No matching tasks in pipeline'
                   : `${teamLabel} pipeline is currently empty`}
               </p>
-              <p className="text-[11px] text-neutral-400 dark:text-white/40 max-w-sm mt-0.5">
+              <p className="text-[11px] text-[var(--text-secondary)] max-w-sm mt-0.5">
                 {pipelineSearch || filterMode !== 'all'
                   ? 'Try clearing the search query or changing the filter mode.'
                   : canCreatePipelineTask
@@ -360,7 +365,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                       onDragTaskStart?.(task);
                     }}
                     onDragEndCapture={() => onDragTaskEnd?.()}
-                    className="group relative flex flex-col justify-between shrink-0 rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#161616] p-3 shadow-2xs hover:shadow-md hover:border-indigo-400/50 dark:hover:border-indigo-500/30 transition-all select-none cursor-grab active:cursor-grabbing w-64 sm:w-72 min-h-[110px]"
+                    className="group relative flex flex-col justify-between shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-2xs hover:shadow-sm hover:border-indigo-400/50 dark:hover:border-indigo-500/30 transition-all select-none cursor-grab active:cursor-grabbing w-64 sm:w-72 min-h-[110px]"
                   >
                     <div>
                       {/* Top Row: Priority & Drag Handle & Actions */}
@@ -370,7 +375,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                             <GripVertical className="h-3.5 w-3.5" />
                           </div>
                           {task.priority && (
-                            <span className={`px-1.5 py-0.2 rounded text-[9px] font-semibold uppercase tracking-wider ${
+                            <span className={`px-1.5 py-0.2 rounded text-[11px] font-semibold uppercase tracking-wider ${
                               task.priority === 'high'
                                 ? 'bg-red-500/15 text-red-600 dark:text-red-400'
                                 : task.priority === 'medium'
@@ -381,14 +386,14 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                             </span>
                           )}
                           {task.dueDate && (
-                            <span className="text-[10px] text-neutral-400 dark:text-white/30 truncate">
+                            <span className="text-[11px] text-[var(--text-secondary)] truncate">
                               Due: {task.dueDate}
                             </span>
                           )}
                         </div>
 
                         {/* Quick hover actions */}
-                        <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity gap-0.5 shrink-0">
+                        <div className="flex items-center card-actions opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
                           <button
                             type="button"
                             onClick={e => {
@@ -441,7 +446,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                               }
                               setEditingTaskId(null);
                             }}
-                            className="w-full rounded border border-indigo-500 bg-white dark:bg-[#121212] px-1.5 py-0.5 text-xs text-neutral-900 dark:text-white focus:outline-none"
+                            className="w-full rounded border border-indigo-500 bg-[var(--surface)] px-1.5 py-0.5 text-xs text-neutral-900 dark:text-white focus:outline-none"
                           />
                         </div>
                       ) : (
@@ -460,15 +465,15 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
 
                       {/* Account & Project Pills */}
                       {(task.client || task.project) && (
-                        <div className="flex items-center gap-1.5 flex-wrap text-[10px] text-neutral-500 dark:text-white/40 mb-2">
+                        <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-[var(--text-secondary)] mb-2">
                           {task.client && (
-                            <span className="flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/5 truncate max-w-[130px]">
+                            <span className="flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-neutral-100 dark:bg-white/5 border border-[var(--border)] truncate max-w-[130px]">
                               <Briefcase className="h-2.5 w-2.5 text-neutral-400" />
                               <span className="truncate">{task.client}</span>
                             </span>
                           )}
                           {task.project && (
-                            <span className="flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-neutral-100 dark:bg-white/5 border border-neutral-200 dark:border-white/5 truncate max-w-[130px]">
+                            <span className="flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-neutral-100 dark:bg-white/5 border border-[var(--border)] truncate max-w-[130px]">
                               <Tag className="h-2.5 w-2.5 text-neutral-400" />
                               <span className="truncate">{task.project}</span>
                             </span>
@@ -478,7 +483,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
 
                       {/* Discipline Metadata Badges */}
                       {metadata && (
-                        <div className="flex items-center gap-1 flex-wrap text-[9px] text-neutral-600 dark:text-white/50 mb-2">
+                        <div className="flex items-center gap-1 flex-wrap text-[11px] text-neutral-600 dark:text-white/50 mb-2">
                           {metadata.contentType && (
                             <span className="px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-600 dark:text-blue-300 font-medium">
                               {metadata.contentType}
@@ -539,7 +544,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                             className={`flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-[11px] font-medium transition-colors ${
                               canAssignTask
                                 ? 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-950/50 cursor-pointer'
-                                : 'bg-neutral-100 dark:bg-white/5 border-neutral-200 dark:border-white/10 text-neutral-700 dark:text-white/80'
+                                : 'bg-neutral-100 dark:bg-white/5 border-[var(--border)] text-neutral-700 dark:text-white/80'
                             }`}
                           >
                             <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
@@ -553,7 +558,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                             className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[11px] font-semibold transition-colors cursor-pointer ${
                               canAssignTask
                                 ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20'
-                                : 'bg-neutral-100 dark:bg-white/5 border-neutral-200 dark:border-white/10 text-neutral-500 dark:text-white/40'
+                                : 'bg-neutral-100 dark:bg-white/5 border-[var(--border)] text-[var(--text-secondary)]'
                             }`}
                           >
                             <UserX className="h-3 w-3" />
@@ -566,7 +571,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                       <div className="flex items-center gap-1 shrink-0">
                         <span
                           title={`Cognitive Load: ${cognitiveLabel}`}
-                          className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium capitalize ${
+                          className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium capitalize ${
                             task.cognitiveLoad === 'high'
                               ? 'bg-red-500/15 text-red-600 dark:text-red-400'
                               : task.cognitiveLoad === 'medium'
@@ -589,7 +594,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                         {task.estimatedHours !== undefined && task.estimatedHours > 0 && (
                           <span
                             title={`Estimated Effort: ${task.estimatedHours} hours`}
-                            className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-white/5 text-[10px] font-semibold text-neutral-700 dark:text-white/80"
+                            className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-white/5 text-[11px] font-semibold text-neutral-700 dark:text-white/80"
                           >
                             <Clock className="h-2.5 w-2.5 text-neutral-400" />
                             <span>{task.estimatedHours}h</span>

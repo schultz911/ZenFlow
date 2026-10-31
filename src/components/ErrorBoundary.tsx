@@ -54,7 +54,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
                   {this.state.error.message}
                 </p>
                 {this.state.error.stack && (
-                  <pre className="text-[10px] text-white/40 whitespace-pre-wrap overflow-x-auto">
+                  <pre className="text-[11px] text-white/40 whitespace-pre-wrap overflow-x-auto">
                     {this.state.error.stack.split('\n').slice(0, 4).join('\n')}
                   </pre>
                 )}
@@ -62,7 +62,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
             )}
             <button
               onClick={this.handleReset}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2.5 text-xs font-semibold text-white transition-colors cursor-pointer w-full shadow-md shadow-blue-900/20"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2.5 text-xs font-semibold text-white transition-colors cursor-pointer w-full shadow-xs"
             >
               <RotateCcw className="h-3.5 w-3.5" />
               <span>Reload Workspace</span>
