@@ -1029,8 +1029,8 @@ export function getUserDailyAssignedHours(user: User, tasks: Task[], onDate: Dat
     if (!t.estimatedHours || t.estimatedHours <= 0) continue;
 
     if (isTargetToday) {
-      // For today: include active tasks
-      if (t.status === 'todo' || t.status === 'in_progress' || t.status === 'in_review') {
+      // For today: include active assigned tasks (including assigned pipeline deliverables)
+      if (t.status === 'pipeline' || t.status === 'todo' || t.status === 'in_progress' || t.status === 'in_review') {
         const start = t.createdAt ? new Date(t.createdAt) : new Date();
         const end = t.dueDate ? new Date(t.dueDate) : start;
         const workingDays = getWorkingDaysCount(start.toISOString(), end.toISOString());

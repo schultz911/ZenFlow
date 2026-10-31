@@ -11,8 +11,8 @@ import {
   TaskOrderUpdate,
   QueuedMutation,
   TaskActivity,
-
   AuditLogEntry,
+  TaskDisciplineMetadata,
 
 } from '../types';
 import { INITIAL_USERS, INITIAL_TASKS } from '../data/initialData';
@@ -129,8 +129,10 @@ interface DashboardContextType {
   isTeamLead: boolean;
   isAccountManager: boolean;
   canManageMembers: boolean;
+  canCreatePipelineTask: boolean;
+  canAssignTask: boolean;
   canManageUser: (targetUser: User) => boolean;
-  canEditUserTasks: (targetUserId: string) => boolean;
+  canEditUserTasks: (targetUserId?: string) => boolean;
   canSwitchBoards: boolean;
   creativeDirectors: User[];
   clusterLeads: User[];
@@ -140,15 +142,19 @@ interface DashboardContextType {
   downloadAuditLogs: () => void;
   // Tasks
   createTask: (data: {
-    userId: string;
+    userId?: string;
+    team?: Role;
     title: string;
     description?: string;
     dueDate?: string;
-    cognitiveLoad: 'low' | 'medium' | 'high';
-    status: TaskStatus;
+    cognitiveLoad?: 'low' | 'medium' | 'high';
+    status?: TaskStatus;
     client?: string;
     project?: string;
     estimatedHours?: number;
+    priority?: 'low' | 'medium' | 'high';
+    attachments?: string[];
+    disciplineMetadata?: TaskDisciplineMetadata;
   }) => Promise<Task>;
   updateTask: (id: string, updates: Partial<Task>) => Promise<Task>;
   adjustBillableHours: (taskId: string, newDurationMs: number, reason?: string) => Promise<Task>;
@@ -281,6 +287,48 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     return isSuperadmin || isAdministrator || isBusinessLead || isCreativeDirector || isClusterLead;
   }, [currentUser, isSuperadmin, isAdministrator, isBusinessLead, isCreativeDirector, isClusterLead]);
 
+  const canCreatePipelineTask = useMemo(() => {
+    if (!currentUser) return false;
+    const isSuper = currentUser.email?.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase();
+    const isAdmin = Boolean(currentUser.isAdministrator || currentUser.role === 'administrator' || isSuper);
+    const isAccounts = Boolean(
+      currentUser.role === 'account_manager' ||
+      currentUser.isAccountManager ||
+      currentUser.designation === 'account_manager' ||
+      currentUser.designation === 'Account Manager'
+    );
+    const hasSpecialRole = Boolean(
+      currentUser.isBusinessLead ||
+      currentUser.designation === 'business_lead' ||
+      currentUser.designation === 'Business Lead' ||
+      currentUser.isCreativeDirector ||
+      currentUser.designation === 'creative_director' ||
+      currentUser.designation === 'Creative Director' ||
+      currentUser.isClusterLead ||
+      currentUser.designation === 'cluster_lead' ||
+      currentUser.designation === 'Cluster Lead' ||
+      currentUser.isTeamLead ||
+      currentUser.designation === 'team_lead' ||
+      currentUser.designation === 'Team Lead'
+    );
+    return isAdmin || isAccounts || hasSpecialRole;
+  }, [currentUser]);
+
+  const canAssignTask = useMemo(() => {
+    if (!currentUser) return false;
+    const isSuper = currentUser.email?.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase();
+    return Boolean(
+      isSuper ||
+      currentUser.isCreativeDirector ||
+      currentUser.designation === 'creative_director' ||
+      currentUser.designation === 'Creative Director' ||
+      currentUser.isAdministrator ||
+      currentUser.role === 'administrator' ||
+      currentUser.isBusinessLead ||
+      currentUser.isClusterLead
+    );
+  }, [currentUser]);
+
   const canManageUser = useCallback((targetUser: User): boolean => {
     if (!currentUser) return false;
     // Administrator, Business Lead can add and delete accounts and edit user information
@@ -301,7 +349,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     return isSuperadmin || isAdministrator || isBusinessLead || isCreativeDirector || isClusterLead;
   }, [currentUser, isSuperadmin, isAdministrator, isBusinessLead, isCreativeDirector, isClusterLead]);
 
-  const canEditUserTasks = useCallback((targetUserId: string): boolean => {
+  const canEditUserTasks = useCallback((targetUserId?: string): boolean => {
     if (!currentUser) return false;
     // Administrator and Business Lead - can access all boards, edit all boards
     if (isSuperadmin || isAdministrator || isBusinessLead) return true;
@@ -309,20 +357,13 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     if (currentUser.isAccountManager || currentUser.designation === 'account_manager' || currentUser.role === 'account_manager') {
       return false;
     }
-    // Cluster Lead and Creative Director - can access all boards, edit boards of their teams
-    if (isCreativeDirector) {
-      if (targetUserId === currentUser.id) return true;
-      const target = usersRef.current.find(u => u.id === targetUserId);
-      return target?.creativeDirectorId === currentUser.id;
-    }
-    if (isClusterLead) {
-      if (targetUserId === currentUser.id) return true;
-      const target = usersRef.current.find(u => u.id === targetUserId);
-      return target?.clusterLeadId === currentUser.id;
+    // Cluster Lead and Creative Director - can access all boards, edit boards of their teams, and assign/edit pipeline tasks across teams
+    if (isCreativeDirector || isClusterLead) {
+      return true;
     }
     // Team Lead - can access team board, edit boards of their team
     if (currentUser.isTeamLead || currentUser.isContentLead || currentUser.isArtDirector) {
-      if (targetUserId === currentUser.id) return true;
+      if (!targetUserId || targetUserId === currentUser.id) return true;
       const target = usersRef.current.find(u => u.id === targetUserId);
       return Boolean(
         (currentUser.creativeDirectorId && target?.creativeDirectorId === currentUser.creativeDirectorId) ||
@@ -1009,46 +1050,58 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Task creation with offline mutation queuing
   const createTask = useCallback(async (data: {
-    userId: string;
+    userId?: string;
+    team?: Role;
     title: string;
     description?: string;
     dueDate?: string;
-    cognitiveLoad: 'low' | 'medium' | 'high';
-    status: TaskStatus;
+    cognitiveLoad?: 'low' | 'medium' | 'high';
+    status?: TaskStatus;
     client?: string;
     project?: string;
     estimatedHours?: number;
+    priority?: 'low' | 'medium' | 'high';
+    attachments?: string[];
+    disciplineMetadata?: TaskDisciplineMetadata;
   }): Promise<Task> => {
     const realId = `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const currentTasks = tasksRef.current;
-    const isCompleted = data.status === 'done';
+    const status = data.status || (data.userId ? 'todo' : 'pipeline');
+    const cognitiveLoad = data.cognitiveLoad || 'medium';
+    const cleanUserId = (data.userId && data.userId.trim()) ? data.userId.trim() : undefined;
+    const team = data.team || (cleanUserId ? usersRef.current.find(u => u.id === cleanUserId)?.role : activeRoleTab) || 'content';
+    const isCompleted = status === 'done';
     const now = new Date().toISOString();
 
     const initialActivity = {
       id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       timestamp: now,
       action: 'created' as const,
-      to: data.status,
-      details: `Created in ${data.status.replace('_', ' ')}`,
+      to: status,
+      details: cleanUserId ? `Created in ${status.replace('_', ' ')}` : `Created in ${team} team pipeline (Unassigned)`,
     };
 
-    const isInProgress = data.status === 'in_progress';
+    const isInProgress = status === 'in_progress';
 
     const optimisticTask: Task = {
       id: realId,
-      userId: data.userId,
+      userId: cleanUserId,
+      team,
       title: data.title.trim(),
       description: data.description ? data.description.trim() : undefined,
-      dueDate: (data.status === 'pipeline' || data.status === 'retainer') ? undefined : data.dueDate,
-      cognitiveLoad: data.cognitiveLoad,
-      status: data.status,
-      order: currentTasks.filter(t => t.userId === data.userId && t.status === data.status).length,
+      dueDate: (status === 'pipeline' || status === 'retainer') ? undefined : data.dueDate,
+      cognitiveLoad,
+      status,
+      order: currentTasks.filter(t => (cleanUserId ? t.userId === cleanUserId : t.team === team) && t.status === status).length,
       completedAt: isCompleted ? now : undefined,
       inProgressStartedAt: isInProgress ? now : undefined,
       inProgressDurationMs: 0,
       client: data.client,
       project: data.project,
       estimatedHours: data.estimatedHours,
+      priority: data.priority || 'medium',
+      attachments: data.attachments,
+      disciplineMetadata: data.disciplineMetadata,
       createdAt: now,
       updatedAt: now,
       activityLog: [initialActivity],
@@ -1647,6 +1700,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       isTeamLead,
       isAccountManager,
       canManageMembers,
+      canCreatePipelineTask,
+      canAssignTask,
       canManageUser,
       canEditUserTasks,
       canSwitchBoards,
@@ -1699,6 +1754,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       isTeamLead,
       isAccountManager,
       canManageMembers,
+      canCreatePipelineTask,
+      canAssignTask,
       canManageUser,
       canEditUserTasks,
       canSwitchBoards,

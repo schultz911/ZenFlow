@@ -16,6 +16,9 @@ import { DuplicateTaskModal } from './components/DuplicateTaskModal';
 import { DeleteTaskModal } from './components/DeleteTaskModal';
 import { FreePoolContainer } from './components/FreePoolContainer';
 import { AnalyticsModal } from './components/AnalyticsModal';
+import { TeamPipeline } from './components/TeamPipeline';
+import { DisciplineTaskModal } from './components/modals/DisciplineTaskModal';
+import { TaskAssignmentModal } from './components/TaskAssignmentModal';
 import { User, Task, TaskStatus } from './types';
 import { UserPlus, FileText, Palette, Video as VideoIcon, Layout, Search, Loader2, Trash2 } from 'lucide-react';
 import { testConnection } from './lib/firebase';
@@ -47,6 +50,8 @@ function DashboardContent() {
     activeBoardId,
     setActiveBoardId,
     canManageMembers,
+    canCreatePipelineTask,
+    canAssignTask,
   } = useDashboard();
 
   // Modals state
@@ -65,6 +70,8 @@ function DashboardContent() {
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
   const [isHoveringDeleteZone, setIsHoveringDeleteZone] = useState(false);
   const [analyticsModalOpen, setAnalyticsModalOpen] = useState(false);
+  const [disciplineModalOpen, setDisciplineModalOpen] = useState(false);
+  const [selectedTaskForAssignment, setSelectedTaskForAssignment] = useState<Task | null>(null);
 
   // Stable refs for currentUser and users — allow keyboard effect and task modal handler to have empty dep arrays
   const currentUserRef = useRef(currentUser);
@@ -283,12 +290,14 @@ function DashboardContent() {
         setEditingUser(null);
         setAdjustBillableTask(null);
         setAnalyticsModalOpen(false);
+        setDisciplineModalOpen(false);
+        setSelectedTaskForAssignment(null);
       }
 
       // Ctrl+N / Cmd+N: Quick create task
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
         e.preventDefault();
-        handleOpenAddTask();
+        setDisciplineModalOpen(true);
       }
 
       // Ctrl+F / Cmd+F: Focus search input
@@ -599,6 +608,20 @@ function DashboardContent() {
             </div>
           )}
 
+          {/* Shared Team Pipeline (One centralized pipeline per team) */}
+          <TeamPipeline
+            team={activeRoleTab}
+            tasks={tasks}
+            users={users}
+            onOpenCreateModal={() => setDisciplineModalOpen(true)}
+            onOpenAssignmentModal={t => setSelectedTaskForAssignment(t)}
+            onEditTask={handleEditTask}
+            onDeleteTask={handleRequestDeleteTask}
+            onMoveTask={moveTask}
+            onDragTaskStart={handleDragTaskStart}
+            onDragTaskEnd={handleDragTaskEnd}
+          />
+
           {/* User Swimlanes List */}
           {roleFilteredUsers.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border border-neutral-200 dark:border-white/5 bg-white dark:bg-[#0D0D0D] p-12 text-center shadow-sm dark:shadow-2xl">
@@ -746,6 +769,18 @@ function DashboardContent() {
           users={users}
           onClose={() => setTaskToDelete(null)}
           onConfirmDelete={handleConfirmDeleteTask}
+        />
+
+        <DisciplineTaskModal
+          isOpen={disciplineModalOpen}
+          onClose={() => setDisciplineModalOpen(false)}
+          initialDiscipline={activeRoleTab}
+        />
+
+        <TaskAssignmentModal
+          isOpen={Boolean(selectedTaskForAssignment)}
+          task={selectedTaskForAssignment}
+          onClose={() => setSelectedTaskForAssignment(null)}
         />
 
         {/* Floating Resource Free Pool across all boards */}

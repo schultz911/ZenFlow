@@ -152,7 +152,7 @@ test('public member fields use strict allowlist', () => {
 });
 test('pipeline and retainer tasks retain deadline and timer behavior', async () => withServer(async server => {
   for (const status of ['pipeline', 'retainer']) {
-    const response = await server.request('/tasks', 'alice', 'POST', { userId: 'alice', title: `Task ${status}`, status, cognitiveLoad: 'medium' });
+    const response = await server.request('/tasks', 'cd', 'POST', { userId: 'alice', title: `Task ${status}`, status, cognitiveLoad: 'medium' });
     assert.equal(response.status, 201);
     const task = await response.json();
     assert.equal(task.status, status);

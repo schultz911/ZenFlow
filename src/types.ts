@@ -37,9 +37,43 @@ export interface TaskActivity {
   details?: string;
 }
 
+export interface TaskDisciplineMetadata {
+  // Content
+  contentType?: string;
+  deliverable?: string;
+  brief?: string;
+  wordCount?: number;
+  relevantRequirements?: string;
+  // Design
+  assetType?: string;
+  dimensions?: string;
+  format?: string;
+  quantity?: number;
+  designSpecifications?: string;
+  // Video
+  videoType?: string;
+  duration?: string;
+  aspectRatio?: string;
+  deliverables?: string;
+  productionRequirements?: string;
+  // UI/UX
+  designType?: string;
+  platform?: string;
+  screens?: number;
+  userFlows?: string;
+  prototypeRequirements?: string;
+  // Research
+  researchType?: string;
+  objectives?: string;
+  scope?: string;
+  methodology?: string;
+  expectedOutputs?: string;
+}
+
 export interface Task {
   id: string;
-  userId: string;
+  userId?: string;
+  team?: Role;
   title: string;
   description?: string;
   dueDate?: string; // YYYY-MM-DD
@@ -58,6 +92,9 @@ export interface Task {
   client?: string;
   project?: string;
   estimatedHours?: number;
+  priority?: 'low' | 'medium' | 'high';
+  attachments?: string[];
+  disciplineMetadata?: TaskDisciplineMetadata;
 }
 
 export type AnalyticsScope = 'all' | 'client' | 'delivery_unit' | 'project' | 'user';

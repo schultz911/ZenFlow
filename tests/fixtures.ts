@@ -48,7 +48,7 @@ export async function fixtureServer(_directory: string) {
     clients: [], nextClientId: 1, MAX_SSE_CLIENTS: 100,
     writeSse, redactPayload, setInterval, clearInterval,
   };
-  for (const name of ['sanitizeString', 'formatBillableHoursServer']) {
+  for (const name of ['sanitizeString', 'formatBillableHoursServer', 'isCallerAuthorizedForPipeline']) {
     ctx[name] = vm.runInNewContext(compile(functions.get(name)!) + `; ${name}`, ctx);
   }
   const app = express();

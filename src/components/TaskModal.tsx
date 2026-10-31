@@ -96,9 +96,26 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [client, setClient] = useState('');
   const [project, setProject] = useState('');
   const [estimatedHours, setEstimatedHours] = useState('');
+  const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+
+  // Resolved discipline for this task
+  const taskDiscipline = useMemo(() => {
+    if (taskToEdit?.team) return taskToEdit.team;
+    if (taskToEdit?.userId) {
+      const owner = users.find(u => u.id === taskToEdit.userId);
+      if (owner?.role) return owner.role;
+    }
+    return 'content';
+  }, [taskToEdit, users]);
+
+  // Eligible assignees across all teams restricted to matching discipline
+  const eligibleUsers = useMemo(() => {
+    const matched = users.filter(u => u.role === taskDiscipline);
+    return matched.length > 0 ? matched : users;
+  }, [users, taskDiscipline]);
 
   // Autocomplete suggestions from existing tasks
   const existingClients = useMemo(() => {
@@ -133,6 +150,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setClient(taskToEdit.client || '');
       setProject(taskToEdit.project || '');
       setEstimatedHours(taskToEdit.estimatedHours !== undefined ? String(taskToEdit.estimatedHours) : '');
+      setPriority(taskToEdit.priority || 'medium');
     } else {
       setTitle('');
       setDescription('');
@@ -144,6 +162,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setClient('');
       setProject('');
       setEstimatedHours('');
+      setPriority('medium');
     }
     setShowConfirmDelete(false);
     setSubmitError(null);
@@ -211,7 +230,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const isDeadlineRequired = status !== 'pipeline' && status !== 'retainer';
-    if (!title.trim() || !userId || (isDeadlineRequired && !dueDate.trim()) || !canEdit) return;
+    const isUserIdRequired = status !== 'pipeline';
+    if (!title.trim() || (isUserIdRequired && !userId) || (isDeadlineRequired && !dueDate.trim()) || !canEdit) return;
 
     setIsSubmitting(true);
     setSubmitError(null);
@@ -223,17 +243,19 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         await updateTask(taskToEdit.id, {
           title: title.trim(),
           description: description.trim() || undefined,
-          userId,
+          userId: userId || undefined,
           dueDate: finalDueDate,
           cognitiveLoad,
           status,
           client: client.trim() || undefined,
           project: project.trim() || undefined,
           estimatedHours: parsedEstimated,
+          priority,
         });
       } else {
         await createTask({
-          userId,
+          userId: userId || undefined,
+          team: taskDiscipline,
           title: title.trim(),
           description: description.trim() || undefined,
           dueDate: finalDueDate,
@@ -242,6 +264,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           client: client.trim() || undefined,
           project: project.trim() || undefined,
           estimatedHours: parsedEstimated,
+          priority,
         });
       }
       onClose();
@@ -437,8 +460,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Assignee Selection */}
                 <div>
-                  <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
-                    Assignee <span className="text-red-500">*</span>
+                  <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5 flex items-center justify-between">
+                    <span>Assignee {status !== 'pipeline' && <span className="text-red-500">*</span>}</span>
+                    <span className="text-[10px] text-blue-500 font-medium capitalize">{taskDiscipline} Team</span>
                   </label>
                   <div className="relative">
                     <select
@@ -446,9 +470,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       value={userId}
                       onChange={e => setUserId(e.target.value)}
                       className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 pl-3 pr-8 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer"
-                      required
                     >
-                      {users.map(u => (
+                      <option value="">-- Unassigned in Team Pipeline --</option>
+                      {eligibleUsers.map(u => (
                         <option key={u.id} value={u.id}>
                           {u.name} ({getUserTag(u).label})
                         </option>
@@ -556,6 +580,60 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   </span>
                 </div>
               </div>
+
+              {/* Priority */}
+              <div>
+                <label className="block text-xs uppercase tracking-wider font-semibold text-neutral-500 dark:text-white/40 mb-1.5">
+                  Priority
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['low', 'medium', 'high'] as const).map(p => {
+                    const isSelected = priority === p;
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => setPriority(p)}
+                        className={`flex items-center justify-center py-1.5 rounded-xl border text-xs font-semibold capitalize transition-all cursor-pointer ${
+                          isSelected
+                            ? p === 'high'
+                              ? 'bg-red-500/15 border-red-500 text-red-600 dark:text-red-400'
+                              : p === 'medium'
+                              ? 'bg-amber-500/15 border-amber-500 text-amber-600 dark:text-amber-400'
+                              : 'bg-emerald-500/15 border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                            : 'border-neutral-200 dark:border-white/10 bg-neutral-50/50 dark:bg-white/5 text-neutral-500 dark:text-white/40'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Discipline Metadata (Read / Inspection) */}
+              {taskToEdit?.disciplineMetadata && (
+                <div className="rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-50/50 dark:bg-white/[0.02] p-3 space-y-1.5 text-xs">
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-blue-600 dark:text-blue-400">
+                    {taskDiscipline.toUpperCase()} Specifications
+                  </span>
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    {Object.entries(taskToEdit.disciplineMetadata).map(([k, v]) => {
+                      if (!v) return null;
+                      return (
+                        <div key={k} className="flex flex-col">
+                          <span className="text-neutral-400 dark:text-white/30 capitalize text-[10px]">
+                            {k.replace(/([A-Z])/g, ' $1')}
+                          </span>
+                          <span className="font-medium text-neutral-800 dark:text-white/90 break-words">
+                            {String(v)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Cognitive Load */}
               <div>

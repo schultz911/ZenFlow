@@ -22,6 +22,38 @@ export interface Member {
 }
 export interface Identity { email?: string; email_verified?: boolean; exp: number; firebase?: { sign_in_provider?: string } }
 export const isSuperadmin = (user: Member) => user.email.toLowerCase() === SUPERADMIN_EMAIL;
+export const isAccountsMember = (user: Member | undefined) => {
+  if (!user) return false;
+  return Boolean(
+    user.role === 'account_manager' ||
+    user.isAccountManager ||
+    user.designation === 'account_manager' ||
+    user.designation === 'Account Manager'
+  );
+};
+export const hasAuthorizedSpecialRole = (user: Member | undefined) => {
+  if (!user) return false;
+  return Boolean(
+    isSuperadmin(user) ||
+    user.isAdministrator ||
+    user.role === 'administrator' ||
+    user.isBusinessLead ||
+    user.designation === 'business_lead' ||
+    user.designation === 'Business Lead' ||
+    user.isCreativeDirector ||
+    user.designation === 'creative_director' ||
+    user.designation === 'Creative Director' ||
+    user.isClusterLead ||
+    user.designation === 'cluster_lead' ||
+    user.designation === 'Cluster Lead' ||
+    user.isTeamLead ||
+    user.designation === 'team_lead' ||
+    user.designation === 'Team Lead'
+  );
+};
+export const canCreatePipelineTask = (user: Member | undefined) => {
+  return isAccountsMember(user) || hasAuthorizedSpecialRole(user);
+};
 export const canEdit = (caller: Member, owner: Member | undefined) => {
   if (!owner) return false;
   if (isSuperadmin(caller) || caller.isAdministrator || caller.role === 'administrator' || caller.isBusinessLead) return true;
@@ -61,7 +93,7 @@ export function redactPayload(value: any): any {
   if (typeof value.id === 'string' && typeof value.email === 'string' && typeof value.role === 'string') return publicMember(value);
   // Task fields are explicitly constructed by handlers and contain no credentials.
   // Preserve task arrays/objects without copying every activity record on each SSE event.
-  if (typeof value.userId === 'string' && typeof value.title === 'string' &&
+  if ((typeof value.userId === 'string' || value.userId === undefined || value.userId === null) && typeof value.title === 'string' &&
     !['secret', 'private_key', 'clickupApiKey'].some(key => key in value)) return value;
   return Object.fromEntries(Object.entries(value).filter(([key]) => !['secret', 'private_key', 'clickupApiKey'].includes(key))
     .map(([key, item]) => [key, redactPayload(item)]));
@@ -78,7 +110,7 @@ export function sameOriginMutation(req: Request): boolean {
 }
 
 export function createApiSecurity(options: {
-  getStore: () => { users: Member[]; tasks: { id: string; userId: string }[] };
+  getStore: () => { users: Member[]; tasks: { id: string; userId?: string; team?: string; status?: string }[] };
   verify: (token: string) => Promise<Identity>;
 }) {
   return async (req: Request, res: Response, next: NextFunction) => {
@@ -136,13 +168,38 @@ export function createApiSecurity(options: {
           if (!superadmin && !isCallerAdmin && body.creativeDirectorId !== undefined && body.creativeDirectorId !== caller.id) return denied();
         }
       }
-      if (routePath === '/tasks' && req.method === 'POST' && !edit(body.userId)) return denied();
+      if (routePath === '/tasks' && req.method === 'POST') {
+        const isPipeline = body.status === 'pipeline' || !body.userId;
+        if (isPipeline) {
+          if (!canCreatePipelineTask(caller)) return denied();
+        } else {
+          if (!edit(body.userId) && !canCreatePipelineTask(caller)) return denied();
+        }
+      }
       // Delegation is intentionally available to every authenticated member, across boards.
       const taskMatch = routePath.match(/^\/tasks\/([^/]+)$/);
       if (taskMatch && ['PUT', 'DELETE'].includes(req.method)) {
         const task = store.tasks.find(item => item.id === decodeURIComponent(taskMatch[1]));
-        if (task && !edit(task.userId)) return denied();
-        if (body.userId !== undefined && !edit(body.userId)) return denied();
+        const isPipeline = task ? (task.status === 'pipeline' || !task.userId) : false;
+        if (task) {
+          if (isPipeline && isCallerCD) {
+            // Creative Directors can edit and assign pipeline tasks across all teams
+          } else if (task.userId && !edit(task.userId)) {
+            return denied();
+          }
+        }
+        if (body.userId !== undefined && body.userId !== '') {
+          if (isCallerCD) {
+            // Creative Directors can assign matching-discipline users across all teams
+            const targetUser = store.users.find(u => u.id === body.userId);
+            const taskTeam = (task as any)?.team || (task?.userId && store.users.find(u => u.id === task.userId)?.role);
+            if (targetUser && taskTeam && targetUser.role && targetUser.role !== taskTeam) {
+              return res.status(400).json({ error: `Cannot assign task to a user of a different discipline (${targetUser.role} != ${taskTeam})` });
+            }
+          } else if (!edit(body.userId)) {
+            return denied();
+          }
+        }
       }
       if (routePath === '/tasks/reorder' && req.method === 'POST' && Array.isArray(body.updates)) {
         // Validate the entire batch before the existing handler can mutate any task.

@@ -3,7 +3,7 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
 import compression from 'compression';
-import { createApiSecurity, redactPayload, SESSION_COOKIE, sameOriginMutation } from './server/security';
+import { createApiSecurity, redactPayload, SESSION_COOKIE, sameOriginMutation, canCreatePipelineTask } from './server/security';
 import { readAuditTail, writeSse } from './server/resources';
 import { initializeApp as initializeAdminApp, getApps as getAdminApps } from 'firebase-admin/app';
 import { getAuth as getAdminAuth } from 'firebase-admin/auth';
@@ -45,7 +45,8 @@ interface TaskActivity {
 
 interface Task {
   id: string;
-  userId: string;
+  userId?: string;
+  team?: 'content' | 'design' | 'video' | 'ui_ux' | 'research' | 'account_manager' | 'administrator' | 'none';
   title: string;
   description?: string;
   dueDate?: string;
@@ -64,6 +65,9 @@ interface Task {
   client?: string;
   project?: string;
   estimatedHours?: number;
+  priority?: 'low' | 'medium' | 'high';
+  attachments?: string[];
+  disciplineMetadata?: Record<string, any>;
 }
 
 interface AppStore {
@@ -178,8 +182,19 @@ function loadStore(): AppStore {
           (u: User) => !DUMMY_USER_IDS.has(u.id) && !u.email?.endsWith('@acme.studio')
         );
         const cleanTasks = parsed.tasks.filter(
-          (t: Task) => !DUMMY_TASK_IDS.has(t.id) && !DUMMY_USER_IDS.has(t.userId)
+          (t: Task) => !DUMMY_TASK_IDS.has(t.id) && !(t.userId && DUMMY_USER_IDS.has(t.userId))
         );
+        // Migrate existing tasks without losing assignments, statuses, history, or metadata
+        for (const t of cleanTasks) {
+          if (!t.team) {
+            const owner = cleanUsers.find((u: User) => u.id === t.userId);
+            if (owner && owner.role && ['content', 'design', 'video', 'ui_ux', 'research'].includes(owner.role)) {
+              t.team = owner.role as any;
+            } else {
+              t.team = 'content';
+            }
+          }
+        }
         return { users: cleanUsers, tasks: cleanTasks };
       }
     }
@@ -256,6 +271,32 @@ async function saveAnalyticsSnapshotLocal(snapshot: any) {
 }
 
 // Input sanitizer to prevent XSS / malicious injection in titles & descriptions
+function isCallerAuthorizedForPipeline(caller: any): boolean {
+  if (!caller) return false;
+  const isSuper = caller.email?.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase();
+  return Boolean(
+    isSuper ||
+    caller.isAdministrator ||
+    caller.role === 'administrator' ||
+    caller.isBusinessLead ||
+    caller.designation === 'business_lead' ||
+    caller.designation === 'Business Lead' ||
+    caller.isCreativeDirector ||
+    caller.designation === 'creative_director' ||
+    caller.designation === 'Creative Director' ||
+    caller.isClusterLead ||
+    caller.designation === 'cluster_lead' ||
+    caller.designation === 'Cluster Lead' ||
+    caller.isTeamLead ||
+    caller.designation === 'team_lead' ||
+    caller.designation === 'Team Lead' ||
+    caller.isAccountManager ||
+    caller.role === 'account_manager' ||
+    caller.designation === 'account_manager' ||
+    caller.designation === 'Account Manager'
+  );
+}
+
 function sanitizeString(input: unknown): string {
   if (typeof input !== 'string') return '';
   return input
@@ -1661,6 +1702,7 @@ async function startServer() {
     const {
       id: reqId,
       userId,
+      team,
       title,
       description,
       dueDate,
@@ -1669,6 +1711,9 @@ async function startServer() {
       client,
       project,
       estimatedHours,
+      priority,
+      attachments,
+      disciplineMetadata,
     } = req.body;
 
     // Idempotency guard for offline mutation replay: if task with this ID already exists, return it
@@ -1679,23 +1724,53 @@ async function startServer() {
       }
     }
 
+    const caller = res.locals.caller;
+    const cleanStatus = ['pipeline', 'retainer', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : (userId ? 'todo' : 'pipeline');
+    if (cleanStatus === 'pipeline' && !isCallerAuthorizedForPipeline(caller)) {
+      return res.status(403).json({ error: 'Only Accounts team members and users with authorized special roles can create pipeline tasks' });
+    }
+
     const cleanTitle = sanitizeString(title);
-    if (!userId || !cleanTitle) {
-      return res.status(400).json({ error: 'userId and title are required' });
+    if (!cleanTitle) {
+      return res.status(400).json({ error: 'Task title is required' });
     }
 
-    const userExists = store.users.some(u => u.id === userId);
-    if (!userExists) {
-      return res.status(400).json({ error: 'User does not exist in workspace' });
+    let cleanUserId: string | undefined = undefined;
+    if (userId && typeof userId === 'string' && userId.trim()) {
+      cleanUserId = sanitizeString(userId.trim());
+      const targetUser = store.users.find(u => u.id === cleanUserId);
+      if (!targetUser) {
+        return res.status(400).json({ error: 'Target user does not exist in workspace' });
+      }
+    } else if (cleanStatus !== 'pipeline' && cleanStatus !== 'retainer') {
+      return res.status(400).json({ error: 'Assignee is required when adding tasks to active workflow lanes' });
     }
 
-    // Determine order: place at end of that status for this user
-    const existingInStatus = store.tasks.filter(
-      t => t.userId === userId && t.status === (status || 'todo')
-    );
-    const maxOrder = existingInStatus.reduce((max, t) => Math.max(max, t.order ?? 0), -1);
+    const targetUser = cleanUserId ? store.users.find(u => u.id === cleanUserId) : undefined;
+    const resolvedTeam = (team && ['content', 'design', 'video', 'ui_ux', 'research'].includes(team))
+      ? team
+      : (targetUser?.role && ['content', 'design', 'video', 'ui_ux', 'research'].includes(targetUser.role)
+        ? targetUser.role
+        : 'content');
 
-    const cleanStatus = ['pipeline', 'retainer', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(status) ? status : 'todo';
+    if (targetUser && targetUser.role && resolvedTeam && targetUser.role !== resolvedTeam) {
+      return res.status(400).json({ error: `Cannot assign task to user of different discipline (${targetUser.role} != ${resolvedTeam})` });
+    }
+
+    // Determine order: place at end of that status for this user/team
+    let maxOrder = -1;
+    if (cleanStatus === 'pipeline') {
+      const existingInPipeline = store.tasks.filter(
+        t => (t.team === resolvedTeam || (!t.team && t.userId && store.users.find(u => u.id === t.userId)?.role === resolvedTeam)) && t.status === 'pipeline'
+      );
+      maxOrder = existingInPipeline.reduce((max, t) => Math.max(max, t.order ?? 0), -1);
+    } else {
+      const existingInStatus = store.tasks.filter(
+        t => t.userId === cleanUserId && t.status === cleanStatus
+      );
+      maxOrder = existingInStatus.reduce((max, t) => Math.max(max, t.order ?? 0), -1);
+    }
+
     const cleanDueDate = dueDate ? sanitizeString(dueDate) : undefined;
     if (cleanStatus !== 'pipeline' && cleanStatus !== 'retainer' && !cleanDueDate) {
       return res.status(400).json({ error: 'A deadline is required when adding tasks to active workflow lanes' });
@@ -1709,7 +1784,7 @@ async function startServer() {
       timestamp: new Date().toISOString(),
       action: 'created',
       to: cleanStatus,
-      details: `Created in ${cleanStatus.replace('_', ' ')}`,
+      details: cleanUserId ? `Created in ${cleanStatus.replace('_', ' ')}` : `Created in ${resolvedTeam} team pipeline (Unassigned)`,
     };
 
     const parsedEstimatedHours = (typeof estimatedHours === 'number' && !isNaN(estimatedHours) && estimatedHours >= 0)
@@ -1718,9 +1793,18 @@ async function startServer() {
         ? Math.round(Number(estimatedHours) * 10) / 10
         : undefined);
 
+    const cleanPriority = ['low', 'medium', 'high'].includes(priority) ? priority : 'medium';
+    const cleanAttachments = Array.isArray(attachments)
+      ? attachments.filter((a: any) => typeof a === 'string' && a.trim()).map((a: string) => sanitizeString(a.trim()))
+      : undefined;
+    const cleanDisciplineMetadata = disciplineMetadata && typeof disciplineMetadata === 'object' && !Array.isArray(disciplineMetadata)
+      ? disciplineMetadata
+      : undefined;
+
     const newTask: Task = {
       id: taskId,
-      userId,
+      userId: cleanUserId,
+      team: resolvedTeam,
       title: cleanTitle,
       description: description ? sanitizeString(description) : undefined,
       dueDate: cleanDueDate,
@@ -1733,6 +1817,9 @@ async function startServer() {
       client: client ? sanitizeString(client) : undefined,
       project: project ? sanitizeString(project) : undefined,
       estimatedHours: parsedEstimatedHours,
+      priority: cleanPriority,
+      attachments: cleanAttachments,
+      disciplineMetadata: cleanDisciplineMetadata,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       activityLog: [initialActivity],
@@ -1749,8 +1836,8 @@ async function startServer() {
       actor: { ip: req.ip },
       targetId: newTask.id,
       targetType: 'task',
-      details: `Task "${newTask.title}" created for user ${userId}`,
-      metadata: { status: newTask.status, cognitiveLoad: newTask.cognitiveLoad, dueDate: newTask.dueDate },
+      details: `Task "${newTask.title}" created in ${resolvedTeam} pipeline${cleanUserId ? ` for user ${cleanUserId}` : ' (Unassigned)'}`,
+      metadata: { status: newTask.status, team: newTask.team, cognitiveLoad: newTask.cognitiveLoad, dueDate: newTask.dueDate },
     });
 
     res.status(201).json(newTask);
@@ -1885,6 +1972,10 @@ async function startServer() {
       client,
       project,
       estimatedHours,
+      team,
+      priority,
+      attachments,
+      disciplineMetadata,
     } = req.body;
 
     if (title !== undefined) {
@@ -1895,9 +1986,17 @@ async function startServer() {
     }
 
     if (userId !== undefined && userId !== currentTask.userId) {
-      const userExists = store.users.some(u => u.id === userId);
-      if (!userExists) {
-        return res.status(400).json({ error: 'Target user does not exist in workspace' });
+      if (userId !== '' && userId !== null) {
+        const targetUser = store.users.find(u => u.id === userId);
+        if (!targetUser) {
+          return res.status(400).json({ error: 'Target user does not exist in workspace' });
+        }
+        const taskTeam = (team && ['content', 'design', 'video', 'ui_ux', 'research'].includes(team))
+          ? team
+          : (currentTask.team || (currentTask.userId ? store.users.find(u => u.id === currentTask.userId)?.role : undefined));
+        if (targetUser.role && taskTeam && targetUser.role !== taskTeam) {
+          return res.status(400).json({ error: `Cannot assign task to a user of a different discipline (${targetUser.role} != ${taskTeam})` });
+        }
       }
     }
 
@@ -1986,15 +2085,26 @@ async function startServer() {
     }
 
     if (userId !== undefined && userId !== currentTask.userId) {
-      const oldUser = store.users.find(u => u.id === currentTask.userId)?.name || currentTask.userId;
-      const newUser = store.users.find(u => u.id === userId)?.name || userId;
+      const oldUser = currentTask.userId ? (store.users.find(u => u.id === currentTask.userId)?.name || currentTask.userId) : 'Unassigned';
+      const newUser = userId ? (store.users.find(u => u.id === userId)?.name || userId) : 'Unassigned';
       activityEntries.unshift({
         id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         timestamp: new Date().toISOString(),
         action: 'reassigned',
         from: oldUser,
         to: newUser,
-        details: `Reassigned from ${oldUser} to ${newUser}`,
+        details: oldUser === 'Unassigned' ? `Assigned to ${newUser}` : `Reassigned from ${oldUser} to ${newUser}`,
+      });
+    }
+
+    if (cognitiveLoad && cognitiveLoad !== currentTask.cognitiveLoad) {
+      activityEntries.unshift({
+        id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        timestamp: new Date().toISOString(),
+        action: 'updated',
+        from: currentTask.cognitiveLoad,
+        to: cognitiveLoad,
+        details: `Cognitive load updated from ${currentTask.cognitiveLoad} to ${cognitiveLoad}`,
       });
     }
 
@@ -2025,14 +2135,19 @@ async function startServer() {
           : undefined))
       : currentTask.estimatedHours;
 
+    const resolvedTeam = (team && ['content', 'design', 'video', 'ui_ux', 'research'].includes(team))
+      ? team
+      : currentTask.team;
+
     const updatedTask: Task = {
       ...currentTask,
+      team: resolvedTeam,
       title: title !== undefined ? sanitizeString(title) : currentTask.title,
       description: description !== undefined ? (description ? sanitizeString(description) : undefined) : currentTask.description,
       dueDate: resolvedDueDate,
       cognitiveLoad: cognitiveLoad && ['low', 'medium', 'high'].includes(cognitiveLoad) ? cognitiveLoad : currentTask.cognitiveLoad,
       status: targetStatus,
-      userId: userId || currentTask.userId,
+      userId: userId !== undefined ? (userId || undefined) : currentTask.userId,
       order: typeof order === 'number' ? order : currentTask.order,
       completedAt,
       inProgressStartedAt,
@@ -2040,6 +2155,9 @@ async function startServer() {
       client: client !== undefined ? (client ? sanitizeString(client) : undefined) : currentTask.client,
       project: project !== undefined ? (project ? sanitizeString(project) : undefined) : currentTask.project,
       estimatedHours: parsedEstimatedHours,
+      priority: priority !== undefined && ['low', 'medium', 'high'].includes(priority) ? priority : currentTask.priority,
+      attachments: attachments !== undefined ? (Array.isArray(attachments) ? attachments.filter((a: any) => typeof a === 'string' && a.trim()).map((a: string) => sanitizeString(a.trim())) : undefined) : currentTask.attachments,
+      disciplineMetadata: disciplineMetadata !== undefined ? (disciplineMetadata && typeof disciplineMetadata === 'object' && !Array.isArray(disciplineMetadata) ? disciplineMetadata : undefined) : currentTask.disciplineMetadata,
       updatedAt: new Date().toISOString(),
       activityLog: activityEntries.slice(0, 15),
     };
@@ -2116,7 +2234,7 @@ async function startServer() {
         if (!task.activityLog) task.activityLog = [];
 
         if (update.userId && typeof update.userId === 'string' && userMap.has(update.userId) && update.userId !== task.userId) {
-          const oldUser = userMap.get(task.userId)?.name || task.userId;
+          const oldUser = task.userId ? (userMap.get(task.userId)?.name || task.userId) : 'Unassigned';
           const newUser = userMap.get(update.userId)?.name || update.userId;
           task.activityLog.unshift({
             id: `act-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -2124,7 +2242,7 @@ async function startServer() {
             action: 'reassigned',
             from: oldUser,
             to: newUser,
-            details: `Reassigned from ${oldUser} to ${newUser}`,
+            details: oldUser === 'Unassigned' ? `Assigned to ${newUser}` : `Reassigned from ${oldUser} to ${newUser}`,
           });
           task.userId = update.userId;
         }

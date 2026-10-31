@@ -6,6 +6,37 @@ This document records the complete lifecycle of architectural sweeps, discovered
 
 ## 1. Discovered Optimizations
 
+### Sweep 58: 2026-10-31 (Shared Team Pipelines, Role-Based Task Creation, Discipline Modals & Cross-Team Creative Director Assignment)
+
+- **PIPE-01 (Shared Centralized Team Pipelines & Purge of User Pipelines):**
+  - Removed individual user pipelines from [`Swimlane.tsx`](file:///c:/ZenFlow/src/components/Swimlane.tsx).
+  - Built centralized [`TeamPipeline.tsx`](file:///c:/ZenFlow/src/components/TeamPipeline.tsx) containing all assigned and unassigned pipeline deliverables for the active team (`content`, `design`, `video`, `ui_ux`, `research`).
+  - Tasks appear exactly once in their team's pipeline with zero cross-team task duplication.
+  - Supports quick filter modes (All, Unassigned, Assigned), inline title editing, search, drag & drop directly into assignee active lanes, and dropping back into the team pipeline.
+- **AUTH-13 (Strict Role-Based Pipeline Task Creation Guard):**
+  - Enforced pipeline task creation permissions on both UI and backend levels (`canCreatePipelineTask` in [`server/security.ts`](file:///c:/ZenFlow/server/security.ts) and [`server.ts`](file:///c:/ZenFlow/server.ts)).
+  - Only Accounts team members (`role === 'account_manager'` / `isAccountManager`) and users with authorized special roles (`isSuperadmin`, `isAdministrator`, `isBusinessLead`, `isCreativeDirector`, `isClusterLead`, `isTeamLead`) can create pipeline tasks.
+  - Regular discipline specialists are restricted to viewing and cannot create tasks in pipelines (rejected with HTTP 403).
+- **MODAL-04 (5 Discipline-Specific Task Modals & Metadata Storage):**
+  - Built dedicated [`DisciplineTaskModal.tsx`](file:///c:/ZenFlow/src/components/modals/DisciplineTaskModal.tsx) supporting distinct specifications:
+    - **Content:** Content type, deliverable format, brief/outline URL, word count target, and relevant requirements.
+    - **Design:** Asset type, dimensions/aspect ratio, deliverable format, quantity, and design specifications.
+    - **Video:** Video type, duration, aspect ratio, deliverables, and production requirements.
+    - **UI/UX:** Design type, platform target, screens count, user flows, and prototype requirements.
+    - **Research:** Research type, objectives, scope, methodology, and expected outputs.
+  - Shared fields standard across all modals: task title, description, client/account, project, priority (`low`/`medium`/`high`), deadline date picker, and attachments links.
+  - Extended [`TaskModal.tsx`](file:///c:/ZenFlow/src/components/TaskModal.tsx) to inspect and edit discipline metadata on existing tasks.
+- **ASSIGN-01 (Unassigned Default, Cross-Team CD Assignment & Discipline Isolation):**
+  - Newly created tasks enter the relevant team's shared pipeline as **Unassigned** (`userId: undefined`).
+  - Built [`TaskAssignmentModal.tsx`](file:///c:/ZenFlow/src/components/TaskAssignmentModal.tsx) enabling Creative Directors to assign tasks to eligible members of that discipline across all teams (not restricted to their own cluster).
+  - Prevented assignments to users belonging to different disciplines (enforced with HTTP 400 rejection and filtered UI dropdown).
+  - Creative Directors specify Cognitive Load (`low`/`medium`/`high`) and Time Estimate (`estimatedHours`) during assignment and can update them later.
+  - Assigned pipeline tasks reflect directly into individual workload, utilization (`getUserDailyAssignedHours`, `isUserUtilized`), and efficiency calculations (`calculateTasksEfficiency`) in [`workload.ts`](file:///c:/ZenFlow/src/utils/workload.ts).
+- **AUDIT-17 (Zero-Defect Verification & Production Build Certification):**
+  - Static analysis: certified 0 warnings and 0 errors across `npm run lint` (`tsc --noEmit`).
+  - Production build: confirmed 100% clean builds for Vite client and esbuild server bundles (`npm run build`).
+  - Automated test suite: verified all 36 unit, security, session, resource, analytics, and shared pipeline tests passing (`npm test`), plus production server smoke testing (`node --import tsx tests/smoke-production.ts`).
+
 ### Sweep 57: 2026-10-28 (Teamwise Utilization & Efficiency Metrics, Search Engine Repair & Executive Workspace Analytics Modal)
 
 - **UTIL-01 (Daily Estimated Hours Working Days Split & Teamwise Utilization):**
