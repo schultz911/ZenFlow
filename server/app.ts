@@ -5,10 +5,13 @@ import {
   canAssignToDiscipline,
   canCreatePipelineTask,
   deriveMemberDesignation,
+  isAdminMember,
+  isBusinessLead,
   isSuperadmin as isSuperadminUser,
   SUPERADMIN_EMAIL,
   VALID_ROLES,
 } from '../src/domain/permissions';
+import { encryptSecret } from './crypto';
 import {
   computeStatusTransitionTimers,
   formatBillableHours,
@@ -106,11 +109,23 @@ export function sanitizeDisciplineMetadata(raw: unknown): { value?: Record<strin
   return { value: Object.keys(out).length > 0 ? out : undefined };
 }
 
+const MAX_RATE_LIMIT_KEYS = 10_000;
+
 function createRateLimiter(maxRequests: number, windowMs: number) {
   const records = new Map<string, number[]>();
+  let lastPrune = Date.now();
   return (req: Request, res: Response, next: NextFunction) => {
     const ip = req.ip || 'unknown';
     const now = Date.now();
+    if (now - lastPrune > windowMs || records.size >= MAX_RATE_LIMIT_KEYS) {
+      for (const [key, timestamps] of records.entries()) {
+        const active = timestamps.filter(ts => now - ts < windowMs);
+        if (active.length === 0) records.delete(key);
+        else records.set(key, active);
+      }
+      if (records.size >= MAX_RATE_LIMIT_KEYS) records.clear();
+      lastPrune = now;
+    }
     const recent = (records.get(ip) || []).filter(ts => now - ts < windowMs);
     if (recent.length >= maxRequests) {
       return res.status(429).json({ error: 'Too many requests. Please slow down.' });
@@ -205,6 +220,7 @@ export function createServerApp(deps: ServerAppDeps): Express {
   const { broadcastEvent } = sseHub;
 
   const app = express();
+  app.disable('x-powered-by');
   app.set('case sensitive routing', true);
   app.set('trust proxy', 1);
 
@@ -220,16 +236,20 @@ export function createServerApp(deps: ServerAppDeps): Express {
     })
   );
 
-  app.use((_req: Request, res: Response, next) => {
+  const isProd = process.env.NODE_ENV === 'production';
+  const scriptSrc = isProd ? "script-src 'self' https://apis.google.com" : "script-src 'self' 'unsafe-inline' https://apis.google.com";
+  const cspHeader = `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://lh3.googleusercontent.com https://*.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.clickup.com; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com; frame-ancestors 'none'; object-src 'none'; base-uri 'self';`;
+
+  app.use((req: Request, res: Response, next) => {
     res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('X-Frame-Options', 'SAMEORIGIN');
     res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
     res.setHeader('X-Permitted-Cross-Domain-Policies', 'none');
-    res.setHeader(
-      'Content-Security-Policy',
-      "default-src 'self'; script-src 'self' 'unsafe-inline' https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https://lh3.googleusercontent.com https://*.googleusercontent.com; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://api.clickup.com; frame-src 'self' https://*.firebaseapp.com https://accounts.google.com; frame-ancestors 'none';"
-    );
+    if (req.secure) {
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    }
+    res.setHeader('Content-Security-Policy', cspHeader);
     next();
   });
 
@@ -266,6 +286,12 @@ export function createServerApp(deps: ServerAppDeps): Express {
 
   const authLimiter = createRateLimiter(20, 60 * 1000);
   const firestoreLimiter = createRateLimiter(10, 60 * 1000);
+  const apiGeneralLimiter = createRateLimiter(120, 60 * 1000);
+
+  app.use('/api', (req: Request, res: Response, next: NextFunction) => {
+    if (req.path === '/events' || req.path === '/clickup/webhook') return next();
+    return apiGeneralLimiter(req, res, next);
+  });
 
   // Cookie session exchange & logout
   app.post('/api/auth/session', authLimiter, async (req: Request, res: Response) => {
@@ -628,7 +654,7 @@ export function createServerApp(deps: ServerAppDeps): Express {
         : current.clusterLeadId,
       clickupApiKey:
         body.clickupApiKey !== undefined
-          ? String(body.clickupApiKey).trim() || undefined
+          ? encryptSecret(String(body.clickupApiKey).trim())
           : current.clickupApiKey,
       selectedClickupSpaceId:
         body.selectedClickupSpaceId !== undefined
@@ -644,6 +670,7 @@ export function createServerApp(deps: ServerAppDeps): Express {
         body.clickupUsername !== undefined ? sanitizeString(body.clickupUsername) || undefined : current.clickupUsername,
     };
 
+    const isCallerPrivileged = isCallerSuper || isAdminMember(caller) || isBusinessLead(caller);
     updated.designation =
       deriveMemberDesignation({
         role: updated.role,
@@ -652,7 +679,10 @@ export function createServerApp(deps: ServerAppDeps): Express {
         isCreativeDirector: updated.isCreativeDirector,
         isClusterLead: updated.isClusterLead,
         isTeamLead: updated.isTeamLead,
-      }) || (body.designation !== undefined ? sanitizeString(body.designation) || undefined : updated.designation);
+      }) ||
+      (isCallerPrivileged && body.designation !== undefined
+        ? sanitizeString(body.designation) || undefined
+        : updated.designation);
 
     store.users[userIndex] = updated;
     repo.saveLocal();
@@ -1214,8 +1244,14 @@ export function createServerApp(deps: ServerAppDeps): Express {
 
     const resolvedTeam: Task['team'] =
       body.team === 'content' || body.team === 'design' ? body.team : currentTask.team;
-    const cleanContentDocLink =
-      body.contentDocLink !== undefined ? sanitizeString(body.contentDocLink) : currentTask.contentDocLink;
+    let cleanContentDocLink = currentTask.contentDocLink;
+    if (body.contentDocLink !== undefined) {
+      const contentDocCheck = validateHttpUrl(body.contentDocLink);
+      if (contentDocCheck.error) {
+        return res.status(400).json({ error: `Content Document Link: ${contentDocCheck.error}` });
+      }
+      cleanContentDocLink = contentDocCheck.value;
+    }
 
     if (targetStatus === 'done' && currentTask.status !== 'done' && resolvedTeam === 'content') {
       if (!cleanContentDocLink || !/^https?:\/\/\S+/i.test(cleanContentDocLink)) {
@@ -1602,6 +1638,12 @@ export function createServerApp(deps: ServerAppDeps): Express {
 
     for (const update of updates) {
       if (!update || typeof update !== 'object' || !update.id) continue;
+      if (update.contentDocLink !== undefined) {
+        const docCheck = validateHttpUrl(update.contentDocLink);
+        if (docCheck.error) {
+          return res.status(400).json({ error: `Content Document Link: ${docCheck.error}` });
+        }
+      }
       const task = taskMap.get(update.id);
       if (!task) continue;
       if (update.status === 'done' && task.status !== 'done') {
@@ -1766,8 +1808,12 @@ export function createServerApp(deps: ServerAppDeps): Express {
 
   app.post('/api/analytics/snapshots', async (req: Request, res: Response) => {
     const snapshot = req.body;
-    if (!snapshot || !snapshot.id) {
-      return res.status(400).json({ error: 'Valid snapshot payload with id is required' });
+    if (!snapshot || typeof snapshot.id !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(snapshot.id)) {
+      return res.status(400).json({ error: 'Valid snapshot payload with safe alphanumeric id is required' });
+    }
+    const existing = repo.loadAnalyticsSnapshots().find((s: any) => s?.id === snapshot.id);
+    if (existing?.locked) {
+      return res.status(409).json({ error: 'Locked analytics snapshots cannot be modified' });
     }
     await repo.saveAnalyticsSnapshot(snapshot);
     res.json({ success: true, snapshot });

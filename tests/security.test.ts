@@ -1,10 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fixtureServer, fixtureTask } from './fixtures';
 import { publicMember, SUPERADMIN_EMAIL } from '../server/security';
+import { decryptSecret, encryptSecret } from '../server/crypto';
 
 async function withServer(run: (server: Awaited<ReturnType<typeof fixtureServer>>) => Promise<void>) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'zenflow-security-'));
@@ -200,4 +202,147 @@ test('database purge: exclusive to superadmin; non-superadmins are rejected with
   assert.equal(server.store.tasks.length, 0);
   assert.equal(server.store.users.length, 1);
   assert.equal(server.store.users[0].email, SUPERADMIN_EMAIL);
+}));
+
+test('non-admin callers cannot grant or forge privileged flags, designations, or target admins', async () => withServer(async server => {
+  for (const payload of [
+    { name: 'Esc1', email: 'esc1@example.invalid', role: 'content', isBusinessLead: true },
+    { name: 'Esc2', email: 'esc2@example.invalid', role: 'content', isClusterLead: true },
+  ]) {
+    assert.equal((await server.request('/users', 'cd', 'POST', payload)).status, 403);
+  }
+  const strippedRes = await server.request('/users', 'cd', 'POST', {
+    name: 'Esc3',
+    email: 'esc3@example.invalid',
+    role: 'content',
+    designation: 'Business Lead',
+  });
+  assert.equal(strippedRes.status, 201);
+  const strippedUser = await strippedRes.json();
+  assert.equal(strippedUser.designation, undefined);
+  assert.equal(strippedUser.isBusinessLead, undefined);
+
+  assert.equal((await server.request('/users/alice', 'alice', 'PUT', { designation: 'Business Lead' })).status, 403);
+  assert.equal((await server.request('/users/alice', 'cd', 'PUT', { designation: 'Business Lead' })).status, 403);
+  assert.equal((await server.request('/users/alice', 'cd', 'PUT', { isBusinessLead: true })).status, 403);
+  assert.equal((await server.request('/users/root', 'cd', 'PUT', { name: 'Hijack' })).status, 403);
+}));
+
+test('assigneeIds bypass and non-pipeline Accounts task creation are blocked', async () => withServer(async server => {
+  server.store.users.push({
+    id: 'acct',
+    name: 'Acct Mgr',
+    email: 'acct@zensciences.com',
+    role: 'account_manager',
+    isAccountManager: true,
+    avatarColor: 'from-slate-500 to-slate-600',
+    createdAt: '2026-10-01T00:00:00.000Z',
+  });
+  assert.equal(
+    (await server.request('/tasks', 'alice', 'POST', { userId: 'alice', assigneeIds: ['bob'], title: 'Bypass', status: 'todo' })).status,
+    403
+  );
+  assert.equal(
+    (await server.request('/tasks/reorder', 'alice', 'POST', { updates: [{ id: 'a', assigneeIds: ['bob'] }] })).status,
+    403
+  );
+  assert.equal(
+    (await server.request('/tasks', 'acct', 'POST', { title: 'Active Non-Pipeline', team: 'content', status: 'todo' })).status,
+    403
+  );
+  assert.equal(
+    (await server.request('/tasks', 'acct', 'POST', { title: 'Valid Pipeline', team: 'content', status: 'pipeline' })).status,
+    201
+  );
+}));
+
+test('clickup route IDs, endpoint URLs, PAT isolation, and webhook lookup enforce security bounds', async () => withServer(async server => {
+  server.store.users.find((u: any) => u.id === 'root').clickupApiKey = 'pk_root_only_token';
+  server.store.users.push({
+    id: 'acct',
+    name: 'Acct Mgr',
+    email: 'acct@zensciences.com',
+    role: 'account_manager',
+    isAccountManager: true,
+    avatarColor: 'from-slate-500 to-slate-600',
+    createdAt: '2026-10-01T00:00:00.000Z',
+  });
+
+  assert.equal((await server.request('/clickup/folders-and-lists?spaceId=..%2Fother', 'root', 'GET')).status, 400);
+  assert.equal((await server.request('/clickup/custom-fields?listId=bad!id', 'root', 'GET')).status, 400);
+  assert.equal((await server.request('/clickup/webhook/bad!id', 'root', 'DELETE')).status, 400);
+
+  assert.equal((await server.request('/clickup/spaces', 'alice', 'POST', { teamId: '123', name: 'Blocked' })).status, 403);
+  assert.equal((await server.request('/clickup/lists', 'alice', 'POST', { spaceId: '123', name: 'Blocked' })).status, 403);
+  // Accounts user without own PAT cannot borrow admin/other PATs
+  assert.equal((await server.request('/clickup/spaces', 'acct', 'POST', { teamId: '123', name: 'No PAT' })).status, 400);
+
+  assert.equal(
+    (await server.request('/clickup/webhook/register', 'root', 'POST', { teamId: '123', endpoint: 'http://evil.example.com/hook' })).status,
+    400
+  );
+
+  const rawBody = JSON.stringify({ event: 'taskStatusUpdated', webhook_id: 'wh-test-1', task_id: 'cu_missing' });
+  const sig = crypto.createHmac('sha256', server.webhookSecret).update(rawBody).digest('hex');
+  assert.equal(
+    (await server.request('/clickup/webhook', '', 'POST', rawBody, { 'x-signature': sig })).status,
+    200
+  );
+}));
+
+test('analytics snapshots enforce manager auth, safe IDs, and locked immutability', async () => withServer(async server => {
+  assert.equal(
+    (await server.request('/analytics/snapshots', 'alice', 'POST', { id: 'snap-1', timeframe: 'today' })).status,
+    403
+  );
+  assert.equal(
+    (await server.request('/analytics/snapshots', 'root', 'POST', { id: '../bad', timeframe: 'today' })).status,
+    400
+  );
+  const lockRes = await server.request('/analytics/snapshots', 'root', 'POST', {
+    id: 'snap-lock-1',
+    timeframe: 'today',
+    startDate: '2026-10-28',
+    endDate: '2026-10-28',
+    locked: true,
+    metrics: {},
+  });
+  assert.ok(lockRes.status === 200 || lockRes.status === 201);
+  const overwriteRes = await server.request('/analytics/snapshots', 'root', 'POST', {
+    id: 'snap-lock-1',
+    timeframe: 'today',
+    startDate: '2026-10-28',
+    endDate: '2026-10-28',
+    locked: true,
+    metrics: {},
+  });
+  assert.equal(overwriteRes.status, 409);
+}));
+
+test('unsafe javascript URLs in contentDocLink are rejected on update and reorder', async () => withServer(async server => {
+  assert.equal((await server.request('/tasks/a', 'alice', 'PUT', { contentDocLink: 'javascript:alert(1)' })).status, 400);
+  assert.equal(
+    (await server.request('/tasks/reorder', 'alice', 'POST', { updates: [{ id: 'a', contentDocLink: 'javascript:alert(1)' }] })).status,
+    400
+  );
+}));
+
+test('security headers and at-rest secret encryption behave as configured', async () => withServer(async server => {
+  const healthRes = await server.request('/health', '');
+  assert.equal(healthRes.headers.get('x-powered-by'), null);
+  const csp = healthRes.headers.get('content-security-policy') || '';
+  assert.match(csp, /object-src 'none'/);
+  assert.match(csp, /base-uri 'self'/);
+
+  const prevKey = process.env.ZENFLOW_SECRETS_KEY;
+  process.env.ZENFLOW_SECRETS_KEY = 'unit-test-master-secret-key';
+  try {
+    const encrypted = encryptSecret('pk_12345_test_pat');
+    assert.ok(encrypted?.startsWith('enc:v1:'));
+    assert.notEqual(encrypted, 'pk_12345_test_pat');
+    assert.equal(decryptSecret(encrypted), 'pk_12345_test_pat');
+  } finally {
+    if (prevKey === undefined) delete process.env.ZENFLOW_SECRETS_KEY;
+    else process.env.ZENFLOW_SECRETS_KEY = prevKey;
+  }
 }));

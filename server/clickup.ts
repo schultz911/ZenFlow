@@ -2,9 +2,32 @@ import { createHash } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import type { ParentTask, Task, User } from '../src/types';
 import { formatBillableHours, getTaskAssigneeIds } from '../src/domain/taskTransitions';
+import { isAdminMember, isBusinessLead, isSuperadmin } from '../src/domain/permissions';
+import { decryptSecret } from './crypto';
 import { validSignature } from './security';
 import type { WorkspaceRepository } from './store';
 import type { WebhookRegistry } from './webhooks';
+
+const SAFE_CLICKUP_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+function sanitizeClickupId(id: unknown): string | null {
+  if (typeof id !== 'string') return null;
+  const trimmed = id.trim();
+  return SAFE_CLICKUP_ID_RE.test(trimmed) ? encodeURIComponent(trimmed) : null;
+}
+
+function isValidWebhookEndpoint(raw: string, req: Request): boolean {
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol === 'https:') return true;
+    const isLocalHost = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+    if (process.env.NODE_ENV !== 'production' && parsed.protocol === 'http:' && (isLocalHost || parsed.host === req.get('host'))) {
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 export interface ClickUpTransportResponse {
   ok: boolean;
@@ -152,11 +175,13 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     const store = repo.getStore();
     const candidates = [
       options?.explicitToken,
-      options?.caller?.clickupApiKey,
-      options?.taskUser?.clickupApiKey,
+      decryptSecret(options?.caller?.clickupApiKey),
+      decryptSecret(options?.taskUser?.clickupApiKey),
       options?.req?.headers?.['x-clickup-api-key'] as string | undefined,
       options?.req?.body?.apiKey as string | undefined,
-      options?.fallbackToAnyUser !== false ? store.users.find(u => u.clickupApiKey)?.clickupApiKey : undefined,
+      options?.fallbackToAnyUser !== false
+        ? decryptSecret(store.users.find(u => decryptSecret(u.clickupApiKey))?.clickupApiKey)
+        : undefined,
     ];
     for (const c of candidates) {
       if (typeof c === 'string' && c.trim()) return c.trim();
@@ -191,18 +216,21 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     callerToken: string;
   }): Promise<boolean> => {
     const { clickupTaskId, durationMs, taskUser, callerUserId, callerToken } = params;
+    const safeTaskId = sanitizeClickupId(clickupTaskId);
+    if (!safeTaskId) return false;
     const timeMs = Math.round(durationMs);
     if (timeMs < 1000) return true;
 
     const isOwnBoard = !callerUserId || callerUserId === taskUser.id;
-    const boardUserToken = taskUser.clickupApiKey?.trim();
+    const boardUserToken = decryptSecret(taskUser.clickupApiKey);
     const boardUserClickupId = taskUser.clickupUserId ? parseInt(taskUser.clickupUserId, 10) : undefined;
 
     if (boardUserToken) {
       const teamId = await resolveTeamId(boardUserToken);
-      if (teamId) {
+      const safeTeamId = teamId ? sanitizeClickupId(teamId) : null;
+      if (safeTeamId) {
         try {
-          const timeRes = await transport(`${CLICKUP_API}/team/${teamId}/time_entries`, {
+          const timeRes = await transport(`${CLICKUP_API}/team/${safeTeamId}/time_entries`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: boardUserToken },
             body: JSON.stringify({
@@ -220,7 +248,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
         }
       }
       try {
-        const timeRes = await transport(`${CLICKUP_API}/task/${clickupTaskId}/time`, {
+        const timeRes = await transport(`${CLICKUP_API}/task/${safeTaskId}/time`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: boardUserToken },
           body: JSON.stringify({ time: timeMs, start: Date.now() - timeMs, end: Date.now() }),
@@ -233,9 +261,10 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
 
     if (callerToken && boardUserClickupId && !isNaN(boardUserClickupId)) {
       const teamId = await resolveTeamId(callerToken);
-      if (teamId) {
+      const safeTeamId = teamId ? sanitizeClickupId(teamId) : null;
+      if (safeTeamId) {
         try {
-          const timeRes = await transport(`${CLICKUP_API}/team/${teamId}/time_entries`, {
+          const timeRes = await transport(`${CLICKUP_API}/team/${safeTeamId}/time_entries`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: callerToken },
             body: JSON.stringify({
@@ -289,12 +318,13 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       initialLiveDesc,
       skipConflictComment,
     } = params;
-    if (!clickupId || !token) return { hash: lastSyncedHash, conflict: false };
+    const safeId = sanitizeClickupId(clickupId);
+    if (!safeId || !token) return { hash: lastSyncedHash, conflict: false };
 
     let liveDesc = initialLiveDesc;
     if (liveDesc === undefined) {
       try {
-        const getRes = await transport(`${CLICKUP_API}/task/${clickupId}`, {
+        const getRes = await transport(`${CLICKUP_API}/task/${safeId}`, {
           headers: { Authorization: token },
         });
         if (getRes.ok) {
@@ -324,7 +354,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
 
     if (isSafeToOverwrite) {
       try {
-        const putRes = await transport(`${CLICKUP_API}/task/${clickupId}`, {
+        const putRes = await transport(`${CLICKUP_API}/task/${safeId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', Authorization: token },
           body: JSON.stringify({ description: desiredMarkdown }),
@@ -437,7 +467,8 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     const clickupStatus = ZENFLOW_TO_CLICKUP_STATUS[task.status] || 'to do';
     const timeEstimateMs = COGNITIVE_LOAD_ESTIMATES_MS[task.cognitiveLoad] || 24 * 3600 * 1000;
 
-    if (task.clickupTaskId) {
+    const safeTaskId = task.clickupTaskId ? sanitizeClickupId(task.clickupTaskId) : null;
+    if (safeTaskId) {
       try {
         const updatePayload: any = {
           name: task.title,
@@ -447,7 +478,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
         if (task.dueDate) {
           updatePayload.due_date = new Date(task.dueDate + 'T23:59:59').getTime();
         }
-        const res = await transport(`${CLICKUP_API}/task/${task.clickupTaskId}`, {
+        const res = await transport(`${CLICKUP_API}/task/${safeTaskId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json', Authorization: token },
           body: JSON.stringify(updatePayload),
@@ -466,7 +497,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
         }
 
         if (clickupAssigneeIds.length > 0) {
-          await transport(`${CLICKUP_API}/task/${task.clickupTaskId}`, {
+          await transport(`${CLICKUP_API}/task/${safeTaskId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', Authorization: token },
             body: JSON.stringify({
@@ -527,27 +558,28 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     }
 
     // Create task in ClickUp
-    let targetListId = task.clickupListId;
-    if (!targetListId && taskUser?.selectedClickupSpaceId) {
+    let targetListId = task.clickupListId ? sanitizeClickupId(task.clickupListId) : null;
+    const safeSpaceId = taskUser?.selectedClickupSpaceId ? sanitizeClickupId(taskUser.selectedClickupSpaceId) : null;
+    if (!targetListId && safeSpaceId) {
       try {
-        const listRes = await transport(`${CLICKUP_API}/space/${taskUser.selectedClickupSpaceId}/list?archived=false`, {
+        const listRes = await transport(`${CLICKUP_API}/space/${safeSpaceId}/list?archived=false`, {
           headers: { Authorization: token },
         });
         if (listRes.ok) {
           const listData = await listRes.json();
           if (listData.lists?.length > 0) {
-            targetListId = listData.lists[0].id;
+            targetListId = sanitizeClickupId(String(listData.lists[0].id));
           }
         }
         if (!targetListId) {
-          const folderRes = await transport(`${CLICKUP_API}/space/${taskUser.selectedClickupSpaceId}/folder?archived=false`, {
+          const folderRes = await transport(`${CLICKUP_API}/space/${safeSpaceId}/folder?archived=false`, {
             headers: { Authorization: token },
           });
           if (folderRes.ok) {
             const folderData = await folderRes.json();
             for (const f of folderData.folders || []) {
               if (f.lists?.length > 0) {
-                targetListId = f.lists[0].id;
+                targetListId = sanitizeClickupId(String(f.lists[0].id));
                 break;
               }
             }
@@ -638,7 +670,8 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     taskTypeId?: string;
   }): Promise<{ clickupParentTaskId?: string; clickupUrl?: string; descHash?: string }> => {
     const { token, listId, title, markdown, dueDate, taskTypeFieldId, taskTypeId } = params;
-    if (!token || !listId) return {};
+    const safeListId = sanitizeClickupId(listId);
+    if (!token || !safeListId) return {};
     try {
       const parentPayload: Record<string, any> = {
         name: title,
@@ -649,7 +682,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       if (taskTypeFieldId && taskTypeId) {
         parentPayload.custom_fields = [{ id: taskTypeFieldId, value: taskTypeId }];
       }
-      const pRes = await transport(`${CLICKUP_API}/list/${listId}/task`, {
+      const pRes = await transport(`${CLICKUP_API}/list/${safeListId}/task`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: token },
         body: JSON.stringify(parentPayload),
@@ -698,7 +731,8 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       taskTypeFieldId,
       taskTypeId,
     } = params;
-    if (!token || !listId) return { clickupUrl: parentClickupUrl };
+    const safeListId = sanitizeClickupId(listId);
+    if (!token || !safeListId) return { clickupUrl: parentClickupUrl };
     try {
       const subPayload: Record<string, any> = {
         name: `${title} (${discLabel})`,
@@ -710,7 +744,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       if (taskTypeFieldId && taskTypeId) {
         subPayload.custom_fields = [{ id: taskTypeFieldId, value: taskTypeId }];
       }
-      const sRes = await transport(`${CLICKUP_API}/list/${listId}/task`, {
+      const sRes = await transport(`${CLICKUP_API}/list/${safeListId}/task`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: token },
         body: JSON.stringify(subPayload),
@@ -783,13 +817,16 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     const token = resolveToken({ taskUser: assignedUser });
 
     if (token) {
-      try {
-        const cRes = await transport(`${CLICKUP_API}/task/${taskId}`, {
-          headers: { Authorization: token },
-        });
-        if (cRes.ok) clickupTaskData = await cRes.json();
-      } catch (e) {
-        console.warn(`[ClickUp Webhook] Could not fetch ClickUp task ${taskId}:`, e);
+      const safeTaskId = sanitizeClickupId(taskId);
+      if (safeTaskId) {
+        try {
+          const cRes = await transport(`${CLICKUP_API}/task/${safeTaskId}`, {
+            headers: { Authorization: token },
+          });
+          if (cRes.ok) clickupTaskData = await cRes.json();
+        } catch (e) {
+          console.warn(`[ClickUp Webhook] Could not fetch ClickUp task ${taskId}:`, e);
+        }
       }
     }
 
@@ -922,7 +959,9 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     });
 
     app.post('/api/clickup/spaces', async (req: Request, res: Response) => {
-      const token = resolveToken({ req, caller: res.locals.caller });
+      const caller = res.locals.caller as User | undefined;
+      const allowShared = isSuperadmin(caller) || isAdminMember(caller) || isBusinessLead(caller);
+      const token = resolveToken({ req, caller, fallbackToAnyUser: allowShared });
       const spaceName = sanitize(req.body?.name);
       if (!token || !spaceName) {
         return res.status(400).json({ error: 'ClickUp token and space name are required' });
@@ -986,17 +1025,17 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
 
     app.get('/api/clickup/folders-and-lists', async (req: Request, res: Response) => {
       const token = resolveToken({ req, caller: res.locals.caller });
-      const spaceId = sanitize(req.query.spaceId);
-      if (!token || !spaceId) return res.status(400).json({ error: 'spaceId and ClickUp token are required' });
+      const safeSpaceId = sanitizeClickupId(sanitize(req.query.spaceId));
+      if (!token || !safeSpaceId) return res.status(400).json({ error: 'Valid spaceId and ClickUp token are required' });
 
-      const cacheKey = `folders:${spaceId}:${token}`;
+      const cacheKey = `folders:${safeSpaceId}:${token}`;
       const cached = getFromCache(cacheKey);
       if (cached) return res.json(cached);
 
       try {
         const [fRes, lRes] = await Promise.all([
-          transport(`${CLICKUP_API}/space/${spaceId}/folder?archived=false`, { headers: { Authorization: token } }),
-          transport(`${CLICKUP_API}/space/${spaceId}/list?archived=false`, { headers: { Authorization: token } }),
+          transport(`${CLICKUP_API}/space/${safeSpaceId}/folder?archived=false`, { headers: { Authorization: token } }),
+          transport(`${CLICKUP_API}/space/${safeSpaceId}/list?archived=false`, { headers: { Authorization: token } }),
         ]);
         const fData = fRes.ok ? await fRes.json() : { folders: [] };
         const lData = lRes.ok ? await lRes.json() : { lists: [] };
@@ -1010,18 +1049,20 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
 
     app.get('/api/clickup/custom-fields', async (req: Request, res: Response) => {
       const token = resolveToken({ req, caller: res.locals.caller });
-      const listId = sanitize(req.query.listId);
+      const rawListId = sanitize(req.query.listId);
+      const safeListId = rawListId ? sanitizeClickupId(rawListId) : null;
+      if (rawListId && !safeListId) return res.status(400).json({ error: 'Invalid listId format' });
       if (!token) return res.status(400).json({ error: 'ClickUp API token required' });
 
-      const cacheKey = `custom-fields:${listId || 'team'}:${token}`;
+      const cacheKey = `custom-fields:${safeListId || 'team'}:${token}`;
       const cached = getFromCache(cacheKey);
       if (cached) return res.json(cached);
 
       try {
         let taskTypeField: any = null;
         let options: any[] = [];
-        if (listId) {
-          const fRes = await transport(`${CLICKUP_API}/list/${listId}/field`, { headers: { Authorization: token } });
+        if (safeListId) {
+          const fRes = await transport(`${CLICKUP_API}/list/${safeListId}/field`, { headers: { Authorization: token } });
           if (fRes.ok) {
             const data = await fRes.json();
             const match = (data.fields || []).find((f: any) => /task\s*type/i.test(f.name || ''));
@@ -1044,15 +1085,19 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     });
 
     app.post('/api/clickup/lists', async (req: Request, res: Response) => {
-      const token = resolveToken({ req, caller: res.locals.caller });
+      const caller = res.locals.caller as User | undefined;
+      const allowShared = isSuperadmin(caller) || isAdminMember(caller) || isBusinessLead(caller);
+      const token = resolveToken({ req, caller, fallbackToAnyUser: allowShared });
       const name = sanitize(req.body?.name);
-      const spaceId = sanitize(req.body?.spaceId);
-      const folderId = sanitize(req.body?.folderId);
-      if (!token || !name || (!spaceId && !folderId)) {
-        return res.status(400).json({ error: 'name and spaceId/folderId are required' });
+      const rawSpaceId = sanitize(req.body?.spaceId);
+      const rawFolderId = sanitize(req.body?.folderId);
+      const safeSpaceId = rawSpaceId ? sanitizeClickupId(rawSpaceId) : null;
+      const safeFolderId = rawFolderId ? sanitizeClickupId(rawFolderId) : null;
+      if (!token || !name || (!safeSpaceId && !safeFolderId)) {
+        return res.status(400).json({ error: 'Valid name and spaceId/folderId are required' });
       }
 
-      const url = folderId ? `${CLICKUP_API}/folder/${folderId}/list` : `${CLICKUP_API}/space/${spaceId}/list`;
+      const url = safeFolderId ? `${CLICKUP_API}/folder/${safeFolderId}/list` : `${CLICKUP_API}/space/${safeSpaceId}/list`;
       try {
         const createRes = await transport(url, {
           method: 'POST',
@@ -1061,7 +1106,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
         });
         if (!createRes.ok) return res.status(createRes.status).json({ error: 'Failed to create ClickUp list' });
         const list = await createRes.json();
-        invalidateCache(`folders:${spaceId}`);
+        if (safeSpaceId) invalidateCache(`folders:${safeSpaceId}`);
         return res.json({ list });
       } catch (err: any) {
         return res.status(502).json({ error: err?.message || 'Failed creating list' });
@@ -1096,12 +1141,12 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     app.post('/api/clickup/webhook', (req: Request, res: Response) => {
       const signature = req.headers['x-signature'] as string | undefined;
       const rawBody = (req as Request & { rawBody?: Buffer }).rawBody;
-      const savedWebhook = webhookRegistry.latest();
+      const body = req.body || {};
+      const savedWebhook = webhookRegistry.get(body.webhook_id) || webhookRegistry.latest();
       if (!savedWebhook?.secret || !rawBody || !validSignature(rawBody, signature, savedWebhook.secret)) {
         return res.status(401).json({ error: 'Invalid webhook signature' });
       }
 
-      const body = req.body || {};
       const taskId = body.task_id ? String(body.task_id) : '';
       const eventType = String(body.event || 'unknown');
       const historyItems = Array.isArray(body.history_items) ? body.history_items : [];
@@ -1116,12 +1161,15 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       const token = resolveToken({ req, caller: res.locals.caller });
       if (!token) return res.status(400).json({ error: 'ClickUp API token required' });
 
-      const teamId = await resolveTeamId(token);
-      if (!teamId) return res.status(404).json({ error: 'No ClickUp workspace team found' });
-
       const endpoint =
         sanitize(req.body?.endpoint) ||
         `${req.protocol}://${req.get('host')}/api/clickup/webhook`;
+      if (!isValidWebhookEndpoint(endpoint, req)) {
+        return res.status(400).json({ error: 'Webhook endpoint must be a valid https:// URL' });
+      }
+
+      const teamId = await resolveTeamId(token);
+      if (!teamId) return res.status(404).json({ error: 'No ClickUp workspace team found' });
 
       try {
         const createRes = await transport(`${CLICKUP_API}/team/${teamId}/webhook`, {
@@ -1184,15 +1232,16 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     });
 
     app.delete('/api/clickup/webhook/:id', async (req: Request, res: Response) => {
-      const id = String(req.params.id || '');
+      const safeId = sanitizeClickupId(String(req.params.id || ''));
+      if (!safeId) return res.status(400).json({ error: 'Invalid webhook ID' });
       const token = resolveToken({ req, caller: res.locals.caller });
-      if (token && id) {
-        await transport(`${CLICKUP_API}/webhook/${id}`, {
+      if (token) {
+        await transport(`${CLICKUP_API}/webhook/${safeId}`, {
           method: 'DELETE',
           headers: { Authorization: token },
         }).catch(() => {});
       }
-      await webhookRegistry.remove(id, repo.getWebhookDb());
+      await webhookRegistry.remove(decodeURIComponent(safeId), repo.getWebhookDb());
       refreshWebhookPointer();
       res.json({ success: true });
     });

@@ -802,7 +802,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, []);
 
   const downloadAuditLogs = useCallback(() => {
-    window.open('/api/audit/download', '_blank');
+    window.open('/api/audit/download', '_blank', 'noopener,noreferrer');
   }, []);
 
   // ClickUp actions

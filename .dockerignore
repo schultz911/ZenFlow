@@ -9,5 +9,7 @@ data/*.tmp.*
 
 # Private webhook signing registrations and test-only emulator artifacts
 data/.clickup-webhooks.json*
+data/webhooks.json*
+data/analytics_snapshots.json*
 .firebase/
 *-debug.log

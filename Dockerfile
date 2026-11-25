@@ -4,10 +4,10 @@ FROM node:22-slim AS builder
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 COPY . .
-RUN mkdir -p /app/data && npm run build
+RUN npm run build
 
 FROM node:22-slim AS runner
 
@@ -17,11 +17,13 @@ ENV NODE_ENV=production
 ENV PORT=3000
 
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm ci --omit=dev
 
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/data ./data
 COPY --from=builder /app/firebase-applet-config.json* ./
+RUN mkdir -p /app/data && chown -R node:node /app
+
+USER node
 
 EXPOSE 3000
 

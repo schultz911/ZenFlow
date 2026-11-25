@@ -22,7 +22,8 @@ test('permissions: CD and Cluster Lead scopes match server policy and block cros
   const cd1: MemberLike = { id: 'cd-1', email: 'cd1@zensciences.com', isCreativeDirector: true };
   const cd2: MemberLike = { id: 'cd-2', email: 'cd2@zensciences.com', isCreativeDirector: true };
   const cl1: MemberLike = { id: 'cl-1', email: 'cl1@zensciences.com', isClusterLead: true, creativeDirectorId: 'cd-1' };
-  const biz: MemberLike = { id: 'biz', email: 'biz@zensciences.com', designation: 'Business Lead' };
+  const biz: MemberLike = { id: 'biz', email: 'biz@zensciences.com', isBusinessLead: true };
+  const forgedBiz: MemberLike = { id: 'forged', email: 'forged@zensciences.com', designation: 'Business Lead' };
   const acct: MemberLike = { id: 'acct', email: 'acct@zensciences.com', role: 'account_manager' };
   const alice: MemberLike = { id: 'alice', email: 'alice@zensciences.com', role: 'content', creativeDirectorId: 'cd-1', clusterLeadId: 'cl-1' };
   const charlie: MemberLike = { id: 'charlie', email: 'charlie@zensciences.com', role: 'content', creativeDirectorId: 'cd-2' };
@@ -34,6 +35,7 @@ test('permissions: CD and Cluster Lead scopes match server policy and block cros
   assert.equal(canEdit(cl1, alice), true);
   assert.equal(canEdit(cl1, charlie), false);
   assert.equal(canEdit(biz, charlie), true);
+  assert.equal(canEdit(forgedBiz, charlie), false);
   assert.equal(canEdit(acct, alice), false);
   assert.equal(canCreatePipelineTask(acct), true);
   assert.equal(canCreatePipelineTask(alice), false);

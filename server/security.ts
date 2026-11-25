@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { getTaskAssigneeIds } from '../src/domain/taskTransitions';
+import { decryptSecret } from './crypto';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
   SUPERADMIN_EMAIL,
@@ -12,6 +13,7 @@ import {
   isAccountsMember,
   hasAuthorizedSpecialRole,
   canCreatePipelineTask,
+  canAssignTask,
   canManageMembers,
   canEdit,
   canEditTask,
@@ -72,6 +74,22 @@ export function sameOriginMutation(req: Request): boolean {
   try { return new URL(origin).origin === `${req.protocol}://${req.get('host')}`; } catch { return false; }
 }
 
+const extractRequestedAssignees = (input: Record<string, any>): string[] => {
+  if (Array.isArray(input.assigneeIds)) {
+    return Array.from(
+      new Set(
+        input.assigneeIds
+          .filter((uid: unknown): uid is string => typeof uid === 'string' && Boolean(uid.trim()))
+          .map(uid => uid.trim())
+      )
+    );
+  }
+  if (typeof input.userId === 'string' && input.userId.trim()) {
+    return [input.userId.trim()];
+  }
+  return [];
+};
+
 const CLICKUP_SELF_EDIT_KEYS = new Set([
   'clickupApiKey',
   'selectedClickupSpaceId',
@@ -117,9 +135,13 @@ export function createApiSecurity(options: {
       req.body = body;
 
       if (routePath.startsWith('/audit/') && !manager) return denied();
+      if (routePath === '/analytics/snapshots' && req.method === 'POST' && !manager) return denied();
       if (routePath.startsWith('/firestore/') && req.method !== 'GET' && !superadmin) return denied();
       if (routePath === '/clickup/webhook/register' && !superadmin) return denied();
       if (routePath.startsWith('/clickup/webhook/') && req.method === 'DELETE' && !superadmin) return denied();
+      if ((routePath === '/clickup/spaces' || routePath === '/clickup/lists') && req.method === 'POST' && !manager && !canCreatePipelineTask(caller)) {
+        return denied();
+      }
       if (routePath === '/clickup/sync-user-tasks' && !edit(body.userId)) return denied();
       if (routePath === '/auth/login' || routePath === '/auth/verify-email') body.email = caller.email;
 
@@ -127,8 +149,16 @@ export function createApiSecurity(options: {
       if (routePath === '/users' && req.method === 'POST') {
         if (!manager) return denied();
         const existing = store.users.find(user => user.email.toLowerCase() === String(body.email || '').toLowerCase());
-        if (!superadmin && !isCallerAdmin && (body.role === 'administrator' || body.isAdministrator)) return denied();
-        if (!superadmin && !isCallerAdmin && (body.isCreativeDirector || (existing && (!edit(existing.id) || existing.isCreativeDirector)))) return denied();
+        const forbiddenPrivilegeGrant =
+          body.role === 'administrator' ||
+          Boolean(body.isAdministrator) ||
+          Boolean(body.isBusinessLead) ||
+          Boolean(body.isCreativeDirector) ||
+          Boolean(body.isClusterLead);
+        if (!superadmin && !isCallerAdmin && (forbiddenPrivilegeGrant || (existing && (!edit(existing.id) || existing.isCreativeDirector || isAdminMember(existing) || isBusinessLead(existing))))) {
+          return denied();
+        }
+        if (!superadmin && !isCallerAdmin) delete body.designation;
         if (!superadmin && !isCallerAdmin && isCallerCD && !body.creativeDirectorId) body.creativeDirectorId = caller.id;
         if (!superadmin && !isCallerAdmin && isCallerClusterLead && !body.clusterLeadId) body.clusterLeadId = caller.id;
       }
@@ -136,11 +166,21 @@ export function createApiSecurity(options: {
       if (userMatch && ['PUT', 'DELETE'].includes(req.method)) {
         const target = owner(decodeURIComponent(userMatch[1]));
         if (target && !edit(target.id)) return denied();
+        if (target && !superadmin && !isCallerAdmin && (isAdminMember(target) || isBusinessLead(target) || (isCreativeDirector(target) && target.id !== caller.id))) {
+          return denied();
+        }
         if (req.method === 'DELETE' && (!manager || (target && isSuperadmin(target)))) return denied();
         if (req.method === 'PUT') {
           const onlyClickupSelfFields = Object.keys(body).length > 0 && Object.keys(body).every(key => CLICKUP_SELF_EDIT_KEYS.has(key));
-          if (!superadmin && !isCallerAdmin && (body.role === 'administrator' || body.isAdministrator)) return denied();
-          if (!superadmin && !isCallerAdmin && (body.email !== undefined || body.isCreativeDirector !== undefined)) return denied();
+          const forbiddenSelfOrPeerEscalation =
+            body.role === 'administrator' ||
+            body.isAdministrator !== undefined ||
+            body.isBusinessLead !== undefined ||
+            body.isCreativeDirector !== undefined ||
+            body.isClusterLead !== undefined ||
+            body.designation !== undefined;
+          if (!superadmin && !isCallerAdmin && forbiddenSelfOrPeerEscalation) return denied();
+          if (!superadmin && !isCallerAdmin && body.email !== undefined) return denied();
           if (!manager && !(onlyClickupSelfFields && target?.id === caller.id)) return denied();
           if (!superadmin && !isCallerAdmin && body.creativeDirectorId !== undefined && body.creativeDirectorId !== caller.id) return denied();
           if (body.clickupApiKey !== undefined && target?.id !== caller.id && !superadmin) return denied();
@@ -150,11 +190,13 @@ export function createApiSecurity(options: {
         if (!canCreatePipelineTask(caller)) return denied();
       }
       if (routePath === '/tasks' && req.method === 'POST') {
-        const isPipeline = body.status === 'pipeline' || !body.userId;
-        if (isPipeline) {
+        const requestedAssignees = extractRequestedAssignees(body);
+        const requestedStatus = body.status || 'pipeline';
+        if (requestedAssignees.length === 0) {
           if (!canCreatePipelineTask(caller)) return denied();
+          if (requestedStatus !== 'pipeline' && !canAssignTask(caller)) return denied();
         } else {
-          if (!edit(body.userId) && !canCreatePipelineTask(caller)) return denied();
+          if (requestedAssignees.some(uid => !edit(uid))) return denied();
         }
       }
       // Delegation (/tasks/:id/duplicate) is intentionally available to every authenticated member, across boards.
@@ -170,14 +212,7 @@ export function createApiSecurity(options: {
           }
         }
         if (req.method === 'PUT') {
-          const requestedAssignees: string[] = [];
-          if (Array.isArray(body.assigneeIds)) {
-            for (const uid of body.assigneeIds) {
-              if (typeof uid === 'string' && uid.trim()) requestedAssignees.push(uid.trim());
-            }
-          } else if (typeof body.userId === 'string' && body.userId.trim()) {
-            requestedAssignees.push(body.userId.trim());
-          }
+          const requestedAssignees = extractRequestedAssignees(body);
           const existingAssignees = new Set(getTaskAssigneeIds(task));
           for (const uid of requestedAssignees) {
             if (isCallerCD || isCallerAdmin || isCallerClusterLead) {
@@ -201,8 +236,18 @@ export function createApiSecurity(options: {
           if (task && !(isPipeline && (isCallerCD || isCallerAdmin || isCallerClusterLead)) && !canEditTaskLocal(task)) {
             return denied();
           }
-          if (update.userId !== undefined && !(isPipeline && (isCallerCD || isCallerAdmin || isCallerClusterLead)) && !edit(update.userId)) {
-            return denied();
+          const requestedAssignees = extractRequestedAssignees(update);
+          const existingAssignees = new Set(getTaskAssigneeIds(task));
+          for (const uid of requestedAssignees) {
+            if (isCallerCD || isCallerAdmin || isCallerClusterLead) {
+              const targetUser = store.users.find(u => u.id === uid);
+              const taskTeam = (task as any)?.team || (task?.userId && store.users.find(u => u.id === task.userId)?.role);
+              if (!canAssignToDiscipline(taskTeam, targetUser)) {
+                return res.status(400).json({ error: `Cannot assign task to a user of a different discipline (${targetUser?.role} != ${taskTeam})` });
+              }
+            } else if (!existingAssignees.has(uid) && !edit(uid)) {
+              return denied();
+            }
           }
         }
       }
@@ -215,7 +260,13 @@ export function createApiSecurity(options: {
       body.callerUserId = caller.id;
       body.callerEmail = caller.email;
       body.isSuperadmin = superadmin;
-      const savedKey = (caller as any).clickupApiKey || (store.users.find(user => (user as any).clickupApiKey) as any)?.clickupApiKey;
+      const isClickupStructureWrite = req.method === 'POST' && (routePath === '/clickup/spaces' || routePath === '/clickup/lists');
+      const allowSharedPatFallback = superadmin || isCallerAdmin || !isClickupStructureWrite;
+      const callerPat = decryptSecret((caller as any).clickupApiKey);
+      const workspacePat = allowSharedPatFallback
+        ? decryptSecret((store.users.find(user => decryptSecret((user as any).clickupApiKey)) as any)?.clickupApiKey)
+        : '';
+      const savedKey = callerPat || workspacePat;
       if (routePath !== '/clickup/verify') {
         req.headers['x-clickup-api-key'] = savedKey || '';
         body.apiKey = savedKey || '';

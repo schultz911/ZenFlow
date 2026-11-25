@@ -921,7 +921,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                         )}
                       </span>
                     </span>
-                    {contentDocLink && (
+                    {contentDocLink && isValidHttpUrl(contentDocLink) && (
                       <a
                         href={contentDocLink}
                         target="_blank"

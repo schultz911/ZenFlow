@@ -36,12 +36,7 @@ export const isAdminMember = (user: MemberLike | undefined | null): boolean =>
   Boolean(user && (isSuperadmin(user) || user.isAdministrator || user.role === 'administrator'));
 
 export const isBusinessLead = (user: MemberLike | undefined | null): boolean =>
-  Boolean(
-    user &&
-      (user.isBusinessLead ||
-        user.designation === 'business_lead' ||
-        user.designation === 'Business Lead')
-  );
+  Boolean(user?.isBusinessLead);
 
 export const isCreativeDirector = (user: MemberLike | undefined | null): boolean =>
   Boolean(user && (isSuperadmin(user) || user.isCreativeDirector));
@@ -50,19 +45,11 @@ export const isClusterLead = (user: MemberLike | undefined | null): boolean =>
   Boolean(user?.isClusterLead);
 
 export const isTeamLead = (user: MemberLike | undefined | null): boolean =>
-  Boolean(
-    user &&
-      (user.isTeamLead || user.designation === 'team_lead' || user.designation === 'Team Lead')
-  );
+  Boolean(user?.isTeamLead);
 
 export const isAccountsMember = (user: MemberLike | undefined | null): boolean => {
   if (!user) return false;
-  return Boolean(
-    user.role === 'account_manager' ||
-      user.isAccountManager ||
-      user.designation === 'account_manager' ||
-      user.designation === 'Account Manager'
-  );
+  return Boolean(user.role === 'account_manager' || user.isAccountManager);
 };
 
 export const hasAuthorizedSpecialRole = (user: MemberLike | undefined | null): boolean => {
@@ -71,11 +58,7 @@ export const hasAuthorizedSpecialRole = (user: MemberLike | undefined | null): b
     isAdminMember(user) ||
       isBusinessLead(user) ||
       user.isCreativeDirector ||
-      user.designation === 'creative_director' ||
-      user.designation === 'Creative Director' ||
       user.isClusterLead ||
-      user.designation === 'cluster_lead' ||
-      user.designation === 'Cluster Lead' ||
       isTeamLead(user)
   );
 };
@@ -98,8 +81,6 @@ export const canAssignTask = (user: MemberLike | undefined | null): boolean =>
       (isAdminMember(user) ||
         isBusinessLead(user) ||
         isCreativeDirector(user) ||
-        user.designation === 'creative_director' ||
-        user.designation === 'Creative Director' ||
         isClusterLead(user))
   );
 

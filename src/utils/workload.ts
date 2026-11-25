@@ -678,8 +678,10 @@ export function exportWorkspaceXLS(tasks: Task[], users: { id: string; name: str
     'Created At',
   ];
 
-  const escapeXml = (str: string) =>
-    str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const escapeXml = (str: string) => {
+    const safeFormula = /^[=+\-@\t\r]/.test(str) ? `'${str}` : str;
+    return safeFormula.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  };
 
   const headerCells = headers
     .map(h => `<th style="background-color:#1e293b;color:#ffffff;font-weight:bold;padding:8px;border:1px solid #cbd5e1;text-align:left;">${escapeXml(h)}</th>`)

@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ParentTask, Task, User } from '../src/types';
+import { readAuditTail } from './resources';
 import {
   isSuperadmin,
   SUPERADMIN_EMAIL,
@@ -416,6 +417,14 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
         console.warn('[Firestore] Failed to parse service account from environment variable:', e);
       }
     }
+    const dataKeyPath = path.join(dataDir, 'serviceAccountKey.json');
+    if (fs.existsSync(dataKeyPath)) {
+      try {
+        return JSON.parse(fs.readFileSync(dataKeyPath, 'utf-8'));
+      } catch (e) {
+        console.warn('[Firestore] Failed to read data/serviceAccountKey.json:', e);
+      }
+    }
     const localKeyPath = path.join(process.cwd(), 'serviceAccountKey.json');
     if (fs.existsSync(localKeyPath)) {
       try {
@@ -559,7 +568,7 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
         try {
           await fs.promises.mkdir(dataDir, { recursive: true });
           const tempPath = `${dataFile}.tmp.${Date.now()}`;
-          await fs.promises.writeFile(tempPath, JSON.stringify(dataToWrite, null, 2), 'utf-8');
+          await fs.promises.writeFile(tempPath, JSON.stringify(dataToWrite, null, 2), { encoding: 'utf-8', mode: 0o600 });
           await fs.promises.rename(tempPath, dataFile);
         } catch (err) {
           console.error('Failed to persist store asynchronously:', err);
@@ -582,7 +591,7 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
         if (!fs.existsSync(dataDir)) {
           fs.mkdirSync(dataDir, { recursive: true });
         }
-        fs.writeFileSync(dataFile, JSON.stringify(dataToWrite, null, 2), 'utf-8');
+        fs.writeFileSync(dataFile, JSON.stringify(dataToWrite, null, 2), { encoding: 'utf-8', mode: 0o600 });
       } catch (err) {
         console.error('[Process] Failed synchronous emergency persistence:', err);
       }
@@ -658,23 +667,12 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
       firestoreLastError = null;
     },
     async loadRecentAuditLogs(limit) {
-      if (!fs.existsSync(auditLogFile)) return [];
-      const content = fs.readFileSync(auditLogFile, 'utf-8');
-      const lines = content.trim().split('\n').filter(Boolean);
-      const parsed: AuditLogEntry[] = [];
-      for (const line of lines.slice(-limit).reverse()) {
-        try {
-          parsed.push(JSON.parse(line));
-        } catch {
-          // ignore malformed line
-        }
-      }
-      return parsed;
+      return readAuditTail<AuditLogEntry>(auditLogFile, limit);
     },
     async appendAuditEntry(fullEntry) {
       try {
         await fs.promises.mkdir(dataDir, { recursive: true });
-        await fs.promises.appendFile(auditLogFile, JSON.stringify(fullEntry) + '\n', 'utf-8');
+        await fs.promises.appendFile(auditLogFile, JSON.stringify(fullEntry) + '\n', { encoding: 'utf-8', mode: 0o600 });
       } catch (e) {
         console.error('[Audit Log Disk Error]:', e);
       }
@@ -723,7 +721,7 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
         if (existingIndex >= 0) snapshots[existingIndex] = snapshot;
         else snapshots.push(snapshot);
         await fs.promises.mkdir(dataDir, { recursive: true });
-        await fs.promises.writeFile(analyticsSnapshotFile, JSON.stringify(snapshots, null, 2), 'utf-8');
+        await fs.promises.writeFile(analyticsSnapshotFile, JSON.stringify(snapshots, null, 2), { encoding: 'utf-8', mode: 0o600 });
         if (!adminDb) await initFirestore();
         if (adminDb) {
           await adminDb.collection('analytics_snapshots').doc(snapshot.id).set(cleanDocData(snapshot), { merge: true });
@@ -736,15 +734,18 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
       return {
         connected: Boolean(adminDb && firestoreInitialized),
         lastError: firestoreLastError,
-        hasLocalKey: fs.existsSync(path.join(process.cwd(), 'serviceAccountKey.json')),
+        hasLocalKey:
+          fs.existsSync(path.join(dataDir, 'serviceAccountKey.json')) ||
+          fs.existsSync(path.join(process.cwd(), 'serviceAccountKey.json')),
       };
     },
     async saveCredentials(serviceAccountJson) {
       if (!serviceAccountJson || !serviceAccountJson.project_id || !serviceAccountJson.private_key || !serviceAccountJson.client_email) {
         return { ok: false, error: 'Invalid Firebase Service Account JSON' };
       }
-      const keyPath = path.join(process.cwd(), 'serviceAccountKey.json');
-      fs.writeFileSync(keyPath, JSON.stringify(serviceAccountJson, null, 2), 'utf-8');
+      await fs.promises.mkdir(dataDir, { recursive: true });
+      const keyPath = path.join(dataDir, 'serviceAccountKey.json');
+      fs.writeFileSync(keyPath, JSON.stringify(serviceAccountJson, null, 2), { encoding: 'utf-8', mode: 0o600 });
       adminDb = null;
       firestoreInitialized = false;
       await initFirestore();
