@@ -41,8 +41,8 @@
 ### 2. Multi-Stage Swimlane Lifecycle & Team Sections
 
 ZenFlow structures workflows across dedicated disciplines:
-- **Delivery Boards (Content & Design)**: Partitioned by delivery teams under designated Creative Directors with quick team switcher dropdowns.
-- **Shared Agency Disciplines (Video & UI/UX)**: Shared agency-wide teams operating cross-functionally across all delivery teams without board dropdown isolation.
+- **Delivery Boards (Content & Design)**: Partitioned by delivery teams under designated Creative Directors with quick team switcher dropdowns and centralized `TeamPipeline` queues.
+- **ClickUp Parent/Subtask Integration**: Creating a pipeline deliverable generates a canonical `ParentTask` (shared `Brief` and `Brand Guidelines Link`) linked to Content and/or Design subtasks, syncing clean Markdown descriptions to ClickUp with hash-based conflict protection.
 - **Swimlane Stages**:
   - **Pipeline**: Backlog ideation space for uncommitted initiatives; deadlines remain optional.
   - **Retainer**: Ongoing, recurring client engagements without deadlines and with direct `+ Subtask` generation.
@@ -53,23 +53,22 @@ ZenFlow structures workflows across dedicated disciplines:
 
 ### 3. Floating Cross-Board Free Pool
 
-- **Idle Capacity Detection**: A persistent glassmorphic floating pill continuously monitors members across Content, Design, Video, and UI/UX, identifying individuals with zero active tasks in `To Do` or `In Progress`.
-- **Instant Allocation**: Filter idle capacity by role (`All`, `Content`, `Design`, `Video`, `UI/UX`) and instantly allocate tasks without leaving the active board view.
+- **Idle Capacity Detection**: A persistent glassmorphic floating pill continuously monitors members across Content and Design, identifying individuals with underutilized daily capacity (`< 3h/day` assigned).
+- **Instant Allocation**: Filter available capacity by role (`All`, `Content`, `Design`) and instantly allocate tasks without leaving the active board view.
 
 ### 4. Roles, Leadership Hierarchy & Provisioning Permissions
 
-- **Member Roles**: Supports `Administrator`, `Account Manager`, `Content`, `Design`, `Video`, and `UI/UX`.
-- **Leadership Designations**: Configurable designations for `Administrator`, `Creative Director`, `Cluster Lead`, `Content Lead`, and `Art Director` with specific role tags.
-- **Cluster Lead Association**: Direct `Assigned Cluster Lead` mapping while boards continue to follow `Creative Director` as the primary leader of a cluster.
-- **Strict Provisioning Access**: Member onboarding and role management permissions are strictly restricted to `Superadmin`, `Administrator`, `Creative Director`, and `Cluster Lead`.
+- **Team Disciplines**: Supports `Accounts` (`account_manager`), `Content`, `Design`, plus an `Administrator` privilege toggle.
+- **Special Roles / Designations**: Configurable designations for `Business Lead`, `Creative Director`, `Cluster Lead`, and `Team Lead`, with `Creative Director` and `Cluster Lead` assignments.
+- **Strict Provisioning Access**: Member onboarding and role management permissions are restricted to `Superadmin`, `Administrator`, `Business Lead`, `Creative Director`, and `Cluster Lead` (scoped to their teams).
 
-### 5. Universal Subtask Delegation & Cloud Firestore Storage
+### 5. Parent-Linked Deliverables, Subtask Delegation & Cloud Firestore Storage
 
-- **Universal Subtask Delegation**: Any authenticated team member can delegate subtasks across boards. Subtasks link hierarchically under the parent task (`parentTaskId`, `parentTaskTitle`, `isSubtask: true`).
-- **Native Cloud Persistence**: Tasks and team accounts save directly to Google Cloud Firestore (`users`, `tasks`, and `compliance_audit_logs`).
+- **Parent Deliverables & Subtask Sync**: Pipeline deliverables store shared `Brief` and `Brand Guidelines` on a canonical `ParentTask` hydrated onto linked Content and Design subtasks (`parentTaskId`, `parentTaskTitle`, `isSubtask: true`), alongside universal cross-board subtask delegation.
+- **Native Cloud Persistence**: Team accounts, tasks, parent deliverables, and audit logs save directly to Google Cloud Firestore (`users`, `tasks`, `parent_tasks`, and `compliance_audit_logs`).
 - **Resilient Fallback**: Zero-crash startup resilience gracefully falls back to local storage when cloud credentials are pending configuration.
 
-### 5. Resilient Real-Time Engine & Offline Capability
+### 6. Resilient Real-Time Engine & Offline Capability
 
 - **Server-Sent Events (SSE)**: Bounded output streaming (256 KiB backpressure limit) ensures low latency and memory safety under multi-client loads.
 - **Optimistic UI with FIFO Replay**: Offline changes, reorders, and creations are applied instantly to local state and replayed sequentially upon network reconnection.
@@ -132,32 +131,39 @@ flowchart TD
 ## 📂 Directory Structure
 
 ```text
-c:/ZenFlow/
+ZenFlow/
 ├── .github/workflows/          # CI/CD workflows (Node 22 / Java 21)
 ├── data/                       # Local volume data (store.json, audit.ndjson, webhooks.json)
 ├── docs/
-│   └── READINESS.md            # Enterprise readiness & deployment verification guide
+│   ├── READINESS.md            # Enterprise readiness & deployment verification guide
+│   └── UI-REFINEMENT.md        # Shared UI components, hold control & responsive verification
 ├── public/                     # Static assets & favicons
 ├── server/
 │   ├── resources.ts            # Audit tail reader & bounded SSE transport
 │   ├── security.ts             # Auth middleware, cookie issuance & payload redaction
+│   └── webhooks.ts             # ClickUp webhook registry persistence
 ├── src/
-│   ├── components/             # Reusable UI components & modals (Swimlanes, FreePool, etc.)
+│   ├── components/             # Reusable UI components & modals (Swimlanes, TeamPipeline, modals/, ui/)
 │   ├── context/                # DashboardContext (state management, offline queue)
 │   ├── lib/                    # Firebase client initialization & session management
-│   ├── utils/                  # Workload calculations, date formatting & audit helpers
+│   ├── utils/                  # Workload calculations (`workload.ts`) & task metadata folding (`taskMetadata.ts`)
 │   ├── App.tsx                 # Main application layout & swimlane orchestrator
 │   ├── index.css               # Design tokens & Tailwind theme definitions
 │   ├── main.tsx                # React DOM entry point
-│   └── types.ts                # TypeScript interfaces (User, Task, AuditLog)
+│   └── types.ts                # TypeScript interfaces (User, Task, ParentTask, AuditLogEntry)
 ├── tests/
+│   ├── analytics.test.ts       # Utilization, efficiency & delivery unit tests
 │   ├── benchmark-audit.ts      # Synthetic benchmark for asynchronous audit log reading
 │   ├── client-session.test.ts  # Client session migration & token race tests
 │   ├── firestore.emulator.ts   # Firestore Security Rules unit test suite
 │   ├── fixtures.ts             # Mock server, store & identity fixtures
+│   ├── hold-to-confirm.test.ts # Deterministic 5-second hold controller tests
 │   ├── resources.test.ts       # SSE backpressure & audit tail unit tests
 │   ├── security.test.ts        # Comprehensive RBAC & security verification tests
-│   └── smoke-production.ts     # Compiled server artifact production smoke test
+│   ├── shared-pipelines.test.ts# Shared pipelines, ParentTask, ClickUp sync & migration tests
+│   ├── smoke-production.ts     # Compiled server artifact production smoke test
+│   ├── ui-preview.ts           # Isolated Vite preview server for interactive DOM checks
+│   └── ui-preview/             # Synthetic UI fixtures & browser interaction checks
 ├── Dockerfile                  # Multi-stage container definition
 ├── firestore.rules             # Server-owned Firestore security rules
 ├── package.json                # Project dependencies and script declarations
@@ -199,22 +205,15 @@ Create a `.env` file in the project root:
 cp .env.example .env
 ```
 
-Populate the configuration values:
-
-```env
-# Application URL where the app is hosted (e.g. http://localhost:3000)
-APP_URL=http://localhost:3000
-
-# Server Port and Node Environment
-PORT=3000
-NODE_ENV=development
-
-# Firebase Service Account Key (JSON string, base64-encoded string, or path to serviceAccountKey.json)
-FIREBASE_SERVICE_ACCOUNT_KEY=
-
-# Optional local persistent storage directory (defaults to ./data)
-ZENFLOW_DATA_DIR=./data
-```
+<!-- AUTO-GENERATED:ENV -->
+| Variable | Required | Description | Default / Example |
+| :--- | :--- | :--- | :--- |
+| `APP_URL` | No | Public URL where the applet is hosted | `http://localhost:3000` |
+| `PORT` | No | HTTP server port (`server.ts`) | `3000` |
+| `NODE_ENV` | No | Runtime mode (`development` or `production`) | `production` |
+| `FIREBASE_SERVICE_ACCOUNT_KEY` | No | Firebase Admin JSON string, base64 string, or path to `serviceAccountKey.json` | — |
+| `ZENFLOW_DATA_DIR` | No | Persistent directory for `store.json`, `audit.ndjson`, and webhook registry | `./data` |
+<!-- /AUTO-GENERATED:ENV -->
 
 ### Running the Development Server
 
@@ -230,15 +229,17 @@ Visit [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## 📜 Available Scripts
 
+<!-- AUTO-GENERATED:SCRIPTS -->
 | Command | Action |
 | :--- | :--- |
-| `npm run dev` | Starts the server in development mode using `tsx server.ts`. |
-| `npm run build` | Compiles the Vite frontend to `dist/` and bundles `server.ts` into `dist/server.cjs` via `esbuild`. |
-| `npm run start` | Runs the compiled production server (`node dist/server.cjs`). |
-| `npm run lint` | Runs TypeScript compiler checks without emitting files (`tsc --noEmit`). |
-| `npm test` | Runs the complete Node.js test suite across security, sessions, and resources. |
-| `npm run test:rules` | Executes Firestore Security Rules unit tests against the local Firebase Emulator. |
-| `npm run clean` | Cleans build artifacts (`dist/` and temporary server outputs). |
+| `npm run dev` | Runs `tsx server.ts` (development server with Vite middleware). |
+| `npm run build` | Runs `vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs`. |
+| `npm run start` | Runs `node dist/server.cjs`. |
+| `npm run lint` | Runs `tsc --noEmit`. |
+| `npm test` | Runs `node --import tsx --test tests/*.test.ts`. |
+| `npm run test:rules` | Runs `firebase emulators:exec --only firestore --project demo-zenflow "node --import tsx tests/firestore.emulator.ts"`. |
+| `npm run clean` | Runs `rm -rf dist server.js`. |
+<!-- /AUTO-GENERATED:SCRIPTS -->
 
 ---
 
@@ -279,10 +280,10 @@ ZenFlow operates under two coordinated persistence tiers:
 
 1. **Cloud Persistence (Primary)**:
    - Powered by Firebase Admin and `@google-cloud/firestore`.
-   - Collections: `users`, `tasks`, and `compliance_audit_logs`.
+   - Collections: `users`, `tasks`, `parent_tasks`, and `compliance_audit_logs`.
    - Active whenever `FIREBASE_SERVICE_ACCOUNT_KEY` is supplied in the environment or uploaded by Superadmin.
 2. **Local Volume Fallback**:
-   - Persisted as structured JSON in `data/store.json` and append-only NDJSON in `data/compliance-audit.jsonl`.
+   - Persisted as structured JSON in `data/store.json` and append-only NDJSON in `data/audit.ndjson`.
    - Guaranteed atomic writes using temporary swap files (`.tmp`) to eliminate corruption during sudden process restarts.
 
 ---

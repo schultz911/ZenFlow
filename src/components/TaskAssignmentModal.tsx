@@ -1,7 +1,7 @@
 import { DialogPanel } from './ui/DialogPanel';
 import React, { useState, useEffect, useMemo } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { useDashboard } from '../context/DashboardContext';
+import { useAuth, useWorkspace } from '../context/DashboardContext';
 import { Task, CognitiveLoad } from '../types';
 import {
   getUserDailyAssignedHours,
@@ -28,13 +28,13 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
   task,
   onClose,
 }) => {
+  const { canAssignTask } = useAuth();
   const {
     users,
     tasks,
     updateTask,
-    canAssignTask,
     creativeDirectors,
-  } = useDashboard();
+  } = useWorkspace();
 
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [cognitiveLoad, setCognitiveLoad] = useState<CognitiveLoad>('medium');

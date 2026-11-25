@@ -1,8 +1,8 @@
 import { DialogPanel } from './ui/DialogPanel';
-import { LinkListInput } from './ui/LinkListInput';
+import { ContentSpecFields, DesignSpecFields } from './forms/DisciplineSpecFields';
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useDashboard } from '../context/DashboardContext';
+import { useAuth, useWorkspace } from '../context/DashboardContext';
 import { Task, CognitiveLoad, TaskStatus, TaskDisciplineMetadata } from '../types';
 import { getTaskBillableMs, formatBillableDetailed, getLastDayOfMonth, getUserTag, getTaskAssigneeIds } from '../utils/workload';
 import { isValidHttpUrl, foldLegacyDisciplineMetadata } from '../utils/taskMetadata';
@@ -75,14 +75,16 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   onDuplicateTask,
 }) => {
   const {
+    currentUser,
+    canEditUserTasks,
+  } = useAuth();
+  const {
     tasks,
     users,
-    currentUser,
     createTask,
     updateTask,
     deleteTask,
-    canEditUserTasks,
-  } = useDashboard();
+  } = useWorkspace();
 
   const canDuplicate = Boolean(onDuplicateTask);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -312,8 +314,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       if (taskToEdit) {
         await updateTask(taskToEdit.id, {
           title: title.trim(),
-          description: description.trim() || undefined,
-          brandGuidelines: trimmedBrandGuidelines || undefined,
+          description: description.trim(),
+          brandGuidelines: trimmedBrandGuidelines,
           userId: effectiveAssignees[0] || undefined,
           assigneeIds: effectiveAssignees,
           dueDate: finalDueDate,
@@ -324,7 +326,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           estimatedHours: parsedEstimated,
           priority,
           contentDocLink: trimmedDocLink || undefined,
-          disciplineMetadata: nextDisciplineMetadata,
+          disciplineMetadata: nextDisciplineMetadata ?? ({} as TaskDisciplineMetadata),
         });
       } else {
         await createTask({
@@ -478,10 +480,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             )}
 
             {/* Propagated Content Document Link, Brand Guidelines & ClickUp Link */}
-            {(taskToEdit?.contentDocLink || taskToEdit?.brandGuidelines || taskToEdit?.clickupUrl) && (
+            {((taskToEdit?.brandGuidelines && isValidHttpUrl(taskToEdit.brandGuidelines)) ||
+              (taskToEdit?.contentDocLink && isValidHttpUrl(taskToEdit.contentDocLink)) ||
+              (taskToEdit?.clickupUrl && isValidHttpUrl(taskToEdit.clickupUrl))) && (
               <div className="px-6 py-2.5 bg-emerald-50/60 dark:bg-emerald-950/20 border-b border-emerald-200/60 dark:border-emerald-800/20 flex flex-wrap items-center justify-between gap-2 text-xs">
                 <div className="flex flex-wrap items-center gap-3 min-w-0">
-                  {taskToEdit?.brandGuidelines && (
+                  {taskToEdit?.brandGuidelines && isValidHttpUrl(taskToEdit.brandGuidelines) && (
                     <a
                       href={taskToEdit.brandGuidelines}
                       target="_blank"
@@ -493,7 +497,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       <ExternalLink className="w-3 h-3 shrink-0" />
                     </a>
                   )}
-                  {taskToEdit?.contentDocLink && (
+                  {taskToEdit?.contentDocLink && isValidHttpUrl(taskToEdit.contentDocLink) && (
                     <a
                       href={taskToEdit.contentDocLink}
                       target="_blank"
@@ -508,7 +512,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     </a>
                   )}
                 </div>
-                {taskToEdit?.clickupUrl && (
+                {taskToEdit?.clickupUrl && isValidHttpUrl(taskToEdit.clickupUrl) && (
                   <a
                     href={taskToEdit.clickupUrl}
                     target="_blank"
@@ -775,99 +779,29 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
               {/* Discipline Subtask Specifications (Editable) */}
               {(taskDiscipline === 'content' || taskDiscipline === 'design') && (
-                <div className={`rounded-xl border p-3.5 space-y-3 text-xs ${
-                  taskDiscipline === 'design'
-                    ? 'border-indigo-500/20 bg-indigo-50/30 dark:bg-indigo-950/10'
-                    : 'border-blue-500/20 bg-blue-50/30 dark:bg-blue-950/10'
-                }`}>
-                  <span className={`block text-[11px] uppercase font-semibold tracking-wider ${
-                    taskDiscipline === 'design' ? 'text-indigo-600 dark:text-indigo-400' : 'text-blue-600 dark:text-blue-400'
-                  }`}>
-                    {taskDiscipline === 'design' ? 'Design Subtask Specifications' : 'Content Subtask Specifications'}
-                  </span>
-
-                  {taskDiscipline === 'design' ? (
-                    <>
-                      <div>
-                        <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="task-design-asset-type">
-                          Asset Type
-                        </label>
-                        <input
-                          id="task-design-asset-type"
-                          type="text"
-                          value={assetType}
-                          readOnly={!canEdit}
-                          onChange={e => setAssetType(e.target.value)}
-                          placeholder="e.g. Social Media Banner, Infographic"
-                          className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-indigo-500 focus:outline-none read-only:opacity-80"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="task-design-specs">
-                          Design Specifications
-                        </label>
-                        <textarea
-                          id="task-design-specs"
-                          rows={3}
-                          value={designSpecifications}
-                          readOnly={!canEdit}
-                          onChange={e => setDesignSpecifications(e.target.value)}
-                          placeholder="Dimensions, aspect ratios, formats, quantity, visual notes..."
-                          className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-indigo-500 focus:outline-none resize-y read-only:opacity-80"
-                        />
-                      </div>
-                      <LinkListInput
-                        id="task-design-refs"
-                        label="Brand Assets & References"
-                        links={brandAssetsReferences}
-                        onChange={setBrandAssetsReferences}
-                        readOnly={!canEdit}
-                        placeholder="https://..."
-                        accent="indigo"
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <div>
-                        <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="task-content-type">
-                          Content Type
-                        </label>
-                        <input
-                          id="task-content-type"
-                          type="text"
-                          value={contentType}
-                          readOnly={!canEdit}
-                          onChange={e => setContentType(e.target.value)}
-                          placeholder="e.g. Blog Post, Case Study, Whitepaper"
-                          className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none read-only:opacity-80"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="task-content-specs">
-                          Content Specifications
-                        </label>
-                        <textarea
-                          id="task-content-specs"
-                          rows={3}
-                          value={contentSpecifications}
-                          readOnly={!canEdit}
-                          onChange={e => setContentSpecifications(e.target.value)}
-                          placeholder="Word count, deliverable format, tone of voice, keywords, CTA..."
-                          className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none resize-y read-only:opacity-80"
-                        />
-                      </div>
-                      <LinkListInput
-                        id="task-content-refs"
-                        label="Source Content & References"
-                        links={sourceContentReferences}
-                        onChange={setSourceContentReferences}
-                        readOnly={!canEdit}
-                        placeholder="https://..."
-                        accent="blue"
-                      />
-                    </>
-                  )}
-                </div>
+                taskDiscipline === 'design' ? (
+                  <DesignSpecFields
+                    idPrefix="task-modal"
+                    assetType={assetType}
+                    onChangeAssetType={setAssetType}
+                    designSpecifications={designSpecifications}
+                    onChangeDesignSpecifications={setDesignSpecifications}
+                    brandAssetsReferences={brandAssetsReferences}
+                    onChangeBrandAssetsReferences={setBrandAssetsReferences}
+                    readOnly={!canEdit}
+                  />
+                ) : (
+                  <ContentSpecFields
+                    idPrefix="task-modal"
+                    contentType={contentType}
+                    onChangeContentType={setContentType}
+                    contentSpecifications={contentSpecifications}
+                    onChangeContentSpecifications={setContentSpecifications}
+                    sourceContentReferences={sourceContentReferences}
+                    onChangeSourceContentReferences={setSourceContentReferences}
+                    readOnly={!canEdit}
+                  />
+                )
               )}
 
               {/* Cognitive Load */}

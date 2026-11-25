@@ -1,7 +1,7 @@
 import { DialogPanel } from './ui/DialogPanel';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useDashboard } from '../context/DashboardContext';
+import { useBoardUi, useWorkspace } from '../context/DashboardContext';
 import { Task, TaskStatus, User } from '../types';
 import { formatDateOnly, getLastDayOfMonth, getUserTag } from '../utils/workload';
 import {
@@ -33,12 +33,12 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
   initialTargetStatus,
   onDuplicated,
 }) => {
+  const { setActiveBoardId } = useBoardUi();
   const {
     users,
     creativeDirectors,
     duplicateTaskToBoard,
-    setActiveBoardId,
-  } = useDashboard();
+  } = useWorkspace();
 
   // Find source user and board
   const sourceUser = useMemo(() => {

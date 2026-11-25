@@ -2,7 +2,7 @@ import { DialogPanel } from './ui/DialogPanel';
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { useDashboard } from '../context/DashboardContext';
+import { useAuth, useClickUp, useWorkspace } from '../context/DashboardContext';
 import { AuditLogEntry } from '../types';
 import {
   Database,
@@ -30,15 +30,19 @@ interface FirestoreModalProps {
 
 export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose }) => {
   const {
+    isSuperadmin,
+    canManageMembers,
+  } = useAuth();
+  const {
     firestoreStatus,
     refreshFirestoreStatus,
     syncWithFirestore,
     users,
     tasks,
-    isSuperadmin,
-    canManageMembers,
     fetchAuditLogs,
     downloadAuditLogs,
+  } = useWorkspace();
+  const {
     isClickupConnected,
     clickupSpaces,
     connectClickup,
@@ -46,7 +50,7 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
     clickupWebhookStatus,
     refreshClickupWebhookStatus,
     registerClickupWebhook,
-  } = useDashboard();
+  } = useClickUp();
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);

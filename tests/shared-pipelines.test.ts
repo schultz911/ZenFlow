@@ -140,29 +140,25 @@ test('Prevent assignments to users belonging to a different discipline', async (
 }));
 
 test('pipeline-bundle creates linked Content & Design subtasks under a ClickUp parent task and handles Content -> Sent link propagation', async () => withServer(async server => {
-  const realFetch = globalThis.fetch;
   const clickupCalls: Array<{ url: string; method: string; body: any }> = [];
   let createdClickupIdx = 100;
 
-  (globalThis as any).fetch = async (url: string, init?: any) => {
-    if (String(url).startsWith('https://api.clickup.com/')) {
-      const method = init?.method || 'GET';
-      const body = init?.body ? JSON.parse(init.body) : null;
-      clickupCalls.push({ url: String(url), method, body });
-      if (method === 'POST' && String(url).includes('/task') && !String(url).includes('/comment')) {
-        createdClickupIdx++;
-        return new Response(
-          JSON.stringify({ id: `cu-${createdClickupIdx}`, url: `https://app.clickup.com/t/cu-${createdClickupIdx}` }),
-          { status: 200, headers: { 'Content-Type': 'application/json' } }
-        );
-      }
-      if (method === 'GET' && String(url).includes('/api/v2/task/')) {
-        return new Response(JSON.stringify({ description: 'Existing spec' }), { status: 200 });
-      }
-      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  server.setClickupTransport(async (url: string, init?: any) => {
+    const method = init?.method || 'GET';
+    const body = init?.body ? JSON.parse(init.body) : null;
+    clickupCalls.push({ url: String(url), method, body });
+    if (method === 'POST' && String(url).includes('/task') && !String(url).includes('/comment')) {
+      createdClickupIdx++;
+      return new Response(
+        JSON.stringify({ id: `cu-${createdClickupIdx}`, url: `https://app.clickup.com/t/cu-${createdClickupIdx}` }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      );
     }
-    return realFetch(url, init);
-  };
+    if (method === 'GET' && String(url).includes('/api/v2/task/')) {
+      return new Response(JSON.stringify({ description: 'Existing spec' }), { status: 200 });
+    }
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
+  });
 
   try {
     // 1. Account manager creates Content + Design bundle
@@ -263,7 +259,7 @@ test('pipeline-bundle creates linked Content & Design subtasks under a ClickUp p
     assert.deepEqual(Array.from(afterPartial.assigneeIds), ['bob2']);
     assert.equal(afterPartial.userId, 'bob2');
   } finally {
-    globalThis.fetch = realFetch;
+    server.setClickupTransport(undefined);
   }
 }));
 
@@ -363,46 +359,43 @@ test('Existing tasks without team field migrate cleanly on server startup', asyn
 }));
 
 test('ParentTask collection, sibling Brief/BrandGuidelines sync, conflict-safe ClickUp sync, URL validation, and orphan cleanup', async () => withServer(async server => {
-  const realFetch = globalThis.fetch;
   const clickupState = new Map<string, { description: string }>();
   const clickupCalls: Array<{ url: string; method: string; body: any }> = [];
   let seq = 200;
 
-  (globalThis as any).fetch = async (url: string, init?: any) => {
+  const baseTransport = async (url: string, init?: any) => {
     const u = String(url);
-    if (u.startsWith('https://api.clickup.com/')) {
-      const method = init?.method || 'GET';
-      const body = init?.body ? JSON.parse(init.body) : null;
-      clickupCalls.push({ url: u, method, body });
+    const method = init?.method || 'GET';
+    const body = init?.body ? JSON.parse(init.body) : null;
+    clickupCalls.push({ url: u, method, body });
 
-      if (method === 'POST' && u.includes('/list/') && u.endsWith('/task')) {
-        seq++;
-        const id = `cu-${seq}`;
-        clickupState.set(id, { description: body?.description || '' });
-        return new Response(JSON.stringify({ id, url: `https://app.clickup.com/t/${id}`, description: body?.description || '' }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-      const taskMatch = u.match(/\/api\/v2\/task\/([^/?]+)$/);
-      if (taskMatch) {
-        const cuId = taskMatch[1];
-        const current = clickupState.get(cuId) || { description: '' };
-        if (method === 'GET') {
-          return new Response(JSON.stringify({ id: cuId, description: current.description, time_spent: 0, assignees: [] }), { status: 200 });
-        }
-        if (method === 'PUT') {
-          if (typeof body?.description === 'string') {
-            current.description = body.description;
-            clickupState.set(cuId, current);
-          }
-          return new Response(JSON.stringify({ id: cuId, description: current.description }), { status: 200 });
-        }
-      }
-      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    if (method === 'POST' && u.includes('/list/') && u.endsWith('/task')) {
+      seq++;
+      const id = `cu-${seq}`;
+      clickupState.set(id, { description: body?.description || '' });
+      return new Response(JSON.stringify({ id, url: `https://app.clickup.com/t/${id}`, description: body?.description || '' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
     }
-    return realFetch(url, init);
+    const taskMatch = u.match(/\/api\/v2\/task\/([^/?]+)$/);
+    if (taskMatch) {
+      const cuId = taskMatch[1];
+      const current = clickupState.get(cuId) || { description: '' };
+      if (method === 'GET') {
+        return new Response(JSON.stringify({ id: cuId, description: current.description, time_spent: 0, assignees: [] }), { status: 200 });
+      }
+      if (method === 'PUT') {
+        if (typeof body?.description === 'string') {
+          current.description = body.description;
+          clickupState.set(cuId, current);
+        }
+        return new Response(JSON.stringify({ id: cuId, description: current.description }), { status: 200 });
+      }
+    }
+    return new Response(JSON.stringify({ ok: true }), { status: 200 });
   };
+  server.setClickupTransport(baseTransport);
 
   try {
     // 1. Invalid URLs must be rejected with 400
@@ -515,14 +508,95 @@ test('ParentTask collection, sibling Brief/BrandGuidelines sync, conflict-safe C
       )
     );
 
+    // 5.5 Clearing description, brandGuidelines, and disciplineMetadata via empty values propagates cleanly
+    const clearRes = await server.request(`/tasks/${contentSub.id}`, 'cd', 'PUT', {
+      description: '',
+      brandGuidelines: '',
+      disciplineMetadata: {},
+    });
+    assert.equal(clearRes.status, 200);
+    const clearedContent = await clearRes.json();
+    assert.equal(clearedContent.description, undefined);
+    assert.equal(clearedContent.brandGuidelines, undefined);
+    assert.equal(clearedContent.disciplineMetadata, undefined);
+    assert.equal(server.store.parentTasks[0].brief, undefined);
+    assert.equal(server.store.parentTasks[0].brandGuidelines, undefined);
+    const clearedDesignSub = server.store.tasks.find((t: any) => t.id === designSub.id);
+    assert.equal(clearedDesignSub.description, undefined);
+    assert.equal(clearedDesignSub.brandGuidelines, undefined);
+
+    // 5.6 Transient ClickUp GET 500 error must NOT overwrite manual ClickUp description
+    clickupCalls.length = 0;
+    server.setClickupTransport(async (url: string, init?: any) => {
+      if (String(url).includes(`/task/${bundle.clickupParentTaskId}`) && (!init?.method || init.method === 'GET')) {
+        return new Response('Upstream error', { status: 500 });
+      }
+      return baseTransport(url, init);
+    });
+    const transientErrRes = await server.request(`/tasks/${contentSub.id}`, 'cd', 'PUT', {
+      description: 'Should not clobber on GET 500',
+    });
+    assert.equal(transientErrRes.status, 200);
+    await new Promise(r => setTimeout(r, 40));
+    server.setClickupTransport(baseTransport);
+    assert.equal(
+      clickupState.get(bundle.clickupParentTaskId)?.description,
+      'Manual ClickUp notes written by PM — do not overwrite!'
+    );
+
+    // 5.7 Moving Content to Done with contentDocLink + spec change does not duplicate ClickUp description PUTs or conflict comments
+    clickupState.set(contentSub.clickupTaskId, { description: 'Manual ClickUp notes on content subtask' });
+    clickupCalls.length = 0;
+    const doneWithSpecRes = await server.request(`/tasks/${contentSub.id}`, 'alice', 'PUT', {
+      status: 'done',
+      contentDocLink: 'https://docs.google.com/document/d/final-e2e',
+      disciplineMetadata: { contentType: 'Whitepaper', contentSpecifications: 'Updated spec at done' },
+    });
+    assert.equal(doneWithSpecRes.status, 200);
+    await new Promise(r => setTimeout(r, 40));
+    const contentSubComments = clickupCalls.filter(
+      c => c.method === 'POST' && c.url.includes(`/task/${contentSub.clickupTaskId}/comment`)
+    );
+    assert.equal(contentSubComments.length, 1);
+
     // 6. Deleting both subtasks cleans up orphaned ParentTask
     await server.request(`/tasks/${contentSub.id}`, 'root', 'DELETE');
     assert.equal(server.store.parentTasks.length, 1);
     await server.request(`/tasks/${designSub.id}`, 'root', 'DELETE');
     assert.equal(server.store.parentTasks.length, 0);
   } finally {
-    globalThis.fetch = realFetch;
+    server.setClickupTransport(undefined);
   }
+}));
+
+test('Delegated subtasks preserve distinct descriptions across hydration and edits', async () => withServer(async server => {
+  const dup1 = await server.request('/tasks/a/duplicate', 'alice', 'POST', {
+    targetUserId: 'bob',
+    title: 'Subtask 1',
+    description: 'First custom description',
+  });
+  assert.equal(dup1.status, 201);
+  const sub1 = (await dup1.json()).task;
+
+  const dup2 = await server.request('/tasks/a/duplicate', 'alice', 'POST', {
+    targetUserId: 'alice',
+    title: 'Subtask 2',
+    description: 'Second distinct description',
+  });
+  assert.equal(dup2.status, 201);
+  const sub2 = (await dup2.json()).task;
+
+  // Startup hydration must not treat regular task 'a' as a canonical ParentTask
+  server.hydrateSubtasksFromParents();
+  assert.equal(server.store.tasks.find((t: any) => t.id === sub1.id).description, 'First custom description');
+  assert.equal(server.store.tasks.find((t: any) => t.id === sub2.id).description, 'Second distinct description');
+
+  // Editing sub1 description must not overwrite sub2 description
+  const editRes = await server.request(`/tasks/${sub1.id}`, 'bob', 'PUT', {
+    description: 'Edited first description',
+  });
+  assert.equal(editRes.status, 200);
+  assert.equal(server.store.tasks.find((t: any) => t.id === sub2.id).description, 'Second distinct description');
 }));
 
 test('Non-destructive legacy task migration folds old metadata & attachments idempotently', async () => withServer(async server => {

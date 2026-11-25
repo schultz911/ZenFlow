@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Task, TaskStatus, Role } from '../types';
-import { useDashboard } from '../context/DashboardContext';
 import { getDuePillInfo, formatDateOnly, formatCompletedDate, getCognitiveLoadLabel, getTaskBillableMs, formatBillableHours, formatBillableDetailed, getLastDayOfMonth, getTaskAssigneeCount } from '../utils/workload';
+import { isValidHttpUrl } from '../utils/taskMetadata';
 import {
   GripVertical,
   Clock,
@@ -34,6 +34,7 @@ interface TaskCardProps {
   onDragStart?: (task: Task) => void;
   onDragEnd?: () => void;
   onDuplicateToBoard?: (task: Task) => void;
+  canEdit?: boolean;
   isDraggable?: boolean;
 }
 
@@ -52,11 +53,10 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   onDragStart,
   onDragEnd,
   onDuplicateToBoard,
+  canEdit = true,
   isDraggable = true,
 }) => {
-  const { canEditUserTasks } = useDashboard();
   const effectiveUserId = swimlaneUserId || task.userId;
-  const canEdit = canEditUserTasks(effectiveUserId);
   const canDuplicateToBoard = Boolean(onDuplicateToBoard);
   const effectivelyDraggable = isDraggable && canEdit;
   const assigneeCount = getTaskAssigneeCount(task);
@@ -479,9 +479,11 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       )}
 
       {/* Brand Guidelines, Content Doc Link & ClickUp Link Badges */}
-      {(task.brandGuidelines || task.contentDocLink || task.clickupUrl) && (
+      {((task.brandGuidelines && isValidHttpUrl(task.brandGuidelines)) ||
+        (task.contentDocLink && isValidHttpUrl(task.contentDocLink)) ||
+        (task.clickupUrl && isValidHttpUrl(task.clickupUrl))) && (
         <div className="mt-1.5 flex items-center gap-1.5 flex-wrap" onClick={e => e.stopPropagation()}>
-          {task.brandGuidelines && (
+          {task.brandGuidelines && isValidHttpUrl(task.brandGuidelines) && (
             <a
               href={task.brandGuidelines}
               target="_blank"
@@ -494,7 +496,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               <ExternalLink className="h-2.5 w-2.5 shrink-0" />
             </a>
           )}
-          {task.contentDocLink && (
+          {task.contentDocLink && isValidHttpUrl(task.contentDocLink) && (
             <a
               href={task.contentDocLink}
               target="_blank"
@@ -507,7 +509,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               <ExternalLink className="h-2.5 w-2.5 shrink-0" />
             </a>
           )}
-          {task.clickupUrl && (
+          {task.clickupUrl && isValidHttpUrl(task.clickupUrl) && (
             <a
               href={task.clickupUrl}
               target="_blank"

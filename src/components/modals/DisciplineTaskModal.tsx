@@ -1,8 +1,8 @@
 import { DialogPanel } from '../ui/DialogPanel';
-import { LinkListInput } from '../ui/LinkListInput';
+import { ContentSpecFields, DesignSpecFields } from '../forms/DisciplineSpecFields';
 import React, { useState, useEffect, useMemo } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { useDashboard } from '../../context/DashboardContext';
+import { useAuth, useBoardUi, useClickUp, useWorkspace } from '../../context/DashboardContext';
 import { RoleFilter, TaskDisciplineMetadata } from '../../types';
 import { getLastDayOfMonth } from '../../utils/workload';
 import { isValidHttpUrl } from '../../utils/taskMetadata';
@@ -29,11 +29,10 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
   onClose,
   initialDiscipline = 'all',
 }) => {
+  const { canCreatePipelineTask } = useAuth();
+  const { activeRoleTab } = useBoardUi();
+  const { tasks, createPipelineBundle } = useWorkspace();
   const {
-    tasks,
-    activeRoleTab,
-    createPipelineBundle,
-    canCreatePipelineTask,
     isClickupConnected,
     clickupSpaces,
     spaceFoldersAndListsMap,
@@ -44,7 +43,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
     clickupTaskTypeFieldId,
     isLoadingTaskTypes,
     fetchClickupCustomFields,
-  } = useDashboard();
+  } = useClickUp();
 
   const [needsContent, setNeedsContent] = useState(true);
   const [needsDesign, setNeedsDesign] = useState(false);
@@ -879,117 +878,28 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
 
             {/* Content Discipline Fields */}
             {needsContent && (
-              <div className="space-y-3.5 rounded-xl border border-blue-500/20 bg-blue-50/30 dark:bg-blue-950/10 p-4">
-                <div className="flex items-center gap-2 text-xs font-semibold text-blue-700 dark:text-blue-300 uppercase tracking-wider">
-                  <FileText className="h-3.5 w-3.5" />
-                  <span>Content Subtask Specifications</span>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-7">
-                    Content Type
-                  </label>
-                  <input
-                    type="text"
-                    list="content-type-options"
-                    value={contentType}
-                    onChange={e => setContentType(e.target.value)}
-                    placeholder="e.g. Blog Post, Case Study, Whitepaper"
-                    className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
-                    id="disciplinetaskmodal-field-7"
-                  />
-                  <datalist id="content-type-options">
-                    <option value="Blog Post" />
-                    <option value="Website Copy" />
-                    <option value="Case Study" />
-                    <option value="Whitepaper" />
-                    <option value="Social Media Pack" />
-                    <option value="Email Newsletter" />
-                    <option value="Video Script" />
-                    <option value="Press Release" />
-                  </datalist>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-11">
-                    Content Specifications
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={contentSpecifications}
-                    onChange={e => setContentSpecifications(e.target.value)}
-                    placeholder="Word count, deliverable format, tone of voice, keywords, target persona, CTA..."
-                    className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none resize-y"
-                    id="disciplinetaskmodal-field-11"
-                  />
-                </div>
-
-                <LinkListInput
-                  id="disciplinetaskmodal-content-refs"
-                  label="Source Content & References"
-                  links={sourceContentReferences}
-                  onChange={setSourceContentReferences}
-                  placeholder="Paste source doc, outline, or reference URL (https://...)"
-                  accent="blue"
-                />
-              </div>
+              <ContentSpecFields
+                idPrefix="disciplinetaskmodal"
+                contentType={contentType}
+                onChangeContentType={setContentType}
+                contentSpecifications={contentSpecifications}
+                onChangeContentSpecifications={setContentSpecifications}
+                sourceContentReferences={sourceContentReferences}
+                onChangeSourceContentReferences={setSourceContentReferences}
+              />
             )}
 
             {/* Design Discipline Fields */}
             {needsDesign && (
-              <div className="space-y-3.5 rounded-xl border border-indigo-500/20 bg-indigo-50/30 dark:bg-indigo-950/10 p-4">
-                <div className="flex items-center gap-2 text-xs font-semibold text-indigo-700 dark:text-indigo-300 uppercase tracking-wider">
-                  <Palette className="h-3.5 w-3.5" />
-                  <span>Design Subtask Specifications</span>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-12">
-                    Asset Type
-                  </label>
-                  <input
-                    type="text"
-                    list="design-asset-options"
-                    value={assetType}
-                    onChange={e => setAssetType(e.target.value)}
-                    placeholder="e.g. Social Banner, Infographic"
-                    className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-indigo-500 focus:outline-none"
-                    id="disciplinetaskmodal-field-12"
-                  />
-                  <datalist id="design-asset-options">
-                    <option value="Social Media Banner" />
-                    <option value="Infographic" />
-                    <option value="Presentation Deck" />
-                    <option value="Brand Identity / Logo" />
-                    <option value="Ad Creative Pack" />
-                    <option value="Print / Packaging" />
-                    <option value="Vector Illustration" />
-                  </datalist>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-16">
-                    Design Specifications
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={designSpecifications}
-                    onChange={e => setDesignSpecifications(e.target.value)}
-                    placeholder="Dimensions, aspect ratios, deliverable formats, quantity, visual notes, bleed/margins..."
-                    className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-indigo-500 focus:outline-none resize-y"
-                    id="disciplinetaskmodal-field-16"
-                  />
-                </div>
-
-                <LinkListInput
-                  id="disciplinetaskmodal-design-refs"
-                  label="Brand Assets & References"
-                  links={brandAssetsReferences}
-                  onChange={setBrandAssetsReferences}
-                  placeholder="Paste Figma, Drive asset folder, or visual reference URL (https://...)"
-                  accent="indigo"
-                />
-              </div>
+              <DesignSpecFields
+                idPrefix="disciplinetaskmodal"
+                assetType={assetType}
+                onChangeAssetType={setAssetType}
+                designSpecifications={designSpecifications}
+                onChangeDesignSpecifications={setDesignSpecifications}
+                brandAssetsReferences={brandAssetsReferences}
+                onChangeBrandAssetsReferences={setBrandAssetsReferences}
+              />
             )}
 
             {/* Footer Buttons */}

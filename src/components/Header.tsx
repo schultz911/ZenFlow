@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { useDashboard } from '../context/DashboardContext';
+import { useAuth, useBoardUi, useWorkspace } from '../context/DashboardContext';
 import {
   Sun,
   Moon,
@@ -29,17 +29,18 @@ const HeaderComponent: React.FC<HeaderProps> = ({
 }) => {
   const {
     currentUser,
-    users,
-    activeRoleTab,
-    setActiveRoleTab,
-    darkMode,
-    setDarkMode,
-    syncStatus,
     logout,
     isSuperadmin,
     isCreativeDirector,
     canManageMembers,
-  } = useDashboard();
+  } = useAuth();
+  const { users, syncStatus } = useWorkspace();
+  const {
+    activeRoleTab,
+    setActiveRoleTab,
+    darkMode,
+    setDarkMode,
+  } = useBoardUi();
 
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const userDropdownRef = useRef<HTMLDivElement>(null);

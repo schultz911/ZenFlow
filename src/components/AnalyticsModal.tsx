@@ -2,7 +2,7 @@ import { MetricBar } from './ui/MetricBar';
 import { DialogPanel } from './ui/DialogPanel';
 import React, { useState, useMemo, useEffect } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { useDashboard } from '../context/DashboardContext';
+import { useWorkspace } from '../context/DashboardContext';
 import { User, Task, AnalyticsScope, AnalyticsTimeframe } from '../types';
 import {
   calculateTasksEfficiency,
@@ -39,7 +39,7 @@ interface AnalyticsModalProps {
 }
 
 export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
-  const { users, tasks, creativeDirectors } = useDashboard();
+  const { users, tasks, creativeDirectors } = useWorkspace();
 
   // Active time frame & calendar state
   const [timeframe, setTimeframe] = useState<AnalyticsTimeframe>('today');

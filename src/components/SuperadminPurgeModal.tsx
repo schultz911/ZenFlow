@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
-import { useDashboard } from '../context/DashboardContext';
+import { useAuth, useWorkspace } from '../context/DashboardContext';
 import { HoldToPurgeButton } from './HoldToPurgeButton';
 import { DialogPanel } from './ui/DialogPanel';
 
@@ -12,7 +12,8 @@ interface SuperadminPurgeModalProps {
 }
 
 export const SuperadminPurgeModal: React.FC<SuperadminPurgeModalProps> = ({ isOpen, onClose }) => {
-  const { isSuperadmin, users, tasks, purgeAllDatabaseData } = useDashboard();
+  const { isSuperadmin } = useAuth();
+  const { users, tasks, purgeAllDatabaseData } = useWorkspace();
   const [isPurging, setIsPurging] = useState(false);
   const submittingRef = useRef(false);
   const [result, setResult] = useState<Awaited<ReturnType<typeof purgeAllDatabaseData>> | null>(null);

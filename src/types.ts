@@ -124,16 +124,7 @@ export interface ParentTask {
   title: string;
   brief?: string;
   brandGuidelines?: string;
-  client?: string;
-  project?: string;
   clickupParentTaskId?: string;
-  clickupUrl?: string;
-  clickupSpaceId?: string;
-  clickupSpaceName?: string;
-  clickupFolderId?: string;
-  clickupFolderName?: string;
-  clickupListId?: string;
-  clickupListName?: string;
   lastSyncedClickupDescHash?: string;
   createdAt: string;
   updatedAt: string;

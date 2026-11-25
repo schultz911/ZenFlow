@@ -96,12 +96,18 @@ export const LinkListInput: React.FC<LinkListInputProps> = ({
                   setError(null);
                 }
               }}
+              onBlur={e => {
+                const action = (e.relatedTarget as HTMLElement | null)?.dataset?.linkAction;
+                if (action === 'cancel' || action === 'add') return;
+                handleAdd();
+              }}
               placeholder={placeholder}
               autoFocus
               className={`flex-1 rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white ${accentBorder} focus:outline-none`}
             />
             <button
               type="button"
+              data-link-action="add"
               onClick={handleAdd}
               className={`px-3 py-1.5 rounded-xl ${accentBtn} text-white text-xs font-semibold transition-colors cursor-pointer`}
             >
@@ -109,6 +115,7 @@ export const LinkListInput: React.FC<LinkListInputProps> = ({
             </button>
             <button
               type="button"
+              data-link-action="cancel"
               onClick={() => {
                 setIsAdding(false);
                 setDraft('');
@@ -131,15 +138,19 @@ export const LinkListInput: React.FC<LinkListInputProps> = ({
               className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white dark:bg-[#181818] border border-[var(--border)] text-xs text-neutral-700 dark:text-white/80 max-w-full"
             >
               <Link2 className={`h-3 w-3 shrink-0 ${accentText}`} />
-              <a
-                href={url}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={url}
-                className="truncate max-w-[230px] hover:underline"
-              >
-                {url}
-              </a>
+              {isValidHttpUrl(url) ? (
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={url}
+                  className="truncate max-w-[230px] hover:underline"
+                >
+                  {url}
+                </a>
+              ) : (
+                <span title={url} className="truncate max-w-[230px]">{url}</span>
+              )}
               <ExternalLink className="h-2.5 w-2.5 shrink-0 opacity-60" />
               {!readOnly && (
                 <button

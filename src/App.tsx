@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
-import { DashboardProvider, useDashboard } from './context/DashboardContext';
+import { DashboardProvider, useAuth, useBoardUi, useWorkspace } from './context/DashboardContext';
 import { Header } from './components/Header';
 import { OverviewBar } from './components/OverviewBar';
 import { Swimlane } from './components/Swimlane';
-import { LoginModal } from './components/LoginModal';
+import { SignInModal } from './components/SignInModal';
+import { AddMemberModal } from './components/AddMemberModal';
 import { TaskModal } from './components/TaskModal';
 import { WorkloadModal } from './components/WorkloadModal';
 import { FirestoreModal } from './components/FirestoreModal';
@@ -35,23 +36,26 @@ function DashboardContent() {
   const {
     currentUser,
     isAuthChecking,
+    canManageMembers,
+  } = useAuth();
+  const {
     users,
     tasks,
-    activeRoleTab,
-    setActiveRoleTab,
-    activeDragInfo,
-    setActiveDragInfo,
     moveTask,
     removeAssigneeOrDeleteTask,
     deleteUser,
     createTask,
     updateTask,
     adjustBillableHours,
-    rescheduleTask,
+  } = useWorkspace();
+  const {
+    activeRoleTab,
+    setActiveRoleTab,
+    activeDragInfo,
+    setActiveDragInfo,
     activeBoardId,
     setActiveBoardId,
-    canManageMembers,
-  } = useDashboard();
+  } = useBoardUi();
 
   // Modals state
   const [loginModalOpen, setLoginModalOpen] = useState(false);
@@ -452,9 +456,9 @@ function DashboardContent() {
 
   const handleRescheduleTask = useCallback(
     async (taskId: string, newDueDate: string | undefined) => {
-      await rescheduleTask(taskId, newDueDate);
+      await updateTask(taskId, { dueDate: newDueDate });
     },
-    [rescheduleTask]
+    [updateTask]
   );
 
   const handleUpdateTaskTitle = useCallback(
@@ -547,8 +551,6 @@ function DashboardContent() {
       </div>
     );
   }
-
-  const isLoginOpen = !currentUser || loginModalOpen;
 
   return (
     <>
@@ -869,11 +871,14 @@ function DashboardContent() {
         )}
       </div>
 
-      {/* Login & Auth Modal — always rendered crisp on top of the frosted board */}
-      <LoginModal
-        isOpen={isLoginOpen}
+      {/* Sign-In & Add-Member Modals */}
+      <SignInModal
+        isOpen={!currentUser || (loginModalOpen && !isNewAccountModal)}
         onClose={() => setLoginModalOpen(false)}
-        isNewAccountOnly={currentUser ? isNewAccountModal : false}
+      />
+      <AddMemberModal
+        isOpen={Boolean(currentUser && loginModalOpen && isNewAccountModal)}
+        onClose={() => setLoginModalOpen(false)}
       />
     </>
   );

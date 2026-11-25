@@ -1,88 +1,34 @@
 import type { Request, Response, NextFunction } from 'express';
+import { getTaskAssigneeIds } from '../src/domain/taskTransitions';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import {
+  SUPERADMIN_EMAIL,
+  type MemberLike as Member,
+  isSuperadmin,
+  isAdminMember,
+  isBusinessLead,
+  isCreativeDirector,
+  isClusterLead,
+  isAccountsMember,
+  hasAuthorizedSpecialRole,
+  canCreatePipelineTask,
+  canManageMembers,
+  canEdit,
+  canEditTask,
+  canAssignToDiscipline,
+} from '../src/domain/permissions';
 
-export const SUPERADMIN_EMAIL = 'kiran.s@zensciences.com';
+export {
+  SUPERADMIN_EMAIL,
+  type Member,
+  isSuperadmin,
+  isAccountsMember,
+  hasAuthorizedSpecialRole,
+  canCreatePipelineTask,
+  canEdit,
+};
 export const SESSION_COOKIE = 'zenflow_identity';
-export interface Member {
-  id: string;
-  email: string;
-  role?: string;
-  isAdministrator?: boolean;
-  isBusinessLead?: boolean;
-  isCreativeDirector?: boolean;
-  isClusterLead?: boolean;
-  isTeamLead?: boolean;
-  isAccountManager?: boolean;
-  isContentLead?: boolean;
-  isArtDirector?: boolean;
-  isContentSpecialist?: boolean;
-  isBrandDesigner?: boolean;
-  designation?: string;
-  creativeDirectorId?: string;
-  clusterLeadId?: string;
-  clickupApiKey?: string;
-}
 export interface Identity { email?: string; email_verified?: boolean; exp: number; firebase?: { sign_in_provider?: string } }
-export const isSuperadmin = (user: Member) => user.email.toLowerCase() === SUPERADMIN_EMAIL;
-export const isAccountsMember = (user: Member | undefined) => {
-  if (!user) return false;
-  return Boolean(
-    user.role === 'account_manager' ||
-    user.isAccountManager ||
-    user.designation === 'account_manager' ||
-    user.designation === 'Account Manager'
-  );
-};
-export const hasAuthorizedSpecialRole = (user: Member | undefined) => {
-  if (!user) return false;
-  return Boolean(
-    isSuperadmin(user) ||
-    user.isAdministrator ||
-    user.role === 'administrator' ||
-    user.isBusinessLead ||
-    user.designation === 'business_lead' ||
-    user.designation === 'Business Lead' ||
-    user.isCreativeDirector ||
-    user.designation === 'creative_director' ||
-    user.designation === 'Creative Director' ||
-    user.isClusterLead ||
-    user.designation === 'cluster_lead' ||
-    user.designation === 'Cluster Lead' ||
-    user.isTeamLead ||
-    user.designation === 'team_lead' ||
-    user.designation === 'Team Lead'
-  );
-};
-export const canCreatePipelineTask = (user: Member | undefined) => {
-  return isAccountsMember(user) || hasAuthorizedSpecialRole(user);
-};
-export const canEdit = (caller: Member, owner: Member | undefined) => {
-  if (!owner) return false;
-  if (isSuperadmin(caller) || caller.isAdministrator || caller.role === 'administrator' || caller.isBusinessLead) return true;
-  // Account Manager cannot edit boards
-  if (caller.isAccountManager || caller.designation === 'account_manager' || caller.role === 'account_manager') return false;
-  // Creative Director and Cluster Lead edit their teams
-  if (caller.isCreativeDirector && owner.creativeDirectorId === caller.id) return true;
-  if (caller.isClusterLead && (owner.clusterLeadId === caller.id || owner.creativeDirectorId === caller.id)) return true;
-  // Team Lead edits their team
-  if (caller.isTeamLead || caller.isContentLead || caller.isArtDirector) {
-    if (
-      (caller.creativeDirectorId && owner.creativeDirectorId === caller.creativeDirectorId) ||
-      (caller.clusterLeadId && owner.clusterLeadId === caller.clusterLeadId) ||
-      (caller.role && owner.role === caller.role)
-    ) return true;
-  }
-  // Other users edit their own boards
-  return caller.id === owner.id;
-};
-
-function getTaskAssigneeIdsServer(task: { userId?: string; assigneeIds?: string[] } | undefined): string[] {
-  if (!task) return [];
-  if (Array.isArray(task.assigneeIds) && task.assigneeIds.length > 0) {
-    return Array.from(new Set(task.assigneeIds.filter(Boolean)));
-  }
-  return task.userId ? [task.userId] : [];
-}
 
 // Explicit response fields: future credential fields are private by default.
 export function publicMember(user: any) {
@@ -158,20 +104,15 @@ export function createApiSecurity(options: {
       res.locals.caller = caller;
       res.locals.identityExpiresAt = identity.exp * 1000;
       const superadmin = isSuperadmin(caller);
-      const isCallerAdmin = superadmin || Boolean(caller.isAdministrator) || caller.role === 'administrator' || Boolean(caller.isBusinessLead);
-      const isCallerCD = Boolean(caller.isCreativeDirector);
-      const isCallerClusterLead = Boolean(caller.isClusterLead);
-      const canManageMembers = superadmin || isCallerAdmin || isCallerCD || isCallerClusterLead;
-      const manager = canManageMembers;
+      const isCallerAdmin = isAdminMember(caller) || isBusinessLead(caller);
+      const isCallerCD = isCreativeDirector(caller);
+      const isCallerClusterLead = isClusterLead(caller);
+      const manager = canManageMembers(caller);
       const denied = () => res.status(403).json({ error: 'You do not have permission for this operation' });
       const owner = (id: unknown) => store.users.find(user => user.id === id);
       const edit = (id: unknown) => canEdit(caller, owner(id));
-      const canEditTask = (task: { userId?: string; assigneeIds?: string[]; status?: string } | undefined) => {
-        if (!task) return false;
-        const assignees = getTaskAssigneeIdsServer(task);
-        if (assignees.length === 0) return isCallerCD || isCallerAdmin || isCallerClusterLead || canCreatePipelineTask(caller);
-        return assignees.some(id => edit(id));
-      };
+      const canEditTaskLocal = (task: { userId?: string; assigneeIds?: string[]; status?: string } | undefined) =>
+        canEditTask(caller, task, store.users);
       const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
       req.body = body;
 
@@ -220,11 +161,11 @@ export function createApiSecurity(options: {
       const taskMatch = routePath.match(/^\/tasks\/([^/]+)$/);
       if (taskMatch && ['PUT', 'DELETE'].includes(req.method)) {
         const task = store.tasks.find(item => item.id === decodeURIComponent(taskMatch[1]));
-        const isPipeline = task ? (task.status === 'pipeline' || getTaskAssigneeIdsServer(task).length === 0) : false;
+        const isPipeline = task ? (task.status === 'pipeline' || getTaskAssigneeIds(task).length === 0) : false;
         if (task) {
           if (isPipeline && (isCallerCD || isCallerAdmin || isCallerClusterLead)) {
             // Leadership can edit and assign pipeline tasks across all teams
-          } else if (!canEditTask(task)) {
+          } else if (!canEditTaskLocal(task)) {
             return denied();
           }
         }
@@ -237,13 +178,13 @@ export function createApiSecurity(options: {
           } else if (typeof body.userId === 'string' && body.userId.trim()) {
             requestedAssignees.push(body.userId.trim());
           }
-          const existingAssignees = new Set(getTaskAssigneeIdsServer(task));
+          const existingAssignees = new Set(getTaskAssigneeIds(task));
           for (const uid of requestedAssignees) {
             if (isCallerCD || isCallerAdmin || isCallerClusterLead) {
               const targetUser = store.users.find(u => u.id === uid);
               const taskTeam = (task as any)?.team || (task?.userId && store.users.find(u => u.id === task.userId)?.role);
-              if (targetUser && taskTeam && targetUser.role && targetUser.role !== taskTeam) {
-                return res.status(400).json({ error: `Cannot assign task to a user of a different discipline (${targetUser.role} != ${taskTeam})` });
+              if (!canAssignToDiscipline(taskTeam, targetUser)) {
+                return res.status(400).json({ error: `Cannot assign task to a user of a different discipline (${targetUser?.role} != ${taskTeam})` });
               }
             } else if (!existingAssignees.has(uid) && !edit(uid)) {
               return denied();
@@ -256,8 +197,8 @@ export function createApiSecurity(options: {
         for (const update of body.updates) {
           if (!update || typeof update !== 'object') continue;
           const task = tasks.get(update.id);
-          const isPipeline = task ? (task.status === 'pipeline' || getTaskAssigneeIdsServer(task).length === 0) : false;
-          if (task && !(isPipeline && (isCallerCD || isCallerAdmin || isCallerClusterLead)) && !canEditTask(task)) {
+          const isPipeline = task ? (task.status === 'pipeline' || getTaskAssigneeIds(task).length === 0) : false;
+          if (task && !(isPipeline && (isCallerCD || isCallerAdmin || isCallerClusterLead)) && !canEditTaskLocal(task)) {
             return denied();
           }
           if (update.userId !== undefined && !(isPipeline && (isCallerCD || isCallerAdmin || isCallerClusterLead)) && !edit(update.userId)) {
@@ -274,7 +215,7 @@ export function createApiSecurity(options: {
       body.callerUserId = caller.id;
       body.callerEmail = caller.email;
       body.isSuperadmin = superadmin;
-      const savedKey = caller.clickupApiKey || store.users.find(user => user.clickupApiKey)?.clickupApiKey;
+      const savedKey = (caller as any).clickupApiKey || (store.users.find(user => (user as any).clickupApiKey) as any)?.clickupApiKey;
       if (routePath !== '/clickup/verify') {
         req.headers['x-clickup-api-key'] = savedKey || '';
         body.apiKey = savedKey || '';

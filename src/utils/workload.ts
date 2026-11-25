@@ -1,4 +1,7 @@
 import { Task, User, WorkloadBreakdown, TaskScoreItem, CognitiveLoad, Role } from '../types';
+import { getTaskAssigneeIds, formatBillableHours } from '../domain/taskTransitions';
+
+export { getTaskAssigneeIds, formatBillableHours };
 
 export const COGNITIVE_LOAD_WEIGHTS: Record<CognitiveLoad, number> = {
   low: 1.0,
@@ -11,13 +14,6 @@ export const IN_REVIEW_HOURLY_RATES: Record<CognitiveLoad, number> = {
   medium: 0.15, // 0.15 per billable hour
   high: 0.2,   // 0.2 per billable hour
 };
-
-export function getTaskAssigneeIds(task: Pick<Task, 'userId' | 'assigneeIds'>): string[] {
-  if (Array.isArray(task.assigneeIds) && task.assigneeIds.length > 0) {
-    return Array.from(new Set(task.assigneeIds.filter(Boolean)));
-  }
-  return task.userId ? [task.userId] : [];
-}
 
 export function getTaskAssigneeCount(task: Pick<Task, 'userId' | 'assigneeIds'>): number {
   return Math.max(1, getTaskAssigneeIds(task).length);
@@ -494,22 +490,6 @@ export function getTaskBillableMs(task: Task, nowMs: number = Date.now()): numbe
   }
 
   return totalMs;
-}
-
-/**
- * Formats duration milliseconds into clean billable hours:
- * - < 1 minute: "0h" (or "< 1m")
- * - Formats as compact hours, e.g., "24h", "1.5h", or "15m"
- */
-export function formatBillableHours(ms: number): string {
-  if (ms <= 0) return '0h';
-  const hours = ms / (1000 * 60 * 60);
-  if (hours < 0.1) {
-    const mins = Math.max(1, Math.round(ms / (1000 * 60)));
-    return `${mins}m`;
-  }
-  const formattedHours = parseFloat(hours.toFixed(1));
-  return `${formattedHours}h`;
 }
 
 /**

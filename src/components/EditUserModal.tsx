@@ -1,16 +1,14 @@
 import { DialogPanel } from './ui/DialogPanel';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useDashboard } from '../context/DashboardContext';
+import { useAuth, useClickUp, useWorkspace } from '../context/DashboardContext';
 import { User, Role } from '../types';
 import { ClickupMemberPicker } from './ClickupMemberPicker';
+import { MemberRoleFields } from './forms/MemberRoleFields';
 import { isTaskAssignedToUser } from '../utils/workload';
 import {
   X,
   UserCog,
-  Palette,
-  FileText,
-  Crown,
   ShieldCheck,
   Loader2,
   Mail,
@@ -18,12 +16,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   KeyRound,
-  Shield,
-  Briefcase,
-  Award,
-  Layers,
-  Lock,
-  Users,
 } from 'lucide-react';
 
 interface EditUserModalProps {
@@ -38,19 +30,23 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
   user,
 }) => {
   const {
-    updateUserProfile,
     isSuperadmin,
     isAdministrator,
+    canManageMembers,
+  } = useAuth();
+  const {
+    updateUserProfile,
     creativeDirectors,
     clusterLeads,
-    canManageMembers,
     users,
     tasks,
     remapUserTasks,
+  } = useWorkspace();
+  const {
     isClickupConnected,
     clickupMembers,
     loadClickupMembers,
-  } = useDashboard();
+  } = useClickUp();
 
   const canAssignAdmin = isSuperadmin || isAdministrator;
 
@@ -228,30 +224,6 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
     }
   };
 
-  const roleOptions: Array<{ id: Role; label: string; desc: string; icon: React.ReactNode; tooltip: string }> = [
-    {
-      id: 'account_manager',
-      label: 'Accounts',
-      desc: 'Client & Strategy',
-      icon: <Briefcase className="h-4 w-4 text-amber-500" />,
-      tooltip: 'Client management and account coordination team',
-    },
-    {
-      id: 'content',
-      label: 'Content',
-      desc: 'Writing & Concept',
-      icon: <FileText className="h-4 w-4 text-blue-500" />,
-      tooltip: 'Content writing, editorial, and storytelling team',
-    },
-    {
-      id: 'design',
-      label: 'Design',
-      desc: 'Adaptive & Visual',
-      icon: <Palette className="h-4 w-4 text-indigo-500" />,
-      tooltip: 'Visual design, branding, and graphic design team',
-    },
-  ];
-
   return (
     <AnimatePresence>
       {isOpen && user && canManageMembers && (
@@ -392,184 +364,36 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                 />
               </div>
 
-              {/* Administrator Privileges Toggle */}
-              <div
-                className={`rounded-xl border p-3 flex items-center justify-between transition-all ${
-                  !canAssignAdmin
-                    ? 'opacity-50 bg-neutral-100/50 dark:bg-white/[0.02] border-[var(--border)]'
-                    : isAdminPrivilege
-                    ? 'border-rose-500/40 bg-rose-500/5 dark:bg-rose-500/10'
-                    : 'border-[var(--border)] bg-[var(--surface)]'
-                }`}
-                title={canAssignAdmin ? "Grant administrator privileges with full board and account access" : "Administrator privileges are restricted to Superadmins and other Administrators"}
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="rounded-lg p-1.5 bg-rose-500/10 text-rose-500">
-                    <Shield className="h-4 w-4" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-semibold text-neutral-900 dark:text-white">Administrator Privileges</span>
-                      {!canAssignAdmin && <Lock className="w-3 h-3 text-neutral-400" />}
-                    </div>
-                    <p className="text-[11px] text-[var(--text-secondary)]">System & Ops — Full board access, team management, and workspace settings</p>
-                  </div>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    id="toggle-edit-admin-privilege"
-                    disabled={!canAssignAdmin || isTargetSuperadmin}
-                    checked={isTargetSuperadmin ? true : isAdminPrivilege}
-                    onChange={e => setIsAdminPrivilege(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-9 h-5 bg-neutral-200 peer-focus:outline-none rounded-full peer dark:bg-neutral-800 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-neutral-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-600 disabled:cursor-not-allowed"></div>
-                </label>
-              </div>
-
-              {/* Role / Team Selection: 6 functional teams (optional) */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)]" title="Select the member's functional team (click selected team to deselect)">
-                    TEAM
-                  </label>
-                  <span className="text-[11px] text-[var(--text-secondary)]">
-                    {role ? '(click selected to deselect)' : '(no team selected)'}
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {roleOptions.map(opt => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => setRole(prev => prev === opt.id ? undefined : opt.id)}
-                      title={opt.tooltip}
-                      className={`flex items-start gap-2 rounded-xl border p-2 text-left transition-all ${
-                        role === opt.id
-                          ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 ring-1 ring-blue-500 cursor-pointer'
-                          : 'border-[var(--border)] bg-[var(--surface)] text-neutral-600 dark:text-white/60 hover:border-neutral-300 cursor-pointer'
-                      }`}
-                    >
-                      <div className="rounded-lg p-1 bg-neutral-200/50 dark:bg-white/5 shrink-0">
-                        {opt.icon}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-xs font-semibold truncate">{opt.label}</p>
-                        <p className="text-[11px] text-[var(--text-secondary)] truncate">{opt.desc}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Special Roles Section: Role-led */}
-              <div className="rounded-xl border border-[var(--border)] bg-neutral-50/50 dark:bg-white/[0.02] p-3.5 space-y-3">
-                <div className="flex items-center gap-1.5">
-                  <Award className="w-3.5 h-3.5 text-amber-500" />
-                  <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200 uppercase tracking-wider" title="Configure member special roles">
-                    Special Roles
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {/* Business Lead */}
-                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={isBusinessLead}
-                      onChange={e => setIsBusinessLead(e.target.checked)}
-                      className="rounded border-neutral-300 dark:border-neutral-700 text-amber-600 focus:ring-amber-500 h-3.5 w-3.5"
-                    />
-                    <Briefcase className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                    <span className="text-xs font-medium text-neutral-800 dark:text-neutral-200">Business Lead</span>
-                  </label>
-
-                  {/* Creative Director Status */}
-                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={isTargetSuperadmin ? true : isCD}
-                      disabled={isTargetSuperadmin}
-                      onChange={e => setIsCD(e.target.checked)}
-                      className="rounded border-neutral-300 dark:border-neutral-700 text-purple-600 focus:ring-purple-500 h-3.5 w-3.5"
-                    />
-                    <Crown className="w-3.5 h-3.5 text-purple-500 shrink-0" />
-                    <span className="text-xs font-medium text-neutral-800 dark:text-neutral-200">Creative Director</span>
-                  </label>
-
-                  {/* Cluster Lead */}
-                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={isClusterLead}
-                      onChange={e => setIsClusterLead(e.target.checked)}
-                      className="rounded border-neutral-300 dark:border-neutral-700 text-emerald-600 focus:ring-emerald-500 h-3.5 w-3.5"
-                    />
-                    <Layers className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                    <span className="text-xs font-medium text-neutral-800 dark:text-neutral-200">Cluster Lead</span>
-                  </label>
-
-                  {/* Team Lead */}
-                  <label className="flex items-center gap-2 p-2.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] cursor-pointer hover:border-neutral-300 dark:hover:border-white/10 transition-colors">
-                    <input
-                      type="checkbox"
-                      checked={isTeamLead}
-                      onChange={e => setIsTeamLead(e.target.checked)}
-                      className="rounded border-neutral-300 dark:border-neutral-700 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5"
-                    />
-                    <Users className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                    <span className="text-xs font-medium text-neutral-800 dark:text-neutral-200">Team Lead</span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Delivery Lead: Assigned Creative Director */}
-              {!isCD && !isTargetSuperadmin && !isBusinessLead && (
-                <div>
-                  <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5" title="Select the delivery lead who manages this member's cluster board" htmlFor="editusermodal-field-3">
-                    Assigned Creative Director
-                  </label>
-                  <select
-                    value={selectedCDId}
-                    onChange={e => setSelectedCDId(e.target.value)}
-                    title="Delivery lead for this cluster delivery board"
-                    className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none cursor-pointer" id="editusermodal-field-3"
-                  >
-                    <option value="">Independent / Direct Board</option>
-                    {creativeDirectors
-                      .filter(cd => cd.id !== user.id)
-                      .map(cd => (
-                        <option key={cd.id} value={cd.id}>
-                          {cd.name} ({cd.email})
-                        </option>
-                      ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Input for Assigned Cluster Lead */}
-              {!isClusterLead && !isBusinessLead && (
-                <div>
-                  <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5" htmlFor="editusermodal-field-4">
-                    Assigned Cluster Lead
-                  </label>
-                  <select
-                    value={selectedClusterLeadId}
-                    onChange={e => setSelectedClusterLeadId(e.target.value)}
-                    className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none" id="editusermodal-field-4"
-                  >
-                    <option value="">None / Direct</option>
-                    {clusterLeads
-                      .filter(cl => cl.id !== user.id)
-                      .map(cl => (
-                        <option key={cl.id} value={cl.id}>
-                          {cl.name} ({cl.email})
-                        </option>
-                      ))}
-                  </select>
-                </div>
-              )}
+              <MemberRoleFields
+                idPrefix="edituser"
+                role={role}
+                onChangeRole={setRole}
+                isAdministrator={isAdminPrivilege}
+                onChangeAdministrator={setIsAdminPrivilege}
+                canAssignAdmin={canAssignAdmin}
+                isTargetSuperadmin={isTargetSuperadmin}
+                isBusinessLead={isBusinessLead}
+                onChangeBusinessLead={checked => {
+                  setIsBusinessLead(checked);
+                  if (checked) {
+                    setSelectedCDId('');
+                    setSelectedClusterLeadId('');
+                  }
+                }}
+                isCreativeDirector={isCD}
+                onChangeCreativeDirector={setIsCD}
+                isClusterLead={isClusterLead}
+                onChangeClusterLead={setIsClusterLead}
+                isTeamLead={isTeamLead}
+                onChangeTeamLead={setIsTeamLead}
+                creativeDirectorId={selectedCDId}
+                onChangeCreativeDirectorId={setSelectedCDId}
+                clusterLeadId={selectedClusterLeadId}
+                onChangeClusterLeadId={setSelectedClusterLeadId}
+                creativeDirectors={creativeDirectors}
+                clusterLeads={clusterLeads}
+                excludeUserId={user.id}
+              />
 
               {/* ClickUp Workspace Member Mapping */}
               {isClickupConnected && (

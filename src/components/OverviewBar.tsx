@@ -1,6 +1,6 @@
 import { MetricBar } from './ui/MetricBar';
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { useDashboard } from '../context/DashboardContext';
+import { useAuth, useBoardUi, useWorkspace } from '../context/DashboardContext';
 import {
   exportWorkspaceXLS,
   exportWorkspaceJSON,
@@ -34,17 +34,14 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
   onSearchChange,
   onOpenAnalytics,
 }) => {
+  const { canSwitchBoards, isSuperadmin } = useAuth();
+  const { activeRoleTab, activeBoardId, setActiveBoardId } = useBoardUi();
   const {
-    activeRoleTab,
     users,
     tasks,
-    canSwitchBoards,
-    activeBoardId,
-    setActiveBoardId,
-    isSuperadmin,
     creativeDirectors,
     downloadAuditLogs,
-  } = useDashboard();
+  } = useWorkspace();
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);

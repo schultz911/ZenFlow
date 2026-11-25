@@ -1,4 +1,5 @@
 import type { Task, User, QueuedMutation } from '../types';
+import { removeUserFromTaskList } from '../domain/taskTransitions';
 
 export function reconcileSnapshot(snapshot: { tasks: Task[]; users: User[] }, queue: QueuedMutation[], localTasks: Task[]) {
   const tasks = new Map(snapshot.tasks.map(task => [task.id, task]));
@@ -9,18 +10,9 @@ export function reconcileSnapshot(snapshot: { tasks: Task[]; users: User[] }, qu
     if (item.type === 'delete_task') tasks.delete(id);
     else if (item.type === 'delete_user') {
       users.delete(id);
-      for (const [taskId, task] of tasks) {
-        const assignees = Array.isArray(task.assigneeIds) && task.assigneeIds.length > 0
-          ? task.assigneeIds
-          : (task.userId ? [task.userId] : []);
-        if (!assignees.includes(id)) continue;
-        const remaining = assignees.filter(a => a !== id);
-        if (remaining.length > 0) {
-          tasks.set(taskId, { ...task, assigneeIds: remaining, userId: remaining[0] });
-        } else {
-          tasks.delete(taskId);
-        }
-      }
+      const { keptTasks } = removeUserFromTaskList([...tasks.values()], id);
+      tasks.clear();
+      for (const t of keptTasks) tasks.set(t.id, t);
     } else if (item.type === 'create_task') {
       const task = local.get(item.payload?.id) || item.payload;
       if (task?.id) tasks.set(task.id, task);

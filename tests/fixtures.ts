@@ -1,160 +1,222 @@
-import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
-import vm from 'node:vm';
-import { createHash } from 'node:crypto';
-import ts from 'typescript';
-import express from 'express';
-import { createApiSecurity, redactPayload, SUPERADMIN_EMAIL, SESSION_COOKIE, sameOriginMutation, validSignature } from '../server/security';
+import fs from 'node:fs/promises';
+import http from 'node:http';
+import type { Task, TaskStatus, User } from '../src/types';
+import type { Identity } from '../server/security';
+import {
+  createMemoryPersistenceAdapter,
+  createWorkspaceRepository,
+  hydrateSubtasksFromParents,
+  migrateLegacyRolesInStore,
+} from '../server/store';
+import { createClickUpService, type ClickUpTransport } from '../server/clickup';
+import { createServerApp, createSseHub, sanitizeString } from '../server/app';
 import { WebhookRegistry } from '../server/webhooks';
-import { writeSse } from '../server/resources';
 
-const source = ts.createSourceFile('server.ts', fs.readFileSync('server.ts', 'utf8'), ts.ScriptTarget.Latest, true);
-const handlers = new Map<string, string>();
-const functions = new Map<string, string>();
-function walk(node: ts.Node) {
-  if (ts.isFunctionDeclaration(node) && node.name) functions.set(node.name.text, node.getText(source));
-  if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.expression.getText(source) === 'app' && ts.isStringLiteral(node.arguments[0])) {
-    const last = node.arguments.at(-1)!;
-    if (ts.isArrowFunction(last)) handlers.set(`${node.expression.name.text} ${node.arguments[0].text}`, last.getText(source));
-  }
-  ts.forEachChild(node, walk);
+export function fixtureTask(
+  id: string,
+  userId?: string,
+  statusOrExtra: TaskStatus | Partial<Task> = {}
+): Task {
+  const now = '2026-10-01T10:00:00.000Z';
+  const extra: Partial<Task> = typeof statusOrExtra === 'string' ? { status: statusOrExtra } : statusOrExtra;
+  return {
+    id,
+    userId,
+    assigneeIds: userId ? [userId] : [],
+    team: extra.team || 'content',
+    title: `Task ${id}`,
+    cognitiveLoad: 'medium',
+    status: 'todo',
+    order: 0,
+    createdAt: now,
+    updatedAt: now,
+    ...extra,
+  };
 }
-walk(source);
-const compile = (text: string) => ts.transpileModule(text, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
-export function fixtureTask(id: string, userId: string, status = 'todo') {
-  return { id, userId, title: id, status, cognitiveLoad: 'medium', order: 0, createdAt: '2026-10-20T00:00:00Z', updatedAt: '2026-10-20T00:00:00Z', inProgressDurationMs: 0, activityLog: [] };
-}
-export async function fixtureServer(directory: string) {
-  const store: any = {
-    users: [
-      { id: 'root', name: 'Root', email: SUPERADMIN_EMAIL, role: 'content', isCreativeDirector: true },
-      { id: 'cd', name: 'Director', email: 'director@example.invalid', role: 'content', isCreativeDirector: true },
-      { id: 'alice', name: 'Alice', email: 'alice@example.invalid', role: 'content', creativeDirectorId: 'cd' },
-      { id: 'bob', name: 'Bob', email: 'bob@example.invalid', role: 'design' },
-    ],
-    tasks: [fixtureTask('a', 'alice'), fixtureTask('b', 'bob')],
-    parentTasks: [],
-  };
-  const events: any[] = [], audit: any[] = [];
-  const noop = () => {};
-  const asyncNoop = async () => {};
-  const webhookRegistry = new WebhookRegistry(path.join(directory, '.clickup-webhooks.json'));
-  const ctx: any = {
-    store, stateRevision: 1, maybeArchive: noop, deduplicateUsers: noop,
-    saveStore: noop, dbSaveUser: asyncNoop, dbSaveTask: asyncNoop,
-    dbSaveParentTask: asyncNoop, dbDeleteParentTask: asyncNoop, dbBatchSaveParentTasks: asyncNoop,
-    dbDeleteUser: asyncNoop, dbDeleteTask: asyncNoop, dbBatchDeleteTasks: asyncNoop,
-    dbBatchSaveTasks: asyncNoop, dbBatchSaveUsers: asyncNoop,
-    dbPurgeAllCollections: asyncNoop,
-    createHash,
-    firestoreLimiter: (_req: any, _res: any, next: any) => next(),
-    ensureSuperadmin: (s: any) => {
-      s.users = s.users.filter((u: any) => u.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase());
-      if (s.users.length === 0) {
-        s.users.push({ id: 'root', name: 'Root', email: SUPERADMIN_EMAIL, role: 'content', isCreativeDirector: true });
-      }
+
+export async function fixtureServer(
+  directoryOrOptions?: string | { directory?: string; clickupTransport?: ClickUpTransport }
+) {
+  const opts = typeof directoryOrOptions === 'string' ? { directory: directoryOrOptions } : directoryOrOptions || {};
+  const owningTmpDir = !opts.directory;
+  const workDir = opts.directory || (await fs.mkdtemp(path.join(os.tmpdir(), 'zenflow-test-')));
+  const webhookSecret = 'whsec_test_secret_12345';
+
+  const initialUsers: User[] = [
+    {
+      id: 'root',
+      name: 'Kiran S',
+      email: 'kiran.s@zensciences.com',
+      role: 'administrator',
+      avatarColor: 'from-blue-600 to-indigo-600',
+      isAdministrator: true,
+      isCreativeDirector: true,
+      designation: 'Creative Director',
+      createdAt: '2026-10-01T00:00:00.000Z',
     },
-    SUPERADMIN_EMAIL,
-    LEGACY_REMOVED_ROLES: new Set(['video', 'ui_ux', 'research']),
-    ZENFLOW_TO_CLICKUP_STATUS: {
-      pipeline: 'open',
-      retainer: 'in progress',
-      todo: 'to do',
-      in_progress: 'in progress',
-      in_review: 'internal review',
-      done: 'client review',
-      archived: 'complete',
+    {
+      id: 'cd',
+      name: 'CD Lead',
+      email: 'cd@zensciences.com',
+      role: 'content',
+      avatarColor: 'from-purple-500 to-pink-500',
+      isCreativeDirector: true,
+      designation: 'Creative Director',
+      createdAt: '2026-10-01T00:00:00.000Z',
     },
-    cachedClickupTeamIds: new Map(),
-    webhookRegistry,
-    validSignature,
-    fetch: (...args: any[]) => (globalThis.fetch as any)(...args),
-    URL,
-    broadcastEvent: (type: string, payload: any) => events.push({ type, payload: redactPayload(payload) }),
-    appendAuditLog: async (entry: any) => { audit.push(entry); },
-    console: { log: noop, warn: noop, error: noop },
-    AVATAR_COLORS: ['blue'],
-    COGNITIVE_LOAD_ESTIMATES_MS: { low: 43200000, medium: 86400000, high: 129600000 },
-    clients: [], nextClientId: 1, MAX_SSE_CLIENTS: 100,
-    writeSse, redactPayload, setInterval, clearInterval,
-  };
-  for (const name of [
-    'sanitizeString',
-    'validateHttpUrl',
-    'sanitizeUrlList',
-    'sanitizeDisciplineMetadata',
-    'migrateLegacyTaskFields',
-    'hydrateSubtasksFromParents',
-    'hashClickupDescription',
-    'buildParentClickupMarkdown',
-    'buildSubtaskClickupMarkdown',
-    'pushSafeClickupDescription',
-    'syncParentDescriptionToClickUp',
-    'formatBillableHoursServer',
-    'isCallerAuthorizedForPipeline',
-    'getTaskAssigneeIdsServer',
-    'migrateLegacyRoles',
-    'resolveClickupTeamId',
-    'postClickupTimeEntry',
-    'syncContentLinkToClickUp',
-    'syncTaskToClickUp',
-    'processClickupWebhookEvent',
-  ]) {
-    ctx[name] = vm.runInNewContext(compile(functions.get(name)!) + `; ${name}`, ctx);
-  }
-  const app = express();
-  app.set('case sensitive routing', true);
-  app.use(express.json({ verify: (req: any, _res: any, buf: Buffer) => { req.rawBody = buf; } }));
-  const verify = async (token: string) => {
-    if (token === 'invalid') throw new Error('bad signature');
-    const member = store.users.find((user: any) => user.id === token);
-    return {
-      email: member?.email || 'unknown@example.invalid', email_verified: token !== 'unverified',
-      exp: Math.floor(Date.now() / 1000) + (token === 'expired' ? -60 : 3600),
-      firebase: { sign_in_provider: token === 'password' ? 'password' : 'google.com' },
-    };
-  };
-  ctx.verifyIdentity = verify;
-  ctx.SESSION_COOKIE = SESSION_COOKIE;
-  ctx.sameOriginMutation = sameOriginMutation;
-  for (const route of ['post /api/auth/session', 'delete /api/auth/session']) {
-    const handler = vm.runInNewContext(compile(`var handler = ${handlers.get(route)}`) + '; handler', ctx);
-    const [method, routePath] = route.split(' ');
-    (app as any)[method](routePath, handler);
-  }
-  app.use('/api', createApiSecurity({ getStore: () => store, verify }));
-  const routes = [
-    'get /api/health', 'get /api/state', 'get /api/users', 'post /api/users',
-    'put /api/users/:id', 'delete /api/users/:id',
-    'get /api/tasks', 'post /api/tasks', 'post /api/tasks/pipeline-bundle',
-    'put /api/tasks/:id', 'delete /api/tasks/:id', 'post /api/tasks/reorder',
-    'post /api/tasks/:id/duplicate', 'post /api/firestore/purge', 'get /api/events',
-    'post /api/clickup/verify', 'get /api/clickup/spaces', 'post /api/clickup/spaces',
-    'get /api/clickup/members', 'get /api/clickup/folders-and-lists', 'get /api/clickup/custom-fields',
-    'post /api/clickup/lists', 'post /api/clickup/sync-user-tasks',
-    'post /api/clickup/webhook', 'post /api/clickup/webhook/register',
-    'get /api/clickup/webhook/status', 'delete /api/clickup/webhook/:id',
+    {
+      id: 'alice',
+      name: 'Alice Content',
+      email: 'alice@zensciences.com',
+      role: 'content',
+      avatarColor: 'from-blue-500 to-cyan-500',
+      creativeDirectorId: 'cd',
+      createdAt: '2026-10-01T00:00:00.000Z',
+    },
+    {
+      id: 'bob',
+      name: 'Bob Design',
+      email: 'bob@zensciences.com',
+      role: 'design',
+      avatarColor: 'from-amber-500 to-orange-500',
+      createdAt: '2026-10-01T00:00:00.000Z',
+    },
+    {
+      id: 'lead',
+      name: 'Cluster Lead',
+      email: 'lead@zensciences.com',
+      role: 'content',
+      avatarColor: 'from-emerald-500 to-teal-500',
+      isClusterLead: true,
+      creativeDirectorId: 'cd',
+      designation: 'Cluster Lead',
+      createdAt: '2026-10-01T00:00:00.000Z',
+    },
   ];
-  for (const route of routes) {
-    const handler = vm.runInNewContext(compile(`var handler = ${handlers.get(route)}`) + '; handler', ctx);
-    const [method, routePath] = route.split(' ');
-    (app as any)[method](routePath, (req: any, res: any, next: any) => {
-      try { Promise.resolve(handler(req, res)).catch(next); } catch (error) { next(error); }
+
+  const initialTasks: Task[] = [
+    fixtureTask('a', 'alice', { team: 'content' }),
+    fixtureTask('b', 'bob', { team: 'design' }),
+  ];
+
+  const adapter = createMemoryPersistenceAdapter({
+    users: initialUsers,
+    tasks: initialTasks,
+    parentTasks: [],
+  });
+  const repo = createWorkspaceRepository(adapter);
+  const webhookRegistry = new WebhookRegistry(path.join(workDir, 'webhooks.json'));
+  await webhookRegistry.save({
+    id: 'wh-test-1',
+    endpoint: 'http://127.0.0.1/api/clickup/webhook',
+    secret: webhookSecret,
+  });
+
+  let activeTransport: ClickUpTransport | undefined = opts.clickupTransport;
+  const sseHub = createSseHub();
+  const clickup = createClickUpService({
+    repo,
+    webhookRegistry,
+    broadcastEvent: sseHub.broadcastEvent,
+    sanitizeString,
+    transport: (url, init) => (activeTransport ? activeTransport(url, init) : fetch(url, init)),
+  });
+
+  const futureExp = Math.floor(Date.now() / 1000) + 3600;
+  const verifyIdentity = async (token: string): Promise<Identity> => {
+    if (token === 'expired') {
+      return { email: 'alice@zensciences.com', email_verified: true, exp: 1000, firebase: { sign_in_provider: 'google.com' } };
+    }
+    if (token === 'unverified') {
+      return { email: 'alice@zensciences.com', email_verified: false, exp: futureExp, firebase: { sign_in_provider: 'google.com' } };
+    }
+    if (token === 'password') {
+      return { email: 'alice@zensciences.com', email_verified: true, exp: futureExp, firebase: { sign_in_provider: 'password' } };
+    }
+    if (token === 'unknown') {
+      return { email: 'unknown@zensciences.com', email_verified: true, exp: futureExp, firebase: { sign_in_provider: 'google.com' } };
+    }
+    if (token === 'invalid' || !token) {
+      throw new Error('Invalid token');
+    }
+    const matched = repo.getUsers().find(u => u.id === token || u.email.toLowerCase() === token.toLowerCase());
+    if (matched) {
+      return { email: matched.email, email_verified: true, exp: futureExp, firebase: { sign_in_provider: 'google.com' } };
+    }
+    if (token === 'kiran' || token === 'superadmin') {
+      return { email: 'kiran.s@zensciences.com', email_verified: true, exp: futureExp, firebase: { sign_in_provider: 'google.com' } };
+    }
+    throw new Error('Unknown identity token');
+  };
+
+  const app = createServerApp({
+    repo,
+    clickup,
+    verifyIdentity,
+    sseHub,
+    enableRequestLogging: false,
+  });
+
+  const httpServer = http.createServer(app);
+  await new Promise<void>(resolve => httpServer.listen(0, '127.0.0.1', resolve));
+  const port = (httpServer.address() as any).port;
+  const url = `http://127.0.0.1:${port}`;
+
+  const request = (
+    routePath: string,
+    who: string = 'alice',
+    method: string = 'GET',
+    body?: any,
+    extraHeaders: Record<string, string> = {}
+  ) => {
+    const headers: Record<string, string> = { ...extraHeaders };
+    if (who && !headers.Authorization && !headers.authorization && !headers.Cookie && !headers.cookie) {
+      headers.Authorization = `Bearer ${who}`;
+    }
+    if (body !== undefined && !headers['Content-Type'] && !headers['content-type']) {
+      headers['Content-Type'] = 'application/json';
+    }
+    const apiPath = routePath.startsWith('/api') ? routePath : `/api${routePath.startsWith('/') ? '' : '/'}${routePath}`;
+    return fetch(`${url}${apiPath}`, {
+      method,
+      headers,
+      body: body !== undefined ? (typeof body === 'string' ? body : JSON.stringify(body)) : undefined,
     });
-  }
-  app.use((_error: any, _req: any, res: any, _next: any) => res.status(500).json({ error: 'fixture handler failed' }));
-  const server = app.listen(0, '127.0.0.1');
-  await new Promise<void>(resolve => server.on('listening', resolve));
-  const address = server.address() as any;
-  const url = `http://127.0.0.1:${address.port}`;
-  return { store, events, audit, ctx, url,
-    migrateLegacyRoles: () => ctx.migrateLegacyRoles(store),
-    hydrateSubtasksFromParents: () => ctx.hydrateSubtasksFromParents(store),
-    enableLiveBroadcast: () => { ctx.broadcastEvent = vm.runInNewContext(compile(functions.get('broadcastEvent')!) + '; broadcastEvent', ctx); },
-    request: (route: string, who = 'alice', method = 'GET', body?: any, headers: Record<string, string> = {}) => fetch(url + '/api' + route, {
-      method, headers: { ...(who ? { Authorization: `Bearer ${who}` } : {}), 'Content-Type': 'application/json', ...headers },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    }),
-    close: async () => { for (const client of ctx.clients) client.res.destroy(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); },
+  };
+
+  const close = async () => {
+    sseHub.closeAll();
+    httpServer.closeAllConnections?.();
+    await new Promise<void>(resolve => httpServer.close(() => resolve()));
+    if (owningTmpDir) {
+      await fs.rm(workDir, { recursive: true, force: true });
+    }
+  };
+
+  return {
+    url,
+    store: repo.getStore() as { users: any[]; tasks: any[]; parentTasks: any[] },
+    repo,
+    clickup,
+    webhookSecret,
+    get audit() {
+      return repo.getRecentAuditLogs();
+    },
+    enableLiveBroadcast: () => {},
+    ctx: {
+      broadcastEvent: sseHub.broadcastEvent,
+      get clients() {
+        return sseHub.getClients();
+      },
+    },
+    migrateLegacyRoles: () => migrateLegacyRolesInStore(repo.getStore()),
+    hydrateSubtasksFromParents: () => hydrateSubtasksFromParents(repo.getStore()),
+    setClickupTransport: (transport: ClickUpTransport | undefined) => {
+      activeTransport = transport;
+    },
+    request,
+    close,
   };
 }

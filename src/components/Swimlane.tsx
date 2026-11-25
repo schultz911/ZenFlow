@@ -35,7 +35,7 @@ import {
   Calendar,
   UserCog,
 } from 'lucide-react';
-import { useDashboard } from '../context/DashboardContext';
+import { useAuth, useWorkspace } from '../context/DashboardContext';
 
 interface SwimlaneProps {
   user: User;
@@ -146,14 +146,13 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   canMoveUp,
   canMoveDown,
 }) => {
+  const { canManageUser, canEditUserTasks } = useAuth();
   const {
     tasks: allWorkspaceTasks,
     users,
-    canManageUser,
-    canEditUserTasks,
     shareTaskWithUser,
     reassignTaskFromUser,
-  } = useDashboard();
+  } = useWorkspace();
 
   const canEdit = useMemo(() => canEditUserTasks(user.id), [canEditUserTasks, user.id]);
 
@@ -1157,6 +1156,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                     onReschedule={onRescheduleTask}
                                     onAdjustBillableHours={onAdjustBillableHours}
                                     onDuplicateToBoard={onDuplicateTask ? handleCardDuplicate : undefined}
+                                    canEdit={canEdit}
                                     onDragStart={handleTaskDragStart}
                                     onDragEnd={handleTaskDragEnd}
                                   />
@@ -1229,6 +1229,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                   onReschedule={onRescheduleTask}
                                   onAdjustBillableHours={onAdjustBillableHours}
                                   onDuplicateToBoard={onDuplicateTask ? handleCardDuplicate : undefined}
+                                  canEdit={canEdit}
                                   onDragStart={handleTaskDragStart}
                                   onDragEnd={handleTaskDragEnd}
                                 />

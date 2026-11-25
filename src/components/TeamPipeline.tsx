@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { useDashboard } from '../context/DashboardContext';
+import { useAuth, useWorkspace } from '../context/DashboardContext';
 import { Task, User, RoleFilter } from '../types';
 import { getCognitiveLoadLabel, getTaskAssigneeIds } from '../utils/workload';
+import { isValidHttpUrl } from '../utils/taskMetadata';
 import {
   Inbox,
   Plus,
@@ -55,8 +56,8 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
   const {
     canCreatePipelineTask,
     canAssignTask,
-    updateTask,
-  } = useDashboard();
+  } = useAuth();
+  const { updateTask } = useWorkspace();
 
   const [pipelineSearch, setPipelineSearch] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'unassigned' | 'assigned'>('all');
@@ -491,7 +492,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                         </div>
                       )}
 
-                      {(metadata?.contentType || metadata?.assetType || task.brandGuidelines) && (
+                      {(metadata?.contentType || metadata?.assetType || (task.brandGuidelines && isValidHttpUrl(task.brandGuidelines))) && (
                         <div className="flex items-center gap-1 flex-wrap text-[11px] text-neutral-600 dark:text-white/50 mb-2">
                           {metadata?.contentType && (
                             <span className="px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-600 dark:text-blue-300 font-medium">
@@ -503,7 +504,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                               {metadata.assetType}
                             </span>
                           )}
-                          {task.brandGuidelines && (
+                          {task.brandGuidelines && isValidHttpUrl(task.brandGuidelines) && (
                             <a
                               href={task.brandGuidelines}
                               target="_blank"
