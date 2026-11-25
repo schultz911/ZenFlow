@@ -5,6 +5,8 @@ import {
   User,
   Task,
   Role,
+  RoleFilter,
+  CognitiveLoad,
   TaskStatus,
   RealtimeEvent,
   DragTaskInfo,
@@ -13,10 +15,15 @@ import {
   TaskActivity,
   AuditLogEntry,
   TaskDisciplineMetadata,
-
+  ClickupMember,
+  ClickupSpace,
+  ClickupList,
+  ClickupFolder,
+  ClickupCustomFieldOption,
+  ClickupWebhookStatus,
 } from '../types';
 import { INITIAL_USERS, INITIAL_TASKS } from '../data/initialData';
-import { compareTasksByDeadline, formatBillableHours, getTaskBillableMs } from '../utils/workload';
+import { compareTasksByDeadline, formatBillableHours, getTaskBillableMs, getTaskAssigneeIds } from '../utils/workload';
 import { signInWithGoogle, signOutFirebase, onFirebaseAuthStateChanged } from '../lib/firebase';
 
 export interface FirestoreStatus {
@@ -82,8 +89,8 @@ interface DashboardContextType {
   currentUser: User | null;
   users: User[];
   tasks: Task[];
-  activeRoleTab: Role;
-  setActiveRoleTab: (tab: Role) => void;
+  activeRoleTab: RoleFilter;
+  setActiveRoleTab: (tab: RoleFilter) => void;
   darkMode: boolean;
   setDarkMode: (val: boolean | ((prev: boolean) => boolean)) => void;
   syncStatus: 'connected' | 'connecting' | 'offline';
@@ -118,6 +125,8 @@ interface DashboardContextType {
     designation?: string;
     creativeDirectorId?: string;
     clusterLeadId?: string;
+    clickupUserId?: string;
+    clickupUsername?: string;
   }) => Promise<User>;
   updateUserProfile: (userId: string, updates: Partial<User>) => Promise<User>;
   remapUserTasks: (fromUserIdOrEmail: string, toUserId: string, deleteSourceUser?: boolean) => Promise<{ success: boolean; remappedCount: number; error?: string }>;
@@ -139,15 +148,62 @@ interface DashboardContextType {
   clusterLeads: User[];
   activeBoardId: string;
   setActiveBoardId: (boardId: string) => void;
+  // ClickUp Integration
+  isZensciencesUser: boolean;
+  clickupApiKey: string;
+  isClickupConnected: boolean;
+  clickupMembers: ClickupMember[];
+  loadClickupMembers: (apiKey?: string) => Promise<ClickupMember[]>;
+  clickupSpaces: ClickupSpace[];
+  selectedClickupSpaceId: string;
+  clickupFoldersAndLists: { folders: ClickupFolder[]; folderlessLists: ClickupList[] };
+  spaceFoldersMap: Record<string, string[]>;
+  spaceFoldersAndListsMap: Record<string, { folders: ClickupFolder[]; folderlessLists: ClickupList[] }>;
+  getFoldersAndListsForSpace: (spaceId: string) => Promise<{ folders: ClickupFolder[]; folderlessLists: ClickupList[] }>;
+  connectClickup: (apiKey: string) => Promise<{ success: boolean; error?: string }>;
+  disconnectClickup: () => void;
+  setSelectedClickupSpaceId: (spaceId: string, spaceName?: string) => Promise<void>;
+  createClickupSpace: (name: string) => Promise<ClickupSpace | null>;
+  createClickupList: (name: string, spaceId: string, folderId?: string) => Promise<ClickupList | null>;
+  syncUserTasksWithClickUp: (userId: string) => Promise<{ success: boolean; syncedCount: number; archivedCount: number; message: string }>;
+  clickupCustomFieldOptions: ClickupCustomFieldOption[];
+  clickupTaskTypeFieldId: string;
+  isLoadingTaskTypes: boolean;
+  fetchClickupCustomFields: (params: { listId?: string; spaceId?: string; folderId?: string }) => Promise<ClickupCustomFieldOption[]>;
+  clickupWebhookStatus: ClickupWebhookStatus | null;
+  refreshClickupWebhookStatus: () => Promise<void>;
+  registerClickupWebhook: (customEndpoint?: string) => Promise<{ success: boolean; message: string; webhookId?: string }>;
   fetchAuditLogs: (limit?: number) => Promise<AuditLogEntry[]>;
   downloadAuditLogs: () => void;
   // Tasks
+  createPipelineBundle: (data: {
+    title: string;
+    description?: string;
+    dueDate?: string;
+    client?: string;
+    project?: string;
+    priority?: 'low' | 'medium' | 'high';
+    attachments?: string[];
+    disciplines: Array<'content' | 'design'>;
+    disciplineSpecs?: { content?: TaskDisciplineMetadata; design?: TaskDisciplineMetadata };
+    clickupSpaceId?: string;
+    clickupSpaceName?: string;
+    clickupFolderId?: string;
+    clickupFolderName?: string;
+    clickupListId?: string;
+    clickupListName?: string;
+    clickupTaskType?: string;
+    clickupTaskTypeId?: string;
+    clickupTaskTypeFieldId?: string;
+  }) => Promise<{ parentTaskId: string; parentTaskTitle: string; clickupParentTaskId?: string; tasks: Task[] }>;
   createTask: (data: {
     userId?: string;
+    assigneeIds?: string[];
     team?: Role;
     title: string;
     description?: string;
     dueDate?: string;
+    startDate?: string;
     cognitiveLoad?: 'low' | 'medium' | 'high';
     status?: TaskStatus;
     client?: string;
@@ -156,13 +212,44 @@ interface DashboardContextType {
     priority?: 'low' | 'medium' | 'high';
     attachments?: string[];
     disciplineMetadata?: TaskDisciplineMetadata;
+    clickupSpaceId?: string;
+    clickupSpaceName?: string;
+    clickupFolderId?: string;
+    clickupFolderName?: string;
+    clickupListId?: string;
+    clickupListName?: string;
+    clickupTaskType?: string;
+    clickupTaskTypeId?: string;
+    clickupTaskTypeFieldId?: string;
   }) => Promise<Task>;
   updateTask: (id: string, updates: Partial<Task>) => Promise<Task>;
   adjustBillableHours: (taskId: string, newDurationMs: number, reason?: string) => Promise<Task>;
   rescheduleTask: (taskId: string, newDueDate?: string) => Promise<Task>;
   deleteTask: (id: string) => Promise<void>;
+  removeAssigneeOrDeleteTask: (taskId: string, removeAssigneeId?: string) => Promise<void>;
+  shareTaskWithUser: (taskId: string, targetUserId: string) => Promise<Task>;
+  reassignTaskFromUser: (
+    taskId: string,
+    sourceUserId: string,
+    targetUserId: string,
+    newStatus?: TaskStatus,
+    newDueDate?: string | null
+  ) => Promise<Task>;
   deleteUser: (userId: string) => Promise<void>;
-  moveTask: (taskId: string, targetUserId: string, newStatus: TaskStatus, newIndex?: number, newDueDate?: string | null) => Promise<void>;
+  moveTask: (
+    taskId: string,
+    targetUserId: string,
+    newStatus: TaskStatus,
+    newIndex?: number,
+    newDueDate?: string | null,
+    extraUpdates?: {
+      startDate?: string;
+      estimatedHours?: number;
+      cognitiveLoad?: CognitiveLoad;
+      contentDocLink?: string;
+      sourceUserId?: string;
+    }
+  ) => Promise<void>;
   reassignTask: (taskId: string, targetUserId: string) => Promise<void>;
   moveTaskStatus: (taskId: string, newStatus: TaskStatus, newIndex?: number, targetUserId?: string, newDueDate?: string | null) => Promise<void>;
   reorderTasks: (updates: Array<TaskOrderUpdate>) => Promise<void>;
@@ -172,7 +259,7 @@ interface DashboardContextType {
     title?: string;
     targetStatus?: TaskStatus;
     targetDueDate?: string;
-  }) => Promise<{ task: Task;  warning?: string; message?: string }>;
+  }) => Promise<{ task: Task; warning?: string; message?: string }>;
 }
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
@@ -213,10 +300,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     currentUserRef.current = currentUser;
   }, [currentUser]);
 
-  const [activeRoleTab, setActiveRoleTab] = useState<Role>(() => {
-    if (currentUser?.role) return currentUser.role;
-    return 'content';
-  });
+  const [activeRoleTab, setActiveRoleTab] = useState<RoleFilter>('all');
 
   // Roles & Permissions
   const SUPERADMIN_EMAIL = 'kiran.s@zensciences.com';
@@ -376,6 +460,39 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     return targetUserId === currentUser.id;
   }, [currentUser, isSuperadmin, isAdministrator, isBusinessLead, isCreativeDirector, isClusterLead]);
 
+  // ClickUp Integration State
+  const isZensciencesUser = useMemo(() => {
+    return Boolean(currentUser?.email?.toLowerCase().endsWith('@zensciences.com'));
+  }, [currentUser]);
+
+  const clickupApiKey = useMemo(() => '', []);
+
+  const isClickupConnected = useMemo(() => {
+    return Boolean(isZensciencesUser && currentUser?.clickupConnected);
+  }, [isZensciencesUser, currentUser?.clickupConnected]);
+
+  const [clickupSpaces, setClickupSpaces] = useState<ClickupSpace[]>([]);
+  const [selectedClickupSpaceId, setSelectedClickupSpaceIdState] = useState<string>(() => {
+    return currentUser?.selectedClickupSpaceId || localStorage.getItem('zenflow_clickup_space_id') || '';
+  });
+  const selectedClickupSpaceIdRef = useRef<string>(selectedClickupSpaceId);
+  selectedClickupSpaceIdRef.current = selectedClickupSpaceId;
+  const [clickupFoldersAndLists, setClickupFoldersAndLists] = useState<{
+    folders: ClickupFolder[];
+    folderlessLists: ClickupList[];
+  }>({ folders: [], folderlessLists: [] });
+  const [spaceFoldersMap, setSpaceFoldersMap] = useState<Record<string, string[]>>({});
+  const [spaceFoldersAndListsMap, setSpaceFoldersAndListsMap] = useState<
+    Record<string, { folders: ClickupFolder[]; folderlessLists: ClickupList[] }>
+  >({});
+  const spaceFoldersAndListsMapRef = useRef(spaceFoldersAndListsMap);
+  spaceFoldersAndListsMapRef.current = spaceFoldersAndListsMap;
+  const [clickupMembers, setClickupMembers] = useState<ClickupMember[]>([]);
+  const [clickupCustomFieldOptions, setClickupCustomFieldOptions] = useState<ClickupCustomFieldOption[]>([]);
+  const [clickupTaskTypeFieldId, setClickupTaskTypeFieldId] = useState<string>('');
+  const [isLoadingTaskTypes, setIsLoadingTaskTypes] = useState<boolean>(false);
+  const [clickupWebhookStatus, setClickupWebhookStatus] = useState<ClickupWebhookStatus | null>(null);
+
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem(THEME_KEY);
@@ -404,6 +521,101 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       // ignore
     }
   }, []);
+
+  const refreshClickupWebhookStatus = useCallback(async () => {
+    try {
+      const res = await fetch('/api/clickup/webhook/status');
+      if (res.ok) {
+        const data: ClickupWebhookStatus = await res.json();
+        setClickupWebhookStatus(data);
+      }
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const loadClickupFoldersAndLists = useCallback(async (spaceId: string, apiKey: string = '') => {
+    if (!spaceId) return;
+    try {
+      const res = await fetch(`/api/clickup/folders-and-lists?spaceId=${encodeURIComponent(spaceId)}`, {
+        headers: apiKey ? { 'x-clickup-api-key': apiKey } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const result = { folders: data.folders || [], folderlessLists: data.folderlessLists || [] };
+        setClickupFoldersAndLists(result);
+        setSpaceFoldersAndListsMap(prev => ({ ...prev, [spaceId]: result }));
+        setSpaceFoldersMap(prev => ({ ...prev, [spaceId]: (data.folders || []).map((f: ClickupFolder) => f.name) }));
+      }
+    } catch (err) {
+      console.warn('Failed to load ClickUp folders & lists:', err);
+    }
+  }, []);
+
+  const loadClickupSpaces = useCallback(async (apiKey: string = '') => {
+    try {
+      const res = await fetch('/api/clickup/spaces', {
+        headers: apiKey ? { 'x-clickup-api-key': apiKey } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.spaces)) {
+          setClickupSpaces(data.spaces);
+          if (data.spaces.length > 0 && !selectedClickupSpaceIdRef.current) {
+            const firstId = data.spaces[0].id;
+            setSelectedClickupSpaceIdState(firstId);
+            try { localStorage.setItem('zenflow_clickup_space_id', firstId); } catch {}
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load ClickUp spaces:', err);
+    }
+  }, []);
+
+  const getFoldersAndListsForSpace = useCallback(async (spaceId: string) => {
+    if (!spaceId) return { folders: [], folderlessLists: [] };
+    if (spaceFoldersAndListsMapRef.current[spaceId]) {
+      return spaceFoldersAndListsMapRef.current[spaceId];
+    }
+    try {
+      const res = await fetch(`/api/clickup/folders-and-lists?spaceId=${encodeURIComponent(spaceId)}`);
+      if (res.ok) {
+        const data = await res.json();
+        const result = { folders: data.folders || [], folderlessLists: data.folderlessLists || [] };
+        setSpaceFoldersAndListsMap(prev => ({ ...prev, [spaceId]: result }));
+        setSpaceFoldersMap(prev => ({ ...prev, [spaceId]: (data.folders || []).map((f: ClickupFolder) => f.name) }));
+        return result;
+      }
+    } catch (err) {
+      console.warn('Failed to load folders & lists for space:', err);
+    }
+    return { folders: [], folderlessLists: [] };
+  }, []);
+
+  const loadClickupMembers = useCallback(async (apiKey: string = ''): Promise<ClickupMember[]> => {
+    try {
+      const res = await fetch('/api/clickup/members', {
+        headers: apiKey ? { 'x-clickup-api-key': apiKey } : {},
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const list: ClickupMember[] = Array.isArray(data.members) ? data.members : [];
+        setClickupMembers(list);
+        return list;
+      }
+    } catch (err) {
+      console.warn('Failed to load ClickUp members:', err);
+    }
+    return [];
+  }, []);
+
+  useEffect(() => {
+    if (isClickupConnected) {
+      loadClickupSpaces('');
+      loadClickupMembers('');
+    }
+  }, [isClickupConnected, loadClickupSpaces, loadClickupMembers]);
 
   // Apply dark mode class to root document & body
   useEffect(() => {
@@ -680,7 +892,17 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
             } else if (type === 'user_deleted') {
               const deletedUserId = payload.id;
               setUsers(prev => prev.filter(u => u.id !== deletedUserId));
-              setTasks(prev => prev.filter(t => t.userId !== deletedUserId));
+              setTasks(prev =>
+                prev
+                  .map(t => {
+                    const assignees = getTaskAssigneeIds(t);
+                    if (!assignees.includes(deletedUserId)) return t;
+                    const remaining = assignees.filter(id => id !== deletedUserId);
+                    if (remaining.length === 0) return null;
+                    return { ...t, assigneeIds: remaining, userId: remaining[0] };
+                  })
+                  .filter((t): t is Task => Boolean(t))
+              );
               setCurrentUser(prev => (prev?.id === deletedUserId ? null : prev));
             } else if (type === 'task_created') {
               setTasks(prev => {
@@ -959,7 +1181,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         const data = await res.json();
         const user: User = data.user;
         setCurrentUser(user);
-        setActiveRoleTab(user.role);
+        setActiveRoleTab(user.role === 'content' || user.role === 'design' ? user.role : 'all');
         setUsers(prev => {
           const exists = prev.some(u => u.id === user.id);
           return exists ? prev.map(u => (u.id === user.id ? user : u)) : [...prev, user];
@@ -993,7 +1215,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     setCurrentUser(existing);
-    setActiveRoleTab(existing.role);
+    setActiveRoleTab(existing.role === 'content' || existing.role === 'design' ? existing.role : 'all');
 
     return existing;
   }, []);
@@ -1011,8 +1233,175 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const switchUser = useCallback((user: User) => {
     setCurrentUser(user);
-    setActiveRoleTab(user.role);
+    setActiveRoleTab(user.role === 'content' || user.role === 'design' ? user.role : 'all');
   }, []);
+
+  const connectClickup = useCallback(async (apiKey: string): Promise<{ success: boolean; error?: string }> => {
+    const cleanKey = apiKey.trim();
+    if (!cleanKey) return { success: false, error: 'API key is required' };
+    try {
+      const res = await fetch('/api/clickup/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ apiKey: cleanKey }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.valid) {
+        return { success: false, error: data.error || 'Invalid ClickUp API Key' };
+      }
+      if (currentUserRef.current) {
+        await updateUserProfile(currentUserRef.current.id, { clickupApiKey: cleanKey });
+      }
+      await loadClickupSpaces('');
+      await loadClickupMembers('');
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Connection failed' };
+    }
+  }, [updateUserProfile, loadClickupSpaces, loadClickupMembers]);
+
+  const disconnectClickup = useCallback(() => {
+    localStorage.removeItem('zenflow_clickup_api_key');
+    if (currentUserRef.current) {
+      updateUserProfile(currentUserRef.current.id, { clickupApiKey: '' });
+    }
+    setClickupSpaces([]);
+    setClickupFoldersAndLists({ folders: [], folderlessLists: [] });
+  }, [updateUserProfile]);
+
+  const setSelectedClickupSpaceId = useCallback(async (spaceId: string, spaceName?: string) => {
+    setSelectedClickupSpaceIdState(spaceId);
+    try {
+      localStorage.setItem('zenflow_clickup_space_id', spaceId);
+      if (spaceName) localStorage.setItem('zenflow_clickup_space_name', spaceName);
+    } catch {}
+    if (currentUserRef.current) {
+      await updateUserProfile(currentUserRef.current.id, {
+        selectedClickupSpaceId: spaceId,
+        selectedClickupSpaceName: spaceName,
+      });
+    }
+    if (isClickupConnected) {
+      await loadClickupFoldersAndLists(spaceId, '');
+    }
+  }, [isClickupConnected, updateUserProfile, loadClickupFoldersAndLists]);
+
+  const createClickupSpace = useCallback(async (name: string): Promise<ClickupSpace | null> => {
+    if (!name.trim()) return null;
+    try {
+      const res = await fetch('/api/clickup/spaces', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const created: ClickupSpace = data.space;
+        await loadClickupSpaces('');
+        return created;
+      }
+    } catch (err) {
+      console.warn('Failed to create ClickUp space:', err);
+    }
+    return null;
+  }, [loadClickupSpaces]);
+
+  const createClickupList = useCallback(async (
+    name: string,
+    spaceId: string,
+    folderId?: string
+  ): Promise<ClickupList | null> => {
+    if (!name.trim() || (!spaceId && !folderId)) return null;
+    try {
+      const res = await fetch('/api/clickup/lists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ spaceId, folderId, name: name.trim() }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const createdList: ClickupList = data.list;
+        setSpaceFoldersAndListsMap(prev => {
+          const next = { ...prev };
+          delete next[spaceId];
+          return next;
+        });
+        await loadClickupFoldersAndLists(spaceId, '');
+        return createdList;
+      }
+    } catch (err) {
+      console.warn('Failed to create ClickUp list:', err);
+    }
+    return null;
+  }, [loadClickupFoldersAndLists]);
+
+  const syncUserTasksWithClickUp = useCallback(async (userId: string) => {
+    try {
+      const res = await fetch('/api/clickup/sync-user-tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success) {
+        await fetchState();
+        return {
+          success: true,
+          syncedCount: data.syncedCount || 0,
+          archivedCount: data.archivedCount || 0,
+          message: data.message || 'Sync complete',
+        };
+      }
+      return { success: false, syncedCount: 0, archivedCount: 0, message: data?.error || 'Failed to sync with ClickUp' };
+    } catch (err: any) {
+      return { success: false, syncedCount: 0, archivedCount: 0, message: err.message || 'Sync request failed' };
+    }
+  }, [fetchState]);
+
+  const fetchClickupCustomFields = useCallback(async (params: { listId?: string; spaceId?: string; folderId?: string }): Promise<ClickupCustomFieldOption[]> => {
+    setIsLoadingTaskTypes(true);
+    try {
+      const q = new URLSearchParams();
+      if (params.listId) q.set('listId', params.listId);
+      else if (params.spaceId) q.set('spaceId', params.spaceId);
+      else if (params.folderId) q.set('folderId', params.folderId);
+      const res = await fetch(`/api/clickup/custom-fields?${q.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        const options: ClickupCustomFieldOption[] = data.options || [];
+        setClickupCustomFieldOptions(options);
+        if (data.taskTypeField?.id) setClickupTaskTypeFieldId(data.taskTypeField.id);
+        return options;
+      }
+    } catch (err) {
+      console.warn('[DashboardContext] Failed to fetch custom fields:', err);
+    } finally {
+      setIsLoadingTaskTypes(false);
+    }
+    return [];
+  }, []);
+
+  const registerClickupWebhook = useCallback(async (customEndpoint?: string): Promise<{ success: boolean; message: string; webhookId?: string }> => {
+    try {
+      const res = await fetch('/api/clickup/webhook/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: customEndpoint }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await refreshClickupWebhookStatus();
+        return {
+          success: true,
+          message: data.message || 'ClickUp real-time webhook registered successfully!',
+          webhookId: data.webhookId,
+        };
+      }
+      return { success: false, message: data.error || 'Failed to register webhook in ClickUp' };
+    } catch (err: any) {
+      return { success: false, message: err.message || 'Network error registering webhook' };
+    }
+  }, [refreshClickupWebhookStatus]);
 
   const createUser = useCallback(async (data: {
     name: string;
@@ -1031,6 +1420,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     designation?: string;
     creativeDirectorId?: string;
     clusterLeadId?: string;
+    clickupUserId?: string;
+    clickupUsername?: string;
   }): Promise<User> => {
     const res = await fetch('/api/users', {
       method: 'POST',
@@ -1049,13 +1440,54 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     throw new Error(err.error || 'Failed to create user');
   }, []);
 
+  // Create parent task + Content and/or Design subtasks in pipeline
+  const createPipelineBundle = useCallback(async (data: {
+    title: string;
+    description?: string;
+    dueDate?: string;
+    client?: string;
+    project?: string;
+    priority?: 'low' | 'medium' | 'high';
+    attachments?: string[];
+    disciplines: Array<'content' | 'design'>;
+    disciplineSpecs?: { content?: TaskDisciplineMetadata; design?: TaskDisciplineMetadata };
+    clickupSpaceId?: string;
+    clickupSpaceName?: string;
+    clickupFolderId?: string;
+    clickupFolderName?: string;
+    clickupListId?: string;
+    clickupListName?: string;
+    clickupTaskType?: string;
+    clickupTaskTypeId?: string;
+    clickupTaskTypeFieldId?: string;
+  }): Promise<{ parentTaskId: string; parentTaskTitle: string; clickupParentTaskId?: string; tasks: Task[] }> => {
+    const res = await fetch('/api/tasks/pipeline-bundle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    const resData = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      throw new Error(resData.error || 'Failed to create pipeline task(s)');
+    }
+    const createdTasks: Task[] = Array.isArray(resData.tasks) ? resData.tasks : [];
+    setTasks(prev => {
+      const map = new Map(prev.map(t => [t.id, t]));
+      for (const t of createdTasks) map.set(t.id, t);
+      return Array.from(map.values());
+    });
+    return resData;
+  }, []);
+
   // Task creation with offline mutation queuing
   const createTask = useCallback(async (data: {
     userId?: string;
+    assigneeIds?: string[];
     team?: Role;
     title: string;
     description?: string;
     dueDate?: string;
+    startDate?: string;
     cognitiveLoad?: 'low' | 'medium' | 'high';
     status?: TaskStatus;
     client?: string;
@@ -1064,13 +1496,28 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     priority?: 'low' | 'medium' | 'high';
     attachments?: string[];
     disciplineMetadata?: TaskDisciplineMetadata;
+    clickupSpaceId?: string;
+    clickupSpaceName?: string;
+    clickupFolderId?: string;
+    clickupFolderName?: string;
+    clickupListId?: string;
+    clickupListName?: string;
+    clickupTaskType?: string;
+    clickupTaskTypeId?: string;
+    clickupTaskTypeFieldId?: string;
   }): Promise<Task> => {
     const realId = `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const currentTasks = tasksRef.current;
     const status = data.status || (data.userId ? 'todo' : 'pipeline');
     const cognitiveLoad = data.cognitiveLoad || 'medium';
     const cleanUserId = (data.userId && data.userId.trim()) ? data.userId.trim() : undefined;
-    const team = data.team || (cleanUserId ? usersRef.current.find(u => u.id === cleanUserId)?.role : activeRoleTab) || 'content';
+    const cleanAssigneeIds = Array.isArray(data.assigneeIds) && data.assigneeIds.length > 0
+      ? data.assigneeIds
+      : (cleanUserId ? [cleanUserId] : []);
+    const ownerRole = cleanUserId ? usersRef.current.find(u => u.id === cleanUserId)?.role : undefined;
+    const team: Role = data.team === 'design' || data.team === 'content'
+      ? data.team
+      : (ownerRole === 'design' || ownerRole === 'content' ? ownerRole : 'content');
     const isCompleted = status === 'done';
     const now = new Date().toISOString();
 
@@ -1087,13 +1534,15 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     const optimisticTask: Task = {
       id: realId,
       userId: cleanUserId,
+      assigneeIds: cleanAssigneeIds,
       team,
       title: data.title.trim(),
       description: data.description ? data.description.trim() : undefined,
       dueDate: (status === 'pipeline' || status === 'retainer') ? undefined : data.dueDate,
+      startDate: status !== 'pipeline' ? (data.startDate || now.slice(0, 10)) : undefined,
       cognitiveLoad,
       status,
-      order: currentTasks.filter(t => (cleanUserId ? t.userId === cleanUserId : t.team === team) && t.status === status).length,
+      order: currentTasks.filter(t => (cleanUserId ? getTaskAssigneeIds(t).includes(cleanUserId) : t.team === team) && t.status === status).length,
       completedAt: isCompleted ? now : undefined,
       inProgressStartedAt: isInProgress ? now : undefined,
       inProgressDurationMs: 0,
@@ -1103,6 +1552,15 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       priority: data.priority || 'medium',
       attachments: data.attachments,
       disciplineMetadata: data.disciplineMetadata,
+      clickupSpaceId: data.clickupSpaceId,
+      clickupSpaceName: data.clickupSpaceName,
+      clickupFolderId: data.clickupFolderId,
+      clickupFolderName: data.clickupFolderName,
+      clickupListId: data.clickupListId,
+      clickupListName: data.clickupListName,
+      clickupTaskType: data.clickupTaskType,
+      clickupTaskTypeId: data.clickupTaskTypeId,
+      clickupTaskTypeFieldId: data.clickupTaskTypeFieldId,
       createdAt: now,
       updatedAt: now,
       activityLog: [initialActivity],
@@ -1159,6 +1617,15 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   // Task update with offline mutation queuing
   const updateTask = useCallback(async (id: string, updates: Partial<Task>): Promise<Task> => {
     let updatedTask: Task | undefined;
+    const prevTarget = tasksRef.current.find(t => t.id === id);
+    const linkToPropagate = updates.contentDocLink || prevTarget?.contentDocLink;
+    const isContentDoneUpdate = Boolean(
+      prevTarget &&
+      (updates.team || prevTarget.team) === 'content' &&
+      linkToPropagate &&
+      (updates.status === 'done' || (updates.contentDocLink && updates.contentDocLink !== prevTarget.contentDocLink))
+    );
+
     setTasks(prev => {
       const map = new Map<string, Task>();
       for (const t of prev) {
@@ -1195,9 +1662,24 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
             ? (updates.dueDate || undefined)
             : t.dueDate;
 
+          const nextAssigneeIds = Array.isArray(updates.assigneeIds)
+            ? Array.from(new Set(updates.assigneeIds.filter(Boolean)))
+            : updates.userId !== undefined
+            ? (updates.userId ? [updates.userId] : [])
+            : getTaskAssigneeIds(t);
+
+          const nextStartDate = updates.status === 'pipeline'
+            ? undefined
+            : updates.startDate !== undefined
+            ? updates.startDate
+            : (t.startDate || (t.status === 'pipeline' && updates.status ? new Date().toISOString().slice(0, 10) : undefined));
+
           updatedTask = {
             ...t,
             ...updates,
+            assigneeIds: nextAssigneeIds,
+            userId: nextAssigneeIds[0] || undefined,
+            startDate: nextStartDate,
             dueDate: finalDueDate,
             completedAt,
             inProgressStartedAt,
@@ -1205,6 +1687,14 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
             updatedAt: new Date().toISOString(),
           };
           map.set(t.id, updatedTask);
+        } else if (
+          isContentDoneUpdate &&
+          prevTarget &&
+          t.team === 'design' &&
+          ((prevTarget.parentTaskId && t.parentTaskId === prevTarget.parentTaskId) ||
+            (prevTarget.clickupParentTaskId && t.clickupParentTaskId === prevTarget.clickupParentTaskId))
+        ) {
+          map.set(t.id, { ...t, contentDocLink: linkToPropagate, updatedAt: new Date().toISOString() });
         } else {
           map.set(t.id, t);
         }
@@ -1365,10 +1855,71 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, []);
 
+  // Remove a single assignee from a shared task, or delete the task when sole assignee
+  const removeAssigneeOrDeleteTask = useCallback(async (id: string, removeAssigneeId?: string): Promise<void> => {
+    const task = tasksRef.current.find(t => t.id === id);
+    const assignees = task ? getTaskAssigneeIds(task) : [];
+    if (removeAssigneeId && assignees.includes(removeAssigneeId) && assignees.length > 1) {
+      const remaining = assignees.filter(uid => uid !== removeAssigneeId);
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, assigneeIds: remaining, userId: remaining[0] } : t));
+      try {
+        const res = await fetch(`/api/tasks/${id}?removeAssigneeId=${encodeURIComponent(removeAssigneeId)}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      } catch (err) {
+        console.warn('Partial unassign failed:', err);
+      }
+      return;
+    }
+    await deleteTask(id);
+  }, [deleteTask]);
+
+  const shareTaskWithUser = useCallback(async (taskId: string, targetUserId: string): Promise<Task> => {
+    const task = tasksRef.current.find(t => t.id === taskId);
+    if (!task) throw new Error('Task not found');
+    const nextAssigneeIds = Array.from(new Set([...getTaskAssigneeIds(task), targetUserId]));
+    return updateTask(taskId, {
+      assigneeIds: nextAssigneeIds,
+      userId: nextAssigneeIds[0],
+    });
+  }, [updateTask]);
+
+  const reassignTaskFromUser = useCallback(async (
+    taskId: string,
+    sourceUserId: string,
+    targetUserId: string,
+    newStatus?: TaskStatus,
+    newDueDate?: string | null
+  ): Promise<Task> => {
+    const task = tasksRef.current.find(t => t.id === taskId);
+    if (!task) throw new Error('Task not found');
+    const currentIds = getTaskAssigneeIds(task);
+    const replaced = currentIds.filter(id => id !== sourceUserId);
+    if (!replaced.includes(targetUserId)) replaced.push(targetUserId);
+    const updates: Partial<Task> = {
+      assigneeIds: replaced,
+      userId: replaced[0],
+    };
+    if (newStatus) updates.status = newStatus;
+    if (newDueDate !== undefined) updates.dueDate = newDueDate || undefined;
+    return updateTask(taskId, updates);
+  }, [updateTask]);
+
   // User delete with offline mutation queuing
   const deleteUser = useCallback(async (userId: string): Promise<void> => {
     setUsers(prev => prev.filter(u => u.id !== userId));
-    setTasks(prev => prev.filter(t => t.userId !== userId));
+    setTasks(prev =>
+      prev
+        .map(t => {
+          const assignees = getTaskAssigneeIds(t);
+          if (!assignees.includes(userId)) return t;
+          const remaining = assignees.filter(id => id !== userId);
+          if (remaining.length === 0) return null;
+          return { ...t, assigneeIds: remaining, userId: remaining[0] };
+        })
+        .filter((t): t is Task => Boolean(t))
+    );
     setCurrentUser(prev => (prev?.id === userId ? null : prev));
 
     try {
@@ -1394,17 +1945,26 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     targetUserId: string,
     newStatus: TaskStatus,
     newIndex?: number,
-    newDueDate?: string | null
+    newDueDate?: string | null,
+    extraUpdates?: {
+      startDate?: string;
+      estimatedHours?: number;
+      cognitiveLoad?: CognitiveLoad;
+      contentDocLink?: string;
+      sourceUserId?: string;
+    }
   ): Promise<void> => {
     const currentTasks = tasksRef.current;
     const task = currentTasks.find(t => t.id === taskId);
     if (!task) return;
 
-    const isSameUser = task.userId === targetUserId;
+    const existingAssignees = getTaskAssigneeIds(task);
+    const isSameUser = existingAssignees.includes(targetUserId);
     const isSameStatus = task.status === newStatus;
     const isDueDateUnchanged = newDueDate === undefined && ((newStatus !== 'pipeline' && newStatus !== 'retainer') || !task.dueDate);
+    const hasExtraUpdates = Boolean(extraUpdates && Object.keys(extraUpdates).length > 0);
 
-    if (isSameUser && isSameStatus && newIndex === undefined && isDueDateUnchanged) return;
+    if (isSameUser && isSameStatus && newIndex === undefined && isDueDateUnchanged && !hasExtraUpdates) return;
 
     // Automatic pipeline & retainer deadline removal: pipeline & retainer tasks strictly possess no deadline
     const resolvedDueDate =
@@ -1414,9 +1974,23 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         ? (newDueDate || undefined)
         : task.dueDate;
 
+    let nextAssigneeIds: string[];
+    if (newStatus === 'pipeline' && !task.userId && existingAssignees.length === 0) {
+      nextAssigneeIds = [];
+    } else if (task.status === 'pipeline' || existingAssignees.length <= 1) {
+      nextAssigneeIds = [targetUserId];
+    } else if (existingAssignees.includes(targetUserId)) {
+      nextAssigneeIds = existingAssignees;
+    } else {
+      nextAssigneeIds = extraUpdates?.sourceUserId
+        ? Array.from(new Set([...existingAssignees.filter(id => id !== extraUpdates.sourceUserId), targetUserId]))
+        : [targetUserId];
+    }
+    const primaryUserId = nextAssigneeIds[0] || targetUserId;
+
     // Get current tasks in target column excluding the moving task
     const targetUserTasksInStatus = currentTasks
-      .filter(t => t.userId === targetUserId && t.status === newStatus && t.id !== taskId)
+      .filter(t => getTaskAssigneeIds(t).includes(targetUserId) && t.status === newStatus && t.id !== taskId)
       .sort((a, b) => compareTasksByDeadline(a, b, newStatus));
 
     const targetOrder =
@@ -1425,6 +1999,11 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         : targetUserTasksInStatus.length;
 
     const now = new Date().toISOString();
+    const resolvedStartDate = newStatus === 'pipeline'
+      ? undefined
+      : extraUpdates?.startDate !== undefined
+      ? extraUpdates.startDate
+      : (task.startDate || (task.status === 'pipeline' ? now.slice(0, 10) : undefined));
     const isCompleted = newStatus === 'done';
     const completedAt = isCompleted
       ? task.completedAt || now
@@ -1445,9 +2024,14 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     const reorderedTargetTasks = [...targetUserTasksInStatus];
     const movedTaskUpdated: Task = {
       ...task,
-      userId: targetUserId,
+      userId: primaryUserId,
+      assigneeIds: nextAssigneeIds,
       status: newStatus,
       dueDate: resolvedDueDate,
+      startDate: resolvedStartDate,
+      estimatedHours: extraUpdates?.estimatedHours !== undefined ? extraUpdates.estimatedHours : task.estimatedHours,
+      cognitiveLoad: extraUpdates?.cognitiveLoad !== undefined ? extraUpdates.cognitiveLoad : task.cognitiveLoad,
+      contentDocLink: extraUpdates?.contentDocLink !== undefined ? extraUpdates.contentDocLink : task.contentDocLink,
       order: targetOrder,
       completedAt,
       inProgressStartedAt,
@@ -1458,11 +2042,21 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
     const batchUpdates: Array<TaskOrderUpdate> = reorderedTargetTasks.map((t, idx) => ({
       id: t.id,
-      userId: targetUserId,
+      userId: t.id === taskId ? primaryUserId : t.userId,
+      assigneeIds: t.id === taskId ? nextAssigneeIds : undefined,
       status: newStatus,
       order: idx,
       dueDate: t.id === taskId ? (resolvedDueDate || null) : t.dueDate,
+      ...(t.id === taskId && resolvedStartDate !== undefined ? { startDate: resolvedStartDate } : {}),
+      ...(t.id === taskId && extraUpdates?.estimatedHours !== undefined ? { estimatedHours: extraUpdates.estimatedHours } : {}),
+      ...(t.id === taskId && extraUpdates?.cognitiveLoad !== undefined ? { cognitiveLoad: extraUpdates.cognitiveLoad } : {}),
+      ...(t.id === taskId && extraUpdates?.contentDocLink !== undefined ? { contentDocLink: extraUpdates.contentDocLink } : {}),
     }));
+
+    const linkToPropagate = extraUpdates?.contentDocLink || task.contentDocLink;
+    const shouldPropagateLink = Boolean(
+      task.team === 'content' && newStatus === 'done' && linkToPropagate
+    );
 
     // Optimistically update
     setTasks(prev => {
@@ -1474,14 +2068,27 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
           return {
             ...t,
             userId: u.userId || t.userId,
+            assigneeIds: isMoved ? nextAssigneeIds : t.assigneeIds,
             status: u.status,
             order: u.order,
             dueDate: isMoved ? resolvedDueDate : t.dueDate,
+            startDate: isMoved ? resolvedStartDate : t.startDate,
+            estimatedHours: isMoved && extraUpdates?.estimatedHours !== undefined ? extraUpdates.estimatedHours : t.estimatedHours,
+            cognitiveLoad: isMoved && extraUpdates?.cognitiveLoad !== undefined ? extraUpdates.cognitiveLoad : t.cognitiveLoad,
+            contentDocLink: isMoved && extraUpdates?.contentDocLink !== undefined ? extraUpdates.contentDocLink : t.contentDocLink,
             completedAt: isMoved ? completedAt : t.completedAt,
             inProgressStartedAt: isMoved ? inProgressStartedAt : t.inProgressStartedAt,
             inProgressDurationMs: isMoved ? inProgressDurationMs : t.inProgressDurationMs,
             updatedAt: now,
           };
+        }
+        if (
+          shouldPropagateLink &&
+          t.team === 'design' &&
+          ((task.parentTaskId && t.parentTaskId === task.parentTaskId) ||
+            (task.clickupParentTaskId && t.clickupParentTaskId === task.clickupParentTaskId))
+        ) {
+          return { ...t, contentDocLink: linkToPropagate, updatedAt: now };
         }
         return t;
       });
@@ -1739,15 +2346,42 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       clusterLeads,
       activeBoardId,
       setActiveBoardId,
-
+      isZensciencesUser,
+      clickupApiKey,
+      isClickupConnected,
+      clickupMembers,
+      loadClickupMembers,
+      clickupSpaces,
+      selectedClickupSpaceId,
+      clickupFoldersAndLists,
+      spaceFoldersMap,
+      spaceFoldersAndListsMap,
+      getFoldersAndListsForSpace,
+      connectClickup,
+      disconnectClickup,
+      setSelectedClickupSpaceId,
+      createClickupSpace,
+      createClickupList,
+      syncUserTasksWithClickUp,
+      clickupCustomFieldOptions,
+      clickupTaskTypeFieldId,
+      isLoadingTaskTypes,
+      fetchClickupCustomFields,
+      clickupWebhookStatus,
+      refreshClickupWebhookStatus,
+      registerClickupWebhook,
       fetchAuditLogs,
       downloadAuditLogs,
       // Tasks
+      createPipelineBundle,
       createTask,
       updateTask,
       adjustBillableHours,
       rescheduleTask,
       deleteTask,
+      removeAssigneeOrDeleteTask,
+      shareTaskWithUser,
+      reassignTaskFromUser,
       deleteUser,
       moveTask,
       reassignTask,
@@ -1794,14 +2428,41 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       clusterLeads,
       activeBoardId,
       setActiveBoardId,
-
+      isZensciencesUser,
+      clickupApiKey,
+      isClickupConnected,
+      clickupMembers,
+      loadClickupMembers,
+      clickupSpaces,
+      selectedClickupSpaceId,
+      clickupFoldersAndLists,
+      spaceFoldersMap,
+      spaceFoldersAndListsMap,
+      getFoldersAndListsForSpace,
+      connectClickup,
+      disconnectClickup,
+      setSelectedClickupSpaceId,
+      createClickupSpace,
+      createClickupList,
+      syncUserTasksWithClickUp,
+      clickupCustomFieldOptions,
+      clickupTaskTypeFieldId,
+      isLoadingTaskTypes,
+      fetchClickupCustomFields,
+      clickupWebhookStatus,
+      refreshClickupWebhookStatus,
+      registerClickupWebhook,
       fetchAuditLogs,
       downloadAuditLogs,
+      createPipelineBundle,
       createTask,
       updateTask,
       adjustBillableHours,
       rescheduleTask,
       deleteTask,
+      removeAssigneeOrDeleteTask,
+      shareTaskWithUser,
+      reassignTaskFromUser,
       deleteUser,
       moveTask,
       reassignTask,

@@ -65,32 +65,35 @@ test('member provisioning, profile updates and root protection retain the role m
   assert.equal((await server.request('/users/alice', 'alice', 'PUT', { role: 'design' })).status, 403);
   assert.equal((await server.request('/users/alice', 'cd', 'PUT', { name: 'Alice Renamed' })).status, 200);
   assert.equal(server.store.users.find((u: any) => u.id === 'alice').name, 'Alice Renamed');
-  const videoUserRes = await server.request('/users', 'root', 'POST', {
-    name: 'Video Creator',
-    email: 'video@example.invalid',
-    role: 'video',
-    isArtDirector: true,
+  const designUserRes = await server.request('/users', 'root', 'POST', {
+    name: 'Brand Designer',
+    email: 'designer@example.invalid',
+    role: 'design',
+    isBrandDesigner: true,
     clusterLeadId: 'cd',
   });
-  assert.equal(videoUserRes.status, 201);
-  const createdVideoUser = await videoUserRes.json();
-  assert.equal(createdVideoUser.role, 'video');
-  assert.equal(createdVideoUser.isArtDirector, true);
-  assert.equal(createdVideoUser.clusterLeadId, 'cd');
+  assert.equal(designUserRes.status, 201);
+  const createdDesignUser = await designUserRes.json();
+  assert.equal(createdDesignUser.role, 'design');
+  assert.equal(createdDesignUser.isBrandDesigner, true);
+  assert.equal(createdDesignUser.clusterLeadId, 'cd');
 }));
 test('HTTP user payloads and mutation events use an allowlist to prevent private credential leakage', async () => withServer(async server => {
   server.store.users[2].privateInternalToken = 'SYNTHETIC_PRIVATE_KEY';
+  server.store.users[2].clickupApiKey = 'pk_secret_token_do_not_leak';
   for (const route of ['/state', '/users']) {
     const response = await server.request(route);
     assert.equal(response.status, 200);
-    assert.ok(!(await response.text()).includes('SYNTHETIC_PRIVATE_KEY'));
+    const body = await response.text();
+    assert.ok(!body.includes('SYNTHETIC_PRIVATE_KEY'));
+    assert.ok(!body.includes('pk_secret_token_do_not_leak'));
   }
 }));
-test('legacy clickup routes return 410 Gone', async () => withServer(async server => {
-  for (const route of ['/clickup/spaces', '/clickup/folders-and-lists', '/clickup/webhook', '/clickup/verify']) {
-    const res = await server.request(route, 'alice');
-    assert.equal(res.status, 410);
-  }
+test('clickup webhook rejects unsigned or tampered requests with 401', async () => withServer(async server => {
+  const resMissingSig = await server.request('/clickup/webhook', '', 'POST', { event: 'taskStatusUpdated' });
+  assert.equal(resMissingSig.status, 401);
+  const resInvalidSig = await server.request('/clickup/webhook', '', 'POST', { event: 'taskStatusUpdated' }, { 'x-signature': 'deadbeef' });
+  assert.equal(resInvalidSig.status, 401);
 }));
 test('cookie mutations require the same-origin non-simple header; Bearer API requests work', async () => withServer(async server => {
   const cookie = { Cookie: 'zenflow_identity=alice' };
@@ -119,7 +122,7 @@ test('public member fields use strict allowlist', () => {
   const member = publicMember({
     id: 'a',
     email: 'a@b.invalid',
-    role: 'video',
+    role: 'design',
     isClusterLead: true,
     isContentLead: true,
     isArtDirector: true,
@@ -131,13 +134,19 @@ test('public member fields use strict allowlist', () => {
     isAccountManager: true,
     designation: 'Business Lead',
     clusterLeadId: 'lead-1',
+    clickupApiKey: 'pk_secret_123',
+    clickupUserId: '9911',
+    clickupUsername: 'designer99',
     futureSecret: 'secret',
     privateToken: 'token',
   });
   assert.equal(member.futureSecret, undefined);
   assert.equal(member.privateToken, undefined);
+  assert.equal(member.clickupApiKey, undefined);
   assert.equal(member.id, 'a');
-  assert.equal(member.role, 'video');
+  assert.equal(member.role, 'design');
+  assert.equal(member.clickupUserId, '9911');
+  assert.equal(member.clickupUsername, 'designer99');
   assert.equal(member.isClusterLead, true);
   assert.equal(member.isTeamLead, true);
   assert.equal(member.isAccountManager, true);

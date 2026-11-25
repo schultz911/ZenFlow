@@ -2,7 +2,7 @@ import { DialogPanel } from './ui/DialogPanel';
 import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task } from '../types';
-import { calculateUserWorkload, formatDueDate, getCognitiveLoadLabel, calculateWeeklyVelocity, getUserTag } from '../utils/workload';
+import { calculateUserWorkload, formatDueDate, getCognitiveLoadLabel, calculateWeeklyVelocity, getUserTag, isTaskAssignedToUser } from '../utils/workload';
 import { X, TrendingUp, Clock, CheckCircle2 } from 'lucide-react';
 
 interface WorkloadModalProps {
@@ -22,7 +22,7 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
 
   const userTasks = useMemo(() => {
     if (!isOpen || !user) return [];
-    return tasks.filter(t => t.userId === user.id);
+    return tasks.filter(t => isTaskAssignedToUser(t, user.id));
   }, [isOpen, tasks, user]);
 
   const workload = useMemo(() => {

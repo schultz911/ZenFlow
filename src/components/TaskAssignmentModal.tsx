@@ -93,10 +93,13 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
     setSubmitError(null);
 
     const parsedHours = estimatedHours.trim() ? Math.max(0, parseFloat(estimatedHours)) : undefined;
+    const todayIso = new Date().toISOString().split('T')[0];
 
     try {
       await updateTask(task.id, {
         userId: selectedUserId || undefined,
+        assigneeIds: selectedUserId ? [selectedUserId] : [],
+        startDate: selectedUserId ? (task.startDate || todayIso) : undefined,
         cognitiveLoad,
         estimatedHours: parsedHours,
       });

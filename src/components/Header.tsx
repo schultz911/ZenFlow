@@ -12,9 +12,7 @@ import {
   Crown,
   Shield,
   Database,
-  Video as VideoIcon,
-  Layout,
-  Search,
+  Users,
 } from 'lucide-react';
 import { getUserTag } from '../utils/workload';
 
@@ -69,9 +67,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
 
   const contentUsers = useMemo(() => users.filter(u => u.role === 'content'), [users]);
   const designUsers = useMemo(() => users.filter(u => u.role === 'design'), [users]);
-  const videoUsers = useMemo(() => users.filter(u => u.role === 'video'), [users]);
-  const uiUxUsers = useMemo(() => users.filter(u => u.role === 'ui_ux'), [users]);
-  const researchUsers = useMemo(() => users.filter(u => u.role === 'research'), [users]);
+  const allDeliveryUsersCount = contentUsers.length + designUsers.length;
 
   const currentUserTag = useMemo(() => getUserTag(currentUser), [currentUser]);
 
@@ -110,8 +106,29 @@ const HeaderComponent: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Center: Role Switcher Tabs (Content, Design, Video, UI/UX) */}
+          {/* Center: Role Filter Tabs (All, Content, Design) */}
           <div className="hidden xl:flex items-center rounded-full bg-[var(--surface-muted)] p-1 border border-[var(--border)]">
+            <button
+              id="tab-all"
+              onClick={() => setActiveRoleTab('all')}
+              aria-pressed={activeRoleTab === 'all'}
+              className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs sm:text-sm font-medium transition-all ${
+                activeRoleTab === 'all'
+                  ? 'bg-[var(--surface-raised)] text-neutral-900 dark:text-white shadow-sm'
+                  : 'text-neutral-500 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white'
+              }`}
+            >
+              <Users className="h-3.5 w-3.5 text-neutral-500 dark:text-white/70" />
+              <span>All</span>
+              <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
+                activeRoleTab === 'all'
+                  ? 'bg-neutral-900/10 text-neutral-900 dark:bg-white/15 dark:text-white'
+                  : 'bg-neutral-200 dark:bg-white/5 text-neutral-600 dark:text-white/40'
+              }`}>
+                {allDeliveryUsersCount}
+              </span>
+            </button>
+
             <button
               id="tab-content"
               onClick={() => setActiveRoleTab('content')}
@@ -151,69 +168,6 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                   : 'bg-neutral-200 dark:bg-white/5 text-neutral-600 dark:text-white/40'
               }`}>
                 {designUsers.length}
-              </span>
-            </button>
-
-            <button
-              id="tab-video"
-              onClick={() => setActiveRoleTab('video')}
-              aria-pressed={activeRoleTab === 'video'}
-              className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs sm:text-sm font-medium transition-all ${
-                activeRoleTab === 'video'
-                  ? 'bg-[var(--surface-raised)] text-neutral-900 dark:text-white shadow-sm'
-                  : 'text-neutral-500 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white'
-              }`}
-            >
-              <VideoIcon className="h-3.5 w-3.5 text-violet-500 dark:text-violet-400" />
-              <span>Video</span>
-              <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
-                activeRoleTab === 'video'
-                  ? 'bg-violet-500/15 text-violet-600 dark:text-violet-300'
-                  : 'bg-neutral-200 dark:bg-white/5 text-neutral-600 dark:text-white/40'
-              }`}>
-                {videoUsers.length}
-              </span>
-            </button>
-
-            <button
-              id="tab-ui_ux"
-              onClick={() => setActiveRoleTab('ui_ux')}
-              aria-pressed={activeRoleTab === 'ui_ux'}
-              className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs sm:text-sm font-medium transition-all ${
-                activeRoleTab === 'ui_ux'
-                  ? 'bg-[var(--surface-raised)] text-neutral-900 dark:text-white shadow-sm'
-                  : 'text-neutral-500 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white'
-              }`}
-            >
-              <Layout className="h-3.5 w-3.5 text-cyan-500 dark:text-cyan-400" />
-              <span>UI/UX</span>
-              <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
-                activeRoleTab === 'ui_ux'
-                  ? 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300'
-                  : 'bg-neutral-200 dark:bg-white/5 text-neutral-600 dark:text-white/40'
-              }`}>
-                {uiUxUsers.length}
-              </span>
-            </button>
-
-            <button
-              id="tab-research"
-              onClick={() => setActiveRoleTab('research')}
-              aria-pressed={activeRoleTab === 'research'}
-              className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs sm:text-sm font-medium transition-all ${
-                activeRoleTab === 'research'
-                  ? 'bg-[var(--surface-raised)] text-neutral-900 dark:text-white shadow-sm'
-                  : 'text-neutral-500 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white'
-              }`}
-            >
-              <Search className="h-3.5 w-3.5 text-teal-500 dark:text-teal-400" />
-              <span>Research</span>
-              <span className={`ml-1 rounded-full px-1.5 py-0.5 text-[11px] font-semibold ${
-                activeRoleTab === 'research'
-                  ? 'bg-teal-500/15 text-teal-600 dark:text-teal-300'
-                  : 'bg-neutral-200 dark:bg-white/5 text-neutral-600 dark:text-white/40'
-              }`}>
-                {researchUsers.length}
               </span>
             </button>
           </div>
@@ -390,9 +344,20 @@ const HeaderComponent: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        {/* Mobile Sub-header Tabs (Content, Design, Video, UI/UX) */}
+        {/* Mobile Sub-header Tabs (All, Content, Design) */}
         <div className="mobile-team-navigation flex xl:hidden items-center justify-between border-t border-[var(--border)] py-2 overflow-x-auto">
           <div className="flex items-center rounded-full bg-[var(--surface-muted)] p-1 text-xs w-full justify-between border border-[var(--border)] gap-1">
+            <button
+              onClick={() => setActiveRoleTab('all')}
+              aria-pressed={activeRoleTab === 'all'}
+              className={`flex-1 rounded-full py-1 text-center font-medium px-2 text-[11px] ${
+                activeRoleTab === 'all'
+                  ? 'bg-[var(--surface-raised)] text-neutral-900 dark:text-white shadow-xs'
+                  : 'text-[var(--text-secondary)]'
+              }`}
+            >
+              All ({allDeliveryUsersCount})
+            </button>
             <button
               onClick={() => setActiveRoleTab('content')}
               aria-pressed={activeRoleTab === 'content'}
@@ -414,39 +379,6 @@ const HeaderComponent: React.FC<HeaderProps> = ({
               }`}
             >
               Design ({designUsers.length})
-            </button>
-            <button
-              onClick={() => setActiveRoleTab('video')}
-              aria-pressed={activeRoleTab === 'video'}
-              className={`flex-1 rounded-full py-1 text-center font-medium px-2 text-[11px] ${
-                activeRoleTab === 'video'
-                  ? 'bg-[var(--surface-raised)] text-neutral-900 dark:text-white shadow-xs'
-                  : 'text-[var(--text-secondary)]'
-              }`}
-            >
-              Video ({videoUsers.length})
-            </button>
-            <button
-              onClick={() => setActiveRoleTab('ui_ux')}
-              aria-pressed={activeRoleTab === 'ui_ux'}
-              className={`flex-1 rounded-full py-1 text-center font-medium px-2 text-[11px] ${
-                activeRoleTab === 'ui_ux'
-                  ? 'bg-[var(--surface-raised)] text-neutral-900 dark:text-white shadow-xs'
-                  : 'text-[var(--text-secondary)]'
-              }`}
-            >
-              UI/UX ({uiUxUsers.length})
-            </button>
-            <button
-              onClick={() => setActiveRoleTab('research')}
-              aria-pressed={activeRoleTab === 'research'}
-              className={`flex-1 rounded-full py-1 text-center font-medium px-2 text-[11px] ${
-                activeRoleTab === 'research'
-                  ? 'bg-[var(--surface-raised)] text-neutral-900 dark:text-white shadow-xs'
-                  : 'text-[var(--text-secondary)]'
-              }`}
-            >
-              Research ({researchUsers.length})
             </button>
           </div>
         </div>

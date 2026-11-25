@@ -17,6 +17,9 @@ import {
   Download,
   ChevronDown,
   ChevronUp,
+  Radio,
+  ExternalLink,
+  Unlink,
 } from 'lucide-react';
 import { SuperadminPurgeModal } from './SuperadminPurgeModal';
 
@@ -36,6 +39,13 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
     canManageMembers,
     fetchAuditLogs,
     downloadAuditLogs,
+    isClickupConnected,
+    clickupSpaces,
+    connectClickup,
+    disconnectClickup,
+    clickupWebhookStatus,
+    refreshClickupWebhookStatus,
+    registerClickupWebhook,
   } = useDashboard();
 
   const [isSyncing, setIsSyncing] = useState(false);
@@ -54,9 +64,19 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
   const [isLoadingAudit, setIsLoadingAudit] = useState(false);
   const [showAuditFeed, setShowAuditFeed] = useState(false);
 
+  // ClickUp states
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [isClickupLoading, setIsClickupLoading] = useState(false);
+  const [clickupError, setClickupError] = useState<string | null>(null);
+  const [clickupSuccess, setClickupSuccess] = useState<string | null>(null);
+  const [isRegisteringWebhook, setIsRegisteringWebhook] = useState(false);
+  const [webhookFeedback, setWebhookFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
   // Collapsible section states
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     firestore: false,
+    clickup: false,
+    webhook: false,
     audit: false,
   });
 
@@ -84,16 +104,78 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
     if (isOpen) {
       setPurgeModalOpen(false);
       refreshFirestoreStatus();
+      if (isClickupConnected) {
+        refreshClickupWebhookStatus();
+      }
       setFeedback(null);
       setKeyFeedback(null);
+      setClickupError(null);
+      setClickupSuccess(null);
+      setWebhookFeedback(null);
+      setApiKeyInput('');
       setServiceAccountInput('');
       setShowAuditFeed(false);
       setExpandedSections({
         firestore: false,
+        clickup: false,
+        webhook: false,
         audit: false,
       });
     }
-  }, [isOpen, refreshFirestoreStatus]);
+  }, [isOpen, refreshFirestoreStatus, isClickupConnected, refreshClickupWebhookStatus]);
+
+  const handleConnectClickUp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = apiKeyInput.trim();
+    if (!token) return;
+    setIsClickupLoading(true);
+    setClickupError(null);
+    setClickupSuccess(null);
+    try {
+      const result = await connectClickup(token);
+      if (result.success) {
+        setClickupSuccess('ClickUp API connected and spaces loaded.');
+        setApiKeyInput('');
+      } else {
+        setClickupError(result.error || 'Failed to connect ClickUp API token.');
+      }
+    } catch (err: any) {
+      setClickupError(err?.message || 'Failed to connect ClickUp API token.');
+    } finally {
+      setIsClickupLoading(false);
+    }
+  };
+
+  const handleDisconnectClickUp = async () => {
+    setIsClickupLoading(true);
+    setClickupError(null);
+    setClickupSuccess(null);
+    try {
+      await disconnectClickup();
+      setClickupSuccess('ClickUp account disconnected.');
+    } catch (err: any) {
+      setClickupError(err?.message || 'Failed to disconnect ClickUp.');
+    } finally {
+      setIsClickupLoading(false);
+    }
+  };
+
+  const handleRegisterWebhook = async () => {
+    setIsRegisteringWebhook(true);
+    setWebhookFeedback(null);
+    try {
+      const result = await registerClickupWebhook();
+      if (result.success) {
+        setWebhookFeedback({ type: 'success', message: result.message || 'ClickUp webhook registered cleanly.' });
+      } else {
+        setWebhookFeedback({ type: 'error', message: result.message || 'Failed to register ClickUp webhook.' });
+      }
+    } catch (err: any) {
+      setWebhookFeedback({ type: 'error', message: err?.message || 'Failed to register ClickUp webhook.' });
+    } finally {
+      setIsRegisteringWebhook(false);
+    }
+  };
 
   const handleManualSync = async () => {
     setIsSyncing(true);
@@ -430,7 +512,278 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                 )}
               </div>
 
-              {/* SECTION 2: SOC2 Compliance Audit Stream */}
+              {/* ========================================= */}
+              {/* SECTION 2: ClickUp API Integration        */}
+              {/* ========================================= */}
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] overflow-hidden transition-all">
+                <button
+                  type="button"
+                  onClick={() => toggleSection('clickup')}
+                  aria-expanded={expandedSections.clickup}
+                  className="w-full flex items-center justify-between p-3.5 hover:bg-neutral-100/70 dark:hover:bg-white/5 transition-colors cursor-pointer text-left"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">
+                      <Key className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-xs font-semibold text-neutral-900 dark:text-white truncate">
+                        ClickUp API Integration
+                      </h3>
+                      <p className="text-[11px] text-[var(--text-secondary)] truncate">
+                        {isClickupConnected
+                          ? `Authenticated · ${clickupSpaces.length} space(s) available`
+                          : 'Connect personal token for task sync'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        isClickupConnected
+                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                          : 'bg-neutral-500/15 text-neutral-600 dark:text-white/50'
+                      }`}
+                    >
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          isClickupConnected ? 'bg-emerald-500' : 'bg-neutral-400'
+                        }`}
+                      />
+                      {isClickupConnected ? 'Connected' : 'Not Connected'}
+                    </span>
+                    {expandedSections.clickup ? (
+                      <ChevronUp className="h-4 w-4 text-neutral-400" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-neutral-400" />
+                    )}
+                  </div>
+                </button>
+
+                {expandedSections.clickup && (
+                  <div className="p-4 pt-2 border-t border-neutral-200/60 dark:border-white/5 space-y-3 bg-[var(--surface)]">
+                    {clickupError && (
+                      <div className="rounded-xl p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-xs text-red-600 dark:text-red-300 flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />
+                        <span>{clickupError}</span>
+                      </div>
+                    )}
+
+                    {clickupSuccess && (
+                      <div className="rounded-xl p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-600 dark:text-emerald-300 flex items-start gap-2">
+                        <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-500" />
+                        <span>{clickupSuccess}</span>
+                      </div>
+                    )}
+
+                    {isClickupConnected ? (
+                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-semibold text-xs">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                            <span>ClickUp API Authenticated</span>
+                          </div>
+                          <button
+                            onClick={handleDisconnectClickUp}
+                            type="button"
+                            disabled={isClickupLoading}
+                            className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400 hover:underline cursor-pointer"
+                          >
+                            <Unlink className="w-3.5 h-3.5" />
+                            <span>Disconnect</span>
+                          </button>
+                        </div>
+
+                        <div className="text-xs space-y-1.5 pt-1 border-t border-emerald-500/10 text-neutral-600 dark:text-white/70">
+                          <div className="flex items-center justify-between">
+                            <span>Personal API Token</span>
+                            <span className="font-mono text-[11px] text-neutral-500 dark:text-white/50">
+                              Active
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>Available Spaces</span>
+                            <span className="font-medium text-neutral-900 dark:text-white">
+                              {clickupSpaces.length} space(s) available
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <form onSubmit={handleConnectClickUp} className="space-y-3">
+                        <p className="text-xs text-[var(--text-secondary)]">
+                          Connect your ClickUp account to synchronize spaces, lists, tasks, deadlines, and tracked time.
+                        </p>
+                        <div>
+                          <label className="block text-[11px] uppercase font-semibold text-[var(--text-secondary)] mb-1">
+                            Personal API Token
+                          </label>
+                          <input
+                            type="password"
+                            value={apiKeyInput}
+                            onChange={e => setApiKeyInput(e.target.value)}
+                            placeholder="pk_1234567_abcdef..."
+                            disabled={isClickupLoading}
+                            className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] text-xs focus:outline-none focus:border-purple-500 transition-all font-mono text-neutral-900 dark:text-white"
+                          />
+                          <p className="mt-1.5 text-[11px] text-[var(--text-secondary)] flex items-center gap-1 flex-wrap">
+                            <span>Find this in ClickUp: Settings &rarr; Apps &rarr; API Token &rarr; Generate.</span>
+                            <a
+                              href="https://app.clickup.com"
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-purple-600 dark:text-purple-400 hover:underline inline-flex items-center gap-0.5 ml-1"
+                            >
+                              Open ClickUp <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </p>
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={isClickupLoading || !apiKeyInput.trim()}
+                          className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white py-2 px-3 text-xs font-semibold disabled:opacity-50 transition-colors cursor-pointer shadow-xs"
+                        >
+                          {isClickupLoading ? (
+                            <>
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              <span>Verifying Token...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Key className="w-3.5 h-3.5" />
+                              <span>Connect ClickUp</span>
+                            </>
+                          )}
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* ========================================= */}
+              {/* SECTION 3: ClickUp Real-Time Webhook      */}
+              {/* ========================================= */}
+              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] overflow-hidden transition-all">
+                <button
+                  type="button"
+                  onClick={() => toggleSection('webhook')}
+                  aria-expanded={expandedSections.webhook}
+                  className="w-full flex items-center justify-between p-3.5 hover:bg-neutral-100/70 dark:hover:bg-white/5 transition-colors cursor-pointer text-left"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                      <Radio className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-xs font-semibold text-neutral-900 dark:text-white truncate">
+                        Real-Time ClickUp Webhook
+                      </h3>
+                      <p className="text-[11px] text-[var(--text-secondary)] truncate">
+                        {clickupWebhookStatus?.registered
+                          ? `Active · ${clickupWebhookStatus.totalEventsCount ?? 0} events received`
+                          : 'Instantaneous inbound SSE propagation'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                        clickupWebhookStatus?.listening
+                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                          : 'bg-neutral-500/15 text-neutral-600 dark:text-white/50'
+                      }`}
+                    >
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          clickupWebhookStatus?.listening ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-400'
+                        }`}
+                      />
+                      {clickupWebhookStatus?.registered
+                        ? 'Registered & Active'
+                        : clickupWebhookStatus?.listening
+                        ? 'Listener Standby'
+                        : 'Inactive'}
+                    </span>
+                    {expandedSections.webhook ? (
+                      <ChevronUp className="h-4 w-4 text-neutral-400" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 text-neutral-400" />
+                    )}
+                  </div>
+                </button>
+
+                {expandedSections.webhook && (
+                  <div className="p-4 pt-2 border-t border-neutral-200/60 dark:border-white/5 space-y-3 bg-[var(--surface)]">
+                    {webhookFeedback && (
+                      <div
+                        className={`rounded-xl p-3 text-xs flex items-center gap-2.5 ${
+                          webhookFeedback.type === 'success'
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                            : 'bg-red-500/10 text-red-500 border border-red-500/20'
+                        }`}
+                      >
+                        {webhookFeedback.type === 'success' ? (
+                          <CheckCircle2 className="h-4 w-4 shrink-0" />
+                        ) : (
+                          <AlertCircle className="h-4 w-4 shrink-0" />
+                        )}
+                        <span className="font-medium">{webhookFeedback.message}</span>
+                      </div>
+                    )}
+
+                    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3.5 space-y-2 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[var(--text-secondary)]">Inbound Endpoint</span>
+                        <span className="font-mono text-[11px] text-neutral-800 dark:text-white/90 truncate max-w-[260px]">
+                          {clickupWebhookStatus?.endpointUrl || '/api/clickup/webhook'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-[var(--text-secondary)]">Events Ingested</span>
+                        <span className="font-medium text-neutral-900 dark:text-white">
+                          {clickupWebhookStatus?.totalEventsCount ?? 0} events received
+                        </span>
+                      </div>
+
+                      {clickupWebhookStatus?.lastEventAt && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-[var(--text-secondary)]">Last Inbound Event</span>
+                          <span className="text-neutral-600 dark:text-white/60">
+                            {new Date(clickupWebhookStatus.lastEventAt).toLocaleTimeString()} ({clickupWebhookStatus.lastEventAction || 'event'})
+                          </span>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleRegisterWebhook}
+                      disabled={isRegisteringWebhook || !isClickupConnected || !isSuperadmin}
+                      title={isSuperadmin ? 'Register a signed ClickUp webhook' : 'Only the Superadmin can manage workspace webhooks'}
+                      className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 py-2 px-3 text-xs font-semibold disabled:opacity-50 transition-colors cursor-pointer"
+                    >
+                      {isRegisteringWebhook ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Registering with ClickUp Team API...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Radio className="w-3.5 h-3.5" />
+                          <span>{clickupWebhookStatus?.registered ? 'Re-sync Webhook with ClickUp' : 'Register Webhook with ClickUp'}</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* SECTION 4: SOC2 Compliance Audit Stream */}
               <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] overflow-hidden transition-all">
                 <button
                   type="button"

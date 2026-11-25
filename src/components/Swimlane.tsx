@@ -1,11 +1,21 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task, TaskStatus, DragTaskInfo, CognitiveLoad } from '../types';
-import { calculateUserWorkload, compareTasksByDeadline, getUserTag, calculateTasksEfficiency, formatHoursRatio } from '../utils/workload';
+import {
+  calculateUserWorkload,
+  compareTasksByDeadline,
+  getUserTag,
+  calculateTasksEfficiency,
+  formatHoursRatio,
+  isTaskAssignedToUser,
+} from '../utils/workload';
 import { TaskCard } from './TaskCard';
 import { RetainerSwimlane } from './RetainerSwimlane';
 import { DeadlineDemandModal } from './DeadlineDemandModal';
 import { WipLimitModal } from './WipLimitModal';
+import { PipelineMovePromptModal } from './PipelineMovePromptModal';
+import { CrossUserDropModal } from './CrossUserDropModal';
+import { ContentLinkPromptModal } from './ContentLinkPromptModal';
 import {
   Plus,
   Circle,
@@ -31,7 +41,7 @@ interface SwimlaneProps {
   user: User;
   tasks: Task[];
   activeDragInfo?: DragTaskInfo | null;
-  onDragTaskStart?: (task: Task) => void;
+  onDragTaskStart?: (task: Task, sourceUserId?: string) => void;
   onDragTaskEnd?: () => void;
   onAddTask: (userId: string, status?: TaskStatus) => void;
   onQuickAddTask?: (
@@ -45,12 +55,26 @@ interface SwimlaneProps {
   onRescheduleTask?: (taskId: string, newDueDate: string | undefined) => void;
   onAdjustBillableHours?: (task: Task) => void;
   onUpdateTaskTitle?: (taskId: string, newTitle: string) => void;
-  onDeleteTask: (taskId: string) => void;
+  onDeleteTask: (taskId: string, removeAssigneeId?: string) => void;
   onEditUser?: (user: User) => void;
   onDeleteUser?: (user: User) => void;
-  onMoveTask: (taskId: string, targetUserId: string, newStatus: TaskStatus, newIndex?: number, newDueDate?: string | null) => void;
+  onMoveTask: (
+    taskId: string,
+    targetUserId: string,
+    newStatus: TaskStatus,
+    newIndex?: number,
+    newDueDate?: string | null,
+    extraUpdates?: {
+      startDate?: string;
+      estimatedHours?: number;
+      cognitiveLoad?: CognitiveLoad;
+      contentDocLink?: string;
+      sourceUserId?: string;
+    }
+  ) => void;
   onOpenWorkloadModal: (user: User) => void;
-  onDuplicateTask?: (task: Task) => void;
+  onDuplicateTask?: (task: Task, initialTargetUserId?: string, initialTargetStatus?: TaskStatus) => void;
+  onDisciplineMismatch?: (message: string) => void;
   isCurrentUser: boolean;
   onMoveUserUp?: (userId: string) => void;
   onMoveUserDown?: (userId: string) => void;
@@ -115,6 +139,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   onMoveTask,
   onDuplicateTask,
   onOpenWorkloadModal,
+  onDisciplineMismatch,
   isCurrentUser,
   onMoveUserUp,
   onMoveUserDown,
@@ -122,8 +147,12 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   canMoveDown,
 }) => {
   const {
+    tasks: allWorkspaceTasks,
+    users,
     canManageUser,
     canEditUserTasks,
+    shareTaskWithUser,
+    reassignTaskFromUser,
   } = useDashboard();
 
   const canEdit = useMemo(() => canEditUserTasks(user.id), [canEditUserTasks, user.id]);
@@ -158,6 +187,26 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   const [demandModalTask, setDemandModalTask] = useState<Task | null>(null);
   const [demandModalTargetStatus, setDemandModalTargetStatus] = useState<TaskStatus | null>(null);
   const [demandModalTargetIndex, setDemandModalTargetIndex] = useState<number | undefined>(undefined);
+
+  // Pipeline -> Swimlane Prompt Modal State
+  const [pipelinePromptState, setPipelinePromptState] = useState<{
+    task: Task;
+    targetStatus: TaskStatus;
+    targetIndex?: number;
+  } | null>(null);
+
+  // Cross-User Assigned Drop Modal State
+  const [crossUserDropState, setCrossUserDropState] = useState<{
+    task: Task;
+    sourceUser: User | null;
+    targetStatus: TaskStatus;
+  } | null>(null);
+
+  // Content -> Sent Link Prompt Modal State
+  const [contentLinkPromptState, setContentLinkPromptState] = useState<{
+    task: Task;
+    targetIndex?: number;
+  } | null>(null);
 
   // In-Progress WIP Limit Modal State (Max 2 Tasks)
   const [showWipModal, setShowWipModal] = useState(false);
@@ -228,20 +277,34 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
 
   const handleTaskDragStart = useCallback(
     (draggedTask: Task) => {
-      onDragTaskStart?.(draggedTask);
+      onDragTaskStart?.(draggedTask, user.id);
     },
-    [onDragTaskStart]
+    [onDragTaskStart, user.id]
   );
 
   const handleTaskDragEnd = useCallback(() => {
     onDragTaskEnd?.();
   }, [onDragTaskEnd]);
 
-  // Filter tasks belonging strictly to this user with strict key uniqueness
+  const handleCardDelete = useCallback(
+    (taskId: string) => {
+      onDeleteTask(taskId, user.id);
+    },
+    [onDeleteTask, user.id]
+  );
+
+  const handleCardDuplicate = useCallback(
+    (cardTask: Task) => {
+      onDuplicateTask?.(cardTask);
+    },
+    [onDuplicateTask]
+  );
+
+  // Filter tasks belonging to this user (including shared multi-assignee tasks)
   const userTasks = useMemo(() => {
     const map = new Map<string, Task>();
     for (const t of tasks) {
-      if (t && t.id && t.userId === user.id) {
+      if (t && t.id && isTaskAssignedToUser(t, user.id)) {
         map.set(t.id, t);
       }
     }
@@ -271,16 +334,16 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   }, [userTasks]);
 
   const workload = useMemo(() => calculateUserWorkload(userTasks), [userTasks]);
-  const userEfficiency = useMemo(() => calculateTasksEfficiency(userTasks), [userTasks]);
+  const userEfficiency = useMemo(() => calculateTasksEfficiency(userTasks, { forUserId: user.id }), [userTasks, user.id]);
   const archivedTasks = useMemo(() => tasksByColumn.archived, [tasksByColumn]);
 
-  const isCrossUserDrag = Boolean(activeDragInfo && activeDragInfo.sourceUserId !== user.id);
+  const isCrossUserDrag = Boolean(activeDragInfo && activeDragInfo.sourceUserId && activeDragInfo.sourceUserId !== user.id);
 
-  // Central move validator enforcing deadline demand and 2-task WIP limit
+  // Central move validator enforcing pipeline prompt, cross-user options, content link prompt, deadline demand and WIP limit
   const validateAndExecuteMove = useCallback(
-    (taskId: string, targetStatus: TaskStatus, targetIndex?: number, fallbackTask?: Task) => {
-      // Find the moving task in userTasks, tasks, activeDragInfo, or fallbackTask (cross-user drag)
+    (taskId: string, targetStatus: TaskStatus, targetIndex?: number, fallbackTask?: Task, dragSourceUserId?: string) => {
       const task =
+        allWorkspaceTasks.find(t => t.id === taskId) ||
         tasks.find(t => t.id === taskId) ||
         userTasks.find(t => t.id === taskId) ||
         (activeDragInfo?.taskId === taskId ? activeDragInfo.task : undefined) ||
@@ -292,25 +355,55 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
         return;
       }
 
-      // When moving any task to pipeline: clear its deadline immediately from its data
+      // Moving back to pipeline unassigns & clears deadline
       if (targetStatus === 'pipeline') {
         onMoveTask(taskId, user.id, 'pipeline', targetIndex, null);
         return;
       }
 
-      // Demand Deadline Check:
-      // 1. Moving from in_review, done, or archived into todo or in_progress -> demand new deadline
-      // 2. Moving from pipeline into active workflow -> demand new deadline
-      // 3. Any move into active workflow if task has no deadline -> demand deadline
+      // 1. Pipeline -> Swimlane Drop
+      if (task.status === 'pipeline') {
+        if (task.team && task.team !== user.role) {
+          onDisciplineMismatch?.(
+            `Cannot assign a ${task.team} pipeline deliverable to ${user.name} (${user.role}).`
+          );
+          return;
+        }
+        if (targetStatus === 'in_progress') {
+          const otherInProgress = tasksByColumn.in_progress.filter(t => t.id !== taskId);
+          if (otherInProgress.length >= 2) {
+            setShowWipModal(true);
+            return;
+          }
+        }
+        setPipelinePromptState({ task, targetStatus, targetIndex });
+        return;
+      }
+
+      // 2. Cross-user drag of an already-assigned task (target user is not yet assigned)
+      const isAlreadyAssignedHere = isTaskAssignedToUser(task, user.id);
+      if (!isAlreadyAssignedHere) {
+        const resolvedSourceId = dragSourceUserId || activeDragInfo?.sourceUserId || task.userId;
+        const sourceUser = users.find(u => u.id === resolvedSourceId) || null;
+        setCrossUserDropState({ task, sourceUser, targetStatus });
+        return;
+      }
+
+      // 3. Content task moved to Sent ('done') requires Content document URL prompt
+      const isContentTask = task.team ? task.team === 'content' : user.role === 'content';
+      if (targetStatus === 'done' && task.status !== 'done' && isContentTask) {
+        setContentLinkPromptState({ task, targetIndex });
+        return;
+      }
+
+      // 4. Demand Deadline Check:
       const isTargetActive = ['todo', 'in_progress'].includes(targetStatus);
       const isFromReviewDoneArchived = ['in_review', 'done', 'archived'].includes(task.status);
-      const isFromPipeline = task.status === 'pipeline';
       const hasNoDeadline = !task.dueDate || task.dueDate.trim() === '';
       const isActiveLane = ['todo', 'in_progress', 'in_review', 'done'].includes(targetStatus);
 
       const requiresDeadlinePrompt =
         (isFromReviewDoneArchived && isTargetActive) ||
-        (isFromPipeline && isActiveLane) ||
         (isActiveLane && hasNoDeadline);
 
       if (requiresDeadlinePrompt) {
@@ -320,7 +413,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
         return;
       }
 
-      // 2. WIP Limit Check (In Progress max 2):
+      // 5. WIP Limit Check (In Progress max 2):
       if (targetStatus === 'in_progress') {
         const otherInProgress = tasksByColumn.in_progress.filter(t => t.id !== taskId);
         if (otherInProgress.length >= 2) {
@@ -329,10 +422,23 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
         }
       }
 
-      // Otherwise valid: execute move
-      onMoveTask(taskId, user.id, targetStatus, targetIndex);
+      onMoveTask(taskId, user.id, targetStatus, targetIndex, undefined, {
+        sourceUserId: dragSourceUserId || activeDragInfo?.sourceUserId,
+      });
     },
-    [tasks, userTasks, activeDragInfo, tasksByColumn.in_progress, onMoveTask, user.id]
+    [
+      allWorkspaceTasks,
+      tasks,
+      userTasks,
+      activeDragInfo,
+      tasksByColumn.in_progress,
+      onMoveTask,
+      user.id,
+      user.name,
+      user.role,
+      users,
+      onDisciplineMismatch,
+    ]
   );
 
   const handleConfirmDemandDeadline = useCallback(
@@ -380,6 +486,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   const extractDragData = (e: React.DragEvent) => {
     let taskId = '';
     let status: TaskStatus | undefined;
+    let sourceUserId: string | undefined;
     let payloadTask: Task | undefined;
 
     // 1. Try application/json
@@ -389,6 +496,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
         const parsed = JSON.parse(raw);
         if (parsed.taskId) taskId = parsed.taskId;
         if (parsed.status) status = parsed.status;
+        if (parsed.sourceUserId || parsed.userId) sourceUserId = parsed.sourceUserId || parsed.userId;
         if (parsed.taskId && parsed.title) {
           payloadTask = {
             id: parsed.taskId,
@@ -419,15 +527,17 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     if (!taskId && activeDragInfo) {
       taskId = activeDragInfo.taskId;
       status = activeDragInfo.sourceStatus;
+      sourceUserId = activeDragInfo.sourceUserId;
     }
 
     const resolvedTask =
+      allWorkspaceTasks.find(t => t.id === taskId) ||
       tasks.find(t => t.id === taskId) ||
       userTasks.find(t => t.id === taskId) ||
       (activeDragInfo?.taskId === taskId ? activeDragInfo.task : undefined) ||
       payloadTask;
 
-    return { taskId, status, task: resolvedTask };
+    return { taskId, status, sourceUserId, task: resolvedTask };
   };
 
   const handleDragOverColumn = (e: React.DragEvent, status: TaskStatus) => {
@@ -466,12 +576,12 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     setDragOverHeader(false);
     setDragOverColumn(null);
 
-    const { taskId, status, task } = extractDragData(e);
+    const { taskId, status, sourceUserId, task } = extractDragData(e);
     if (!taskId) return;
 
-    // Drop onto user header maintains original status (or default 'todo') and reassigns user
-    const targetStatus = status || 'todo';
-    validateAndExecuteMove(taskId, targetStatus, undefined, task);
+    // Drop onto user header maintains original status (or default 'todo') and assigns/moves user
+    const targetStatus = !status || status === 'pipeline' || status === 'retainer' ? 'todo' : status;
+    validateAndExecuteMove(taskId, targetStatus, undefined, task, sourceUserId);
   };
 
   const handleDropOnColumn = (e: React.DragEvent, targetStatus: TaskStatus) => {
@@ -480,11 +590,11 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     setDragOverColumn(null);
     setDragOverTaskId(null);
 
-    const { taskId, task } = extractDragData(e);
+    const { taskId, sourceUserId, task } = extractDragData(e);
     if (!taskId) return;
 
     // Assign to this user and move to target column status
-    validateAndExecuteMove(taskId, targetStatus, undefined, task);
+    validateAndExecuteMove(taskId, targetStatus, undefined, task, sourceUserId);
   };
 
   const handleDropOnTask = (e: React.DragEvent, targetTask: Task, targetStatus: TaskStatus) => {
@@ -493,15 +603,15 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     setDragOverColumn(null);
     setDragOverTaskId(null);
 
-    const { taskId, task } = extractDragData(e);
-    if (!taskId || (taskId === targetTask.id && user.id === targetTask.userId)) return;
+    const { taskId, sourceUserId, task } = extractDragData(e);
+    if (!taskId || (taskId === targetTask.id && isTaskAssignedToUser(targetTask, user.id))) return;
 
     // Calculate new index in this user's target status list using pre-indexed column tasks
     const tasksInTarget = (tasksByColumn[targetStatus] || []).filter(t => t.id !== taskId);
     const targetIdx = tasksInTarget.findIndex(t => t.id === targetTask.id);
     const newIndex = targetIdx !== -1 ? targetIdx : tasksInTarget.length;
 
-    validateAndExecuteMove(taskId, targetStatus, newIndex, task);
+    validateAndExecuteMove(taskId, targetStatus, newIndex, task, sourceUserId);
   };
 
   const handleMoveStatus = useCallback(
@@ -1039,13 +1149,14 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                   <TaskCard
                                     task={task}
                                     userRole={user.role}
+                                    swimlaneUserId={user.id}
                                     onEdit={onEditTask}
                                     onUpdateTitle={onUpdateTaskTitle}
-                                    onDelete={onDeleteTask}
+                                    onDelete={handleCardDelete}
                                     onMoveStatus={handleMoveStatus}
                                     onReschedule={onRescheduleTask}
                                     onAdjustBillableHours={onAdjustBillableHours}
-                                    onDuplicateToBoard={onDuplicateTask}
+                                    onDuplicateToBoard={onDuplicateTask ? handleCardDuplicate : undefined}
                                     onDragStart={handleTaskDragStart}
                                     onDragEnd={handleTaskDragEnd}
                                   />
@@ -1110,13 +1221,14 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                 <TaskCard
                                   task={task}
                                   userRole={user.role}
+                                  swimlaneUserId={user.id}
                                   onEdit={onEditTask}
                                   onUpdateTitle={onUpdateTaskTitle}
-                                  onDelete={onDeleteTask}
+                                  onDelete={handleCardDelete}
                                   onMoveStatus={handleMoveStatus}
                                   onReschedule={onRescheduleTask}
                                   onAdjustBillableHours={onAdjustBillableHours}
-                                  onDuplicateToBoard={onDuplicateTask}
+                                  onDuplicateToBoard={onDuplicateTask ? handleCardDuplicate : undefined}
                                   onDragStart={handleTaskDragStart}
                                   onDragEnd={handleTaskDragEnd}
                                 />
@@ -1147,6 +1259,86 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
           }}
         />
 
+        {/* Pipeline -> Swimlane Prompt Modal */}
+        <PipelineMovePromptModal
+          isOpen={Boolean(pipelinePromptState)}
+          onClose={() => setPipelinePromptState(null)}
+          task={pipelinePromptState?.task || null}
+          targetUser={user}
+          onConfirm={({ startDate, estimatedHours, cognitiveLoad, dueDate }) => {
+            if (!pipelinePromptState) return;
+            const { task: pTask, targetStatus, targetIndex } = pipelinePromptState;
+            setPipelinePromptState(null);
+            if (targetStatus === 'in_progress') {
+              const otherInProgress = tasksByColumn.in_progress.filter(t => t.id !== pTask.id);
+              if (otherInProgress.length >= 2) {
+                setShowWipModal(true);
+                return;
+              }
+            }
+            onMoveTask(pTask.id, user.id, targetStatus, targetIndex, dueDate ?? pTask.dueDate ?? null, {
+              startDate,
+              estimatedHours,
+              cognitiveLoad,
+            });
+          }}
+        />
+
+        {/* Cross-User Assigned Drop Prompt Modal */}
+        <CrossUserDropModal
+          isOpen={Boolean(crossUserDropState)}
+          onClose={() => setCrossUserDropState(null)}
+          task={crossUserDropState?.task || null}
+          sourceUser={crossUserDropState?.sourceUser || null}
+          targetUser={user}
+          targetStatus={crossUserDropState?.targetStatus || 'todo'}
+          onReassign={async () => {
+            if (!crossUserDropState) return;
+            const { task: dTask, sourceUser, targetStatus } = crossUserDropState;
+            setCrossUserDropState(null);
+            const fromUserId = sourceUser?.id || dTask.userId;
+            await reassignTaskFromUser(dTask.id, fromUserId, user.id, targetStatus, dTask.dueDate).catch(err => {
+              onDisciplineMismatch?.(err?.message || 'Failed to reassign task');
+            });
+          }}
+          onDuplicateShare={async () => {
+            if (!crossUserDropState) return;
+            const { task: dTask } = crossUserDropState;
+            setCrossUserDropState(null);
+            await shareTaskWithUser(dTask.id, user.id).catch(err => {
+              onDisciplineMismatch?.(err?.message || 'Failed to share task');
+            });
+          }}
+          onCreateSubtask={() => {
+            if (!crossUserDropState) return;
+            const { task: dTask, targetStatus } = crossUserDropState;
+            setCrossUserDropState(null);
+            onDuplicateTask?.(dTask, user.id, targetStatus);
+          }}
+        />
+
+        {/* Content -> Sent Document Link Prompt Modal */}
+        <ContentLinkPromptModal
+          isOpen={Boolean(contentLinkPromptState)}
+          onClose={() => setContentLinkPromptState(null)}
+          task={contentLinkPromptState?.task || null}
+          hasSiblingDesignTask={Boolean(
+            contentLinkPromptState?.task?.parentTaskId &&
+              allWorkspaceTasks.some(
+                t =>
+                  t.id !== contentLinkPromptState.task.id &&
+                  t.parentTaskId === contentLinkPromptState.task.parentTaskId &&
+                  t.team === 'design'
+              )
+          )}
+          onConfirm={(contentDocLink) => {
+            if (!contentLinkPromptState) return;
+            const { task: cTask, targetIndex } = contentLinkPromptState;
+            setContentLinkPromptState(null);
+            onMoveTask(cTask.id, user.id, 'done', targetIndex, undefined, { contentDocLink });
+          }}
+        />
+
         {/* In-Progress WIP Limit Modal (Max 2 Tasks) */}
         <WipLimitModal
           isOpen={showWipModal}
@@ -1154,7 +1346,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
           inProgressTasks={tasksByColumn.in_progress}
           onClose={() => setShowWipModal(false)}
           onMoveToTodo={taskId => onMoveTask(taskId, user.id, 'todo')}
-          onMoveToDone={taskId => onMoveTask(taskId, user.id, 'done')}
+          onMoveToDone={taskId => validateAndExecuteMove(taskId, 'done')}
         />
       </motion.div>
     );
@@ -1176,6 +1368,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     if (prev.onMoveTask !== next.onMoveTask) return false;
     if (prev.onOpenWorkloadModal !== next.onOpenWorkloadModal) return false;
     if (prev.onDuplicateTask !== next.onDuplicateTask) return false;
+    if (prev.onDisciplineMismatch !== next.onDisciplineMismatch) return false;
     if (prev.onDragTaskStart !== next.onDragTaskStart) return false;
     if (prev.onDragTaskEnd !== next.onDragTaskEnd) return false;
     if (prev.onMoveUserUp !== next.onMoveUserUp) return false;

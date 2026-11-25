@@ -1,4 +1,6 @@
-export type Role = 'content' | 'design' | 'video' | 'ui_ux' | 'research' | 'account_manager' | 'administrator' | 'none';
+export type Role = 'content' | 'design' | 'account_manager' | 'administrator' | 'none';
+
+export type RoleFilter = 'all' | 'content' | 'design';
 
 export type CognitiveLoad = 'low' | 'medium' | 'high';
 
@@ -25,6 +27,75 @@ export interface User {
   isContentSpecialist?: boolean;
   isBrandDesigner?: boolean;
   clusterLeadId?: string;
+  clickupApiKey?: string;
+  clickupConnected?: boolean;
+  selectedClickupSpaceId?: string;
+  selectedClickupSpaceName?: string;
+  clickupUserId?: string;
+  clickupUsername?: string;
+}
+
+export interface ClickupMember {
+  id: string;
+  username: string;
+  email: string;
+  color?: string;
+  profilePicture?: string;
+  initials?: string;
+}
+
+export interface ClickupCustomFieldOption {
+  id: string;
+  name: string;
+  color?: string;
+  orderindex?: number;
+}
+
+export interface ClickupCustomField {
+  id: string;
+  name: string;
+  type: string;
+  type_config?: {
+    options?: ClickupCustomFieldOption[];
+  };
+}
+
+export interface ClickupSpace {
+  id: string;
+  name: string;
+  color?: string;
+  private?: boolean;
+}
+
+export interface ClickupList {
+  id: string;
+  name: string;
+  orderindex?: number;
+  folder?: {
+    id: string;
+    name: string;
+  };
+  space?: {
+    id: string;
+    name: string;
+  };
+}
+
+export interface ClickupFolder {
+  id: string;
+  name: string;
+  lists: ClickupList[];
+}
+
+export interface ClickupWebhookStatus {
+  listening: boolean;
+  registered: boolean;
+  webhookId?: string;
+  endpointUrl: string;
+  lastEventAt?: string;
+  lastEventAction?: string;
+  totalEventsCount: number;
+  supportedEvents?: string[];
 }
 
 export interface TaskActivity {
@@ -50,33 +121,17 @@ export interface TaskDisciplineMetadata {
   format?: string;
   quantity?: number;
   designSpecifications?: string;
-  // Video
-  videoType?: string;
-  duration?: string;
-  aspectRatio?: string;
-  deliverables?: string;
-  productionRequirements?: string;
-  // UI/UX
-  designType?: string;
-  platform?: string;
-  screens?: number;
-  userFlows?: string;
-  prototypeRequirements?: string;
-  // Research
-  researchType?: string;
-  objectives?: string;
-  scope?: string;
-  methodology?: string;
-  expectedOutputs?: string;
 }
 
 export interface Task {
   id: string;
   userId?: string;
+  assigneeIds?: string[];
   team?: Role;
   title: string;
   description?: string;
   dueDate?: string; // YYYY-MM-DD
+  startDate?: string; // YYYY-MM-DD or ISO timestamp when moved from pipeline to swimlane
   cognitiveLoad: CognitiveLoad;
   status: TaskStatus;
   order: number;
@@ -95,6 +150,19 @@ export interface Task {
   priority?: 'low' | 'medium' | 'high';
   attachments?: string[];
   disciplineMetadata?: TaskDisciplineMetadata;
+  contentDocLink?: string;
+  clickupTaskId?: string;
+  clickupFolderId?: string;
+  clickupFolderName?: string;
+  clickupListId?: string;
+  clickupListName?: string;
+  clickupSpaceId?: string;
+  clickupSpaceName?: string;
+  clickupUrl?: string;
+  clickupTaskType?: string;
+  clickupTaskTypeId?: string;
+  clickupTaskTypeFieldId?: string;
+  clickupParentTaskId?: string;
 }
 
 export type AnalyticsScope = 'all' | 'client' | 'delivery_unit' | 'project' | 'user';
@@ -176,12 +244,17 @@ export interface DragTaskInfo {
 export interface TaskOrderUpdate {
   id: string;
   userId?: string;
+  assigneeIds?: string[];
   status: TaskStatus;
   order: number;
   dueDate?: string | null;
+  startDate?: string;
+  estimatedHours?: number;
+  cognitiveLoad?: CognitiveLoad;
+  contentDocLink?: string;
 }
 
-export type RealtimeEventType = 
+export type RealtimeEventType =
   | 'user_created'
   | 'user_updated'
   | 'user_deleted'
@@ -200,7 +273,7 @@ export interface RealtimeEvent {
 export interface AuditLogEntry {
   id: string;
   timestamp: string;
-  category: 'task' | 'user' | 'security' | 'system';
+  category: 'task' | 'user' | 'security' | 'webhook' | 'system';
   action: string;
   actor?: {
     id?: string;
@@ -209,7 +282,7 @@ export interface AuditLogEntry {
     ip?: string;
   };
   targetId: string;
-  targetType: 'task' | 'user' | 'workspace';
+  targetType: 'task' | 'user' | 'workspace' | 'webhook';
   details?: string;
   from?: any;
   to?: any;

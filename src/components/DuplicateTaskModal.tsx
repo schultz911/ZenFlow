@@ -12,7 +12,6 @@ import {
   Loader2,
   AlertCircle,
   ArrowRight,
-  Shield,
   UserCheck,
   GitFork,
 } from 'lucide-react';
@@ -21,6 +20,8 @@ interface DuplicateTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
   task: Task | null;
+  initialTargetUserId?: string;
+  initialTargetStatus?: TaskStatus;
   onDuplicated?: (newTask: Task, targetUser: User) => void;
 }
 
@@ -28,6 +29,8 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
   isOpen,
   onClose,
   task,
+  initialTargetUserId,
+  initialTargetStatus,
   onDuplicated,
 }) => {
   const {
@@ -106,17 +109,40 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
       return;
     }
 
-    // Default to a different board than source user's board
-    const currentBoardId = sourceBoard?.id || '';
-    const otherBoard = availableBoards.find(b => b.id !== currentBoardId && b.id !== 'all');
-    const defaultBoardId = otherBoard ? otherBoard.id : (availableBoards[0]?.id || 'all');
+    const preselectedUser = initialTargetUserId
+      ? users.find(u => u.id === initialTargetUserId) || null
+      : null;
 
-    setSelectedBoardId(defaultBoardId);
+    if (preselectedUser) {
+      const targetBoardId = preselectedUser.isCreativeDirector
+        ? preselectedUser.id
+        : preselectedUser.creativeDirectorId
+        ? preselectedUser.creativeDirectorId
+        : availableBoards.some(b => b.id === 'independent')
+        ? 'independent'
+        : 'all';
+      setSelectedBoardId(targetBoardId);
+      setSelectedUserId(preselectedUser.id);
+    } else {
+      // Default to a different board than source user's board
+      const currentBoardId = sourceBoard?.id || '';
+      const otherBoard = availableBoards.find(b => b.id !== currentBoardId && b.id !== 'all');
+      const defaultBoardId = otherBoard ? otherBoard.id : (availableBoards[0]?.id || 'all');
+      setSelectedBoardId(defaultBoardId);
+      setSelectedUserId('');
+    }
+
     setSubtaskTitle(task.title);
-    setTargetStatus(task.status === 'retainer' || task.status === 'pipeline' ? 'todo' : task.status);
+    const resolvedStatus =
+      initialTargetStatus && initialTargetStatus !== 'retainer' && initialTargetStatus !== 'pipeline'
+        ? initialTargetStatus
+        : task.status === 'retainer' || task.status === 'pipeline'
+        ? 'todo'
+        : task.status;
+    setTargetStatus(resolvedStatus);
     setTargetDueDate(task.dueDate || '');
     setFeedback(null);
-  }, [isOpen, task, sourceBoard, availableBoards]);
+  }, [isOpen, task, sourceBoard, availableBoards, initialTargetUserId, initialTargetStatus, users]);
 
   // Compute members belonging to the selected board (excluding current task owner)
   const availableUsers = useMemo(() => {
@@ -268,10 +294,6 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
               <div>
                 <h3 className="text-base font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
                   <span>Create and Assign Subtask</span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-500/20 px-2 py-0.5 text-[11px] font-semibold text-blue-600 dark:text-blue-400">
-                    <Shield className="h-2.5 w-2.5" />
-                    CD & Superadmin
-                  </span>
                 </h3>
               </div>
             </div>

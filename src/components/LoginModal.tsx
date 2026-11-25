@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
 import { Role } from '../types';
+import { ClickupMemberPicker } from './ClickupMemberPicker';
 import {
   X,
   Mail,
@@ -13,14 +14,11 @@ import {
   Crown,
   Loader2,
   Shield,
-  Video as VideoIcon,
-  Layout,
   Briefcase,
   Award,
   Layers,
   Lock,
   Users,
-  Search,
 } from 'lucide-react';
 
 interface LoginModalProps {
@@ -46,6 +44,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
     canManageMembers,
     authError,
     setAuthError,
+    isClickupConnected,
+    clickupMembers,
+    loadClickupMembers,
   } = useDashboard();
 
   const canAssignAdmin = isSuperadmin || isAdministrator;
@@ -61,7 +62,9 @@ export const LoginModal: React.FC<LoginModalProps> = ({
   const [isClusterLead, setIsClusterLead] = useState(false);
   const [isTeamLead, setIsTeamLead] = useState(false);
 
-  // Assigned Leaders
+  // Assigned Leaders & ClickUp Mapping
+  const [clickupUserId, setClickupUserId] = useState<string>('');
+  const [clickupUsername, setClickupUsername] = useState<string>('');
   const [selectedCDId, setSelectedCDId] = useState<string>(() => {
     if (currentUser?.isCreativeDirector) return currentUser.id;
     return creativeDirectors[0]?.id || '';
@@ -159,6 +162,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
           designation,
           creativeDirectorId: isBusinessLead ? undefined : (isCD ? undefined : (selectedCDId || undefined)),
           clusterLeadId: isBusinessLead ? undefined : (isClusterLead ? undefined : (selectedClusterLeadId || undefined)),
+          clickupUserId: clickupUserId || undefined,
+          clickupUsername: clickupUsername || undefined,
         });
       } else {
         await login(cleanName, role || 'content', cleanEmail);
@@ -173,6 +178,8 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       setIsTeamLead(false);
       setSelectedCDId('');
       setSelectedClusterLeadId('');
+      setClickupUserId('');
+      setClickupUsername('');
       onClose();
     } catch (err: any) {
       setError(err.message || 'Operation failed. Please try again.');
@@ -206,27 +213,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({
       desc: 'Adaptive & Visual',
       icon: <Palette className="h-4 w-4 text-indigo-500" />,
       tooltip: 'Visual design, branding, and graphic design team',
-    },
-    {
-      id: 'video',
-      label: 'Video',
-      desc: 'Motion & Editing',
-      icon: <VideoIcon className="h-4 w-4 text-violet-500" />,
-      tooltip: 'Cross-functional motion graphics and video production shared team',
-    },
-    {
-      id: 'ui_ux',
-      label: 'UI/UX',
-      desc: 'Product & Interface',
-      icon: <Layout className="h-4 w-4 text-cyan-500" />,
-      tooltip: 'Cross-functional product interface and user experience shared team',
-    },
-    {
-      id: 'research',
-      label: 'Research',
-      desc: 'Insights & Analysis',
-      icon: <Search className="h-4 w-4 text-teal-500" />,
-      tooltip: 'User research, insights, and data analysis shared team',
     },
   ];
 
@@ -533,6 +519,24 @@ export const LoginModal: React.FC<LoginModalProps> = ({
                     </label>
                   </div>
                 </div>
+
+                {/* ClickUp Workspace Member Mapping */}
+                {isNewAccountOnly && isClickupConnected && (
+                  <div>
+                    <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5">
+                      ClickUp Member Mapping
+                    </label>
+                    <ClickupMemberPicker
+                      members={clickupMembers}
+                      selectedMemberId={clickupUserId || undefined}
+                      onRefresh={loadClickupMembers}
+                      onSelect={member => {
+                        setClickupUserId(member ? member.id : '');
+                        setClickupUsername(member ? member.username : '');
+                      }}
+                    />
+                  </div>
+                )}
 
                 {/* Delivery Lead: Assigned Creative Director */}
                 {!isCD && !isBusinessLead && (

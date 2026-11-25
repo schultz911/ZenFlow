@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Task, TaskStatus, Role } from '../types';
 import { useDashboard } from '../context/DashboardContext';
-import { getDuePillInfo, formatDateOnly, formatCompletedDate, getCognitiveLoadLabel, getTaskBillableMs, formatBillableHours, formatBillableDetailed, getLastDayOfMonth } from '../utils/workload';
+import { getDuePillInfo, formatDateOnly, formatCompletedDate, getCognitiveLoadLabel, getTaskBillableMs, formatBillableHours, formatBillableDetailed, getLastDayOfMonth, getTaskAssigneeCount } from '../utils/workload';
 import {
   GripVertical,
   Clock,
@@ -16,11 +16,15 @@ import {
   Timer,
   CopyPlus,
   CornerDownRight,
+  ExternalLink,
+  Link2,
+  Users,
 } from 'lucide-react';
 
 interface TaskCardProps {
   task: Task;
   userRole?: Role;
+  swimlaneUserId?: string;
   onEdit: (task: Task) => void;
   onUpdateTitle?: (taskId: string, newTitle: string) => void;
   onDelete: (taskId: string) => void;
@@ -38,6 +42,7 @@ const STATUS_SEQUENCE: TaskStatus[] = ['todo', 'in_progress', 'in_review', 'done
 export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   task,
   userRole = 'content',
+  swimlaneUserId,
   onEdit,
   onUpdateTitle,
   onDelete,
@@ -50,9 +55,15 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   isDraggable = true,
 }) => {
   const { canEditUserTasks } = useDashboard();
-  const canEdit = canEditUserTasks(task.userId);
+  const effectiveUserId = swimlaneUserId || task.userId;
+  const canEdit = canEditUserTasks(effectiveUserId);
   const canDuplicateToBoard = Boolean(onDuplicateToBoard);
   const effectivelyDraggable = isDraggable && canEdit;
+  const assigneeCount = getTaskAssigneeCount(task);
+  const sharedEstimatedHours =
+    task.estimatedHours !== undefined && task.estimatedHours > 0
+      ? Math.round((task.estimatedHours / assigneeCount) * 100) / 100
+      : undefined;
 
   const [isDragging, setIsDragging] = useState(false);
   const [showSnoozeFlyout, setShowSnoozeFlyout] = useState(false);
@@ -226,7 +237,8 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
     const dragPayload = {
       taskId: task.id,
       status: task.status,
-      userId: task.userId,
+      userId: effectiveUserId,
+      sourceUserId: effectiveUserId,
       order: task.order,
       title: task.title,
       dueDate: task.dueDate,
@@ -293,6 +305,16 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             />
             <span className="capitalize">{task.cognitiveLoad}</span>
           </span>
+
+          {assigneeCount > 1 && (
+            <span
+              title={`Shared task across ${assigneeCount} assignees (workload & time divided evenly)`}
+              className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-500/25"
+            >
+              <Users className="h-2.5 w-2.5" />
+              <span>1/{assigneeCount}</span>
+            </span>
+          )}
         </div>
 
         {/* Top Right: Actions & Billable Hours Badge */}
@@ -333,13 +355,17 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             </button>
           </div>
 
-          {/* Billable Hours badge (top right of card - clickable to manually correct hours) */}
-          {task.estimatedHours !== undefined && task.estimatedHours > 0 && (
+          {/* Estimated Hours & Billable Hours badges */}
+          {sharedEstimatedHours !== undefined && (
             <span
-              title={`Estimated: ${task.estimatedHours}h`}
+              title={
+                assigneeCount > 1
+                  ? `Your share: ${sharedEstimatedHours}h (${task.estimatedHours}h total split across ${assigneeCount} assignees)`
+                  : `Estimated: ${task.estimatedHours}h`
+              }
               className="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium bg-neutral-100 dark:bg-white/5 text-[var(--text-secondary)] border border-neutral-200/50 dark:border-white/5 shrink-0"
             >
-              Est: {task.estimatedHours}h
+              Est: {sharedEstimatedHours}h
             </span>
           )}
           {billableMs > 0 || task.status === 'in_progress' ? (
@@ -450,6 +476,37 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         <p className="mt-1 text-[11px] text-[var(--text-secondary)] line-clamp-2 leading-relaxed">
           {task.description}
         </p>
+      )}
+
+      {/* Content Doc Link & ClickUp Link Badges */}
+      {(task.contentDocLink || task.clickupUrl) && (
+        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap" onClick={e => e.stopPropagation()}>
+          {task.contentDocLink && (
+            <a
+              href={task.contentDocLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Content Doc: ${task.contentDocLink}`}
+              className="inline-flex items-center gap-1 rounded-md bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/25 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 hover:underline"
+            >
+              <Link2 className="h-2.5 w-2.5 shrink-0" />
+              <span>Content Doc</span>
+              <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+            </a>
+          )}
+          {task.clickupUrl && (
+            <a
+              href={task.clickupUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Open in ClickUp"
+              className="inline-flex items-center gap-1 rounded-md bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/25 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700 dark:text-purple-300 hover:underline"
+            >
+              <span>ClickUp</span>
+              <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+            </a>
+          )}
+        </div>
       )}
 
       {/* Bottom Row: Date display (deadline for active, completedAt for done/archived) & quick status stepper */}

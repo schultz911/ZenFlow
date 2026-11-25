@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
 import { Task, CognitiveLoad, TaskStatus } from '../types';
-import { getTaskBillableMs, formatBillableDetailed, getLastDayOfMonth, getUserTag } from '../utils/workload';
+import { getTaskBillableMs, formatBillableDetailed, getLastDayOfMonth, getUserTag, getTaskAssigneeIds } from '../utils/workload';
 import {
   X,
   Calendar,
@@ -20,6 +20,9 @@ import {
   CopyPlus,
   CornerDownRight,
   AlertCircle,
+  Link2,
+  ExternalLink,
+  Users,
 } from 'lucide-react';
 
 function formatActivityTime(isoString: string): string {
@@ -91,6 +94,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [userId, setUserId] = useState('');
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
   const [dueDate, setDueDate] = useState('');
   const [cognitiveLoad, setCognitiveLoad] = useState<CognitiveLoad>('medium');
   const [status, setStatus] = useState<TaskStatus>('todo');
@@ -98,6 +102,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [project, setProject] = useState('');
   const [estimatedHours, setEstimatedHours] = useState('');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
+  const [contentDocLink, setContentDocLink] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
@@ -137,6 +142,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
   const canEdit = useMemo(() => {
     if (!taskToEdit) return true;
+    const ids = getTaskAssigneeIds(taskToEdit);
+    if (ids.length > 0) {
+      return ids.some(id => canEditUserTasks(id));
+    }
     return canEditUserTasks(taskToEdit.userId);
   }, [taskToEdit, canEditUserTasks]);
 
@@ -144,7 +153,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     if (taskToEdit) {
       setTitle(taskToEdit.title || '');
       setDescription(taskToEdit.description || '');
-      setUserId(taskToEdit.userId || '');
+      const ids = getTaskAssigneeIds(taskToEdit);
+      setAssigneeIds(ids);
+      setUserId(ids[0] || taskToEdit.userId || '');
       setDueDate(taskToEdit.dueDate || '');
       setCognitiveLoad(taskToEdit.cognitiveLoad || 'medium');
       setStatus(taskToEdit.status || 'todo');
@@ -152,11 +163,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setProject(taskToEdit.project || '');
       setEstimatedHours(taskToEdit.estimatedHours !== undefined ? String(taskToEdit.estimatedHours) : '');
       setPriority(taskToEdit.priority || 'medium');
+      setContentDocLink(taskToEdit.contentDocLink || '');
     } else {
       setTitle('');
       setDescription('');
       const defaultUser = defaultUserId || currentUser?.id || users[0]?.id || '';
       setUserId(defaultUser);
+      setAssigneeIds(defaultUser ? [defaultUser] : []);
       setDueDate('');
       setCognitiveLoad('medium');
       setStatus(defaultStatus || 'todo');
@@ -164,6 +177,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setProject('');
       setEstimatedHours('');
       setPriority('medium');
+      setContentDocLink('');
     }
     setShowConfirmDelete(false);
     setSubmitError(null);
@@ -232,7 +246,26 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     e.preventDefault();
     const isDeadlineRequired = status !== 'pipeline' && status !== 'retainer';
     const isUserIdRequired = status !== 'pipeline';
-    if (!title.trim() || (isUserIdRequired && !userId) || (isDeadlineRequired && !dueDate.trim()) || !canEdit) return;
+    const effectiveAssignees = assigneeIds.length > 0 ? assigneeIds : (userId ? [userId] : []);
+    if (!title.trim() || (isUserIdRequired && effectiveAssignees.length === 0) || (isDeadlineRequired && !dueDate.trim()) || !canEdit) return;
+
+    const trimmedDocLink = contentDocLink.trim();
+    if (taskDiscipline === 'content' && status === 'done') {
+      if (!trimmedDocLink) {
+        setSubmitError('A content document URL is required before marking a Content task as Sent.');
+        return;
+      }
+      try {
+        const parsed = new URL(trimmedDocLink);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          setSubmitError('Content document link must start with http:// or https://.');
+          return;
+        }
+      } catch {
+        setSubmitError('Please enter a valid Content document URL.');
+        return;
+      }
+    }
 
     setIsSubmitting(true);
     setSubmitError(null);
@@ -244,7 +277,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         await updateTask(taskToEdit.id, {
           title: title.trim(),
           description: description.trim() || undefined,
-          userId: userId || undefined,
+          userId: effectiveAssignees[0] || undefined,
+          assigneeIds: effectiveAssignees,
           dueDate: finalDueDate,
           cognitiveLoad,
           status,
@@ -252,10 +286,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           project: project.trim() || undefined,
           estimatedHours: parsedEstimated,
           priority,
+          contentDocLink: trimmedDocLink || undefined,
         });
       } else {
         await createTask({
-          userId: userId || undefined,
+          userId: effectiveAssignees[0] || undefined,
+          assigneeIds: effectiveAssignees,
           team: taskDiscipline,
           title: title.trim(),
           description: description.trim() || undefined,
@@ -401,6 +437,37 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               </div>
             )}
 
+            {/* Propagated Content Document Link & ClickUp Link */}
+            {(taskToEdit?.contentDocLink || taskToEdit?.clickupUrl) && (
+              <div className="px-6 py-2.5 bg-emerald-50/60 dark:bg-emerald-950/20 border-b border-emerald-200/60 dark:border-emerald-800/20 flex flex-wrap items-center justify-between gap-2 text-xs">
+                {taskToEdit?.contentDocLink && (
+                  <a
+                    href={taskToEdit.contentDocLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-300 hover:underline min-w-0"
+                  >
+                    <Link2 className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate max-w-[280px]">
+                      Content Doc: {taskToEdit.contentDocLink}
+                    </span>
+                    <ExternalLink className="w-3 h-3 shrink-0" />
+                  </a>
+                )}
+                {taskToEdit?.clickupUrl && (
+                  <a
+                    href={taskToEdit.clickupUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 font-semibold text-purple-700 dark:text-purple-300 hover:underline shrink-0"
+                  >
+                    <span>Open in ClickUp</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
+              </div>
+            )}
+
             {/* Error Banner */}
             {submitError && (
               <div className="mx-6 mt-4 p-3 rounded-xl bg-red-50 dark:bg-red-950/30 border border-red-500/20 flex items-center gap-2 text-xs text-red-600 dark:text-red-400">
@@ -469,7 +536,17 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     <select
                       id="task-assignee-select"
                       value={userId}
-                      onChange={e => setUserId(e.target.value)}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setUserId(val);
+                        if (!val) {
+                          setAssigneeIds([]);
+                        } else if (assigneeIds.length <= 1) {
+                          setAssigneeIds([val]);
+                        } else {
+                          setAssigneeIds(prev => [val, ...prev.filter(id => id !== val)]);
+                        }
+                      }}
                       className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] py-2 pl-3 pr-8 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer"
                     >
                       <option value="">-- Unassigned in Team Pipeline --</option>
@@ -481,6 +558,36 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     </select>
                     <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-secondary)]" />
                   </div>
+                  {assigneeIds.length > 1 && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                      <Users className="h-3 w-3 text-emerald-500 shrink-0" />
+                      {assigneeIds.map(aid => {
+                        const member = users.find(u => u.id === aid);
+                        if (!member) return null;
+                        return (
+                          <span
+                            key={aid}
+                            className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300"
+                          >
+                            <span>{member.name}</span>
+                            {canEdit && assigneeIds.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const next = assigneeIds.filter(id => id !== aid);
+                                  setAssigneeIds(next);
+                                  setUserId(next[0] || '');
+                                }}
+                                className="hover:text-red-500 cursor-pointer"
+                              >
+                                ×
+                              </button>
+                            )}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
 
                 {/* Workflow Status */}
@@ -740,6 +847,43 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 </div>
               )}
 
+              {/* Content Document Link (Editable for Content tasks, or read-only clickable for sibling Design tasks) */}
+              {(taskDiscipline === 'content' || Boolean(contentDocLink)) && (
+                <div>
+                  <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5 flex items-center justify-between" htmlFor="task-content-doc-link">
+                    <span className="flex items-center gap-1.5">
+                      <Link2 className="h-3.5 w-3.5 text-emerald-500" />
+                      <span>
+                        Content Document Link
+                        {taskDiscipline === 'content' && status === 'done' && (
+                          <span className="text-red-500 ml-0.5">*</span>
+                        )}
+                      </span>
+                    </span>
+                    {contentDocLink && (
+                      <a
+                        href={contentDocLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline normal-case"
+                      >
+                        <span>Open Link</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </a>
+                    )}
+                  </label>
+                  <input
+                    id="task-content-doc-link"
+                    type="url"
+                    value={contentDocLink}
+                    readOnly={taskDiscipline !== 'content'}
+                    onChange={e => setContentDocLink(e.target.value)}
+                    placeholder="https://docs.google.com/document/d/..."
+                    className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] py-2 px-3 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-emerald-500 focus:outline-none transition-colors read-only:opacity-80"
+                  />
+                </div>
+              )}
+
               {/* Context / Description */}
               <div>
                 <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5" htmlFor="task-description-input">
@@ -902,7 +1046,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 <button
                   id="task-submit-button"
                   type="submit"
-                  disabled={isSubmitting || !title.trim() || !userId || (status !== 'pipeline' && status !== 'retainer' && !dueDate.trim()) || !canEdit}
+                  disabled={isSubmitting || !title.trim() || (status !== 'pipeline' && assigneeIds.length === 0 && !userId) || (status !== 'pipeline' && status !== 'retainer' && !dueDate.trim()) || !canEdit}
                   className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-500 focus:outline-none transition-all disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmitting ? (

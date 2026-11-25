@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
-import { Task, User, Role } from '../types';
-import { getCognitiveLoadLabel } from '../utils/workload';
+import { Task, User, RoleFilter } from '../types';
+import { getCognitiveLoadLabel, getTaskAssigneeIds } from '../utils/workload';
 import {
   Inbox,
   Plus,
@@ -17,12 +17,11 @@ import {
   Briefcase,
   FileText,
   Palette,
-  Video as VideoIcon,
-  Layout,
+  CornerDownRight,
 } from 'lucide-react';
 
 interface TeamPipelineProps {
-  team: Role;
+  roleFilter: RoleFilter;
   tasks: Task[];
   users: User[];
   onOpenCreateModal: () => void;
@@ -37,13 +36,10 @@ interface TeamPipelineProps {
 const DISCIPLINE_ICONS: Record<string, React.FC<{ className?: string }>> = {
   content: FileText,
   design: Palette,
-  video: VideoIcon,
-  ui_ux: Layout,
-  research: Search,
 };
 
 export const TeamPipeline: React.FC<TeamPipelineProps> = ({
-  team,
+  roleFilter,
   tasks,
   users,
   onOpenCreateModal,
@@ -65,11 +61,9 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
   const [isDragOver, setIsDragOver] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  // Inline editing state for task title in pipeline
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
 
-  // Lookup map of users for fast assignee matching
   const userMap = useMemo(() => {
     const map = new Map<string, User>();
     for (const u of users) {
@@ -78,36 +72,36 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
     return map;
   }, [users]);
 
-  // Centralized team pipeline tasks: status === 'pipeline' AND team === activeTeam (no cross-team duplication)
+  // Unified pipeline tasks filtered by roleFilter ('all' | 'content' | 'design')
   const pipelineTasks = useMemo(() => {
     const map = new Map<string, Task>();
     for (const task of tasks) {
       if (!task || !task.id) continue;
       if (task.status !== 'pipeline') continue;
 
-      const taskTeam = task.team || (task.userId ? userMap.get(task.userId)?.role : undefined);
-      if (taskTeam === team) {
+      const firstAssignee = getTaskAssigneeIds(task)[0];
+      const taskTeam = task.team || (firstAssignee ? userMap.get(firstAssignee)?.role : undefined) || 'content';
+      if (taskTeam !== 'content' && taskTeam !== 'design') continue;
+      if (roleFilter === 'all' || taskTeam === roleFilter) {
         map.set(task.id, task);
       }
     }
     return Array.from(map.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-  }, [tasks, team, userMap]);
+  }, [tasks, roleFilter, userMap]);
 
-  // Metrics
   const totalCount = pipelineTasks.length;
   const unassignedCount = useMemo(() => {
-    return pipelineTasks.filter(t => !t.userId || t.userId === '').length;
+    return pipelineTasks.filter(t => getTaskAssigneeIds(t).length === 0).length;
   }, [pipelineTasks]);
   const assignedCount = totalCount - unassignedCount;
 
-  // Filtered tasks for display
   const displayedTasks = useMemo(() => {
     let result = pipelineTasks;
 
     if (filterMode === 'unassigned') {
-      result = result.filter(t => !t.userId || t.userId === '');
+      result = result.filter(t => getTaskAssigneeIds(t).length === 0);
     } else if (filterMode === 'assigned') {
-      result = result.filter(t => Boolean(t.userId && t.userId !== ''));
+      result = result.filter(t => getTaskAssigneeIds(t).length > 0);
     }
 
     const query = pipelineSearch.trim().toLowerCase();
@@ -117,9 +111,12 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
         const matchesDesc = t.description ? t.description.toLowerCase().includes(query) : false;
         const matchesClient = t.client ? t.client.toLowerCase().includes(query) : false;
         const matchesProject = t.project ? t.project.toLowerCase().includes(query) : false;
-        const assignee = t.userId ? userMap.get(t.userId)?.name.toLowerCase() : '';
-        const matchesAssignee = assignee ? assignee.includes(query) : false;
-        return matchesTitle || matchesDesc || matchesClient || matchesProject || matchesAssignee;
+        const matchesParent = t.parentTaskTitle ? t.parentTaskTitle.toLowerCase().includes(query) : false;
+        const assigneeNames = getTaskAssigneeIds(t)
+          .map(id => userMap.get(id)?.name.toLowerCase() || '')
+          .join(' ');
+        const matchesAssignee = assigneeNames.includes(query);
+        return matchesTitle || matchesDesc || matchesClient || matchesProject || matchesParent || matchesAssignee;
       });
     }
 
@@ -164,14 +161,16 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
       if (existing) {
         await updateTask(taskId, {
           status: 'pipeline',
-          team: team,
+          team: existing.team || (roleFilter === 'all' ? 'content' : roleFilter),
         });
       }
     }
   };
 
-  const DisciplineIcon = DISCIPLINE_ICONS[team] || Inbox;
-  const teamLabel = team === 'ui_ux' ? 'UI/UX' : team.charAt(0).toUpperCase() + team.slice(1);
+  const DisciplineIcon = roleFilter === 'all' ? Inbox : (DISCIPLINE_ICONS[roleFilter] || Inbox);
+  const pipelineHeading = roleFilter === 'all'
+    ? 'Team Pipeline'
+    : `${roleFilter === 'content' ? 'Content' : 'Design'} Pipeline`;
 
   return (
     <div
@@ -184,7 +183,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
           : 'border-[var(--border)] bg-[var(--surface)] shadow-sm'
       }`}
     >
-      {/* Top Banner: Pipeline Information, Counters, and Actions */}
+      {/* Top Banner */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-6 border-b border-[var(--border)] bg-neutral-50/50 dark:bg-white/[0.01]">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 shrink-0">
@@ -192,7 +191,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
           </div>
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">
-              {teamLabel} Team Pipeline
+              {pipelineHeading}
             </h3>
             <span className="rounded-full bg-neutral-200 dark:bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-neutral-700 dark:text-white/60">
               {totalCount} total
@@ -202,7 +201,6 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
 
         {/* Filter Pills, Search & Create Task Button */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Quick Filter Modes */}
           <div className="flex items-center rounded-xl bg-neutral-100 dark:bg-white/5 p-1 border border-[var(--border)] text-[11px] font-medium">
             <button
               type="button"
@@ -242,7 +240,6 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
             </button>
           </div>
 
-          {/* Inline Pipeline Search */}
           <div className="relative">
             <input
               type="text"
@@ -265,7 +262,6 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
             )}
           </div>
 
-          {/* Add Pipeline Task (Role-Guarded) */}
           {canCreatePipelineTask ? (
             <button
               type="button"
@@ -273,7 +269,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
               className="flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 px-3 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors cursor-pointer"
             >
               <Plus className="h-3.5 w-3.5" />
-              <span>Add {teamLabel} Task</span>
+              <span>Add Task</span>
             </button>
           ) : (
             <div
@@ -285,7 +281,6 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
             </div>
           )}
 
-          {/* Collapse toggle */}
           <button
             type="button"
             onClick={() => setIsCollapsed(prev => !prev)}
@@ -308,14 +303,14 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
               <p className="text-xs font-semibold text-neutral-700 dark:text-white/80">
                 {pipelineSearch || filterMode !== 'all'
                   ? 'No matching tasks in pipeline'
-                  : `${teamLabel} pipeline is currently empty`}
+                  : `${pipelineHeading} is currently empty`}
               </p>
               <p className="text-[11px] text-[var(--text-secondary)] max-w-sm mt-0.5">
                 {pipelineSearch || filterMode !== 'all'
                   ? 'Try clearing the search query or changing the filter mode.'
                   : canCreatePipelineTask
-                  ? `Create tasks using the button above. Tasks enter as unassigned for Creative Director review and estimation.`
-                  : `Unscheduled deliverables created by Accounts will appear here.`}
+                  ? 'Create tasks using the button above. Select Content, Design, or both to generate pipeline subtasks.'
+                  : 'Unscheduled deliverables created by Accounts will appear here.'}
               </p>
               {canCreatePipelineTask && !pipelineSearch && filterMode === 'all' && (
                 <button
@@ -324,7 +319,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                   className="mt-3 flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  <span>Create First {teamLabel} Task</span>
+                  <span>Add Task</span>
                 </button>
               )}
             </div>
@@ -332,8 +327,10 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
             <div className="flex items-start gap-3 py-1 px-0.5 scroll-smooth min-h-[92px]">
               {displayedTasks.map(task => {
                 const isEditingThis = editingTaskId === task.id;
-                const assignee = task.userId ? userMap.get(task.userId) : null;
-                const cognitiveLabel = getCognitiveLoadLabel(task.cognitiveLoad, team);
+                const taskDiscipline = task.team === 'design' ? 'design' : 'content';
+                const assigneeIds = getTaskAssigneeIds(task);
+                const assignee = assigneeIds[0] ? userMap.get(assigneeIds[0]) : null;
+                const cognitiveLabel = getCognitiveLoadLabel(task.cognitiveLoad, taskDiscipline);
                 const metadata = task.disciplineMetadata;
 
                 return (
@@ -353,8 +350,8 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                       const dragPayload = {
                         taskId: task.id,
                         status: 'pipeline',
-                        userId: task.userId || '',
-                        team: task.team || team,
+                        userId: assigneeIds[0] || '',
+                        team: taskDiscipline,
                         order: task.order,
                         title: task.title,
                         dueDate: task.dueDate,
@@ -368,12 +365,19 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                     className="group relative flex flex-col justify-between shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-2xs hover:shadow-sm hover:border-indigo-400/50 dark:hover:border-indigo-500/30 transition-all select-none cursor-grab active:cursor-grabbing w-64 sm:w-72 min-h-[110px]"
                   >
                     <div>
-                      {/* Top Row: Priority & Drag Handle & Actions */}
+                      {/* Top Row: Discipline Badge, Priority, Drag Handle & Actions */}
                       <div className="flex items-center justify-between gap-1.5 mb-1.5">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <div className="text-neutral-400 dark:text-white/20 group-hover:text-neutral-700 dark:group-hover:text-white/60 shrink-0">
                             <GripVertical className="h-3.5 w-3.5" />
                           </div>
+                          <span className={`px-1.5 py-0.2 rounded text-[11px] font-semibold uppercase tracking-wider ${
+                            taskDiscipline === 'design'
+                              ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300'
+                              : 'bg-blue-500/15 text-blue-600 dark:text-blue-300'
+                          }`}>
+                            {taskDiscipline}
+                          </span>
                           {task.priority && (
                             <span className={`px-1.5 py-0.2 rounded text-[11px] font-semibold uppercase tracking-wider ${
                               task.priority === 'high'
@@ -392,7 +396,6 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                           )}
                         </div>
 
-                        {/* Quick hover actions */}
                         <div className="flex items-center card-actions opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
                           <button
                             type="button"
@@ -419,7 +422,13 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                         </div>
                       </div>
 
-                      {/* Title: inline editable */}
+                      {task.isSubtask && task.parentTaskTitle && (
+                        <div className="mb-1 flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 font-medium truncate">
+                          <CornerDownRight className="h-2.5 w-2.5 shrink-0" />
+                          <span className="truncate">{task.parentTaskTitle}</span>
+                        </div>
+                      )}
+
                       {isEditingThis ? (
                         <div className="mb-2" onClick={e => e.stopPropagation()}>
                           <input
@@ -463,7 +472,6 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                         </h4>
                       )}
 
-                      {/* Account & Project Pills */}
                       {(task.client || task.project) && (
                         <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-[var(--text-secondary)] mb-2">
                           {task.client && (
@@ -481,7 +489,6 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                         </div>
                       )}
 
-                      {/* Discipline Metadata Badges */}
                       {metadata && (
                         <div className="flex items-center gap-1 flex-wrap text-[11px] text-neutral-600 dark:text-white/50 mb-2">
                           {metadata.contentType && (
@@ -504,38 +511,11 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                               {metadata.dimensions}
                             </span>
                           )}
-                          {metadata.videoType && (
-                            <span className="px-1.5 py-0.2 rounded bg-violet-500/10 text-violet-600 dark:text-violet-300 font-medium">
-                              {metadata.videoType}
-                            </span>
-                          )}
-                          {metadata.duration && (
-                            <span className="px-1.5 py-0.2 rounded bg-neutral-100 dark:bg-white/5 font-medium">
-                              {metadata.duration}
-                            </span>
-                          )}
-                          {metadata.designType && (
-                            <span className="px-1.5 py-0.2 rounded bg-cyan-500/10 text-cyan-600 dark:text-cyan-300 font-medium">
-                              {metadata.designType}
-                            </span>
-                          )}
-                          {metadata.screens && (
-                            <span className="px-1.5 py-0.2 rounded bg-neutral-100 dark:bg-white/5 font-medium">
-                              {metadata.screens} screens
-                            </span>
-                          )}
-                          {metadata.researchType && (
-                            <span className="px-1.5 py-0.2 rounded bg-teal-500/10 text-teal-600 dark:text-teal-300 font-medium">
-                              {metadata.researchType}
-                            </span>
-                          )}
                         </div>
                       )}
                     </div>
 
-                    {/* Bottom Row: Assignee + Cognitive Load + Estimated Hours */}
                     <div className="pt-2 border-t border-neutral-100 dark:border-white/5 flex items-center justify-between gap-1.5">
-                      {/* Assignee Section */}
                       <div>
                         {assignee ? (
                           <div
@@ -548,7 +528,9 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                             }`}
                           >
                             <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
-                            <span className="truncate max-w-[85px]">{assignee.name}</span>
+                            <span className="truncate max-w-[85px]">
+                              {assigneeIds.length > 1 ? `${assignee.name} +${assigneeIds.length - 1}` : assignee.name}
+                            </span>
                           </div>
                         ) : (
                           <button
@@ -567,7 +549,6 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                         )}
                       </div>
 
-                      {/* Cognitive Load & Hours Pills */}
                       <div className="flex items-center gap-1 shrink-0">
                         <span
                           title={`Cognitive Load: ${cognitiveLabel}`}
@@ -612,4 +593,3 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
     </div>
   );
 };
-

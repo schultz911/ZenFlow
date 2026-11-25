@@ -2,20 +2,23 @@ import { DialogPanel } from './ui/DialogPanel';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Task, User } from '../types';
+import { getTaskAssigneeIds } from '../utils/workload';
 import { AlertTriangle, Trash2, X, Loader2, CornerDownRight } from 'lucide-react';
 
 interface DeleteTaskModalProps {
   task: Task | null;
   users: User[];
   isOpen: boolean;
+  targetUserId?: string;
   onClose: () => void;
-  onConfirmDelete: (taskId: string) => Promise<void> | void;
+  onConfirmDelete: (taskId: string, removeAssigneeId?: string) => Promise<void> | void;
 }
 
 export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
   task,
   users,
   isOpen,
+  targetUserId,
   onClose,
   onConfirmDelete,
 }) => {
@@ -32,13 +35,15 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, isDeleting, onClose]);
 
-  const owner = task ? users.find(u => u.id === task.userId) : null;
+  const assigneeIds = task ? getTaskAssigneeIds(task) : [];
+  const isSharedRemoval = Boolean(task && targetUserId && assigneeIds.length > 1 && assigneeIds.includes(targetUserId));
+  const owner = task ? users.find(u => u.id === (isSharedRemoval ? targetUserId : task.userId)) : null;
 
   const handleDelete = async () => {
     if (!task) return;
     try {
       setIsDeleting(true);
-      await onConfirmDelete(task.id);
+      await onConfirmDelete(task.id, isSharedRemoval ? targetUserId : undefined);
       setIsDeleting(false);
       onClose();
     } catch (err) {
@@ -77,7 +82,7 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
             </div>
             <div>
               <h2 className="text-base font-semibold tracking-tight text-neutral-900 dark:text-white">
-                Delete Task
+                {isSharedRemoval ? 'Remove Assignee from Task' : 'Delete Task'}
               </h2>
             </div>
           </div>
@@ -126,7 +131,9 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
           </div>
 
           <div className="rounded-xl bg-red-50/80 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 p-3 text-xs text-red-600 dark:text-red-400">
-            Are you sure you want to delete this task? This action cannot be undone.
+            {isSharedRemoval
+              ? `Remove ${owner?.name || 'this member'} from this shared task? It will remain active on the other ${assigneeIds.length - 1} assignee(s)' board(s).`
+              : 'Are you sure you want to delete this task? This action cannot be undone.'}
           </div>
         </div>
 
@@ -149,12 +156,12 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
             {isDeleting ? (
               <>
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                <span>Deleting Task...</span>
+                <span>{isSharedRemoval ? 'Removing...' : 'Deleting Task...'}</span>
               </>
             ) : (
               <>
                 <Trash2 className="h-3.5 w-3.5" />
-                <span>Delete Task</span>
+                <span>{isSharedRemoval ? 'Remove Assignee' : 'Delete Task'}</span>
               </>
             )}
           </button>

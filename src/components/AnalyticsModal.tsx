@@ -14,6 +14,8 @@ import {
   getUserTag,
   getUserDailyAssignedHours,
   isWorkingDay,
+  getTaskAssigneeIds,
+  isTaskAssignedToUser,
   DeliveryUnitInfo,
 } from '../utils/workload';
 import {
@@ -147,22 +149,22 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
 
     if (filterScope === 'client' && selectedClientId) {
       tList = tasks.filter(t => t.client === selectedClientId);
-      const clientUserIds = new Set(tList.map(t => t.userId));
+      const clientUserIds = new Set(tList.flatMap(t => getTaskAssigneeIds(t)));
       uList = users.filter(u => clientUserIds.has(u.id));
     } else if (filterScope === 'delivery_unit' && selectedDeliveryUnitId) {
       const du = deliveryUnits.find(d => d.id === selectedDeliveryUnitId);
       if (du) {
         const duUserIds = new Set(du.userIds);
         uList = users.filter(u => duUserIds.has(u.id));
-        tList = tasks.filter(t => duUserIds.has(t.userId));
+        tList = tasks.filter(t => getTaskAssigneeIds(t).some(id => duUserIds.has(id)));
       }
     } else if (filterScope === 'project' && selectedProjectId) {
       tList = tasks.filter(t => t.project === selectedProjectId);
-      const projUserIds = new Set(tList.map(t => t.userId));
+      const projUserIds = new Set(tList.flatMap(t => getTaskAssigneeIds(t)));
       uList = users.filter(u => projUserIds.has(u.id));
     } else if (filterScope === 'user' && selectedUserId) {
       uList = users.filter(u => u.id === selectedUserId);
-      tList = tasks.filter(t => t.userId === selectedUserId);
+      tList = tasks.filter(t => isTaskAssignedToUser(t, selectedUserId));
     }
 
     return { scopedUsers: uList, scopedTasks: tList };
@@ -263,8 +265,8 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
     }> = [];
 
     for (const u of scopedUsers) {
-      const uTasks = scopedTasks.filter(t => t.userId === u.id);
-      const { efficiencyPercent, totalTimeTakenHours, totalEstimatedHours } = calculateTasksEfficiency(uTasks);
+      const uTasks = scopedTasks.filter(t => isTaskAssignedToUser(t, u.id));
+      const { efficiencyPercent, totalTimeTakenHours, totalEstimatedHours } = calculateTasksEfficiency(uTasks, { forUserId: u.id });
 
       // Check dates within timeframe
       const lowDates: string[] = [];
@@ -325,22 +327,27 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
       }).sort((a, b) => b.keyHours - a.keyHours);
     };
 
-    // Helper to calculate delivery units for a task list
+    // Helper to calculate delivery units for a task list (split multi-assignee shares cleanly)
     const computeDeliveryUnitsForTasks = (taskList: Task[]) => {
       const map = new Map<string, { du: DeliveryUnitInfo; billableMs: number; estimatedHours: number }>();
       for (const t of taskList) {
-        const user = users.find(u => u.id === t.userId);
-        if (!user) continue;
-        const du = getUserDeliveryUnit(user, deliveryUnits) || {
-          id: 'unit-general',
-          name: 'General Team',
-          type: 'general' as const,
-          userIds: [user.id],
-        };
-        const existing = map.get(du.id) || { du, billableMs: 0, estimatedHours: 0 };
-        existing.billableMs += getTaskBillableMs(t);
-        if (t.estimatedHours) existing.estimatedHours += t.estimatedHours;
-        map.set(du.id, existing);
+        const assignees = getTaskAssigneeIds(t);
+        if (assignees.length === 0) continue;
+        const share = assignees.length;
+        for (const uid of assignees) {
+          const user = users.find(u => u.id === uid);
+          if (!user) continue;
+          const du = getUserDeliveryUnit(user, deliveryUnits) || {
+            id: 'unit-general',
+            name: 'General Team',
+            type: 'general' as const,
+            userIds: [user.id],
+          };
+          const existing = map.get(du.id) || { du, billableMs: 0, estimatedHours: 0 };
+          existing.billableMs += getTaskBillableMs(t) / share;
+          if (t.estimatedHours) existing.estimatedHours += t.estimatedHours / share;
+          map.set(du.id, existing);
+        }
       }
       return Array.from(map.values()).map(d => {
         const b = Math.round((d.billableMs / 3600000) * 10) / 10;
@@ -425,10 +432,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
     });
 
     const keyUnits = computeDeliveryUnitsForTasks(tasks).map(u => {
-      const unitTasks = tasks.filter(t => {
-        const member = users.find(usr => usr.id === t.userId);
-        return member && u.du.userIds.includes(member.id);
-      });
+      const unitTasks = tasks.filter(t => getTaskAssigneeIds(t).some(id => u.du.userIds.includes(id)));
       const topClients = computeClientsForTasks(unitTasks);
       const topProjects = computeProjectsForTasks(unitTasks);
       return { ...u, topClients, topProjects };
@@ -450,7 +454,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
     const userScores = new Map<string, { user: User; score: number; topProjects: Array<{ project: string; score: number }> }>();
 
     for (const u of scopedUsers) {
-      const uTasks = tasks.filter(t => t.userId === u.id);
+      const uTasks = tasks.filter(t => isTaskAssignedToUser(t, u.id));
       const breakdown = calculateUserWorkload(uTasks);
 
       // Group breakdown items by project
@@ -495,8 +499,9 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
     if (filterScope === 'project') {
       // Per project view: tasks contributing highest workload scores
       const projectTasks = scopedTasks.map(t => {
-        const u = users.find(usr => usr.id === t.userId);
-        const uTasks = tasks.filter(tsk => tsk.userId === t.userId);
+        const firstUid = getTaskAssigneeIds(t)[0];
+        const u = firstUid ? users.find(usr => usr.id === firstUid) : undefined;
+        const uTasks = firstUid ? tasks.filter(tsk => isTaskAssignedToUser(tsk, firstUid)) : [];
         const breakdown = calculateUserWorkload(uTasks);
         const scoreItem = breakdown.items.find(i => i.taskId === t.id);
         const score = scoreItem ? scoreItem.calculatedScore : 1.5;
@@ -517,7 +522,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
     if (filterScope === 'user') {
       // Per user view: tasks contributing highest workload scores
       const user = scopedUsers[0];
-      const uTasks = tasks.filter(t => t.userId === user?.id);
+      const uTasks = user ? tasks.filter(t => isTaskAssignedToUser(t, user.id)) : [];
       const breakdown = calculateUserWorkload(uTasks);
       const userRankedTasks = breakdown.items.map(item => {
         const t = tasks.find(tsk => tsk.id === item.taskId);

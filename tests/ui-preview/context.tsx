@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import type { Role, Task, User } from '../../src/types';
+import type { Role, RoleFilter, Task, User } from '../../src/types';
 
 const date = new Date().toISOString();
 const deadline = new Date(Date.now() + 6 * 86400000).toISOString().slice(0, 10);
@@ -25,7 +25,7 @@ const Context = createContext<any>(null);
 export function DashboardProvider({ children }: { children: ReactNode }) {
   const params = new URLSearchParams(location.search);
   const [darkMode, setDarkMode] = useState(params.get('theme') !== 'light');
-  const [activeRoleTab, setActiveRoleTab] = useState<Role>('content');
+  const [activeRoleTab, setActiveRoleTab] = useState<RoleFilter>('all');
   const [activeBoardId, setActiveBoardId] = useState('all');
   const [activeDragInfo, setActiveDragInfo] = useState(null);
   const [tasks, setTasks] = useState(fixtureTasks);
@@ -49,8 +49,15 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
       return { success: true, message: 'Fixture purge complete', deletedTaskCount, deletedUserCount: 2 };
     },
     updateTask: async (id: string, updates: Partial<Task>) => setTasks(previous => previous.map(task => task.id === id ? { ...task, ...updates } : task)),
-    createTask: noop, createUser: noop, deleteTask: noop, deleteUser: noop, moveTask: noop, adjustBillableHours: noop,
+    createTask: noop, createPipelineBundle: noop, createUser: noop, deleteTask: noop, removeAssigneeOrDeleteTask: noop,
+    shareTaskWithUser: noop, reassignTaskFromUser: noop, deleteUser: noop, moveTask: noop, adjustBillableHours: noop,
     rescheduleTask: noop, duplicateTaskToBoard: noop, loginWithGoogle: noop,
+    isClickupConnected: false, clickupSpaces: [], spaceFoldersAndListsMap: {}, getFoldersAndListsForSpace: async () => ({ folders: [], folderlessLists: [] }),
+    clickupMembers: [], isLoadingClickupMembers: false, loadClickupMembers: noop,
+    connectClickup: async () => ({ success: false }), disconnectClickup: noop,
+    createClickupSpace: async () => null, createClickupList: async () => null,
+    clickupCustomFieldOptions: [], clickupTaskTypeFieldId: null, isLoadingTaskTypes: false, fetchClickupCustomFields: noop,
+    clickupWebhookStatus: null, refreshClickupWebhookStatus: noop, registerClickupWebhook: async () => ({ success: false }),
   };
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }

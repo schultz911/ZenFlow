@@ -9,7 +9,18 @@ export function reconcileSnapshot(snapshot: { tasks: Task[]; users: User[] }, qu
     if (item.type === 'delete_task') tasks.delete(id);
     else if (item.type === 'delete_user') {
       users.delete(id);
-      for (const [taskId, task] of tasks) if (task.userId === id) tasks.delete(taskId);
+      for (const [taskId, task] of tasks) {
+        const assignees = Array.isArray(task.assigneeIds) && task.assigneeIds.length > 0
+          ? task.assigneeIds
+          : (task.userId ? [task.userId] : []);
+        if (!assignees.includes(id)) continue;
+        const remaining = assignees.filter(a => a !== id);
+        if (remaining.length > 0) {
+          tasks.set(taskId, { ...task, assigneeIds: remaining, userId: remaining[0] });
+        } else {
+          tasks.delete(taskId);
+        }
+      }
     } else if (item.type === 'create_task') {
       const task = local.get(item.payload?.id) || item.payload;
       if (task?.id) tasks.set(task.id, task);

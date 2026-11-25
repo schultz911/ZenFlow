@@ -1,8 +1,10 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import vm from 'node:vm';
 import ts from 'typescript';
 import express from 'express';
-import { createApiSecurity, redactPayload, SUPERADMIN_EMAIL, SESSION_COOKIE, sameOriginMutation } from '../server/security';
+import { createApiSecurity, redactPayload, SUPERADMIN_EMAIL, SESSION_COOKIE, sameOriginMutation, validSignature } from '../server/security';
+import { WebhookRegistry } from '../server/webhooks';
 import { writeSse } from '../server/resources';
 
 const source = ts.createSourceFile('server.ts', fs.readFileSync('server.ts', 'utf8'), ts.ScriptTarget.Latest, true);
@@ -21,7 +23,7 @@ const compile = (text: string) => ts.transpileModule(text, { compilerOptions: { 
 export function fixtureTask(id: string, userId: string, status = 'todo') {
   return { id, userId, title: id, status, cognitiveLoad: 'medium', order: 0, createdAt: '2026-10-20T00:00:00Z', updatedAt: '2026-10-20T00:00:00Z', inProgressDurationMs: 0, activityLog: [] };
 }
-export async function fixtureServer(_directory: string) {
+export async function fixtureServer(directory: string) {
   const store: any = {
     users: [
       { id: 'root', name: 'Root', email: SUPERADMIN_EMAIL, role: 'content', isCreativeDirector: true },
@@ -34,6 +36,7 @@ export async function fixtureServer(_directory: string) {
   const events: any[] = [], audit: any[] = [];
   const noop = () => {};
   const asyncNoop = async () => {};
+  const webhookRegistry = new WebhookRegistry(path.join(directory, '.clickup-webhooks.json'));
   const ctx: any = {
     store, stateRevision: 1, maybeArchive: noop, deduplicateUsers: noop,
     saveStore: noop, dbSaveUser: asyncNoop, dbSaveTask: asyncNoop,
@@ -48,20 +51,46 @@ export async function fixtureServer(_directory: string) {
       }
     },
     SUPERADMIN_EMAIL,
+    LEGACY_REMOVED_ROLES: new Set(['video', 'ui_ux', 'research']),
+    ZENFLOW_TO_CLICKUP_STATUS: {
+      pipeline: 'open',
+      retainer: 'in progress',
+      todo: 'to do',
+      in_progress: 'in progress',
+      in_review: 'internal review',
+      done: 'client review',
+      archived: 'complete',
+    },
+    cachedClickupTeamIds: new Map(),
+    webhookRegistry,
+    validSignature,
+    fetch: (...args: any[]) => (globalThis.fetch as any)(...args),
+    URL,
     broadcastEvent: (type: string, payload: any) => events.push({ type, payload: redactPayload(payload) }),
     appendAuditLog: async (entry: any) => { audit.push(entry); },
     console: { log: noop, warn: noop, error: noop },
     AVATAR_COLORS: ['blue'],
-    COGNITIVE_LOAD_ESTIMATES_MS: { medium: 86400000 },
+    COGNITIVE_LOAD_ESTIMATES_MS: { low: 43200000, medium: 86400000, high: 129600000 },
     clients: [], nextClientId: 1, MAX_SSE_CLIENTS: 100,
     writeSse, redactPayload, setInterval, clearInterval,
   };
-  for (const name of ['sanitizeString', 'formatBillableHoursServer', 'isCallerAuthorizedForPipeline']) {
+  for (const name of [
+    'sanitizeString',
+    'formatBillableHoursServer',
+    'isCallerAuthorizedForPipeline',
+    'getTaskAssigneeIdsServer',
+    'migrateLegacyRoles',
+    'resolveClickupTeamId',
+    'postClickupTimeEntry',
+    'syncContentLinkToClickUp',
+    'syncTaskToClickUp',
+    'processClickupWebhookEvent',
+  ]) {
     ctx[name] = vm.runInNewContext(compile(functions.get(name)!) + `; ${name}`, ctx);
   }
   const app = express();
   app.set('case sensitive routing', true);
-  app.use(express.json());
+  app.use(express.json({ verify: (req: any, _res: any, buf: Buffer) => { req.rawBody = buf; } }));
   const verify = async (token: string) => {
     if (token === 'invalid') throw new Error('bad signature');
     const member = store.users.find((user: any) => user.id === token);
@@ -80,10 +109,18 @@ export async function fixtureServer(_directory: string) {
     (app as any)[method](routePath, handler);
   }
   app.use('/api', createApiSecurity({ getStore: () => store, verify }));
-  const routes = ['get /api/health', 'get /api/state', 'get /api/users', 'post /api/users',
-    'put /api/users/:id', 'delete /api/users/:id', 'get /api/tasks', 'post /api/tasks',
+  const routes = [
+    'get /api/health', 'get /api/state', 'get /api/users', 'post /api/users',
+    'put /api/users/:id', 'delete /api/users/:id',
+    'get /api/tasks', 'post /api/tasks', 'post /api/tasks/pipeline-bundle',
     'put /api/tasks/:id', 'delete /api/tasks/:id', 'post /api/tasks/reorder',
-    'post /api/tasks/:id/duplicate', 'post /api/firestore/purge', 'get /api/events'];
+    'post /api/tasks/:id/duplicate', 'post /api/firestore/purge', 'get /api/events',
+    'post /api/clickup/verify', 'get /api/clickup/spaces', 'post /api/clickup/spaces',
+    'get /api/clickup/members', 'get /api/clickup/folders-and-lists', 'get /api/clickup/custom-fields',
+    'post /api/clickup/lists', 'post /api/clickup/sync-user-tasks',
+    'post /api/clickup/webhook', 'post /api/clickup/webhook/register',
+    'get /api/clickup/webhook/status', 'delete /api/clickup/webhook/:id',
+  ];
   for (const route of routes) {
     const handler = vm.runInNewContext(compile(`var handler = ${handlers.get(route)}`) + '; handler', ctx);
     const [method, routePath] = route.split(' ');
@@ -91,15 +128,13 @@ export async function fixtureServer(_directory: string) {
       try { Promise.resolve(handler(req, res)).catch(next); } catch (error) { next(error); }
     });
   }
-  app.all('/api/clickup/*', (_req: any, res: any) => {
-    res.status(410).json({ error: 'ClickUp integration has been removed. ZenFlow operates in standalone mode.' });
-  });
   app.use((_error: any, _req: any, res: any, _next: any) => res.status(500).json({ error: 'fixture handler failed' }));
   const server = app.listen(0, '127.0.0.1');
   await new Promise<void>(resolve => server.on('listening', resolve));
   const address = server.address() as any;
   const url = `http://127.0.0.1:${address.port}`;
   return { store, events, audit, ctx, url,
+    migrateLegacyRoles: () => ctx.migrateLegacyRoles(store),
     enableLiveBroadcast: () => { ctx.broadcastEvent = vm.runInNewContext(compile(functions.get('broadcastEvent')!) + '; broadcastEvent', ctx); },
     request: (route: string, who = 'alice', method = 'GET', body?: any, headers: Record<string, string> = {}) => fetch(url + '/api' + route, {
       method, headers: { ...(who ? { Authorization: `Bearer ${who}` } : {}), 'Content-Type': 'application/json', ...headers },

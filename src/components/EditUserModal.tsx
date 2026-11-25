@@ -3,6 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useDashboard } from '../context/DashboardContext';
 import { User, Role } from '../types';
+import { ClickupMemberPicker } from './ClickupMemberPicker';
+import { isTaskAssignedToUser } from '../utils/workload';
 import {
   X,
   UserCog,
@@ -18,13 +20,10 @@ import {
   KeyRound,
   Shield,
   Briefcase,
-  Video as VideoIcon,
-  Layout,
   Award,
   Layers,
   Lock,
   Users,
-  Search,
 } from 'lucide-react';
 
 interface EditUserModalProps {
@@ -48,6 +47,9 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
     users,
     tasks,
     remapUserTasks,
+    isClickupConnected,
+    clickupMembers,
+    loadClickupMembers,
   } = useDashboard();
 
   const canAssignAdmin = isSuperadmin || isAdministrator;
@@ -63,9 +65,11 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
   const [isClusterLead, setIsClusterLead] = useState(false);
   const [isTeamLead, setIsTeamLead] = useState(false);
 
-  // Assigned Leaders
+  // Assigned Leaders & ClickUp mapping
   const [selectedCDId, setSelectedCDId] = useState<string>('');
   const [selectedClusterLeadId, setSelectedClusterLeadId] = useState<string>('');
+  const [clickupUserId, setClickupUserId] = useState<string>('');
+  const [clickupUsername, setClickupUsername] = useState<string>('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,6 +94,8 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
       setIsTeamLead(Boolean(user.isTeamLead || user.designation === 'team_lead' || user.designation === 'Team Lead'));
       setSelectedCDId(user.creativeDirectorId || '');
       setSelectedClusterLeadId(user.clusterLeadId || '');
+      setClickupUserId(user.clickupUserId || '');
+      setClickupUsername(user.clickupUsername || '');
       setError(null);
       setShowRemapTool(false);
       setRemapSourceUserId('');
@@ -116,15 +122,15 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
   const duplicateTarget = (isEmailChanged && user)
     ? users.find(u => u.id !== user.id && (u.email || '').toLowerCase().trim() === cleanCurrentEmail)
     : null;
-  const userTasksCount = user ? tasks.filter(t => t.userId === user.id).length : 0;
+  const userTasksCount = user ? tasks.filter(t => isTaskAssignedToUser(t, user.id)).length : 0;
   const duplicateUserTasksCount = duplicateTarget
-    ? tasks.filter(t => t.userId === duplicateTarget.id).length
+    ? tasks.filter(t => isTaskAssignedToUser(t, duplicateTarget.id)).length
     : 0;
 
   // Other users for explicit task remapping
   const otherUsers = user ? users.filter(u => u.id !== user.id) : [];
   const selectedSourceTaskCount = remapSourceUserId
-    ? tasks.filter(t => t.userId === remapSourceUserId).length
+    ? tasks.filter(t => isTaskAssignedToUser(t, remapSourceUserId)).length
     : 0;
 
   const handleExecuteRemap = async () => {
@@ -183,6 +189,8 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
       isTeamLead,
       isAccountManager: isAccountMgr,
       designation,
+      clickupUserId: clickupUserId || undefined,
+      clickupUsername: clickupUsername || undefined,
     };
 
     if (isSuperadmin && !isTargetSuperadmin) {
@@ -241,27 +249,6 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
       desc: 'Adaptive & Visual',
       icon: <Palette className="h-4 w-4 text-indigo-500" />,
       tooltip: 'Visual design, branding, and graphic design team',
-    },
-    {
-      id: 'video',
-      label: 'Video',
-      desc: 'Motion & Editing',
-      icon: <VideoIcon className="h-4 w-4 text-violet-500" />,
-      tooltip: 'Cross-functional motion graphics and video production shared team',
-    },
-    {
-      id: 'ui_ux',
-      label: 'UI/UX',
-      desc: 'Product & Interface',
-      icon: <Layout className="h-4 w-4 text-cyan-500" />,
-      tooltip: 'Cross-functional product interface and user experience shared team',
-    },
-    {
-      id: 'research',
-      label: 'Research',
-      desc: 'Insights & Analysis',
-      icon: <Search className="h-4 w-4 text-teal-500" />,
-      tooltip: 'User research, insights, and data analysis shared team',
     },
   ];
 
@@ -584,6 +571,24 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                 </div>
               )}
 
+              {/* ClickUp Workspace Member Mapping */}
+              {isClickupConnected && (
+                <div>
+                  <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5">
+                    ClickUp Member Mapping
+                  </label>
+                  <ClickupMemberPicker
+                    members={clickupMembers}
+                    selectedMemberId={clickupUserId || undefined}
+                    onRefresh={loadClickupMembers}
+                    onSelect={member => {
+                      setClickupUserId(member ? member.id : '');
+                      setClickupUsername(member ? member.username : '');
+                    }}
+                  />
+                </div>
+              )}
+
               {/* Superadmin Task Remapping & Transfer Section */}
               {isSuperadmin && (
                 <div className="rounded-xl border border-purple-500/20 bg-purple-50/20 dark:bg-purple-950/10 p-3.5 space-y-3">
@@ -618,7 +623,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                         >
                           <option value="">-- Select member with misassigned tasks --</option>
                           {otherUsers.map(u => {
-                            const count = tasks.filter(t => t.userId === u.id).length;
+                            const count = tasks.filter(t => isTaskAssignedToUser(t, u.id)).length;
                             return (
                               <option key={u.id} value={u.id}>
                                 {u.name} ({u.email}) — {count} task(s)

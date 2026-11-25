@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { User, Task, TaskStatus } from '../types';
-import { getUserTag, getUserDailyAssignedHours } from '../utils/workload';
+import { User, Task, TaskStatus, RoleFilter } from '../types';
+import { getUserTag, getUserDailyAssignedHours, getTaskAssigneeIds } from '../utils/workload';
 import {
   Users,
   ChevronDown,
@@ -34,7 +34,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
     }
   });
 
-  const [roleFilter, setRoleFilter] = useState<'all' | 'content' | 'design' | 'video' | 'ui_ux' | 'research'>('all');
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
 
   const toggleExpanded = () => {
     setIsExpanded(prev => {
@@ -54,11 +54,13 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
     const pipelineCounts = new Map<string, number>();
 
     for (const t of tasks) {
-      if (!t || !t.userId) continue;
-      if (t.status === 'in_review') {
-        inReviewCounts.set(t.userId, (inReviewCounts.get(t.userId) || 0) + 1);
-      } else if (t.status === 'pipeline') {
-        pipelineCounts.set(t.userId, (pipelineCounts.get(t.userId) || 0) + 1);
+      if (!t) continue;
+      for (const uid of getTaskAssigneeIds(t)) {
+        if (t.status === 'in_review') {
+          inReviewCounts.set(uid, (inReviewCounts.get(uid) || 0) + 1);
+        } else if (t.status === 'pipeline') {
+          pipelineCounts.set(uid, (pipelineCounts.get(uid) || 0) + 1);
+        }
       }
     }
 
@@ -66,6 +68,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
     const stats = new Map<string, { inReview: number; pipeline: number; assignedHours: number }>();
 
     for (const u of users) {
+      if (u.role !== 'content' && u.role !== 'design') continue;
       const assignedHours = getUserDailyAssignedHours(u, tasks);
       stats.set(u.id, {
         inReview: inReviewCounts.get(u.id) || 0,
@@ -90,9 +93,6 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
 
   const contentCount = useMemo(() => freeUsers.filter(u => u.role === 'content').length, [freeUsers]);
   const designCount = useMemo(() => freeUsers.filter(u => u.role === 'design').length, [freeUsers]);
-  const videoCount = useMemo(() => freeUsers.filter(u => u.role === 'video').length, [freeUsers]);
-  const uiUxCount = useMemo(() => freeUsers.filter(u => u.role === 'ui_ux').length, [freeUsers]);
-  const researchCount = useMemo(() => freeUsers.filter(u => u.role === 'research').length, [freeUsers]);
 
   return (
     <div className="fixed bottom-4 right-4 z-40 select-none">
@@ -222,39 +222,6 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                 }`}
               >
                 Design ({designCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => setRoleFilter('video')}
-                className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
-                  roleFilter === 'video'
-                    ? 'bg-violet-600 text-white shadow-xs'
-                    : 'text-neutral-500 dark:text-white/50 hover:bg-neutral-100 dark:hover:bg-white/5'
-                }`}
-              >
-                Video ({videoCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => setRoleFilter('ui_ux')}
-                className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
-                  roleFilter === 'ui_ux'
-                    ? 'bg-cyan-600 text-white shadow-xs'
-                    : 'text-neutral-500 dark:text-white/50 hover:bg-neutral-100 dark:hover:bg-white/5'
-                }`}
-              >
-                UI/UX ({uiUxCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => setRoleFilter('research')}
-                className={`px-2 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
-                  roleFilter === 'research'
-                    ? 'bg-teal-600 text-white shadow-xs'
-                    : 'text-neutral-500 dark:text-white/50 hover:bg-neutral-100 dark:hover:bg-white/5'
-                }`}
-              >
-                Research ({researchCount})
               </button>
             </div>
 

@@ -12,6 +12,21 @@ export const IN_REVIEW_HOURLY_RATES: Record<CognitiveLoad, number> = {
   high: 0.2,   // 0.2 per billable hour
 };
 
+export function getTaskAssigneeIds(task: Pick<Task, 'userId' | 'assigneeIds'>): string[] {
+  if (Array.isArray(task.assigneeIds) && task.assigneeIds.length > 0) {
+    return Array.from(new Set(task.assigneeIds.filter(Boolean)));
+  }
+  return task.userId ? [task.userId] : [];
+}
+
+export function getTaskAssigneeCount(task: Pick<Task, 'userId' | 'assigneeIds'>): number {
+  return Math.max(1, getTaskAssigneeIds(task).length);
+}
+
+export function isTaskAssignedToUser(task: Pick<Task, 'userId' | 'assigneeIds'>, userId: string): boolean {
+  return getTaskAssigneeIds(task).includes(userId);
+}
+
 /**
  * Returns role-tailored cognitive load naming
  */
@@ -26,39 +41,6 @@ export function getCognitiveLoadLabel(load: CognitiveLoad, role: Role = 'content
         return 'Identity Design';
       default:
         return 'Conceptual Design';
-    }
-  } else if (role === 'video') {
-    switch (load) {
-      case 'low':
-        return 'Video Editing';
-      case 'medium':
-        return 'Motion Graphics';
-      case 'high':
-        return 'Creative Direction & Storyboard';
-      default:
-        return 'Motion Graphics';
-    }
-  } else if (role === 'ui_ux') {
-    switch (load) {
-      case 'low':
-        return 'UI Assets & Components';
-      case 'medium':
-        return 'Wireframing & Prototype';
-      case 'high':
-        return 'Design Systems & Architecture';
-      default:
-        return 'Wireframing & Prototype';
-    }
-  } else if (role === 'research') {
-    switch (load) {
-      case 'low':
-        return 'Secondary Research';
-      case 'medium':
-        return 'Competitive Analysis';
-      case 'high':
-        return 'Primary Research & Synthesis';
-      default:
-        return 'Market Research';
     }
   } else if (role === 'account_manager') {
     switch (load) {
@@ -182,24 +164,6 @@ export function getUserTag(user?: {
       badgeClass: 'bg-rose-500/15 text-rose-600 dark:text-rose-300 border-rose-500/30 font-semibold',
     };
   }
-  if (user.role === 'research') {
-    return {
-      label: 'Research',
-      badgeClass: 'bg-teal-500/15 text-teal-600 dark:text-teal-300 border-teal-500/30',
-    };
-  }
-  if (user.role === 'ui_ux') {
-    return {
-      label: 'UI/UX',
-      badgeClass: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300 border-cyan-500/30',
-    };
-  }
-  if (user.role === 'video') {
-    return {
-      label: 'Video',
-      badgeClass: 'bg-violet-500/15 text-violet-600 dark:text-violet-300 border-violet-500/30',
-    };
-  }
   if (user.role === 'account_manager') {
     return {
       label: 'Accounts',
@@ -252,17 +216,18 @@ export function quickWorkloadScore(userTasks: Task[]): number {
   let score = 0;
   for (const t of userTasks) {
     if (t.status === 'pipeline' || t.status === 'retainer' || t.status === 'done' || t.status === 'archived') continue;
+    const divisor = getTaskAssigneeCount(t);
     if (t.status === 'in_review') {
       const rate = IN_REVIEW_HOURLY_RATES[t.cognitiveLoad] ?? 0.15;
       const billableHours = getTaskBillableMs(t) / (1000 * 60 * 60);
-      score += billableHours * rate;
+      score += (billableHours * rate) / divisor;
     } else {
       const cw = COGNITIVE_LOAD_WEIGHTS[t.cognitiveLoad] ?? 1.0;
       const hasDeadline = Boolean(t.dueDate && t.dueDate.trim() !== '');
       const sw = t.status === 'in_progress' ? 1.0 : (hasDeadline ? 0.75 : 0.50);
       const days = getDaysRemaining(t.dueDate);
       const prox = hasDeadline ? getProximityMultiplier(days) : 1.0;
-      score += sw * cw * prox;
+      score += (sw * cw * prox) / divisor;
     }
   }
   return Math.round(score * 10) / 10;
@@ -611,6 +576,7 @@ export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
     let proximityMultiplier = 1.0;
     let taskScore = 0;
     let billableHours: number | undefined;
+    const assigneeCount = getTaskAssigneeCount(task);
 
     if (task.status === 'in_progress') {
       statusWeight = 1.0; // In progress: 1.0
@@ -619,7 +585,7 @@ export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
       if (daysRemaining !== null && daysRemaining < 0) {
         overdueCount++;
       }
-      taskScore = statusWeight * cognitiveWeight * proximityMultiplier;
+      taskScore = (statusWeight * cognitiveWeight * proximityMultiplier) / assigneeCount;
     } else if (task.status === 'todo') {
       if (hasDeadline) {
         statusWeight = 0.75; // To do with deadline: 0.75 (75% of in_progress)
@@ -632,13 +598,13 @@ export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
       if (daysRemaining !== null && daysRemaining < 0) {
         overdueCount++;
       }
-      taskScore = statusWeight * cognitiveWeight * proximityMultiplier;
+      taskScore = (statusWeight * cognitiveWeight * proximityMultiplier) / assigneeCount;
     } else if (task.status === 'in_review') {
       inReviewCount++;
       const ratePerHour = IN_REVIEW_HOURLY_RATES[task.cognitiveLoad] ?? 0.15;
       const billableMs = getTaskBillableMs(task);
       billableHours = billableMs / (1000 * 60 * 60);
-      taskScore = billableHours * ratePerHour;
+      taskScore = (billableHours * ratePerHour) / assigneeCount;
       statusWeight = ratePerHour;
       proximityMultiplier = 1.0; // In review ignores deadline proximity and does not count towards overdueCount
     }
@@ -741,7 +707,10 @@ export function exportWorkspaceXLS(tasks: Task[], users: { id: string; name: str
 
   const rows = tasks
     .map(t => {
-      const user = userMap.get(t.userId);
+      const assignees = getTaskAssigneeIds(t)
+        .map(id => userMap.get(id))
+        .filter((u): u is { id: string; name: string; email: string; role?: Role } => Boolean(u));
+      const user = assignees[0];
       const billableMs = getTaskBillableMs(t);
       const billableHoursStr = formatBillableHours(billableMs);
       const billableDetailedStr = formatBillableDetailed(billableMs);
@@ -752,9 +721,9 @@ export function exportWorkspaceXLS(tasks: Task[], users: { id: string; name: str
         t.title || '',
         statusLabel,
         t.cognitiveLoad || 'medium',
-        user?.name || 'Unassigned',
-        user?.email || '',
-        user?.role || '',
+        assignees.length > 0 ? assignees.map(u => u.name).join(', ') : 'Unassigned',
+        assignees.map(u => u.email).filter(Boolean).join(', '),
+        user?.role || t.team || '',
         t.dueDate || 'None',
         billableHoursStr,
         billableDetailedStr,
@@ -995,14 +964,17 @@ export function isWorkingDay(d: Date): boolean {
 }
 
 /**
- * Returns estimated daily hours allocated to a task split equally across its working days.
+ * Returns estimated daily hours allocated to a task split equally across its working days
+ * (using startDate if recorded, falling back to createdAt), divided by assignee count when perAssignee is true.
  */
-export function getTaskDailyEstimatedHours(task: Task, onDate?: Date): number {
+export function getTaskDailyEstimatedHours(task: Task, onDate?: Date, perAssignee: boolean = true): number {
   if (!task.estimatedHours || task.estimatedHours <= 0) return 0;
-  const start = task.createdAt ? new Date(task.createdAt) : new Date();
+  const startRaw = task.startDate || task.createdAt;
+  const start = startRaw ? new Date(startRaw) : new Date();
   const end = task.dueDate ? new Date(task.dueDate) : start;
   const workingDays = getWorkingDaysCount(start.toISOString(), end.toISOString());
-  const dailyHours = task.estimatedHours / workingDays;
+  const divisor = perAssignee ? getTaskAssigneeCount(task) : 1;
+  const dailyHours = task.estimatedHours / divisor / workingDays;
 
   if (!onDate) return Math.round(dailyHours * 10) / 10;
 
@@ -1025,19 +997,20 @@ export function getUserDailyAssignedHours(user: User, tasks: Task[], onDate: Dat
   const isTargetToday = targetDateStr === new Date().toISOString().slice(0, 10);
 
   for (const t of tasks) {
-    if (!t || t.userId !== user.id) continue;
+    if (!t || !isTaskAssignedToUser(t, user.id)) continue;
     if (!t.estimatedHours || t.estimatedHours <= 0) continue;
 
     if (isTargetToday) {
       // For today: include active assigned tasks (including assigned pipeline deliverables)
       if (t.status === 'pipeline' || t.status === 'todo' || t.status === 'in_progress' || t.status === 'in_review') {
-        const start = t.createdAt ? new Date(t.createdAt) : new Date();
+        const startRaw = t.startDate || t.createdAt;
+        const start = startRaw ? new Date(startRaw) : new Date();
         const end = t.dueDate ? new Date(t.dueDate) : start;
         const workingDays = getWorkingDaysCount(start.toISOString(), end.toISOString());
-        totalDailyHours += (t.estimatedHours / workingDays);
+        totalDailyHours += (t.estimatedHours / getTaskAssigneeCount(t) / workingDays);
       }
     } else {
-      const daily = getTaskDailyEstimatedHours(t, onDate);
+      const daily = getTaskDailyEstimatedHours(t, onDate, true);
       totalDailyHours += daily;
     }
   }
@@ -1083,21 +1056,29 @@ export function calculateTeamUtilization(teamUsers: User[], tasks: Task[], onDat
 
 /**
  * Calculates efficiency across a collection of tasks (Aggregate time taken / time estimated).
+ * Deduplicates by task id; when forUserId is passed, divides each task's estimate & billable time by assignee count.
  */
-export function calculateTasksEfficiency(taskList: Task[]): {
+export function calculateTasksEfficiency(
+  taskList: Task[],
+  options?: { forUserId?: string }
+): {
   efficiencyPercent: number;
   totalTimeTakenHours: number;
   totalEstimatedHours: number;
 } {
   let totalTimeTakenMs = 0;
   let totalEstimatedHours = 0;
+  const seen = new Set<string>();
 
   for (const t of taskList) {
-    if (!t) continue;
-    const billableMs = getTaskBillableMs(t);
+    if (!t || (t.id && seen.has(t.id))) continue;
+    if (t.id) seen.add(t.id);
+    if (options?.forUserId && !isTaskAssignedToUser(t, options.forUserId)) continue;
+    const divisor = options?.forUserId ? getTaskAssigneeCount(t) : 1;
+    const billableMs = getTaskBillableMs(t) / divisor;
     totalTimeTakenMs += billableMs;
     if (t.estimatedHours && t.estimatedHours > 0) {
-      totalEstimatedHours += t.estimatedHours;
+      totalEstimatedHours += t.estimatedHours / divisor;
     }
   }
 
@@ -1130,20 +1111,19 @@ export function formatHoursRatio(billableHours: number, estimatedHours: number):
 export interface DeliveryUnitInfo {
   id: string;
   name: string;
-  type: 'cd_team' | 'video' | 'ui_ux' | 'research' | 'accounts' | 'general';
+  type: 'cd_team' | 'accounts' | 'general';
   userIds: string[];
 }
 
 /**
- * Extracts delivery units across all boards and shared teams.
+ * Extracts delivery units across all boards.
  */
 export function getDeliveryUnits(users: User[], creativeDirectors: User[]): DeliveryUnitInfo[] {
   const units: DeliveryUnitInfo[] = [];
 
-  // 1. Creative Director Teams
   for (const cd of creativeDirectors) {
     const cdTeamUserIds = users
-      .filter(u => (u.id === cd.id || u.creativeDirectorId === cd.id) && u.role !== 'video' && u.role !== 'ui_ux' && u.role !== 'research')
+      .filter(u => u.id === cd.id || u.creativeDirectorId === cd.id)
       .map(u => u.id);
 
     units.push({
@@ -1151,39 +1131,6 @@ export function getDeliveryUnits(users: User[], creativeDirectors: User[]): Deli
       name: `${cd.name}'s Team`,
       type: 'cd_team',
       userIds: cdTeamUserIds,
-    });
-  }
-
-  // 2. Video Team
-  const videoUserIds = users.filter(u => u.role === 'video').map(u => u.id);
-  if (videoUserIds.length > 0) {
-    units.push({
-      id: 'unit-video',
-      name: 'Video Team',
-      type: 'video',
-      userIds: videoUserIds,
-    });
-  }
-
-  // 3. UI/UX Team
-  const uiUxUserIds = users.filter(u => u.role === 'ui_ux').map(u => u.id);
-  if (uiUxUserIds.length > 0) {
-    units.push({
-      id: 'unit-ui_ux',
-      name: 'UI/UX Team',
-      type: 'ui_ux',
-      userIds: uiUxUserIds,
-    });
-  }
-
-  // 4. Research Team
-  const researchUserIds = users.filter(u => u.role === 'research').map(u => u.id);
-  if (researchUserIds.length > 0) {
-    units.push({
-      id: 'unit-research',
-      name: 'Research Team',
-      type: 'research',
-      userIds: researchUserIds,
     });
   }
 

@@ -1,4 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 
 export const SUPERADMIN_EMAIL = 'kiran.s@zensciences.com';
 export const SESSION_COOKIE = 'zenflow_identity';
@@ -19,6 +20,7 @@ export interface Member {
   designation?: string;
   creativeDirectorId?: string;
   clusterLeadId?: string;
+  clickupApiKey?: string;
 }
 export interface Identity { email?: string; email_verified?: boolean; exp: number; firebase?: { sign_in_provider?: string } }
 export const isSuperadmin = (user: Member) => user.email.toLowerCase() === SUPERADMIN_EMAIL;
@@ -74,6 +76,14 @@ export const canEdit = (caller: Member, owner: Member | undefined) => {
   return caller.id === owner.id;
 };
 
+function getTaskAssigneeIdsServer(task: { userId?: string; assigneeIds?: string[] } | undefined): string[] {
+  if (!task) return [];
+  if (Array.isArray(task.assigneeIds) && task.assigneeIds.length > 0) {
+    return Array.from(new Set(task.assigneeIds.filter(Boolean)));
+  }
+  return task.userId ? [task.userId] : [];
+}
+
 // Explicit response fields: future credential fields are private by default.
 export function publicMember(user: any) {
   const result: Record<string, any> = {};
@@ -81,22 +91,29 @@ export function publicMember(user: any) {
     'id', 'name', 'email', 'role', 'avatarColor', 'createdAt', 'order', 'designation',
     'isCreativeDirector', 'creativeDirectorId',
     'isAdministrator', 'isBusinessLead', 'isClusterLead', 'isTeamLead', 'isAccountManager',
-    'isContentLead', 'isArtDirector', 'isContentSpecialist', 'isBrandDesigner', 'clusterLeadId'
+    'isContentLead', 'isArtDirector', 'isContentSpecialist', 'isBrandDesigner', 'clusterLeadId',
+    'selectedClickupSpaceId', 'selectedClickupSpaceName', 'clickupUserId', 'clickupUsername',
   ]) {
     if (user[key] !== undefined) result[key] = user[key];
   }
+  result.clickupConnected = Boolean(user.clickupApiKey || user.clickupConnected);
   return result;
 }
 export function redactPayload(value: any): any {
   if (Array.isArray(value)) return value.map(redactPayload);
   if (!value || typeof value !== 'object') return value;
-  if (typeof value.id === 'string' && typeof value.email === 'string' && typeof value.role === 'string') return publicMember(value);
+  if (typeof value.id === 'string' && typeof value.email === 'string' && (typeof value.role === 'string' || value.role === undefined)) {
+    return publicMember(value);
+  }
   // Task fields are explicitly constructed by handlers and contain no credentials.
-  // Preserve task arrays/objects without copying every activity record on each SSE event.
   if ((typeof value.userId === 'string' || value.userId === undefined || value.userId === null) && typeof value.title === 'string' &&
     !['secret', 'private_key', 'clickupApiKey'].some(key => key in value)) return value;
   return Object.fromEntries(Object.entries(value).filter(([key]) => !['secret', 'private_key', 'clickupApiKey'].includes(key))
     .map(([key, item]) => [key, redactPayload(item)]));
+}
+export function validSignature(raw: Buffer | undefined, signature: unknown, secret: string | undefined): boolean {
+  if (!raw || !secret || typeof signature !== 'string' || !/^[a-f0-9]{64}$/i.test(signature)) return false;
+  return timingSafeEqual(createHmac('sha256', secret).update(raw).digest(), Buffer.from(signature, 'hex'));
 }
 export function readCookie(req: Request): string {
   const part = req.headers.cookie?.split(';').find(item => item.trim().startsWith(`${SESSION_COOKIE}=`));
@@ -109,14 +126,23 @@ export function sameOriginMutation(req: Request): boolean {
   try { return new URL(origin).origin === `${req.protocol}://${req.get('host')}`; } catch { return false; }
 }
 
+const CLICKUP_SELF_EDIT_KEYS = new Set([
+  'clickupApiKey',
+  'selectedClickupSpaceId',
+  'selectedClickupSpaceName',
+  'clickupUserId',
+  'clickupUsername',
+]);
+
 export function createApiSecurity(options: {
-  getStore: () => { users: Member[]; tasks: { id: string; userId?: string; team?: string; status?: string }[] };
+  getStore: () => { users: Member[]; tasks: { id: string; userId?: string; assigneeIds?: string[]; team?: string; status?: string }[] };
   verify: (token: string) => Promise<Identity>;
 }) {
   return async (req: Request, res: Response, next: NextFunction) => {
     const routePath = req.path.replace(/\/+$/, '') || '/';
-    if ((req.method === 'GET' && routePath === '/health')) return next();
-    if (routePath.startsWith('/clickup/')) return res.status(410).json({ error: 'ClickUp integration has been removed. ZenFlow operates in standalone mode.' });
+    if (req.method === 'GET' && routePath === '/health') return next();
+    // ClickUp inbound webhook uses HMAC signature verification instead of a Google session.
+    if (req.method === 'POST' && routePath === '/clickup/webhook') return next();
     const bearer = req.get('authorization')?.match(/^Bearer (\S+)$/)?.[1];
     const token = bearer || readCookie(req);
     if (!token) return res.status(401).json({ error: 'Google authentication required' });
@@ -140,11 +166,20 @@ export function createApiSecurity(options: {
       const denied = () => res.status(403).json({ error: 'You do not have permission for this operation' });
       const owner = (id: unknown) => store.users.find(user => user.id === id);
       const edit = (id: unknown) => canEdit(caller, owner(id));
+      const canEditTask = (task: { userId?: string; assigneeIds?: string[]; status?: string } | undefined) => {
+        if (!task) return false;
+        const assignees = getTaskAssigneeIdsServer(task);
+        if (assignees.length === 0) return isCallerCD || isCallerAdmin || isCallerClusterLead || canCreatePipelineTask(caller);
+        return assignees.some(id => edit(id));
+      };
       const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
       req.body = body;
 
       if (routePath.startsWith('/audit/') && !manager) return denied();
       if (routePath.startsWith('/firestore/') && req.method !== 'GET' && !superadmin) return denied();
+      if (routePath === '/clickup/webhook/register' && !superadmin) return denied();
+      if (routePath.startsWith('/clickup/webhook/') && req.method === 'DELETE' && !superadmin) return denied();
+      if (routePath === '/clickup/sync-user-tasks' && !edit(body.userId)) return denied();
       if (routePath === '/auth/login' || routePath === '/auth/verify-email') body.email = caller.email;
 
       if (routePath === '/users/remap-tasks' && !superadmin) return denied();
@@ -162,11 +197,16 @@ export function createApiSecurity(options: {
         if (target && !edit(target.id)) return denied();
         if (req.method === 'DELETE' && (!manager || (target && isSuperadmin(target)))) return denied();
         if (req.method === 'PUT') {
+          const onlyClickupSelfFields = Object.keys(body).length > 0 && Object.keys(body).every(key => CLICKUP_SELF_EDIT_KEYS.has(key));
           if (!superadmin && !isCallerAdmin && (body.role === 'administrator' || body.isAdministrator)) return denied();
           if (!superadmin && !isCallerAdmin && (body.email !== undefined || body.isCreativeDirector !== undefined)) return denied();
-          if (!manager) return denied();
+          if (!manager && !(onlyClickupSelfFields && target?.id === caller.id)) return denied();
           if (!superadmin && !isCallerAdmin && body.creativeDirectorId !== undefined && body.creativeDirectorId !== caller.id) return denied();
+          if (body.clickupApiKey !== undefined && target?.id !== caller.id && !superadmin) return denied();
         }
+      }
+      if (routePath === '/tasks/pipeline-bundle' && req.method === 'POST') {
+        if (!canCreatePipelineTask(caller)) return denied();
       }
       if (routePath === '/tasks' && req.method === 'POST') {
         const isPipeline = body.status === 'pipeline' || !body.userId;
@@ -176,38 +216,53 @@ export function createApiSecurity(options: {
           if (!edit(body.userId) && !canCreatePipelineTask(caller)) return denied();
         }
       }
-      // Delegation is intentionally available to every authenticated member, across boards.
+      // Delegation (/tasks/:id/duplicate) is intentionally available to every authenticated member, across boards.
       const taskMatch = routePath.match(/^\/tasks\/([^/]+)$/);
       if (taskMatch && ['PUT', 'DELETE'].includes(req.method)) {
         const task = store.tasks.find(item => item.id === decodeURIComponent(taskMatch[1]));
-        const isPipeline = task ? (task.status === 'pipeline' || !task.userId) : false;
+        const isPipeline = task ? (task.status === 'pipeline' || getTaskAssigneeIdsServer(task).length === 0) : false;
         if (task) {
-          if (isPipeline && isCallerCD) {
-            // Creative Directors can edit and assign pipeline tasks across all teams
-          } else if (task.userId && !edit(task.userId)) {
+          if (isPipeline && (isCallerCD || isCallerAdmin || isCallerClusterLead)) {
+            // Leadership can edit and assign pipeline tasks across all teams
+          } else if (!canEditTask(task)) {
             return denied();
           }
         }
-        if (body.userId !== undefined && body.userId !== '') {
-          if (isCallerCD) {
-            // Creative Directors can assign matching-discipline users across all teams
-            const targetUser = store.users.find(u => u.id === body.userId);
-            const taskTeam = (task as any)?.team || (task?.userId && store.users.find(u => u.id === task.userId)?.role);
-            if (targetUser && taskTeam && targetUser.role && targetUser.role !== taskTeam) {
-              return res.status(400).json({ error: `Cannot assign task to a user of a different discipline (${targetUser.role} != ${taskTeam})` });
+        if (req.method === 'PUT') {
+          const requestedAssignees: string[] = [];
+          if (Array.isArray(body.assigneeIds)) {
+            for (const uid of body.assigneeIds) {
+              if (typeof uid === 'string' && uid.trim()) requestedAssignees.push(uid.trim());
             }
-          } else if (!edit(body.userId)) {
-            return denied();
+          } else if (typeof body.userId === 'string' && body.userId.trim()) {
+            requestedAssignees.push(body.userId.trim());
+          }
+          const existingAssignees = new Set(getTaskAssigneeIdsServer(task));
+          for (const uid of requestedAssignees) {
+            if (isCallerCD || isCallerAdmin || isCallerClusterLead) {
+              const targetUser = store.users.find(u => u.id === uid);
+              const taskTeam = (task as any)?.team || (task?.userId && store.users.find(u => u.id === task.userId)?.role);
+              if (targetUser && taskTeam && targetUser.role && targetUser.role !== taskTeam) {
+                return res.status(400).json({ error: `Cannot assign task to a user of a different discipline (${targetUser.role} != ${taskTeam})` });
+              }
+            } else if (!existingAssignees.has(uid) && !edit(uid)) {
+              return denied();
+            }
           }
         }
       }
       if (routePath === '/tasks/reorder' && req.method === 'POST' && Array.isArray(body.updates)) {
-        // Validate the entire batch before the existing handler can mutate any task.
         const tasks = new Map(store.tasks.map(task => [task.id, task]));
         for (const update of body.updates) {
           if (!update || typeof update !== 'object') continue;
           const task = tasks.get(update.id);
-          if ((task && !edit(task.userId)) || (update.userId !== undefined && !edit(update.userId))) return denied();
+          const isPipeline = task ? (task.status === 'pipeline' || getTaskAssigneeIdsServer(task).length === 0) : false;
+          if (task && !(isPipeline && (isCallerCD || isCallerAdmin || isCallerClusterLead)) && !canEditTask(task)) {
+            return denied();
+          }
+          if (update.userId !== undefined && !(isPipeline && (isCallerCD || isCallerAdmin || isCallerClusterLead)) && !edit(update.userId)) {
+            return denied();
+          }
         }
       }
 
@@ -219,6 +274,13 @@ export function createApiSecurity(options: {
       body.callerUserId = caller.id;
       body.callerEmail = caller.email;
       body.isSuperadmin = superadmin;
+      const savedKey = caller.clickupApiKey || store.users.find(user => user.clickupApiKey)?.clickupApiKey;
+      if (routePath !== '/clickup/verify') {
+        req.headers['x-clickup-api-key'] = savedKey || '';
+        body.apiKey = savedKey || '';
+        if (!routePath.startsWith('/users')) body.clickupApiKey = savedKey || '';
+        delete req.query.apiKey;
+      }
       const json = res.json.bind(res);
       res.json = ((value: any) => json(redactPayload(value))) as Response['json'];
       res.setHeader('Cache-Control', 'private, no-cache, must-revalidate');

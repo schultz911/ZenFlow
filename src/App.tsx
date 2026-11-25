@@ -20,7 +20,8 @@ import { TeamPipeline } from './components/TeamPipeline';
 import { DisciplineTaskModal } from './components/modals/DisciplineTaskModal';
 import { TaskAssignmentModal } from './components/TaskAssignmentModal';
 import { User, Task, TaskStatus } from './types';
-import { UserPlus, FileText, Palette, Video as VideoIcon, Layout, Search, Loader2, Trash2 } from 'lucide-react';
+import { getTaskAssigneeIds } from './utils/workload';
+import { UserPlus, FileText, Palette, Search, Trash2, AlertTriangle, X, Loader2 } from 'lucide-react';
 import { testConnection } from './lib/firebase';
 
 const EMPTY_TASKS: Task[] = [];
@@ -41,7 +42,7 @@ function DashboardContent() {
     activeDragInfo,
     setActiveDragInfo,
     moveTask,
-    deleteTask,
+    removeAssigneeOrDeleteTask,
     deleteUser,
     createTask,
     updateTask,
@@ -65,7 +66,10 @@ function DashboardContent() {
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [taskToDuplicate, setTaskToDuplicate] = useState<Task | null>(null);
-  const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+  const [duplicateTargetUserId, setDuplicateTargetUserId] = useState<string | undefined>(undefined);
+  const [duplicateTargetStatus, setDuplicateTargetStatus] = useState<TaskStatus | undefined>(undefined);
+  const [taskToDeleteState, setTaskToDeleteState] = useState<{ task: Task; targetUserId?: string } | null>(null);
+  const [workspaceNotice, setWorkspaceNotice] = useState<string | null>(null);
   const [isHoveringDeleteZone, setIsHoveringDeleteZone] = useState(false);
   const [analyticsModalOpen, setAnalyticsModalOpen] = useState(false);
   const [disciplineModalOpen, setDisciplineModalOpen] = useState(false);
@@ -87,7 +91,7 @@ function DashboardContent() {
 
   // Free pool resource jump and highlight handler
   const handleSelectFreeResource = useCallback((user: User) => {
-    if (user.role !== activeRoleTab) {
+    if (activeRoleTab !== 'all' && (user.role === 'content' || user.role === 'design') && user.role !== activeRoleTab) {
       setActiveRoleTab(user.role);
     }
     if (activeBoardId !== 'all') {
@@ -148,7 +152,7 @@ function DashboardContent() {
     return Array.from(map.values());
   }, [tasks, searchQuery, userNameMap]);
 
-  // Cross-role search result counts for global navigation
+  // Cross-role search result counts for global navigation (Content & Design)
   const searchRoleMatches = useMemo(() => {
     const trimmed = searchQuery.trim().toLowerCase();
     if (!trimmed) return null;
@@ -156,15 +160,17 @@ function DashboardContent() {
     const counts: Record<string, number> = {
       content: 0,
       design: 0,
-      video: 0,
-      ui_ux: 0,
-      research: 0,
     };
 
     const taskMatchesSet = new Set(filteredTasks.map(t => t.id));
     for (const t of tasks) {
       if (!taskMatchesSet.has(t.id)) continue;
-      const u = users.find(usr => usr.id === t.userId);
+      if (t.team && counts[t.team] !== undefined) {
+        counts[t.team]++;
+        continue;
+      }
+      const firstUid = getTaskAssigneeIds(t)[0];
+      const u = users.find(usr => usr.id === firstUid);
       if (u && u.role && counts[u.role] !== undefined) {
         counts[u.role]++;
       }
@@ -185,23 +191,30 @@ function DashboardContent() {
     return counts;
   }, [searchQuery, filteredTasks, tasks, users]);
 
-  // Filter users by role tab and active team board (video, UI/UX, and research are shared teams across all boards)
+  // Filter users by role tab ('all' | 'content' | 'design') and active team board
   // When search is active, show only users who match the query or have matching tasks
   const roleFilteredUsers = useMemo(() => {
     const trimmed = searchQuery.trim().toLowerCase();
     let boardUsers = users;
-    const isSharedSection = activeRoleTab === 'video' || activeRoleTab === 'ui_ux' || activeRoleTab === 'research';
-    
+
     // When searching, allow finding members across boards in the active role tab
-    if (activeBoardId !== 'all' && !isSharedSection && !trimmed) {
+    if (activeBoardId !== 'all' && !trimmed) {
       boardUsers = users.filter(u => u.id === activeBoardId || u.creativeDirectorId === activeBoardId);
     }
 
-    let filtered = boardUsers.filter(u => u.role === activeRoleTab);
+    let filtered =
+      activeRoleTab === 'all'
+        ? boardUsers.filter(u => u.role === 'content' || u.role === 'design')
+        : boardUsers.filter(u => u.role === activeRoleTab);
 
     // If search is active, only show users who match query or have matching tasks
     if (trimmed) {
-      const usersWithMatchingTasks = new Set(filteredTasks.map(t => t.userId));
+      const usersWithMatchingTasks = new Set<string>();
+      for (const t of filteredTasks) {
+        for (const uid of getTaskAssigneeIds(t)) {
+          usersWithMatchingTasks.add(uid);
+        }
+      }
       filtered = filtered.filter(u => {
         const matchesName = u.name.toLowerCase().includes(trimmed);
         const matchesEmail = u.email.toLowerCase().includes(trimmed);
@@ -240,18 +253,20 @@ function DashboardContent() {
 
   const prevTasksByUserIdRef = useRef<Map<string, Task[]>>(new Map());
 
-  // Partition tasks by userId with stable array references to prevent global Swimlane re-render cascades
+  // Partition tasks across every assigned userId with stable array references
   const tasksByUserId = useMemo(() => {
     const partitioned = new Map<string, Task[]>();
     for (const u of users) {
       partitioned.set(u.id, []);
     }
     for (const task of filteredTasks) {
-      const userList = partitioned.get(task.userId);
-      if (userList) {
-        userList.push(task);
-      } else {
-        partitioned.set(task.userId, [task]);
+      for (const uid of getTaskAssigneeIds(task)) {
+        const userList = partitioned.get(uid);
+        if (userList) {
+          userList.push(task);
+        } else {
+          partitioned.set(uid, [task]);
+        }
       }
     }
 
@@ -361,19 +376,23 @@ function DashboardContent() {
     setUserToDelete(u);
   }, []);
 
-  const handleOpenDuplicateTask = useCallback((task: Task) => {
+  const handleOpenDuplicateTask = useCallback((task: Task, targetUserId?: string, targetStatus?: TaskStatus) => {
+    setDuplicateTargetUserId(targetUserId);
+    setDuplicateTargetStatus(targetStatus);
     setTaskToDuplicate(task);
   }, []);
 
   const handleCloseDuplicateTask = useCallback(() => {
     setTaskToDuplicate(null);
+    setDuplicateTargetUserId(undefined);
+    setDuplicateTargetStatus(undefined);
   }, []);
 
   const handleDragTaskStart = useCallback(
-    (draggedTask: Task) => {
+    (draggedTask: Task, sourceUserId?: string) => {
       setActiveDragInfo({
         taskId: draggedTask.id,
-        sourceUserId: draggedTask.userId,
+        sourceUserId: sourceUserId || draggedTask.userId,
         sourceStatus: draggedTask.status,
         title: draggedTask.title,
         task: draggedTask,
@@ -388,19 +407,29 @@ function DashboardContent() {
     setIsHoveringDeleteZone(false);
   }, [setActiveDragInfo]);
 
-  const handleRequestDeleteTask = useCallback((taskIdOrTask: string | Task) => {
+  const handleRequestDeleteTask = useCallback((taskIdOrTask: string | Task, removeAssigneeId?: string) => {
     if (typeof taskIdOrTask === 'string') {
       const found = tasks.find(t => t.id === taskIdOrTask);
-      if (found) setTaskToDelete(found);
+      if (found) setTaskToDeleteState({ task: found, targetUserId: removeAssigneeId });
     } else {
-      setTaskToDelete(taskIdOrTask);
+      setTaskToDeleteState({ task: taskIdOrTask, targetUserId: removeAssigneeId });
     }
   }, [tasks]);
 
-  const handleConfirmDeleteTask = useCallback(async (taskId: string) => {
-    await deleteTask(taskId);
-    setTaskToDelete(null);
-  }, [deleteTask]);
+  const handleConfirmDeleteTask = useCallback(async (taskId: string, removeAssigneeId?: string) => {
+    await removeAssigneeOrDeleteTask(taskId, removeAssigneeId);
+    setTaskToDeleteState(null);
+  }, [removeAssigneeOrDeleteTask]);
+
+  const handleDisciplineMismatch = useCallback((message: string) => {
+    setWorkspaceNotice(message);
+  }, []);
+
+  useEffect(() => {
+    if (!workspaceNotice) return;
+    const timer = setTimeout(() => setWorkspaceNotice(null), 4500);
+    return () => clearTimeout(timer);
+  }, [workspaceNotice]);
 
   const handleQuickAddTask = useCallback(
     async (
@@ -582,10 +611,13 @@ function DashboardContent() {
               {searchRoleMatches && (
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-[11px] text-[var(--text-secondary)]">Matches in teams:</span>
-                  {(['content', 'design', 'video', 'ui_ux', 'research'] as const).map(role => {
-                    const count = searchRoleMatches[role] || 0;
+                  {(['all', 'content', 'design'] as const).map(role => {
+                    const count =
+                      role === 'all'
+                        ? (searchRoleMatches.content || 0) + (searchRoleMatches.design || 0)
+                        : searchRoleMatches[role] || 0;
                     if (count === 0 && role !== activeRoleTab) return null;
-                    const roleLabel = role === 'ui_ux' ? 'UI/UX' : role.charAt(0).toUpperCase() + role.slice(1);
+                    const roleLabel = role === 'all' ? 'All' : role.charAt(0).toUpperCase() + role.slice(1);
                     return (
                       <button
                         key={role}
@@ -606,9 +638,25 @@ function DashboardContent() {
             </div>
           )}
 
-          {/* Shared Team Pipeline (One centralized pipeline per team) */}
+          {workspaceNotice && (
+            <div className="mb-4 flex items-center justify-between gap-2 rounded-xl border border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-950/30 px-4 py-2.5 text-xs text-amber-800 dark:text-amber-300 shadow-xs">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                <span className="font-medium">{workspaceNotice}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWorkspaceNotice(null)}
+                className="rounded p-0.5 hover:bg-amber-200/50 dark:hover:bg-white/10"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
+          {/* Centralized Pipeline */}
           <TeamPipeline
-            team={activeRoleTab}
+            roleFilter={activeRoleTab}
             tasks={tasks}
             users={users}
             onOpenCreateModal={() => setDisciplineModalOpen(true)}
@@ -626,27 +674,25 @@ function DashboardContent() {
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-[#141414] border border-[var(--border)] text-neutral-500 dark:text-white/50 mb-3">
                 {searchQuery.trim() ? (
                   <Search className="h-6 w-6 text-blue-500" />
-                ) : activeRoleTab === 'content' ? (
-                  <FileText className="h-6 w-6 text-blue-500" />
                 ) : activeRoleTab === 'design' ? (
                   <Palette className="h-6 w-6 text-indigo-500" />
-                ) : activeRoleTab === 'video' ? (
-                  <VideoIcon className="h-6 w-6 text-violet-500" />
-                ) : activeRoleTab === 'ui_ux' ? (
-                  <Layout className="h-6 w-6 text-cyan-500" />
                 ) : (
-                  <Search className="h-6 w-6 text-teal-500" />
+                  <FileText className="h-6 w-6 text-blue-500" />
                 )}
               </div>
               <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">
                 {searchQuery.trim()
-                  ? `No matching tasks, clients, projects, or members found in ${activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab.charAt(0).toUpperCase() + activeRoleTab.slice(1)}`
-                  : `No members in ${activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab === 'video' ? 'Video' : activeRoleTab === 'content' ? 'Content' : activeRoleTab === 'design' ? 'Design' : activeRoleTab === 'research' ? 'Research' : activeRoleTab} yet`}
+                  ? `No matching tasks, clients, projects, or members found in ${activeRoleTab === 'all' ? 'All Teams' : activeRoleTab.charAt(0).toUpperCase() + activeRoleTab.slice(1)}`
+                  : activeRoleTab === 'all'
+                  ? 'No Content or Design members yet'
+                  : `No members in ${activeRoleTab === 'content' ? 'Content' : 'Design'} yet`}
               </h3>
               <p className="mt-1 text-xs text-[var(--text-secondary)] max-w-sm">
                 {searchQuery.trim()
-                  ? 'Try searching with different keywords, check other team tabs above, or clear the search query.'
-                  : `Add a new member with the ${activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab === 'research' ? 'Research' : activeRoleTab} role to generate their dedicated swimlane.`}
+                  ? 'Try searching with different keywords, check the filter tabs above, or clear the search query.'
+                  : activeRoleTab === 'all'
+                  ? 'Add team members with the Content or Design role to populate the workspace.'
+                  : `Add a new member with the ${activeRoleTab} role to generate their dedicated swimlane.`}
               </p>
               {searchQuery.trim() ? (
                 <button
@@ -662,7 +708,7 @@ function DashboardContent() {
                   className="mt-4 flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 transition-colors shadow-xs cursor-pointer"
                 >
                   <UserPlus className="h-3.5 w-3.5" />
-                  <span>Add {activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab === 'video' ? 'Video' : activeRoleTab === 'content' ? 'Content' : activeRoleTab === 'design' ? 'Design' : activeRoleTab === 'research' ? 'Research' : activeRoleTab} Member</span>
+                  <span>Add {activeRoleTab === 'design' ? 'Design' : activeRoleTab === 'content' ? 'Content' : 'Team'} Member</span>
                 </button>
               )}
             </div>
@@ -693,6 +739,7 @@ function DashboardContent() {
                     onDeleteUser={handleOpenDeleteUser}
                     onMoveTask={moveTask}
                     onDuplicateTask={handleOpenDuplicateTask}
+                    onDisciplineMismatch={handleDisciplineMismatch}
                     onOpenWorkloadModal={handleOpenWorkloadModal}
                     isCurrentUser={isCurrent}
                     onMoveUserUp={handleMoveUserUp}
@@ -760,14 +807,17 @@ function DashboardContent() {
         <DuplicateTaskModal
           isOpen={Boolean(taskToDuplicate)}
           task={taskToDuplicate}
+          initialTargetUserId={duplicateTargetUserId}
+          initialTargetStatus={duplicateTargetStatus}
           onClose={handleCloseDuplicateTask}
         />
 
         <DeleteTaskModal
-          isOpen={Boolean(taskToDelete)}
-          task={taskToDelete}
+          isOpen={Boolean(taskToDeleteState)}
+          task={taskToDeleteState?.task || null}
+          targetUserId={taskToDeleteState?.targetUserId}
           users={users}
-          onClose={() => setTaskToDelete(null)}
+          onClose={() => setTaskToDeleteState(null)}
           onConfirmDelete={handleConfirmDeleteTask}
         />
 
@@ -804,7 +854,7 @@ function DashboardContent() {
               e.preventDefault();
               setIsHoveringDeleteZone(false);
               if (activeDragInfo?.task) {
-                handleRequestDeleteTask(activeDragInfo.task);
+                handleRequestDeleteTask(activeDragInfo.task, activeDragInfo.sourceUserId);
                 setActiveDragInfo(null);
               }
             }}

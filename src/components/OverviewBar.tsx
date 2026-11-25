@@ -8,6 +8,7 @@ import {
   calculateTeamUtilization,
   calculateTasksEfficiency,
   formatHoursRatio,
+  getTaskAssigneeIds,
 } from '../utils/workload';
 import {
   Search,
@@ -105,24 +106,29 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
     return () => clearTimeout(timer);
   }, [localSearch, onSearchChange, searchQuery]);
 
-  // Filter users by active tab. Video, UI/UX, and Research are shared teams across all delivery teams so they don't filter by board
-  const isSharedSection = activeRoleTab === 'video' || activeRoleTab === 'ui_ux' || activeRoleTab === 'research';
+  // Filter users by active role filter (All, Content, or Design) and active team board
   const displayedUsers = useMemo(() => {
     let boardUsers = users;
-    if (activeBoardId !== 'all' && !isSharedSection) {
+    if (activeBoardId !== 'all') {
       boardUsers = users.filter(u => u.id === activeBoardId || u.creativeDirectorId === activeBoardId);
     }
-    return boardUsers.filter(u => u.role === activeRoleTab);
-  }, [users, activeRoleTab, activeBoardId, isSharedSection]);
+    return boardUsers.filter(u =>
+      activeRoleTab === 'all'
+        ? (u.role === 'content' || u.role === 'design')
+        : u.role === activeRoleTab
+    );
+  }, [users, activeRoleTab, activeBoardId]);
 
   // Calculate workload analytics & overload counts using indexed lookup (O(U+T))
   const { avgWorkload, overloadedMembersCount } = useMemo(() => {
     if (displayedUsers.length === 0) return { avgWorkload: 0, overloadedMembersCount: 0 };
     const tasksByUser = new Map<string, typeof tasks>();
     for (const t of tasks) {
-      const arr = tasksByUser.get(t.userId);
-      if (arr) arr.push(t);
-      else tasksByUser.set(t.userId, [t]);
+      for (const uid of getTaskAssigneeIds(t)) {
+        const arr = tasksByUser.get(uid);
+        if (arr) arr.push(t);
+        else tasksByUser.set(uid, [t]);
+      }
     }
 
     let overloaded = 0;
@@ -137,25 +143,21 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
     return { avgWorkload: avg, overloadedMembersCount: overloaded };
   }, [displayedUsers, tasks]);
 
-  // Single-pass computation for in_progress and todo counts filtered by active board and team role tab (O(U+T))
-  const { inProgressCount, todoCount } = useMemo(() => {
-    const displayedUserIds = new Set(displayedUsers.map(u => u.id));
-    let inProgress = 0;
-    let todo = 0;
-    for (const t of tasks) {
-      if (displayedUserIds.has(t.userId)) {
-        if (t.status === 'in_progress') inProgress++;
-        else if (t.status === 'todo') todo++;
-      }
-    }
-    return { inProgressCount: inProgress, todoCount: todo };
-  }, [displayedUsers, tasks]);
-
-  // Team tasks, utilization, and efficiency metrics
+  // Team tasks (deduplicated across multi-assignee tasks)
   const teamTasks = useMemo(() => {
     const displayedUserIds = new Set(displayedUsers.map(u => u.id));
-    return tasks.filter(t => displayedUserIds.has(t.userId));
+    return tasks.filter(t => getTaskAssigneeIds(t).some(id => displayedUserIds.has(id)));
   }, [displayedUsers, tasks]);
+
+  const { inProgressCount, todoCount } = useMemo(() => {
+    let inProgress = 0;
+    let todo = 0;
+    for (const t of teamTasks) {
+      if (t.status === 'in_progress') inProgress++;
+      else if (t.status === 'todo') todo++;
+    }
+    return { inProgressCount: inProgress, todoCount: todo };
+  }, [teamTasks]);
 
   const teamUtilization = useMemo(() => {
     return calculateTeamUtilization(displayedUsers, tasks);
@@ -170,7 +172,9 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
       <section className="surface p-4 sm:p-5" aria-label="Team overview">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-baseline gap-3">
-            <h1 className="text-xl font-semibold tracking-tight">{activeRoleTab === 'ui_ux' ? 'UI/UX' : activeRoleTab.charAt(0).toUpperCase() + activeRoleTab.slice(1)}</h1>
+            <h1 className="text-xl font-semibold tracking-tight">
+              {activeRoleTab === 'all' ? 'All Teams' : activeRoleTab === 'content' ? 'Content' : 'Design'}
+            </h1>
             <span className="text-xs text-[var(--text-secondary)]">{displayedUsers.length} {displayedUsers.length === 1 ? 'member' : 'members'}</span>
           </div>
           {overloadedMembersCount > 0 && <span className="flex items-center gap-1.5 text-xs font-medium text-red-700 dark:text-red-300"><AlertTriangle aria-hidden="true" className="h-3.5 w-3.5" />{overloadedMembersCount} {overloadedMembersCount === 1 ? 'member needs' : 'members need'} workload review</span>}
@@ -241,8 +245,8 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
 
         {/* Right Action Utilities: Team Board Selector & Export Workspace */}
         <div className="flex w-full sm:w-auto flex-wrap items-center gap-2">
-          {/* Team Board Selector (Superadmin & Creative Directors - hidden on shared teams Video & UI/UX) */}
-          {canSwitchBoards && !isSharedSection && (
+          {/* Team Board Selector (Superadmin & Creative Directors) */}
+          {canSwitchBoards && (
             <div className="relative" ref={boardDropdownRef}>
               <button
                 id="board-selector-btn"

@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Task, User } from '../types';
-import { getDaysRemaining } from '../utils/workload';
+import { getDaysRemaining, getTaskAssigneeIds } from '../utils/workload';
 import { AlertTriangle, Clock } from 'lucide-react';
 
 interface MarqueeRibbonProps {
@@ -87,7 +87,8 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
           }`}
         >
           {displayList.map((task, idx) => {
-            const user = userMap.get(task.userId);
+            const firstUid = getTaskAssigneeIds(task)[0];
+            const user = firstUid ? userMap.get(firstUid) : undefined;
             // Use pre-computed days from useMemo — no redundant getDaysRemaining call
             const isOverdue = task.days < 0;
 

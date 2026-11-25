@@ -8,6 +8,8 @@ import {
   calculateTasksEfficiency,
   formatHoursRatio,
   getDeliveryUnits,
+  calculateUserWorkload,
+  getUserDailyAssignedHours,
 } from '../src/utils/workload';
 import { Task, User } from '../src/types';
 
@@ -128,33 +130,61 @@ test('efficiency calculates aggregate time taken / time estimated across tasks',
   assert.equal(formatHoursRatio(result.totalTimeTakenHours, result.totalEstimatedHours), '(14h / 20h)');
 });
 
-test('delivery units group CD teams, Video, Research, and UI/UX', () => {
+test('delivery units group CD teams (Content & Design only)', () => {
   const users: User[] = [
     { id: 'cd1', name: 'Creative Director 1', email: 'cd1@example.invalid', role: 'content', isCreativeDirector: true, createdAt: '2026-10-01' },
     { id: 'm1', name: 'Writer', email: 'w@example.invalid', role: 'content', creativeDirectorId: 'cd1', createdAt: '2026-10-01' },
-    { id: 'v1', name: 'Animator', email: 'v@example.invalid', role: 'video', createdAt: '2026-10-01' },
-    { id: 'u1', name: 'Product Designer', email: 'u@example.invalid', role: 'ui_ux', createdAt: '2026-10-01' },
-    { id: 'r1', name: 'Researcher', email: 'r@example.invalid', role: 'research', createdAt: '2026-10-01' },
+    { id: 'm2', name: 'Designer', email: 'd@example.invalid', role: 'design', creativeDirectorId: 'cd1', createdAt: '2026-10-01' },
   ];
 
   const cds = users.filter(u => u.isCreativeDirector);
   const units = getDeliveryUnits(users, cds);
 
-  assert.equal(units.length, 4);
+  assert.equal(units.length, 1);
   const cdUnit = units.find(u => u.type === 'cd_team');
   assert.ok(cdUnit);
   assert.equal(cdUnit?.userIds.includes('m1'), true);
+  assert.equal(cdUnit?.userIds.includes('m2'), true);
+});
 
-  const videoUnit = units.find(u => u.type === 'video');
-  assert.ok(videoUnit);
-  assert.equal(videoUnit?.userIds.includes('v1'), true);
+test('multi-assignee shared task divides workload score, daily hours, and efficiency evenly across assignees', () => {
+  const alice: User = { id: 'u1', name: 'Alice', email: 'alice@example.invalid', role: 'content', createdAt: '2026-10-01' };
+  const sharedTask: Task = {
+    id: 't-shared',
+    userId: 'u1',
+    assigneeIds: ['u1', 'u2'],
+    title: 'Shared Brand Copy',
+    status: 'todo',
+    cognitiveLoad: 'medium', // base score 2
+    order: 0,
+    estimatedHours: 8,
+    inProgressDurationMs: 4 * 3600000,
+    createdAt: '2026-10-26T09:00:00.000Z',
+    startDate: '2026-10-26',
+    dueDate: '2026-10-27', // 2 working days -> 8h total / 2 days / 2 assignees = 2h/day per user
+    updatedAt: '2026-10-26T09:00:00.000Z',
+  };
 
-  const uiUxUnit = units.find(u => u.type === 'ui_ux');
-  assert.ok(uiUxUnit);
-  assert.equal(uiUxUnit?.userIds.includes('u1'), true);
+  const singleTask: Task = {
+    ...sharedTask,
+    id: 't-single',
+    assigneeIds: ['u1'],
+  };
 
-  const researchUnit = units.find(u => u.type === 'research');
-  assert.ok(researchUnit);
-  assert.equal(researchUnit?.userIds.includes('r1'), true);
+  assert.equal(getTaskDailyEstimatedHours(sharedTask, new Date('2026-10-26T12:00:00Z')), 2);
+  assert.equal(getUserDailyAssignedHours(alice, [sharedTask], new Date('2026-10-26T12:00:00Z')), 2);
+
+  const singleWl = calculateUserWorkload([singleTask]);
+  const sharedWl = calculateUserWorkload([sharedTask]);
+  assert.ok(sharedWl.totalScore < singleWl.totalScore);
+  assert.ok(Math.abs(sharedWl.totalScore - singleWl.totalScore / 2) <= 0.1);
+
+  const userEff = calculateTasksEfficiency([sharedTask], { forUserId: 'u1' });
+  assert.equal(userEff.totalTimeTakenHours, 2); // 4h / 2
+  assert.equal(userEff.totalEstimatedHours, 4); // 8h / 2
+  assert.equal(userEff.efficiencyPercent, 50);
+
+  const teamEff = calculateTasksEfficiency([sharedTask, sharedTask]);
+  assert.equal(teamEff.totalEstimatedHours, 8); // deduplicated by task ID
 });
 
