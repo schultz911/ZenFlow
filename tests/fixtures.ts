@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import { createHash } from 'node:crypto';
 import ts from 'typescript';
 import express from 'express';
 import { createApiSecurity, redactPayload, SUPERADMIN_EMAIL, SESSION_COOKIE, sameOriginMutation, validSignature } from '../server/security';
@@ -32,6 +33,7 @@ export async function fixtureServer(directory: string) {
       { id: 'bob', name: 'Bob', email: 'bob@example.invalid', role: 'design' },
     ],
     tasks: [fixtureTask('a', 'alice'), fixtureTask('b', 'bob')],
+    parentTasks: [],
   };
   const events: any[] = [], audit: any[] = [];
   const noop = () => {};
@@ -40,9 +42,11 @@ export async function fixtureServer(directory: string) {
   const ctx: any = {
     store, stateRevision: 1, maybeArchive: noop, deduplicateUsers: noop,
     saveStore: noop, dbSaveUser: asyncNoop, dbSaveTask: asyncNoop,
+    dbSaveParentTask: asyncNoop, dbDeleteParentTask: asyncNoop, dbBatchSaveParentTasks: asyncNoop,
     dbDeleteUser: asyncNoop, dbDeleteTask: asyncNoop, dbBatchDeleteTasks: asyncNoop,
     dbBatchSaveTasks: asyncNoop, dbBatchSaveUsers: asyncNoop,
     dbPurgeAllCollections: asyncNoop,
+    createHash,
     firestoreLimiter: (_req: any, _res: any, next: any) => next(),
     ensureSuperadmin: (s: any) => {
       s.users = s.users.filter((u: any) => u.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase());
@@ -76,6 +80,16 @@ export async function fixtureServer(directory: string) {
   };
   for (const name of [
     'sanitizeString',
+    'validateHttpUrl',
+    'sanitizeUrlList',
+    'sanitizeDisciplineMetadata',
+    'migrateLegacyTaskFields',
+    'hydrateSubtasksFromParents',
+    'hashClickupDescription',
+    'buildParentClickupMarkdown',
+    'buildSubtaskClickupMarkdown',
+    'pushSafeClickupDescription',
+    'syncParentDescriptionToClickUp',
     'formatBillableHoursServer',
     'isCallerAuthorizedForPipeline',
     'getTaskAssigneeIdsServer',
@@ -135,6 +149,7 @@ export async function fixtureServer(directory: string) {
   const url = `http://127.0.0.1:${address.port}`;
   return { store, events, audit, ctx, url,
     migrateLegacyRoles: () => ctx.migrateLegacyRoles(store),
+    hydrateSubtasksFromParents: () => ctx.hydrateSubtasksFromParents(store),
     enableLiveBroadcast: () => { ctx.broadcastEvent = vm.runInNewContext(compile(functions.get('broadcastEvent')!) + '; broadcastEvent', ctx); },
     request: (route: string, who = 'alice', method = 'GET', body?: any, headers: Record<string, string> = {}) => fetch(url + '/api' + route, {
       method, headers: { ...(who ? { Authorization: `Bearer ${who}` } : {}), 'Content-Type': 'application/json', ...headers },

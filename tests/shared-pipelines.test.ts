@@ -48,7 +48,11 @@ test('role-based task creation: Accounts and special roles can create tasks; reg
     client: 'Client X',
     project: 'Q4 Content Push',
     priority: 'high',
-    disciplineMetadata: { contentType: 'Blog Post', wordCount: 1200 },
+    disciplineMetadata: {
+      contentType: 'Blog Post',
+      contentSpecifications: '1200 words, SEO optimized',
+      sourceContentReferences: ['https://docs.google.com/document/d/source-1'],
+    },
   });
   assert.equal(resAcct.status, 201);
   const taskAcct = await resAcct.json();
@@ -57,20 +61,26 @@ test('role-based task creation: Accounts and special roles can create tasks; reg
   assert.equal(taskAcct.team, 'content');
   assert.equal(taskAcct.userId, undefined); // Initially Unassigned!
   assert.equal(taskAcct.priority, 'high');
-  assert.equal(taskAcct.disciplineMetadata.wordCount, 1200);
+  assert.equal(taskAcct.disciplineMetadata.contentSpecifications, '1200 words, SEO optimized');
+  assert.deepEqual(taskAcct.disciplineMetadata.sourceContentReferences, ['https://docs.google.com/document/d/source-1']);
 
   // Creative Director creates design pipeline task -> SUCCEEDS (201)
   const resCD = await server.request('/tasks', 'cd', 'POST', {
     title: 'Brand Design Concept',
     status: 'pipeline',
     team: 'design',
-    disciplineMetadata: { assetType: 'Key Visual', dimensions: '1080x1080' },
+    disciplineMetadata: {
+      assetType: 'Key Visual',
+      designSpecifications: '1080x1080 Figma export',
+      brandAssetsReferences: ['https://figma.com/file/brand-assets'],
+    },
   });
   assert.equal(resCD.status, 201);
   const taskCD = await resCD.json();
   assert.equal(taskCD.team, 'design');
   assert.equal(taskCD.userId, undefined); // Unassigned
-  assert.equal(taskCD.disciplineMetadata.dimensions, '1080x1080');
+  assert.equal(taskCD.disciplineMetadata.designSpecifications, '1080x1080 Figma export');
+  assert.deepEqual(taskCD.disciplineMetadata.brandAssetsReferences, ['https://figma.com/file/brand-assets']);
 }));
 
 test('Creative Directors can assign pipeline tasks to matching-discipline users across all teams', async () => withServer(async server => {
@@ -168,8 +178,16 @@ test('pipeline-bundle creates linked Content & Design subtasks under a ClickUp p
       clickupListId: 'list-1',
       clickupListName: 'Launch',
       disciplineSpecs: {
-        content: { contentType: 'Blog Post', wordCount: 1200 },
-        design: { assetType: 'Hero Banner', dimensions: '1920x1080' },
+        content: {
+          contentType: 'Blog Post',
+          contentSpecifications: '1200 words, narrative angle',
+          sourceContentReferences: ['https://docs.google.com/document/d/src'],
+        },
+        design: {
+          assetType: 'Hero Banner',
+          designSpecifications: '1920x1080 PNG + Figma',
+          brandAssetsReferences: ['https://figma.com/file/assets'],
+        },
       },
     });
     assert.equal(bundleRes.status, 201);
@@ -342,4 +360,236 @@ test('Existing tasks without team field migrate cleanly on server startup', asyn
   const found = allTasks.find((t: any) => t.id === 'legacy-1');
   assert.ok(found);
   assert.equal(found.title, 'Old Design Task');
+}));
+
+test('ParentTask collection, sibling Brief/BrandGuidelines sync, conflict-safe ClickUp sync, URL validation, and orphan cleanup', async () => withServer(async server => {
+  const realFetch = globalThis.fetch;
+  const clickupState = new Map<string, { description: string }>();
+  const clickupCalls: Array<{ url: string; method: string; body: any }> = [];
+  let seq = 200;
+
+  (globalThis as any).fetch = async (url: string, init?: any) => {
+    const u = String(url);
+    if (u.startsWith('https://api.clickup.com/')) {
+      const method = init?.method || 'GET';
+      const body = init?.body ? JSON.parse(init.body) : null;
+      clickupCalls.push({ url: u, method, body });
+
+      if (method === 'POST' && u.includes('/list/') && u.endsWith('/task')) {
+        seq++;
+        const id = `cu-${seq}`;
+        clickupState.set(id, { description: body?.description || '' });
+        return new Response(JSON.stringify({ id, url: `https://app.clickup.com/t/${id}`, description: body?.description || '' }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
+      const taskMatch = u.match(/\/api\/v2\/task\/([^/?]+)$/);
+      if (taskMatch) {
+        const cuId = taskMatch[1];
+        const current = clickupState.get(cuId) || { description: '' };
+        if (method === 'GET') {
+          return new Response(JSON.stringify({ id: cuId, description: current.description, time_spent: 0, assignees: [] }), { status: 200 });
+        }
+        if (method === 'PUT') {
+          if (typeof body?.description === 'string') {
+            current.description = body.description;
+            clickupState.set(cuId, current);
+          }
+          return new Response(JSON.stringify({ id: cuId, description: current.description }), { status: 200 });
+        }
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    }
+    return realFetch(url, init);
+  };
+
+  try {
+    // 1. Invalid URLs must be rejected with 400
+    const badBrandRes = await server.request('/tasks/pipeline-bundle', 'acct', 'POST', {
+      title: 'Bad URL Test',
+      brandGuidelines: 'ftp://invalid.example.com',
+      disciplines: ['content'],
+    });
+    assert.equal(badBrandRes.status, 400);
+
+    const badRefRes = await server.request('/tasks/pipeline-bundle', 'acct', 'POST', {
+      title: 'Bad Ref Test',
+      disciplines: ['design'],
+      disciplineSpecs: { design: { brandAssetsReferences: ['not-a-url'] } },
+    });
+    assert.equal(badRefRes.status, 400);
+
+    // 2. Create Content + Design bundle with Brief + Brand Guidelines
+    const bundleRes = await server.request('/tasks/pipeline-bundle', 'acct', 'POST', {
+      title: 'Q1 Brand Campaign',
+      description: 'Long campaign brief across both teams.',
+      brandGuidelines: 'https://brand.example.com/guidelines',
+      disciplines: ['content', 'design'],
+      clickupSpaceId: 'sp-1',
+      clickupListId: 'list-1',
+      disciplineSpecs: {
+        content: {
+          contentType: 'Whitepaper',
+          contentSpecifications: '2000 words executive tone',
+          sourceContentReferences: ['https://docs.example.com/a', 'https://docs.example.com/b'],
+        },
+        design: {
+          assetType: 'Presentation Deck',
+          designSpecifications: '16:9 dark theme slides',
+          brandAssetsReferences: ['https://figma.com/file/xyz'],
+        },
+      },
+    });
+    assert.equal(bundleRes.status, 201);
+    const bundle = await bundleRes.json();
+    assert.equal(server.store.parentTasks.length, 1);
+    const parentRecord = server.store.parentTasks[0];
+    assert.equal(parentRecord.id, bundle.parentTaskId);
+    assert.equal(parentRecord.brief, 'Long campaign brief across both teams.');
+    assert.equal(parentRecord.brandGuidelines, 'https://brand.example.com/guidelines');
+    assert.ok(parentRecord.lastSyncedClickupDescHash);
+
+    const contentSub = bundle.tasks.find((t: any) => t.team === 'content');
+    const designSub = bundle.tasks.find((t: any) => t.team === 'design');
+    assert.equal(contentSub.description, 'Long campaign brief across both teams.');
+    assert.equal(designSub.brandGuidelines, 'https://brand.example.com/guidelines');
+
+    // ClickUp parent got clean Brief + Brand Guidelines (no markers); subtasks got only their specs
+    const cuParentDesc = clickupState.get(bundle.clickupParentTaskId)?.description || '';
+    assert.ok(cuParentDesc.includes('Long campaign brief across both teams.'));
+    assert.ok(cuParentDesc.includes('https://brand.example.com/guidelines'));
+    assert.equal(cuParentDesc.includes('[ZenFlow]'), false);
+
+    const cuContentDesc = clickupState.get(contentSub.clickupTaskId)?.description || '';
+    assert.ok(cuContentDesc.includes('2000 words executive tone'));
+    assert.ok(cuContentDesc.includes('https://docs.example.com/a'));
+    assert.equal(cuContentDesc.includes('Long campaign brief'), false);
+
+    // 3. Status/assignee update must NOT send description to ClickUp
+    clickupCalls.length = 0;
+    const statusMoveRes = await server.request(`/tasks/${contentSub.id}`, 'cd', 'PUT', {
+      userId: 'alice',
+      status: 'todo',
+      dueDate: '2026-12-10',
+    });
+    assert.equal(statusMoveRes.status, 200);
+    await new Promise(r => setTimeout(r, 30));
+    const putWithDescOnStatus = clickupCalls.filter(c => c.method === 'PUT' && c.body && 'description' in c.body);
+    assert.equal(putWithDescOnStatus.length, 0);
+
+    // 4. Editing Brief on Content subtask updates ParentTask, propagates to Design sibling, and updates ClickUp parent when unmodified
+    const briefEditRes = await server.request(`/tasks/${contentSub.id}`, 'cd', 'PUT', {
+      description: 'Updated shared campaign brief v2.',
+      brandGuidelines: 'https://brand.example.com/v2',
+    });
+    assert.equal(briefEditRes.status, 200);
+    await new Promise(r => setTimeout(r, 40));
+
+    assert.equal(server.store.parentTasks[0].brief, 'Updated shared campaign brief v2.');
+    assert.equal(server.store.parentTasks[0].brandGuidelines, 'https://brand.example.com/v2');
+    const updatedDesignSub = server.store.tasks.find((t: any) => t.id === designSub.id);
+    assert.equal(updatedDesignSub.description, 'Updated shared campaign brief v2.');
+    assert.equal(updatedDesignSub.brandGuidelines, 'https://brand.example.com/v2');
+    assert.ok((clickupState.get(bundle.clickupParentTaskId)?.description || '').includes('Updated shared campaign brief v2.'));
+
+    // 5. Conflict guard: if someone manually edits ClickUp parent description, ZenFlow preserves it and posts a comment instead
+    clickupState.set(bundle.clickupParentTaskId, { description: 'Manual ClickUp notes written by PM — do not overwrite!' });
+    clickupCalls.length = 0;
+    const briefConflictRes = await server.request(`/tasks/${contentSub.id}`, 'cd', 'PUT', {
+      description: 'Brief v3 from ZenFlow',
+    });
+    assert.equal(briefConflictRes.status, 200);
+    await new Promise(r => setTimeout(r, 40));
+
+    assert.equal(
+      clickupState.get(bundle.clickupParentTaskId)?.description,
+      'Manual ClickUp notes written by PM — do not overwrite!'
+    );
+    assert.ok(
+      clickupCalls.some(
+        c =>
+          c.method === 'POST' &&
+          c.url.includes(`/task/${bundle.clickupParentTaskId}/comment`) &&
+          String(c.body?.comment_text || '').includes('Brief v3 from ZenFlow')
+      )
+    );
+
+    // 6. Deleting both subtasks cleans up orphaned ParentTask
+    await server.request(`/tasks/${contentSub.id}`, 'root', 'DELETE');
+    assert.equal(server.store.parentTasks.length, 1);
+    await server.request(`/tasks/${designSub.id}`, 'root', 'DELETE');
+    assert.equal(server.store.parentTasks.length, 0);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}));
+
+test('Non-destructive legacy task migration folds old metadata & attachments idempotently', async () => withServer(async server => {
+  server.store.tasks.push(
+    {
+      ...fixtureTaskSafe('legacy-content', 'alice'),
+      team: 'content',
+      parentTaskId: 'parent-legacy-1',
+      parentTaskTitle: 'Legacy Parent',
+      isSubtask: true,
+      description: 'Shared legacy brief',
+      attachments: ['https://drive.google.com/file/1'],
+      disciplineMetadata: {
+        contentType: 'Case Study',
+        deliverable: 'Google Doc Draft',
+        wordCount: 1500,
+        brief: 'https://docs.google.com/document/d/outline',
+        relevantRequirements: 'Include customer quote',
+      },
+    } as any,
+    {
+      ...fixtureTaskSafe('legacy-design', 'bob'),
+      team: 'design',
+      parentTaskId: 'parent-legacy-1',
+      parentTaskTitle: 'Legacy Parent',
+      isSubtask: true,
+      description: 'Shared legacy brief',
+      attachments: ['https://figma.com/file/legacy-kit'],
+      disciplineMetadata: {
+        assetType: 'Infographic',
+        dimensions: '1080x1920',
+        format: 'Figma',
+        quantity: 3,
+        designSpecifications: 'Use dark palette',
+      },
+    } as any
+  );
+
+  const firstRun = server.hydrateSubtasksFromParents();
+  assert.equal(firstRun, true);
+
+  const contentTask = server.store.tasks.find((t: any) => t.id === 'legacy-content');
+  assert.equal(contentTask.disciplineMetadata.contentType, 'Case Study');
+  assert.ok(contentTask.disciplineMetadata.contentSpecifications.includes('Deliverable Format: Google Doc Draft'));
+  assert.ok(contentTask.disciplineMetadata.contentSpecifications.includes('Word Count Target: 1500'));
+  assert.ok(contentTask.disciplineMetadata.contentSpecifications.includes('Include customer quote'));
+  assert.deepEqual(Array.from(contentTask.disciplineMetadata.sourceContentReferences), [
+    'https://docs.google.com/document/d/outline',
+    'https://drive.google.com/file/1',
+  ]);
+  assert.equal(contentTask.attachments, undefined);
+
+  const designTask = server.store.tasks.find((t: any) => t.id === 'legacy-design');
+  assert.equal(designTask.disciplineMetadata.assetType, 'Infographic');
+  assert.ok(designTask.disciplineMetadata.designSpecifications.includes('Use dark palette'));
+  assert.ok(designTask.disciplineMetadata.designSpecifications.includes('Dimensions: 1080x1920'));
+  assert.ok(designTask.disciplineMetadata.designSpecifications.includes('Deliverable Format: Figma'));
+  assert.ok(designTask.disciplineMetadata.designSpecifications.includes('Quantity: 3'));
+  assert.deepEqual(Array.from(designTask.disciplineMetadata.brandAssetsReferences), ['https://figma.com/file/legacy-kit']);
+  assert.equal(designTask.attachments, undefined);
+
+  // ParentTask backfilled
+  const parent = server.store.parentTasks.find((p: any) => p.id === 'parent-legacy-1');
+  assert.ok(parent);
+  assert.equal(parent.brief, 'Shared legacy brief');
+
+  // Second run is strictly idempotent
+  const secondRun = server.hydrateSubtasksFromParents();
+  assert.equal(secondRun, false);
 }));

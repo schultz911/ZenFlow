@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express, { Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
+import { createHash } from 'node:crypto';
 import compression from 'compression';
 import { createApiSecurity, redactPayload, SESSION_COOKIE, sameOriginMutation, validSignature } from './server/security';
 import { readAuditTail, writeSse } from './server/resources';
@@ -50,6 +51,26 @@ interface TaskActivity {
   details?: string;
 }
 
+interface ParentTask {
+  id: string;
+  title: string;
+  brief?: string;
+  brandGuidelines?: string;
+  client?: string;
+  project?: string;
+  clickupParentTaskId?: string;
+  clickupUrl?: string;
+  clickupSpaceId?: string;
+  clickupSpaceName?: string;
+  clickupFolderId?: string;
+  clickupFolderName?: string;
+  clickupListId?: string;
+  clickupListName?: string;
+  lastSyncedClickupDescHash?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface Task {
   id: string;
   userId?: string;
@@ -57,6 +78,8 @@ interface Task {
   team?: 'content' | 'design' | 'account_manager' | 'administrator' | 'none';
   title: string;
   description?: string;
+  brandGuidelines?: string;
+  lastSyncedClickupDescHash?: string;
   dueDate?: string;
   startDate?: string;
   cognitiveLoad: 'low' | 'medium' | 'high';
@@ -95,6 +118,7 @@ interface Task {
 interface AppStore {
   users: User[];
   tasks: Task[];
+  parentTasks: ParentTask[];
 }
 
 const SUPERADMIN_EMAIL = 'kiran.s@zensciences.com';
@@ -275,9 +299,11 @@ function loadStore(): AppStore {
         const cleanTasks = parsed.tasks.filter(
           (t: Task) => !DUMMY_TASK_IDS.has(t.id) && !(t.userId && DUMMY_USER_IDS.has(t.userId))
         );
-        const migrated: AppStore = { users: cleanUsers, tasks: cleanTasks };
-        const { changed } = migrateLegacyRoles(migrated);
-        if (changed) {
+        const cleanParents: ParentTask[] = Array.isArray(parsed.parentTasks) ? parsed.parentTasks : [];
+        const migrated: AppStore = { users: cleanUsers, tasks: cleanTasks, parentTasks: cleanParents };
+        const { changed: rolesChanged } = migrateLegacyRoles(migrated);
+        const normChanged = hydrateSubtasksFromParents(migrated);
+        if (rolesChanged || normChanged) {
           saveStore(migrated);
         }
         return migrated;
@@ -290,6 +316,7 @@ function loadStore(): AppStore {
   const initialStore: AppStore = {
     users: [],
     tasks: [],
+    parentTasks: [],
   };
   saveStore(initialStore);
   return initialStore;
@@ -382,12 +409,223 @@ function isCallerAuthorizedForPipeline(caller: any): boolean {
   );
 }
 
-function sanitizeString(input: unknown): string {
+function sanitizeString(input: unknown, maxLen = 1000): string {
   if (typeof input !== 'string') return '';
   return input
     .trim()
     .replace(/[<>]/g, '') // Strip basic HTML tags
-    .slice(0, 1000); // Enforce max string length boundary
+    .slice(0, maxLen); // Enforce max string length boundary
+}
+
+function validateHttpUrl(input: unknown): { value?: string; error?: string } {
+  if (input === undefined || input === null) return { value: undefined };
+  if (typeof input !== 'string') return { error: 'Link must be a valid URL string' };
+  const trimmed = input.trim();
+  if (!trimmed) return { value: undefined };
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { error: 'URL must start with http:// or https://' };
+    }
+    return { value: trimmed.slice(0, 1000) };
+  } catch {
+    return { error: `Invalid URL: ${trimmed}` };
+  }
+}
+
+function sanitizeUrlList(raw: unknown): { value?: string[]; error?: string } {
+  if (!Array.isArray(raw)) return { value: undefined };
+  const cleaned: string[] = [];
+  const seen = new Set<string>();
+  for (const item of raw) {
+    if (typeof item !== 'string' || !item.trim()) continue;
+    const checked = validateHttpUrl(item);
+    if (checked.error) return { error: checked.error };
+    if (checked.value && !seen.has(checked.value)) {
+      seen.add(checked.value);
+      cleaned.push(checked.value);
+    }
+  }
+  return { value: cleaned.length > 0 ? cleaned : undefined };
+}
+
+function sanitizeDisciplineMetadata(raw: unknown): { value?: Record<string, any>; error?: string } {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { value: undefined };
+  const src = raw as Record<string, unknown>;
+  const out: Record<string, any> = {};
+
+  if (typeof src.contentType === 'string' && src.contentType.trim()) {
+    out.contentType = sanitizeString(src.contentType, 300);
+  }
+  if (typeof src.contentSpecifications === 'string' && src.contentSpecifications.trim()) {
+    out.contentSpecifications = sanitizeString(src.contentSpecifications, 10000);
+  }
+  if (src.sourceContentReferences !== undefined) {
+    const refs = sanitizeUrlList(src.sourceContentReferences);
+    if (refs.error) return { error: `Source Content & References: ${refs.error}` };
+    if (refs.value) out.sourceContentReferences = refs.value;
+  }
+
+  if (typeof src.assetType === 'string' && src.assetType.trim()) {
+    out.assetType = sanitizeString(src.assetType, 300);
+  }
+  if (typeof src.designSpecifications === 'string' && src.designSpecifications.trim()) {
+    out.designSpecifications = sanitizeString(src.designSpecifications, 10000);
+  }
+  if (src.brandAssetsReferences !== undefined) {
+    const refs = sanitizeUrlList(src.brandAssetsReferences);
+    if (refs.error) return { error: `Brand Assets & References: ${refs.error}` };
+    if (refs.value) out.brandAssetsReferences = refs.value;
+  }
+
+  return { value: Object.keys(out).length > 0 ? out : undefined };
+}
+
+function migrateLegacyTaskFields(task: Task): boolean {
+  let changed = false;
+  const meta: Record<string, any> = task.disciplineMetadata && typeof task.disciplineMetadata === 'object' && !Array.isArray(task.disciplineMetadata)
+    ? { ...task.disciplineMetadata }
+    : {};
+  const attachments = Array.isArray(task.attachments)
+    ? task.attachments.filter((a): a is string => typeof a === 'string' && Boolean(a.trim())).map(a => a.trim())
+    : [];
+
+  const isDesign = task.team === 'design' || (Boolean(meta.assetType || meta.dimensions || meta.format || meta.quantity) && !meta.contentType);
+  if (isDesign) {
+    const extraSpecParts: string[] = [];
+    if (typeof meta.dimensions === 'string' && meta.dimensions.trim()) {
+      extraSpecParts.push(`Dimensions: ${meta.dimensions.trim()}`);
+      delete meta.dimensions;
+      changed = true;
+    }
+    if (typeof meta.format === 'string' && meta.format.trim()) {
+      extraSpecParts.push(`Deliverable Format: ${meta.format.trim()}`);
+      delete meta.format;
+      changed = true;
+    }
+    if (meta.quantity !== undefined && meta.quantity !== null && String(meta.quantity).trim()) {
+      extraSpecParts.push(`Quantity: ${String(meta.quantity).trim()}`);
+      delete meta.quantity;
+      changed = true;
+    }
+    if (extraSpecParts.length > 0) {
+      const existing = typeof meta.designSpecifications === 'string' ? meta.designSpecifications.trim() : '';
+      const appended = extraSpecParts.join('\n');
+      meta.designSpecifications = existing ? `${existing}\n\n${appended}` : appended;
+    }
+    if (attachments.length > 0) {
+      const existingRefs = Array.isArray(meta.brandAssetsReferences) ? meta.brandAssetsReferences : [];
+      const merged = Array.from(new Set([...existingRefs, ...attachments]));
+      if (merged.length > 0) meta.brandAssetsReferences = merged;
+      delete task.attachments;
+      changed = true;
+    }
+  } else {
+    const extraSpecParts: string[] = [];
+    const extraRefs: string[] = [];
+    if (typeof meta.deliverable === 'string' && meta.deliverable.trim()) {
+      extraSpecParts.push(`Deliverable Format: ${meta.deliverable.trim()}`);
+      delete meta.deliverable;
+      changed = true;
+    }
+    if (meta.wordCount !== undefined && meta.wordCount !== null && String(meta.wordCount).trim()) {
+      extraSpecParts.push(`Word Count Target: ${String(meta.wordCount).trim()}`);
+      delete meta.wordCount;
+      changed = true;
+    }
+    if (typeof meta.relevantRequirements === 'string' && meta.relevantRequirements.trim()) {
+      extraSpecParts.push(meta.relevantRequirements.trim());
+      delete meta.relevantRequirements;
+      changed = true;
+    }
+    if (typeof meta.brief === 'string' && meta.brief.trim()) {
+      const b = meta.brief.trim();
+      if (/^https?:\/\/\S+/i.test(b)) {
+        extraRefs.push(b);
+      } else {
+        extraSpecParts.push(`Outline: ${b}`);
+      }
+      delete meta.brief;
+      changed = true;
+    }
+    if (extraSpecParts.length > 0) {
+      const existing = typeof meta.contentSpecifications === 'string' ? meta.contentSpecifications.trim() : '';
+      const appended = extraSpecParts.join('\n');
+      meta.contentSpecifications = existing ? `${existing}\n\n${appended}` : appended;
+    }
+    if (extraRefs.length > 0 || attachments.length > 0) {
+      const existingRefs = Array.isArray(meta.sourceContentReferences) ? meta.sourceContentReferences : [];
+      const merged = Array.from(new Set([...existingRefs, ...extraRefs, ...attachments]));
+      if (merged.length > 0) meta.sourceContentReferences = merged;
+      if (attachments.length > 0) delete task.attachments;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    task.disciplineMetadata = Object.keys(meta).length > 0 ? meta : undefined;
+  }
+  return changed;
+}
+
+function hydrateSubtasksFromParents(appStore: AppStore): boolean {
+  let changed = false;
+  if (!Array.isArray(appStore.parentTasks)) {
+    appStore.parentTasks = [];
+    changed = true;
+  }
+  const parentMap = new Map<string, ParentTask>();
+  for (const p of appStore.parentTasks) {
+    if (p && p.id) parentMap.set(p.id, p);
+  }
+
+  for (const task of appStore.tasks) {
+    if (migrateLegacyTaskFields(task)) {
+      changed = true;
+    }
+    if (task.parentTaskId) {
+      let parent = parentMap.get(task.parentTaskId);
+      if (!parent) {
+        parent = {
+          id: task.parentTaskId,
+          title: task.parentTaskTitle || task.title.replace(/\s+\((Content|Design)\)$/i, ''),
+          brief: task.description || undefined,
+          brandGuidelines: task.brandGuidelines || undefined,
+          client: task.client,
+          project: task.project,
+          clickupParentTaskId: task.clickupParentTaskId,
+          clickupSpaceId: task.clickupSpaceId,
+          clickupSpaceName: task.clickupSpaceName,
+          clickupFolderId: task.clickupFolderId,
+          clickupFolderName: task.clickupFolderName,
+          clickupListId: task.clickupListId,
+          clickupListName: task.clickupListName,
+          createdAt: task.createdAt,
+          updatedAt: task.updatedAt,
+        };
+        appStore.parentTasks.push(parent);
+        parentMap.set(parent.id, parent);
+        changed = true;
+      }
+      if (parent.title && task.parentTaskTitle !== parent.title) {
+        task.parentTaskTitle = parent.title;
+        changed = true;
+      }
+      if ((parent.brief || undefined) !== (task.description || undefined)) {
+        task.description = parent.brief || undefined;
+        changed = true;
+      }
+      if ((parent.brandGuidelines || undefined) !== (task.brandGuidelines || undefined)) {
+        task.brandGuidelines = parent.brandGuidelines || undefined;
+        changed = true;
+      }
+      if (parent.clickupParentTaskId && !task.clickupParentTaskId) {
+        task.clickupParentTaskId = parent.clickupParentTaskId;
+        changed = true;
+      }
+    }
+  }
+  return changed;
 }
 
 // Format duration milliseconds into compact billable hours string for audit records
@@ -657,6 +895,55 @@ async function dbSaveTask(task: Task) {
   }
 }
 
+async function dbSaveParentTask(parentTask: ParentTask) {
+  try {
+    if (!adminDb) await initFirestore();
+    const payload = cleanDocData(parentTask);
+    if (adminDb) {
+      await adminDb.collection('parent_tasks').doc(parentTask.id).set(payload, { merge: true });
+      firestoreLastError = null;
+    }
+  } catch (err: any) {
+    firestoreLastError = err.message || String(err);
+    console.error('[Firestore Save ParentTask Error]:', firestoreLastError);
+  }
+}
+
+async function dbDeleteParentTask(parentTaskId: string) {
+  try {
+    if (!adminDb) await initFirestore();
+    if (adminDb) {
+      await adminDb.collection('parent_tasks').doc(parentTaskId).delete();
+      firestoreLastError = null;
+    }
+  } catch (err: any) {
+    firestoreLastError = err.message || String(err);
+    console.error('[Firestore Delete ParentTask Error]:', firestoreLastError);
+  }
+}
+
+async function dbBatchSaveParentTasks(parentTasks: ParentTask[]) {
+  if (parentTasks.length === 0) return;
+  try {
+    if (!adminDb) await initFirestore();
+    const CHUNK_SIZE = 500;
+    for (let i = 0; i < parentTasks.length; i += CHUNK_SIZE) {
+      const chunk = parentTasks.slice(i, i + CHUNK_SIZE);
+      if (adminDb) {
+        const batch = adminDb.batch();
+        for (const p of chunk) {
+          batch.set(adminDb.collection('parent_tasks').doc(p.id), cleanDocData(p), { merge: true });
+        }
+        await batch.commit();
+        firestoreLastError = null;
+      }
+    }
+  } catch (err: any) {
+    firestoreLastError = err.message || String(err);
+    console.error('[Firestore Batch Save ParentTasks Error]:', firestoreLastError);
+  }
+}
+
 async function dbDeleteTask(taskId: string) {
   try {
     if (!adminDb) await initFirestore();
@@ -755,12 +1042,23 @@ async function dbPurgeAllCollections() {
     if (!adminDb) await initFirestore();
     if (!adminDb) return;
 
-    // 1. Purge all tasks
+    // 1. Purge all tasks & parent_tasks
     const tasksSnap = await adminDb.collection('tasks').get();
     const taskDocs = tasksSnap.docs;
     const CHUNK_SIZE = 500;
     for (let i = 0; i < taskDocs.length; i += CHUNK_SIZE) {
       const chunk = taskDocs.slice(i, i + CHUNK_SIZE);
+      const batch = adminDb.batch();
+      for (const doc of chunk) {
+        batch.delete(doc.ref);
+      }
+      await batch.commit();
+    }
+
+    const parentSnap = await adminDb.collection('parent_tasks').get();
+    const parentDocs = parentSnap.docs;
+    for (let i = 0; i < parentDocs.length; i += CHUNK_SIZE) {
+      const chunk = parentDocs.slice(i, i + CHUNK_SIZE);
       const batch = adminDb.batch();
       for (const doc of chunk) {
         batch.delete(doc.ref);
@@ -806,10 +1104,12 @@ async function syncFromFirestore() {
 
     const firestoreUsers: User[] = [];
     const firestoreTasks: Task[] = [];
+    const firestoreParents: ParentTask[] = [];
 
     if (adminDb) {
       const usersSnap = await adminDb.collection('users').get();
       const tasksSnap = await adminDb.collection('tasks').get();
+      const parentsSnap = await adminDb.collection('parent_tasks').get();
 
       usersSnap.forEach((d: any) => {
         const u = d.data() as User;
@@ -822,6 +1122,13 @@ async function syncFromFirestore() {
         const t = d.data() as Task;
         if (!DUMMY_TASK_IDS.has(t.id) && !DUMMY_USER_IDS.has(t.userId)) {
           firestoreTasks.push(t);
+        }
+      });
+
+      parentsSnap.forEach((d: any) => {
+        const p = d.data() as ParentTask;
+        if (p && p.id) {
+          firestoreParents.push(p);
         }
       });
     }
@@ -851,9 +1158,24 @@ async function syncFromFirestore() {
       await dbBatchSaveTasks(store.tasks);
     }
 
+    // 3. Parent Tasks: merge or push to Firestore
+    if (firestoreParents.length > 0) {
+      const parentMap = new Map((store.parentTasks || []).map(p => [p.id, p]));
+      for (const p of firestoreParents) {
+        parentMap.set(p.id, p);
+      }
+      store.parentTasks = Array.from(parentMap.values());
+    } else if (store.parentTasks && store.parentTasks.length > 0) {
+      await dbBatchSaveParentTasks(store.parentTasks);
+    }
+
     const { removedTaskIds } = migrateLegacyRoles(store);
     if (removedTaskIds.length > 0) {
       await dbBatchDeleteTasks(removedTaskIds);
+    }
+    if (hydrateSubtasksFromParents(store)) {
+      await dbBatchSaveParentTasks(store.parentTasks);
+      await dbBatchSaveTasks(store.tasks);
     }
 
     ensureSuperadmin(store);
@@ -1109,6 +1431,143 @@ async function postClickupTimeEntry(params: {
   return false;
 }
 
+function hashClickupDescription(text: unknown): string {
+  if (typeof text !== 'string') return '';
+  const normalized = text.replace(/\r\n/g, '\n').trim();
+  if (!normalized) return '';
+  return createHash('sha256').update(normalized).digest('hex');
+}
+
+function buildParentClickupMarkdown(brief?: string, brandGuidelines?: string): string {
+  const sections: string[] = [];
+  if (brief && brief.trim()) {
+    sections.push(`**Brief**\n${brief.trim()}`);
+  }
+  if (brandGuidelines && brandGuidelines.trim()) {
+    sections.push(`**Brand Guidelines**\n${brandGuidelines.trim()}`);
+  }
+  return sections.join('\n\n');
+}
+
+function buildSubtaskClickupMarkdown(team?: string, metadata?: Record<string, any>, contentDocLink?: string): string {
+  const sections: string[] = [];
+  const meta = metadata && typeof metadata === 'object' ? metadata : {};
+
+  if (team === 'design' || (Boolean(meta.assetType || meta.designSpecifications || meta.brandAssetsReferences) && team !== 'content')) {
+    if (meta.assetType) sections.push(`**Asset Type:** ${meta.assetType}`);
+    if (meta.designSpecifications) sections.push(`**Design Specifications**\n${meta.designSpecifications}`);
+    if (Array.isArray(meta.brandAssetsReferences) && meta.brandAssetsReferences.length > 0) {
+      sections.push(`**Brand Assets & References**\n${meta.brandAssetsReferences.map((u: string) => `- ${u}`).join('\n')}`);
+    }
+  } else {
+    if (meta.contentType) sections.push(`**Content Type:** ${meta.contentType}`);
+    if (meta.contentSpecifications) sections.push(`**Content Specifications**\n${meta.contentSpecifications}`);
+    if (Array.isArray(meta.sourceContentReferences) && meta.sourceContentReferences.length > 0) {
+      sections.push(`**Source Content & References**\n${meta.sourceContentReferences.map((u: string) => `- ${u}`).join('\n')}`);
+    }
+  }
+
+  if (contentDocLink && contentDocLink.trim()) {
+    sections.push(`**Content Document Link**\n${contentDocLink.trim()}`);
+  }
+  return sections.join('\n\n');
+}
+
+async function pushSafeClickupDescription(params: {
+  clickupId: string;
+  desiredMarkdown: string;
+  lastSyncedHash?: string;
+  fallbackLegacyDesc?: string;
+  token: string;
+  commentHeader: string;
+  initialLiveDesc?: string;
+}): Promise<{ hash?: string; conflict: boolean }> {
+  const { clickupId, desiredMarkdown, lastSyncedHash, fallbackLegacyDesc, token, commentHeader, initialLiveDesc } = params;
+  if (!clickupId || !token) return { hash: lastSyncedHash, conflict: false };
+
+  let liveDesc = initialLiveDesc;
+  if (liveDesc === undefined) {
+    try {
+      const getRes = await fetch(`https://api.clickup.com/api/v2/task/${clickupId}`, {
+        headers: { Authorization: token },
+      });
+      if (getRes.ok) {
+        const data = await getRes.json();
+        liveDesc = typeof data?.description === 'string' ? data.description : '';
+      }
+    } catch (err) {
+      console.warn(`[ClickUp Desc Sync] Failed reading ClickUp task ${clickupId}:`, err);
+    }
+  }
+
+  const liveHash = hashClickupDescription(liveDesc || '');
+  const desiredHash = hashClickupDescription(desiredMarkdown);
+  if (liveHash === desiredHash) {
+    return { hash: desiredHash, conflict: false };
+  }
+
+  const fallbackHash = fallbackLegacyDesc ? hashClickupDescription(fallbackLegacyDesc) : '';
+  const isSafeToOverwrite =
+    liveHash === '' ||
+    (Boolean(lastSyncedHash) && liveHash === lastSyncedHash) ||
+    (!lastSyncedHash && Boolean(fallbackHash) && liveHash === fallbackHash);
+
+  if (isSafeToOverwrite) {
+    try {
+      const putRes = await fetch(`https://api.clickup.com/api/v2/task/${clickupId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: token },
+        body: JSON.stringify({ description: desiredMarkdown }),
+      });
+      if (putRes.ok) {
+        const updatedData = await putRes.json().catch(() => null);
+        const returnedHash = typeof updatedData?.description === 'string'
+          ? hashClickupDescription(updatedData.description)
+          : '';
+        return { hash: returnedHash || desiredHash, conflict: false };
+      }
+    } catch (err) {
+      console.warn(`[ClickUp Desc Sync] PUT description failed for ${clickupId}:`, err);
+    }
+    return { hash: lastSyncedHash, conflict: false };
+  }
+
+  // ClickUp description was edited manually outside ZenFlow: preserve ClickUp text and post comment instead
+  if (desiredMarkdown.trim()) {
+    try {
+      await fetch(`https://api.clickup.com/api/v2/task/${clickupId}/comment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: token },
+        body: JSON.stringify({ comment_text: `${commentHeader}\n\n${desiredMarkdown}` }),
+      });
+    } catch (err) {
+      console.warn(`[ClickUp Desc Sync] Fallback comment failed for ${clickupId}:`, err);
+    }
+  }
+  return { hash: lastSyncedHash, conflict: true };
+}
+
+async function syncParentDescriptionToClickUp(parent: ParentTask, explicitToken?: string, previousBrief?: string) {
+  if (!parent.clickupParentTaskId) return;
+  const token = (explicitToken || store.users.find(u => u.clickupApiKey)?.clickupApiKey || '').trim();
+  if (!token) return;
+
+  const desiredMarkdown = buildParentClickupMarkdown(parent.brief, parent.brandGuidelines);
+  const res = await pushSafeClickupDescription({
+    clickupId: parent.clickupParentTaskId,
+    desiredMarkdown,
+    lastSyncedHash: parent.lastSyncedClickupDescHash,
+    fallbackLegacyDesc: previousBrief,
+    token,
+    commentHeader: 'ZenFlow Parent Brief / Brand Guidelines Update (preserved manual ClickUp description):',
+  });
+  if (res.hash !== parent.lastSyncedClickupDescHash) {
+    parent.lastSyncedClickupDescHash = res.hash;
+    saveStore(store);
+    dbSaveParentTask(parent).catch(() => {});
+  }
+}
+
 async function syncContentLinkToClickUp(task: Task, link: string, explicitToken?: string) {
   if (!task.clickupTaskId || !link) return;
   const assignees = getTaskAssigneeIdsServer(task);
@@ -1126,25 +1585,29 @@ async function syncContentLinkToClickUp(task: Task, link: string, explicitToken?
     console.warn('[ClickUp Link Sync] Comment error:', err);
   }
 
-  try {
-    const getRes = await fetch(`https://api.clickup.com/api/v2/task/${task.clickupTaskId}`, {
-      headers: { Authorization: token },
-    });
-    const currentDesc = getRes.ok ? String((await getRes.json()).description || '') : (task.description || '');
-    if (!currentDesc.includes(link)) {
-      const nextDesc = currentDesc ? `${currentDesc}\n\nContent Document Link: ${link}` : `Content Document Link: ${link}`;
-      await fetch(`https://api.clickup.com/api/v2/task/${task.clickupTaskId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: token },
-        body: JSON.stringify({ description: nextDesc }),
-      });
-    }
-  } catch (err) {
-    console.warn('[ClickUp Link Sync] Description update error:', err);
+  const desiredMarkdown = buildSubtaskClickupMarkdown(task.team, task.disciplineMetadata, link);
+  const res = await pushSafeClickupDescription({
+    clickupId: task.clickupTaskId,
+    desiredMarkdown,
+    lastSyncedHash: task.lastSyncedClickupDescHash,
+    fallbackLegacyDesc: task.description,
+    token,
+    commentHeader: `ZenFlow Content Document Link Update: ${link}`,
+  });
+  if (res.hash !== task.lastSyncedClickupDescHash) {
+    task.lastSyncedClickupDescHash = res.hash;
+    saveStore(store);
+    dbSaveTask(task).catch(() => {});
   }
 }
 
-async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User, callerUserId?: string) {
+async function syncTaskToClickUp(
+  task: Task,
+  apiKey?: string,
+  user?: User,
+  callerUserId?: string,
+  options?: { syncDescription?: boolean; previousDescription?: string }
+) {
   const assigneeIds = getTaskAssigneeIdsServer(task);
   const assigneeUsers = assigneeIds
     .map(id => store.users.find(u => u.id === id))
@@ -1176,6 +1639,7 @@ async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User, calle
     try {
       let clickupTimeSpent = 0;
       let existingClickupAssignees: number[] = [];
+      let liveDescription: string | undefined = undefined;
       try {
         const getRes = await fetch(`https://api.clickup.com/api/v2/task/${task.clickupTaskId}`, {
           headers: { Authorization: token },
@@ -1183,6 +1647,9 @@ async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User, calle
         if (getRes.ok) {
           const cuTask = await getRes.json();
           clickupTimeSpent = typeof cuTask.time_spent === 'number' ? cuTask.time_spent : 0;
+          if (typeof cuTask.description === 'string') {
+            liveDescription = cuTask.description;
+          }
           if (Array.isArray(cuTask.assignees)) {
             existingClickupAssignees = cuTask.assignees
               .map((a: any) => (typeof a === 'object' && a?.id ? parseInt(String(a.id), 10) : parseInt(String(a), 10)))
@@ -1209,7 +1676,6 @@ async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User, calle
         status: targetStatus,
         time_estimate: estimateMs,
       };
-      if (task.description) updatePayload.description = task.description;
       if (task.dueDate) updatePayload.due_date = new Date(task.dueDate + 'T23:59:59').getTime();
       if (startDateMs && !isNaN(startDateMs)) updatePayload.start_date = startDateMs;
 
@@ -1231,6 +1697,26 @@ async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User, calle
         console.warn(`[ClickUp Sync] Failed to update task ${task.id} in ClickUp:`, await res.text());
       }
 
+      if (options?.syncDescription) {
+        const desiredMarkdown = (task.isSubtask || task.disciplineMetadata)
+          ? buildSubtaskClickupMarkdown(task.team, task.disciplineMetadata, task.contentDocLink)
+          : buildParentClickupMarkdown(task.description, task.brandGuidelines);
+        const descRes = await pushSafeClickupDescription({
+          clickupId: task.clickupTaskId,
+          desiredMarkdown,
+          lastSyncedHash: task.lastSyncedClickupDescHash,
+          fallbackLegacyDesc: options.previousDescription ?? task.description,
+          token,
+          commentHeader: 'ZenFlow Specifications Update (preserved manual ClickUp description):',
+          initialLiveDesc: liveDescription,
+        });
+        if (descRes.hash !== task.lastSyncedClickupDescHash) {
+          task.lastSyncedClickupDescHash = descRes.hash;
+          saveStore(store);
+          dbSaveTask(task).catch(() => {});
+        }
+      }
+
       if (task.clickupTaskTypeFieldId && task.clickupTaskTypeId) {
         await fetch(`https://api.clickup.com/api/v2/task/${task.clickupTaskId}/field/${task.clickupTaskTypeFieldId}`, {
           method: 'POST',
@@ -1247,12 +1733,15 @@ async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User, calle
   if (!task.clickupListId) return;
 
   try {
+    const initialDesc = (task.isSubtask || task.disciplineMetadata)
+      ? buildSubtaskClickupMarkdown(task.team, task.disciplineMetadata, task.contentDocLink)
+      : buildParentClickupMarkdown(task.description, task.brandGuidelines);
     const createPayload: Record<string, any> = {
       name: task.title,
       status: targetStatus,
       time_estimate: estimateMs,
     };
-    if (task.description) createPayload.description = task.description;
+    if (initialDesc) createPayload.description = initialDesc;
     if (task.dueDate) createPayload.due_date = new Date(task.dueDate + 'T23:59:59').getTime();
     if (startDateMs && !isNaN(startDateMs)) createPayload.start_date = startDateMs;
     if (clickupAssigneeIds.length > 0) createPayload.assignees = clickupAssigneeIds;
@@ -1270,6 +1759,11 @@ async function syncTaskToClickUp(task: Task, apiKey?: string, user?: User, calle
       const clickupTask = await res.json();
       task.clickupTaskId = clickupTask.id;
       task.clickupUrl = clickupTask.url;
+      if (initialDesc) {
+        task.lastSyncedClickupDescHash = typeof clickupTask.description === 'string'
+          ? (hashClickupDescription(clickupTask.description) || hashClickupDescription(initialDesc))
+          : hashClickupDescription(initialDesc);
+      }
 
       if (zenflowTrackedMs >= 1000 && taskUser) {
         await postClickupTimeEntry({
@@ -1630,6 +2124,7 @@ async function startServer() {
     res.json({
       users: store.users,
       tasks: store.tasks,
+      parentTasks: store.parentTasks || [],
     });
   });
 
@@ -2322,11 +2817,11 @@ async function startServer() {
     const {
       title,
       description,
+      brandGuidelines,
       dueDate,
       client,
       project,
       priority,
-      attachments,
       disciplines,
       disciplineSpecs,
       clickupSpaceId,
@@ -2352,14 +2847,29 @@ async function startServer() {
       return res.status(400).json({ error: 'Select at least one requirement (Content or Design)' });
     }
 
-    const cleanDescription = description ? sanitizeString(description) : undefined;
+    const brandCheck = validateHttpUrl(brandGuidelines);
+    if (brandCheck.error) {
+      return res.status(400).json({ error: `Brand Guidelines: ${brandCheck.error}` });
+    }
+
+    const sanitizedDisciplineSpecs: Record<string, Record<string, any> | undefined> = {};
+    for (const disc of validDisciplines) {
+      const rawSpec = disciplineSpecs && typeof disciplineSpecs === 'object' ? disciplineSpecs[disc] : undefined;
+      if (rawSpec !== undefined) {
+        const checked = sanitizeDisciplineMetadata(rawSpec);
+        if (checked.error) {
+          return res.status(400).json({ error: checked.error });
+        }
+        sanitizedDisciplineSpecs[disc] = checked.value;
+      }
+    }
+
+    const cleanDescription = description ? sanitizeString(description, 10000) : undefined;
+    const cleanBrandGuidelines = brandCheck.value;
     const cleanClient = client ? sanitizeString(client) : (clickupSpaceName ? sanitizeString(clickupSpaceName) : undefined);
     const cleanProject = project ? sanitizeString(project) : (clickupListName ? sanitizeString(clickupListName) : undefined);
     const cleanPriority = ['low', 'medium', 'high'].includes(priority) ? priority : 'medium';
     const cleanDueDate = dueDate ? sanitizeString(dueDate) : undefined;
-    const cleanAttachments = Array.isArray(attachments)
-      ? attachments.filter((a: any) => typeof a === 'string' && a.trim()).map((a: string) => sanitizeString(a.trim()))
-      : undefined;
 
     const cleanListId = clickupListId ? sanitizeString(clickupListId) : undefined;
     const cleanSpaceId = clickupSpaceId ? sanitizeString(clickupSpaceId) : undefined;
@@ -2378,14 +2888,16 @@ async function startServer() {
     const parentTaskId = `parent-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     let clickupParentTaskId: string | undefined;
     let parentClickupUrl: string | undefined;
+    let parentDescHash: string | undefined;
 
+    const parentMarkdown = buildParentClickupMarkdown(cleanDescription, cleanBrandGuidelines);
     if (token && cleanListId) {
       try {
         const parentPayload: Record<string, any> = {
           name: cleanTitle,
           status: ZENFLOW_TO_CLICKUP_STATUS.pipeline || 'open',
         };
-        if (cleanDescription) parentPayload.description = cleanDescription;
+        if (parentMarkdown) parentPayload.description = parentMarkdown;
         if (cleanDueDate) parentPayload.due_date = new Date(cleanDueDate + 'T23:59:59').getTime();
         if (clickupTaskTypeFieldId && clickupTaskTypeId) {
           parentPayload.custom_fields = [{ id: clickupTaskTypeFieldId, value: clickupTaskTypeId }];
@@ -2399,6 +2911,11 @@ async function startServer() {
           const pData = await pRes.json();
           clickupParentTaskId = pData.id;
           parentClickupUrl = pData.url;
+          if (parentMarkdown) {
+            parentDescHash = typeof pData.description === 'string'
+              ? (hashClickupDescription(pData.description) || hashClickupDescription(parentMarkdown))
+              : hashClickupDescription(parentMarkdown);
+          }
         } else {
           console.warn('[ClickUp Bundle] Failed to create parent task:', await pRes.text());
         }
@@ -2408,6 +2925,29 @@ async function startServer() {
     }
 
     const now = new Date().toISOString();
+    const parentTask: ParentTask = {
+      id: parentTaskId,
+      title: cleanTitle,
+      brief: cleanDescription,
+      brandGuidelines: cleanBrandGuidelines,
+      client: cleanClient,
+      project: cleanProject,
+      clickupParentTaskId,
+      clickupUrl: parentClickupUrl,
+      clickupSpaceId: cleanSpaceId,
+      clickupSpaceName: cleanSpaceName,
+      clickupFolderId: cleanFolderId,
+      clickupFolderName: cleanFolderName,
+      clickupListId: cleanListId,
+      clickupListName: cleanListName,
+      lastSyncedClickupDescHash: parentDescHash,
+      createdAt: now,
+      updatedAt: now,
+    };
+    if (!Array.isArray(store.parentTasks)) store.parentTasks = [];
+    store.parentTasks.push(parentTask);
+    dbSaveParentTask(parentTask).catch(e => console.error('Firestore bundle parent save err:', e));
+
     const createdTasks: Task[] = [];
 
     for (const disc of validDisciplines) {
@@ -2415,12 +2955,12 @@ async function startServer() {
       const maxOrder = existingInPipeline.reduce((max, t) => Math.max(max, t.order ?? 0), -1);
       const discLabel = disc === 'content' ? 'Content' : 'Design';
       const subtaskId = `task-${Date.now()}-${disc.slice(0, 3)}-${Math.random().toString(36).substring(2, 6)}`;
-      const discMeta = disciplineSpecs && typeof disciplineSpecs === 'object' && disciplineSpecs[disc] && typeof disciplineSpecs[disc] === 'object'
-        ? disciplineSpecs[disc]
-        : undefined;
+      const discMeta = sanitizedDisciplineSpecs[disc];
+      const subMarkdown = buildSubtaskClickupMarkdown(disc, discMeta);
 
       let clickupTaskId: string | undefined;
       let clickupUrl: string | undefined = parentClickupUrl;
+      let subDescHash: string | undefined;
 
       if (token && cleanListId) {
         try {
@@ -2429,7 +2969,7 @@ async function startServer() {
             status: ZENFLOW_TO_CLICKUP_STATUS.pipeline || 'open',
           };
           if (clickupParentTaskId) subPayload.parent = clickupParentTaskId;
-          if (cleanDescription) subPayload.description = cleanDescription;
+          if (subMarkdown) subPayload.description = subMarkdown;
           if (cleanDueDate) subPayload.due_date = new Date(cleanDueDate + 'T23:59:59').getTime();
           if (clickupTaskTypeFieldId && clickupTaskTypeId) {
             subPayload.custom_fields = [{ id: clickupTaskTypeFieldId, value: clickupTaskTypeId }];
@@ -2443,6 +2983,11 @@ async function startServer() {
             const sData = await sRes.json();
             clickupTaskId = sData.id;
             clickupUrl = sData.url || parentClickupUrl;
+            if (subMarkdown) {
+              subDescHash = typeof sData.description === 'string'
+                ? (hashClickupDescription(sData.description) || hashClickupDescription(subMarkdown))
+                : hashClickupDescription(subMarkdown);
+            }
           } else {
             console.warn(`[ClickUp Bundle] Failed to create ${discLabel} subtask:`, await sRes.text());
           }
@@ -2458,6 +3003,8 @@ async function startServer() {
         team: disc,
         title: validDisciplines.length > 1 ? `${cleanTitle} (${discLabel})` : cleanTitle,
         description: cleanDescription,
+        brandGuidelines: cleanBrandGuidelines,
+        lastSyncedClickupDescHash: subDescHash,
         dueDate: cleanDueDate,
         cognitiveLoad: 'medium',
         status: 'pipeline',
@@ -2470,7 +3017,6 @@ async function startServer() {
         client: cleanClient,
         project: cleanProject,
         priority: cleanPriority,
-        attachments: cleanAttachments,
         disciplineMetadata: discMeta,
         clickupTaskId,
         clickupParentTaskId,
@@ -2515,6 +3061,7 @@ async function startServer() {
     res.status(201).json({
       parentTaskId,
       parentTaskTitle: cleanTitle,
+      parentTask,
       clickupParentTaskId,
       tasks: createdTasks,
     });
@@ -2529,6 +3076,7 @@ async function startServer() {
       team,
       title,
       description,
+      brandGuidelines,
       dueDate,
       startDate,
       cognitiveLoad,
@@ -2641,9 +3189,15 @@ async function startServer() {
     const cleanAttachments = Array.isArray(attachments)
       ? attachments.filter((a: any) => typeof a === 'string' && a.trim()).map((a: string) => sanitizeString(a.trim()))
       : undefined;
-    const cleanDisciplineMetadata = disciplineMetadata && typeof disciplineMetadata === 'object' && !Array.isArray(disciplineMetadata)
-      ? disciplineMetadata
-      : undefined;
+    const brandCheck = validateHttpUrl(brandGuidelines);
+    if (brandCheck.error) {
+      return res.status(400).json({ error: `Brand Guidelines: ${brandCheck.error}` });
+    }
+    const metaCheck = sanitizeDisciplineMetadata(disciplineMetadata);
+    if (metaCheck.error) {
+      return res.status(400).json({ error: metaCheck.error });
+    }
+    const cleanDisciplineMetadata = metaCheck.value;
 
     const newTask: Task = {
       id: taskId,
@@ -2651,7 +3205,8 @@ async function startServer() {
       assigneeIds: cleanAssigneeIds,
       team: resolvedTeam,
       title: cleanTitle,
-      description: description ? sanitizeString(description) : undefined,
+      description: description ? sanitizeString(description, 10000) : undefined,
+      brandGuidelines: brandCheck.value,
       dueDate: cleanDueDate,
       startDate: cleanStartDate,
       cognitiveLoad: ['low', 'medium', 'high'].includes(cognitiveLoad) ? cognitiveLoad : 'medium',
@@ -2758,6 +3313,7 @@ async function startServer() {
       team: resolvedTeam,
       title: title ? title.trim() : `Subtask: ${sourceTask.title}`,
       description: description !== undefined ? description.trim() : (sourceTask.description || ''),
+      brandGuidelines: sourceTask.brandGuidelines,
       dueDate: resolvedDueDate,
       startDate: resolvedStatus !== 'pipeline' ? now.slice(0, 10) : undefined,
       cognitiveLoad: cognitiveLoad || sourceTask.cognitiveLoad || 'medium',
@@ -2880,6 +3436,7 @@ async function startServer() {
     const {
       title,
       description,
+      brandGuidelines,
       dueDate,
       startDate,
       cognitiveLoad,
@@ -3104,11 +3661,39 @@ async function startServer() {
       ? (startDate ? sanitizeString(startDate) : undefined)
       : (currentTask.startDate || (currentTask.status === 'pipeline' ? new Date().toISOString().slice(0, 10) : undefined));
 
+    let nextBrandGuidelines = currentTask.brandGuidelines;
+    if (brandGuidelines !== undefined) {
+      const brandCheck = validateHttpUrl(brandGuidelines);
+      if (brandCheck.error) {
+        return res.status(400).json({ error: `Brand Guidelines: ${brandCheck.error}` });
+      }
+      nextBrandGuidelines = brandCheck.value;
+    }
+
+    let nextDisciplineMetadata = currentTask.disciplineMetadata;
+    if (disciplineMetadata !== undefined) {
+      const metaCheck = sanitizeDisciplineMetadata(disciplineMetadata);
+      if (metaCheck.error) {
+        return res.status(400).json({ error: metaCheck.error });
+      }
+      nextDisciplineMetadata = metaCheck.value;
+    }
+
+    const nextDescription = description !== undefined
+      ? (description ? sanitizeString(description, 10000) : undefined)
+      : currentTask.description;
+    const briefOrBrandChanged =
+      (nextDescription || undefined) !== (currentTask.description || undefined) ||
+      (nextBrandGuidelines || undefined) !== (currentTask.brandGuidelines || undefined);
+    const specsChanged =
+      JSON.stringify(nextDisciplineMetadata || null) !== JSON.stringify(currentTask.disciplineMetadata || null);
+
     const updatedTask: Task = {
       ...currentTask,
       team: resolvedTeam,
       title: title !== undefined ? sanitizeString(title) : currentTask.title,
-      description: description !== undefined ? (description ? sanitizeString(description) : undefined) : currentTask.description,
+      description: nextDescription,
+      brandGuidelines: nextBrandGuidelines,
       dueDate: resolvedDueDate,
       startDate: resolvedStartDate,
       cognitiveLoad: cognitiveLoad && ['low', 'medium', 'high'].includes(cognitiveLoad) ? cognitiveLoad : currentTask.cognitiveLoad,
@@ -3124,7 +3709,7 @@ async function startServer() {
       estimatedHours: parsedEstimatedHours,
       priority: priority !== undefined && ['low', 'medium', 'high'].includes(priority) ? priority : currentTask.priority,
       attachments: attachments !== undefined ? (Array.isArray(attachments) ? attachments.filter((a: any) => typeof a === 'string' && a.trim()).map((a: string) => sanitizeString(a.trim())) : undefined) : currentTask.attachments,
-      disciplineMetadata: disciplineMetadata !== undefined ? (disciplineMetadata && typeof disciplineMetadata === 'object' && !Array.isArray(disciplineMetadata) ? disciplineMetadata : undefined) : currentTask.disciplineMetadata,
+      disciplineMetadata: nextDisciplineMetadata,
       contentDocLink: cleanContentDocLink || undefined,
       clickupSpaceId: clickupSpaceId !== undefined ? (clickupSpaceId ? sanitizeString(clickupSpaceId) : undefined) : currentTask.clickupSpaceId,
       clickupSpaceName: clickupSpaceName !== undefined ? (clickupSpaceName ? sanitizeString(clickupSpaceName) : undefined) : currentTask.clickupSpaceName,
@@ -3147,6 +3732,55 @@ async function startServer() {
       req.body.apiKey ||
       ''
     ).trim();
+
+    // Update canonical ParentTask and propagate Brief / Brand Guidelines to siblings & ClickUp parent
+    if (briefOrBrandChanged && (updatedTask.parentTaskId || updatedTask.clickupParentTaskId)) {
+      if (!Array.isArray(store.parentTasks)) store.parentTasks = [];
+      let parent = updatedTask.parentTaskId
+        ? store.parentTasks.find(p => p.id === updatedTask.parentTaskId)
+        : store.parentTasks.find(p => p.clickupParentTaskId && p.clickupParentTaskId === updatedTask.clickupParentTaskId);
+      const nowIso = new Date().toISOString();
+      if (!parent && updatedTask.parentTaskId) {
+        parent = {
+          id: updatedTask.parentTaskId,
+          title: updatedTask.parentTaskTitle || updatedTask.title.replace(/\s+\((Content|Design)\)$/i, ''),
+          brief: nextDescription,
+          brandGuidelines: nextBrandGuidelines,
+          client: updatedTask.client,
+          project: updatedTask.project,
+          clickupParentTaskId: updatedTask.clickupParentTaskId,
+          createdAt: updatedTask.createdAt,
+          updatedAt: nowIso,
+        };
+        store.parentTasks.push(parent);
+      } else if (parent) {
+        parent.brief = nextDescription;
+        parent.brandGuidelines = nextBrandGuidelines;
+        parent.updatedAt = nowIso;
+      }
+
+      if (parent) {
+        dbSaveParentTask(parent).catch(e => console.error('Firestore parent update err:', e));
+        syncParentDescriptionToClickUp(parent, cuToken, currentTask.description).catch(e =>
+          console.error('ClickUp parent desc sync err:', e)
+        );
+      }
+
+      const siblings = store.tasks.filter(t =>
+        t.id !== updatedTask.id &&
+        (
+          (updatedTask.parentTaskId && t.parentTaskId === updatedTask.parentTaskId) ||
+          (updatedTask.clickupParentTaskId && t.clickupParentTaskId === updatedTask.clickupParentTaskId)
+        )
+      );
+      for (const sib of siblings) {
+        sib.description = nextDescription;
+        sib.brandGuidelines = nextBrandGuidelines;
+        sib.updatedAt = nowIso;
+        dbSaveTask(sib).catch(e => console.error('Firestore sibling parent-field update err:', e));
+        broadcastEvent('task_updated', sib);
+      }
+    }
 
     // Propagate contentDocLink to sibling Design task(s) under the same parent & sync to ClickUp
     if (isContentDiscipline && cleanContentDocLink && (targetStatus === 'done' || cleanContentDocLink !== currentTask.contentDocLink)) {
@@ -3178,7 +3812,10 @@ async function startServer() {
 
     saveStore(store);
     dbSaveTask(updatedTask).catch(e => console.error('Firestore task update err:', e));
-    syncTaskToClickUp(updatedTask, cuToken, undefined, caller?.id).catch(e => console.error('ClickUp update sync err:', e));
+    syncTaskToClickUp(updatedTask, cuToken, undefined, caller?.id, {
+      syncDescription: specsChanged || (!updatedTask.parentTaskId && briefOrBrandChanged),
+      previousDescription: currentTask.description,
+    }).catch(e => console.error('ClickUp update sync err:', e));
 
     broadcastEvent('task_updated', updatedTask);
     appendAuditLog({
@@ -3236,6 +3873,13 @@ async function startServer() {
     }
 
     const removed = store.tasks.splice(taskIndex, 1)[0];
+    if (removed.parentTaskId && Array.isArray(store.parentTasks)) {
+      const hasRemainingSibling = store.tasks.some(t => t.parentTaskId === removed.parentTaskId);
+      if (!hasRemainingSibling) {
+        store.parentTasks = store.parentTasks.filter(p => p.id !== removed.parentTaskId);
+        dbDeleteParentTask(removed.parentTaskId).catch(e => console.error('Firestore parent task delete err:', e));
+      }
+    }
     saveStore(store);
     dbDeleteTask(removed.id).catch(e => console.error('Firestore task delete err:', e));
 
@@ -4078,8 +4722,9 @@ async function startServer() {
       const nonSuperadminUsers = store.users.filter(u => u.email.toLowerCase() !== SUPERADMIN_EMAIL.toLowerCase());
       const previousUserCount = nonSuperadminUsers.length;
 
-      // 1. Purge all tasks in local store
+      // 1. Purge all tasks & parentTasks in local store
       store.tasks = [];
+      store.parentTasks = [];
 
       // 2. Purge all non-superadmin users, retaining only the root superadmin
       store.users = store.users.filter(u => u.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase());

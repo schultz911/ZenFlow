@@ -179,6 +179,7 @@ interface DashboardContextType {
   createPipelineBundle: (data: {
     title: string;
     description?: string;
+    brandGuidelines?: string;
     dueDate?: string;
     client?: string;
     project?: string;
@@ -202,6 +203,7 @@ interface DashboardContextType {
     team?: Role;
     title: string;
     description?: string;
+    brandGuidelines?: string;
     dueDate?: string;
     startDate?: string;
     cognitiveLoad?: 'low' | 'medium' | 'high';
@@ -1444,6 +1446,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   const createPipelineBundle = useCallback(async (data: {
     title: string;
     description?: string;
+    brandGuidelines?: string;
     dueDate?: string;
     client?: string;
     project?: string;
@@ -1486,6 +1489,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     team?: Role;
     title: string;
     description?: string;
+    brandGuidelines?: string;
     dueDate?: string;
     startDate?: string;
     cognitiveLoad?: 'low' | 'medium' | 'high';
@@ -1538,6 +1542,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       team,
       title: data.title.trim(),
       description: data.description ? data.description.trim() : undefined,
+      brandGuidelines: data.brandGuidelines ? data.brandGuidelines.trim() : undefined,
       dueDate: (status === 'pipeline' || status === 'retainer') ? undefined : data.dueDate,
       startDate: status !== 'pipeline' ? (data.startDate || now.slice(0, 10)) : undefined,
       cognitiveLoad,
@@ -1625,6 +1630,9 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       linkToPropagate &&
       (updates.status === 'done' || (updates.contentDocLink && updates.contentDocLink !== prevTarget.contentDocLink))
     );
+    const parentBriefChanged = Boolean(prevTarget && updates.description !== undefined && updates.description !== prevTarget.description);
+    const parentBrandChanged = Boolean(prevTarget && updates.brandGuidelines !== undefined && updates.brandGuidelines !== prevTarget.brandGuidelines);
+    const shouldSyncParentFields = Boolean(prevTarget && (prevTarget.parentTaskId || prevTarget.clickupParentTaskId) && (parentBriefChanged || parentBrandChanged));
 
     setTasks(prev => {
       const map = new Map<string, Task>();
@@ -1688,13 +1696,25 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
           };
           map.set(t.id, updatedTask);
         } else if (
-          isContentDoneUpdate &&
           prevTarget &&
-          t.team === 'design' &&
           ((prevTarget.parentTaskId && t.parentTaskId === prevTarget.parentTaskId) ||
             (prevTarget.clickupParentTaskId && t.clickupParentTaskId === prevTarget.clickupParentTaskId))
         ) {
-          map.set(t.id, { ...t, contentDocLink: linkToPropagate, updatedAt: new Date().toISOString() });
+          let nextSibling = t;
+          let siblingModified = false;
+          if (isContentDoneUpdate && t.team === 'design' && linkToPropagate) {
+            nextSibling = { ...nextSibling, contentDocLink: linkToPropagate };
+            siblingModified = true;
+          }
+          if (shouldSyncParentFields) {
+            nextSibling = {
+              ...nextSibling,
+              ...(parentBriefChanged ? { description: updates.description || undefined } : {}),
+              ...(parentBrandChanged ? { brandGuidelines: updates.brandGuidelines || undefined } : {}),
+            };
+            siblingModified = true;
+          }
+          map.set(t.id, siblingModified ? { ...nextSibling, updatedAt: new Date().toISOString() } : t);
         } else {
           map.set(t.id, t);
         }

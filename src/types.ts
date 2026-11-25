@@ -111,16 +111,32 @@ export interface TaskActivity {
 export interface TaskDisciplineMetadata {
   // Content
   contentType?: string;
-  deliverable?: string;
-  brief?: string;
-  wordCount?: number;
-  relevantRequirements?: string;
+  contentSpecifications?: string;
+  sourceContentReferences?: string[];
   // Design
   assetType?: string;
-  dimensions?: string;
-  format?: string;
-  quantity?: number;
   designSpecifications?: string;
+  brandAssetsReferences?: string[];
+}
+
+export interface ParentTask {
+  id: string;
+  title: string;
+  brief?: string;
+  brandGuidelines?: string;
+  client?: string;
+  project?: string;
+  clickupParentTaskId?: string;
+  clickupUrl?: string;
+  clickupSpaceId?: string;
+  clickupSpaceName?: string;
+  clickupFolderId?: string;
+  clickupFolderName?: string;
+  clickupListId?: string;
+  clickupListName?: string;
+  lastSyncedClickupDescHash?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Task {
@@ -130,6 +146,8 @@ export interface Task {
   team?: Role;
   title: string;
   description?: string;
+  brandGuidelines?: string;
+  lastSyncedClickupDescHash?: string;
   dueDate?: string; // YYYY-MM-DD
   startDate?: string; // YYYY-MM-DD or ISO timestamp when moved from pipeline to swimlane
   cognitiveLoad: CognitiveLoad;

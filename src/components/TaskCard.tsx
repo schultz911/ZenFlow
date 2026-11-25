@@ -478,9 +478,22 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         </p>
       )}
 
-      {/* Content Doc Link & ClickUp Link Badges */}
-      {(task.contentDocLink || task.clickupUrl) && (
+      {/* Brand Guidelines, Content Doc Link & ClickUp Link Badges */}
+      {(task.brandGuidelines || task.contentDocLink || task.clickupUrl) && (
         <div className="mt-1.5 flex items-center gap-1.5 flex-wrap" onClick={e => e.stopPropagation()}>
+          {task.brandGuidelines && (
+            <a
+              href={task.brandGuidelines}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={`Brand Guidelines: ${task.brandGuidelines}`}
+              className="inline-flex items-center gap-1 rounded-md bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/25 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300 hover:underline"
+            >
+              <Link2 className="h-2.5 w-2.5 shrink-0" />
+              <span>Brand Guidelines</span>
+              <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+            </a>
+          )}
           {task.contentDocLink && (
             <a
               href={task.contentDocLink}

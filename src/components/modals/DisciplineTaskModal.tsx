@@ -1,16 +1,17 @@
 import { DialogPanel } from '../ui/DialogPanel';
+import { LinkListInput } from '../ui/LinkListInput';
 import React, { useState, useEffect, useMemo } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { useDashboard } from '../../context/DashboardContext';
 import { RoleFilter, TaskDisciplineMetadata } from '../../types';
 import { getLastDayOfMonth } from '../../utils/workload';
+import { isValidHttpUrl } from '../../utils/taskMetadata';
 import {
   X,
   FileText,
   Palette,
   Plus,
   AlertCircle,
-  Link as LinkIcon,
   Sparkles,
   Check,
   FolderKanban,
@@ -64,30 +65,24 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
   const [isLoadingLists, setIsLoadingLists] = useState(false);
   const [clickupActionError, setClickupActionError] = useState<string | null>(null);
 
-  // Shared Fields
+  // Shared Fields (linked to parent task)
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [brandGuidelines, setBrandGuidelines] = useState('');
   const [client, setClient] = useState('');
   const [project, setProject] = useState('');
   const [priority, setPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [dueDate, setDueDate] = useState('');
-  const [attachments, setAttachments] = useState<string[]>([]);
-  const [newAttachmentUrl, setNewAttachmentUrl] = useState('');
-  const [isAddingAttachment, setIsAddingAttachment] = useState(false);
 
   // Content Discipline Fields
   const [contentType, setContentType] = useState('Blog Post');
-  const [deliverable, setDeliverable] = useState('Google Doc Draft');
-  const [brief, setBrief] = useState('');
-  const [wordCount, setWordCount] = useState('');
-  const [relevantRequirements, setRelevantRequirements] = useState('');
+  const [contentSpecifications, setContentSpecifications] = useState('');
+  const [sourceContentReferences, setSourceContentReferences] = useState<string[]>([]);
 
   // Design Discipline Fields
   const [assetType, setAssetType] = useState('Social Media Banner');
-  const [dimensions, setDimensions] = useState('1080x1080');
-  const [format, setFormat] = useState('Figma');
-  const [quantity, setQuantity] = useState('1');
   const [designSpecifications, setDesignSpecifications] = useState('');
+  const [brandAssetsReferences, setBrandAssetsReferences] = useState<string[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -162,25 +157,19 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
 
     setTitle('');
     setDescription('');
+    setBrandGuidelines('');
     setClient('');
     setProject('');
     setPriority('medium');
     setDueDate('');
-    setAttachments([]);
-    setNewAttachmentUrl('');
-    setIsAddingAttachment(false);
 
     setContentType('Blog Post');
-    setDeliverable('Google Doc Draft');
-    setBrief('');
-    setWordCount('');
-    setRelevantRequirements('');
+    setContentSpecifications('');
+    setSourceContentReferences([]);
 
     setAssetType('Social Media Banner');
-    setDimensions('1080x1080');
-    setFormat('Figma');
-    setQuantity('1');
     setDesignSpecifications('');
+    setBrandAssetsReferences([]);
 
     setSubmitError(null);
   };
@@ -304,18 +293,6 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
     }
   };
 
-  const handleAddAttachment = () => {
-    const trimmed = newAttachmentUrl.trim();
-    if (!trimmed) return;
-    setAttachments(prev => [...prev, trimmed]);
-    setNewAttachmentUrl('');
-    setIsAddingAttachment(false);
-  };
-
-  const handleRemoveAttachment = (index: number) => {
-    setAttachments(prev => prev.filter((_, i) => i !== index));
-  };
-
   const setQuickDate = (daysFromNow: number | null, isEndOfMonth = false) => {
     if (daysFromNow === null && !isEndOfMonth) {
       setDueDate('');
@@ -351,26 +328,28 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
       return;
     }
 
+    const trimmedBrandGuidelines = brandGuidelines.trim();
+    if (trimmedBrandGuidelines && !isValidHttpUrl(trimmedBrandGuidelines)) {
+      setSubmitError('Brand Guidelines must be a valid URL starting with http:// or https://.');
+      return;
+    }
+
     setIsSubmitting(true);
     setSubmitError(null);
 
     const contentMeta: TaskDisciplineMetadata | undefined = needsContent
       ? {
           contentType: contentType.trim() || undefined,
-          deliverable: deliverable.trim() || undefined,
-          brief: brief.trim() || undefined,
-          wordCount: wordCount ? parseInt(wordCount, 10) : undefined,
-          relevantRequirements: relevantRequirements.trim() || undefined,
+          contentSpecifications: contentSpecifications.trim() || undefined,
+          sourceContentReferences: sourceContentReferences.length > 0 ? sourceContentReferences : undefined,
         }
       : undefined;
 
     const designMeta: TaskDisciplineMetadata | undefined = needsDesign
       ? {
           assetType: assetType.trim() || undefined,
-          dimensions: dimensions.trim() || undefined,
-          format: format.trim() || undefined,
-          quantity: quantity ? parseInt(quantity, 10) : undefined,
           designSpecifications: designSpecifications.trim() || undefined,
+          brandAssetsReferences: brandAssetsReferences.length > 0 ? brandAssetsReferences : undefined,
         }
       : undefined;
 
@@ -378,11 +357,11 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
       await createPipelineBundle({
         title: title.trim(),
         description: description.trim() || undefined,
+        brandGuidelines: trimmedBrandGuidelines || undefined,
         dueDate: dueDate.trim() || undefined,
         client: client.trim() || undefined,
         project: project.trim() || undefined,
         priority,
-        attachments: attachments.length > 0 ? attachments : undefined,
         disciplines: selectedDisciplines,
         disciplineSpecs: {
           content: contentMeta,
@@ -736,16 +715,40 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-2">
-                  Description / Brief Overview
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-neutral-700 dark:text-white/80" htmlFor="disciplinetaskmodal-field-2">
+                    Brief
+                  </label>
+                  <span className="text-[11px] text-[var(--text-secondary)]">
+                    Shared &amp; linked to parent task
+                  </span>
+                </div>
                 <textarea
-                  rows={2}
+                  rows={4}
                   value={description}
                   onChange={e => setDescription(e.target.value)}
-                  placeholder="Summarize the core requirements, goals, and context for this task..."
-                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none resize-none"
+                  placeholder="Detailed campaign brief, objectives, audience, messaging, and context..."
+                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none resize-y"
                   id="disciplinetaskmodal-field-2"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs font-semibold text-neutral-700 dark:text-white/80" htmlFor="disciplinetaskmodal-brand-guidelines">
+                    Brand Guidelines Link
+                  </label>
+                  <span className="text-[11px] text-[var(--text-secondary)]">
+                    Shared &amp; linked to parent task
+                  </span>
+                </div>
+                <input
+                  type="url"
+                  value={brandGuidelines}
+                  onChange={e => setBrandGuidelines(e.target.value)}
+                  placeholder="https://... (Brand book, Notion, Google Drive, Figma)"
+                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none"
+                  id="disciplinetaskmodal-brand-guidelines"
                 />
               </div>
 
@@ -872,82 +875,6 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                   </div>
                 </div>
               </div>
-
-              {/* Attachments & Reference Links */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-neutral-700 dark:text-white/80" htmlFor="disciplinetaskmodal-field-6">
-                    Attachments & Reference Links
-                  </label>
-                  {!isAddingAttachment && (
-                    <button
-                      type="button"
-                      onClick={() => setIsAddingAttachment(true)}
-                      className="flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                    >
-                      <Plus className="h-3 w-3" />
-                      <span>Add Link</span>
-                    </button>
-                  )}
-                </div>
-
-                {isAddingAttachment && (
-                  <div className="flex items-center gap-2 mb-2">
-                    <input
-                      type="url"
-                      value={newAttachmentUrl}
-                      onChange={e => setNewAttachmentUrl(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          handleAddAttachment();
-                        }
-                      }}
-                      placeholder="Paste link (Google Drive, Figma, Notion, Miro...)"
-                      className="flex-1 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
-                      id="disciplinetaskmodal-field-6"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddAttachment}
-                      className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-semibold hover:bg-blue-500 transition-colors"
-                    >
-                      Add
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAddingAttachment(false);
-                        setNewAttachmentUrl('');
-                      }}
-                      className="px-2 py-1.5 rounded-xl border border-[var(--border)] text-xs text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
-
-                {attachments.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-1.5">
-                    {attachments.map((att, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-neutral-100 dark:bg-white/5 border border-[var(--border)] text-xs text-neutral-700 dark:text-white/80 max-w-full"
-                      >
-                        <LinkIcon className="h-3 w-3 text-blue-500 shrink-0" />
-                        <span className="truncate max-w-[260px]">{att}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveAttachment(idx)}
-                          className="text-neutral-400 hover:text-red-500 dark:hover:text-red-400 ml-1"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
 
             {/* Content Discipline Fields */}
@@ -957,100 +884,54 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                   <FileText className="h-3.5 w-3.5" />
                   <span>Content Subtask Specifications</span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-7">
-                      Content Type
-                    </label>
-                    <input
-                      type="text"
-                      list="content-type-options"
-                      value={contentType}
-                      onChange={e => setContentType(e.target.value)}
-                      placeholder="e.g. Blog Post, Case Study, Whitepaper"
-                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
-                      id="disciplinetaskmodal-field-7"
-                    />
-                    <datalist id="content-type-options">
-                      <option value="Blog Post" />
-                      <option value="Website Copy" />
-                      <option value="Case Study" />
-                      <option value="Whitepaper" />
-                      <option value="Social Media Pack" />
-                      <option value="Email Newsletter" />
-                      <option value="Video Script" />
-                      <option value="Press Release" />
-                    </datalist>
-                  </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-8">
-                      Deliverable Format
-                    </label>
-                    <input
-                      type="text"
-                      list="content-deliverable-options"
-                      value={deliverable}
-                      onChange={e => setDeliverable(e.target.value)}
-                      placeholder="e.g. Google Doc Draft, Notion Page"
-                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
-                      id="disciplinetaskmodal-field-8"
-                    />
-                    <datalist id="content-deliverable-options">
-                      <option value="Google Doc Draft" />
-                      <option value="Notion Brief & Copy" />
-                      <option value="Markdown File" />
-                      <option value="Copy Deck Spreadsheet" />
-                      <option value="PDF Document" />
-                    </datalist>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-9">
-                      Brief / Outline URL
-                    </label>
-                    <input
-                      type="text"
-                      value={brief}
-                      onChange={e => setBrief(e.target.value)}
-                      placeholder="Link to document brief or outline..."
-                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
-                      id="disciplinetaskmodal-field-9"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-10">
-                      Word Count Target
-                    </label>
-                    <input
-                      type="number"
-                      min={0}
-                      step={50}
-                      value={wordCount}
-                      onChange={e => setWordCount(e.target.value)}
-                      placeholder="e.g. 800, 1500"
-                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
-                      id="disciplinetaskmodal-field-10"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-7">
+                    Content Type
+                  </label>
+                  <input
+                    type="text"
+                    list="content-type-options"
+                    value={contentType}
+                    onChange={e => setContentType(e.target.value)}
+                    placeholder="e.g. Blog Post, Case Study, Whitepaper"
+                    className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
+                    id="disciplinetaskmodal-field-7"
+                  />
+                  <datalist id="content-type-options">
+                    <option value="Blog Post" />
+                    <option value="Website Copy" />
+                    <option value="Case Study" />
+                    <option value="Whitepaper" />
+                    <option value="Social Media Pack" />
+                    <option value="Email Newsletter" />
+                    <option value="Video Script" />
+                    <option value="Press Release" />
+                  </datalist>
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-11">
-                    Relevant Requirements & Guidelines
+                    Content Specifications
                   </label>
                   <textarea
-                    rows={2}
-                    value={relevantRequirements}
-                    onChange={e => setRelevantRequirements(e.target.value)}
-                    placeholder="Keywords, target persona, tone of voice, call to action requirements..."
-                    className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none resize-none"
+                    rows={4}
+                    value={contentSpecifications}
+                    onChange={e => setContentSpecifications(e.target.value)}
+                    placeholder="Word count, deliverable format, tone of voice, keywords, target persona, CTA..."
+                    className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none resize-y"
                     id="disciplinetaskmodal-field-11"
                   />
                 </div>
+
+                <LinkListInput
+                  id="disciplinetaskmodal-content-refs"
+                  label="Source Content & References"
+                  links={sourceContentReferences}
+                  onChange={setSourceContentReferences}
+                  placeholder="Paste source doc, outline, or reference URL (https://...)"
+                  accent="blue"
+                />
               </div>
             )}
 
@@ -1061,106 +942,53 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                   <Palette className="h-3.5 w-3.5" />
                   <span>Design Subtask Specifications</span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-12">
-                      Asset Type
-                    </label>
-                    <input
-                      type="text"
-                      list="design-asset-options"
-                      value={assetType}
-                      onChange={e => setAssetType(e.target.value)}
-                      placeholder="e.g. Social Banner, Infographic"
-                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
-                      id="disciplinetaskmodal-field-12"
-                    />
-                    <datalist id="design-asset-options">
-                      <option value="Social Media Banner" />
-                      <option value="Infographic" />
-                      <option value="Presentation Deck" />
-                      <option value="Brand Identity / Logo" />
-                      <option value="Ad Creative Pack" />
-                      <option value="Print / Packaging" />
-                      <option value="Vector Illustration" />
-                    </datalist>
-                  </div>
 
-                  <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-13">
-                      Dimensions / Aspect Ratio
-                    </label>
-                    <input
-                      type="text"
-                      list="design-dim-options"
-                      value={dimensions}
-                      onChange={e => setDimensions(e.target.value)}
-                      placeholder="e.g. 1080x1080, 1920x1080, A4"
-                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
-                      id="disciplinetaskmodal-field-13"
-                    />
-                    <datalist id="design-dim-options">
-                      <option value="1080x1080 (Square 1:1)" />
-                      <option value="1920x1080 (Landscape 16:9)" />
-                      <option value="1080x1920 (Story/Reel 9:16)" />
-                      <option value="1200x628 (Facebook/LinkedIn Ad)" />
-                      <option value="A4 Print (210x297mm)" />
-                    </datalist>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-14">
-                      Deliverable Format
-                    </label>
-                    <input
-                      type="text"
-                      list="design-format-options"
-                      value={format}
-                      onChange={e => setFormat(e.target.value)}
-                      placeholder="e.g. Figma, PSD, AI, PNG, SVG, PDF"
-                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
-                      id="disciplinetaskmodal-field-14"
-                    />
-                    <datalist id="design-format-options">
-                      <option value="Figma Source + PNG Export" />
-                      <option value="Adobe Illustrator (.ai) + SVG" />
-                      <option value="Adobe Photoshop (.psd)" />
-                      <option value="High-Res PDF (Print Ready)" />
-                      <option value="PNG / JPEG Pack" />
-                    </datalist>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-15">
-                      Quantity of Assets
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={quantity}
-                      onChange={e => setQuantity(e.target.value)}
-                      placeholder="e.g. 1, 3, 5"
-                      className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
-                      id="disciplinetaskmodal-field-15"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-12">
+                    Asset Type
+                  </label>
+                  <input
+                    type="text"
+                    list="design-asset-options"
+                    value={assetType}
+                    onChange={e => setAssetType(e.target.value)}
+                    placeholder="e.g. Social Banner, Infographic"
+                    className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-indigo-500 focus:outline-none"
+                    id="disciplinetaskmodal-field-12"
+                  />
+                  <datalist id="design-asset-options">
+                    <option value="Social Media Banner" />
+                    <option value="Infographic" />
+                    <option value="Presentation Deck" />
+                    <option value="Brand Identity / Logo" />
+                    <option value="Ad Creative Pack" />
+                    <option value="Print / Packaging" />
+                    <option value="Vector Illustration" />
+                  </datalist>
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-16">
-                    Design Specifications & Brand Notes
+                    Design Specifications
                   </label>
                   <textarea
-                    rows={2}
+                    rows={4}
                     value={designSpecifications}
                     onChange={e => setDesignSpecifications(e.target.value)}
-                    placeholder="Color palette, font pairings, visual reference links, bleed/margins..."
-                    className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none resize-none"
+                    placeholder="Dimensions, aspect ratios, deliverable formats, quantity, visual notes, bleed/margins..."
+                    className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-indigo-500 focus:outline-none resize-y"
                     id="disciplinetaskmodal-field-16"
                   />
                 </div>
+
+                <LinkListInput
+                  id="disciplinetaskmodal-design-refs"
+                  label="Brand Assets & References"
+                  links={brandAssetsReferences}
+                  onChange={setBrandAssetsReferences}
+                  placeholder="Paste Figma, Drive asset folder, or visual reference URL (https://...)"
+                  accent="indigo"
+                />
               </div>
             )}
 

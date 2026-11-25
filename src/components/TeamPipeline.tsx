@@ -18,6 +18,8 @@ import {
   FileText,
   Palette,
   CornerDownRight,
+  Link2,
+  ExternalLink,
 } from 'lucide-react';
 
 interface TeamPipelineProps {
@@ -489,27 +491,31 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                         </div>
                       )}
 
-                      {metadata && (
+                      {(metadata?.contentType || metadata?.assetType || task.brandGuidelines) && (
                         <div className="flex items-center gap-1 flex-wrap text-[11px] text-neutral-600 dark:text-white/50 mb-2">
-                          {metadata.contentType && (
+                          {metadata?.contentType && (
                             <span className="px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-600 dark:text-blue-300 font-medium">
                               {metadata.contentType}
                             </span>
                           )}
-                          {metadata.wordCount && (
-                            <span className="px-1.5 py-0.2 rounded bg-neutral-100 dark:bg-white/5 font-medium">
-                              {metadata.wordCount} words
-                            </span>
-                          )}
-                          {metadata.assetType && (
+                          {metadata?.assetType && (
                             <span className="px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 font-medium">
                               {metadata.assetType}
                             </span>
                           )}
-                          {metadata.dimensions && (
-                            <span className="px-1.5 py-0.2 rounded bg-neutral-100 dark:bg-white/5 font-medium">
-                              {metadata.dimensions}
-                            </span>
+                          {task.brandGuidelines && (
+                            <a
+                              href={task.brandGuidelines}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              title={`Brand Guidelines: ${task.brandGuidelines}`}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-600 dark:text-blue-300 font-medium hover:underline"
+                            >
+                              <Link2 className="h-2.5 w-2.5 shrink-0" />
+                              <span>Brand Guidelines</span>
+                              <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+                            </a>
                           )}
                         </div>
                       )}
