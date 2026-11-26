@@ -30,7 +30,8 @@ import {
 import { compareTasksByDeadline, formatBillableHours, getTaskBillableMs, getTaskAssigneeIds } from '../utils/workload';
 import { signInWithGoogle, signOutFirebase, onFirebaseAuthStateChanged } from '../lib/firebase';
 import {
-  SUPERADMIN_EMAIL,
+  getSuperadminEmail,
+  setSuperadminEmailOverride,
   isSuperadmin as isSuperadminMember,
   isAdminMember,
   isBusinessLead as isBusinessLeadMember,
@@ -45,6 +46,10 @@ import {
   canEditUserBoard,
   canSwitchBoards as canSwitchBoardsPolicy,
 } from '../domain/permissions';
+
+if (import.meta.env.VITE_SUPERADMIN_EMAIL) {
+  setSuperadminEmailOverride(import.meta.env.VITE_SUPERADMIN_EMAIL as string);
+}
 import {
   applyOptimisticTaskUpdate,
   applyOptimisticTaskReorder,
@@ -305,7 +310,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   const creativeDirectors = useMemo(
     () =>
       users
-        .filter(u => u.isCreativeDirector || u.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase())
+        .filter(u => u.isCreativeDirector || isSuperadminMember(u))
         .sort((a, b) => a.name.localeCompare(b.name)),
     [users]
   );
@@ -502,7 +507,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
           let primary = list.find(u => rawTasks.some((t: Task) => t.userId === u.id)) ||
             list.find(u => u.id !== 'user-superadmin-kiran') ||
             list[0];
-          if (em === SUPERADMIN_EMAIL.toLowerCase()) primary = { ...primary, isCreativeDirector: true };
+          if (em === getSuperadminEmail()) primary = { ...primary, isCreativeDirector: true };
           dedupedUsers.push(primary);
           for (const dup of list) {
             if (dup.id !== primary.id) idReassignments.set(dup.id, primary.id);
@@ -664,7 +669,9 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         return;
       }
 
+      const superEmail = getSuperadminEmail();
       let matched: User | undefined;
+      let sessionError: string | null = null;
       try {
         const res = await fetch('/api/auth/verify-email', {
           method: 'POST',
@@ -672,8 +679,13 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
           body: JSON.stringify({ email }),
         });
         if (res.ok) matched = (await res.json()).user;
-      } catch (e) {
+        else if (res.status !== 403 && res.status !== 404) {
+          const payload = await res.json().catch(() => ({}));
+          sessionError = payload.error || `Authentication verification failed (${res.status})`;
+        }
+      } catch (e: any) {
         console.warn('[Auth] Server verify-email failed:', e);
+        sessionError = e?.message || 'Unable to verify Google session with server';
       }
 
       if (!isMounted || revision !== authRevision) return;
@@ -685,7 +697,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         setCurrentUser(null);
         try { localStorage.removeItem(USER_SESSION_KEY); } catch {}
         setAuthError(
-          `Account not registered: ${email}. Only registered ZenFlow team members can view the board. Please contact kiran.s@zensciences.com to be added.`
+          sessionError ||
+            `Account not registered: ${email}. Only registered ZenFlow team members can view the board. Please contact ${superEmail} to be added.`
         );
       }
       setIsAuthChecking(false);
@@ -701,6 +714,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     setAuthError(null);
     const googleUser = await signInWithGoogle();
     const cleanEmail = googleUser.email.trim().toLowerCase();
+    const superEmail = getSuperadminEmail();
     const response = await fetch('/api/auth/verify-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -709,7 +723,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     const existing: User | undefined = response.ok ? (await response.json()).user : undefined;
     if (!existing) {
       await signOutFirebase();
-      const err = `Account not registered: ${cleanEmail}. Only users with existing ZenFlow accounts are authorized to sign in. Please contact kiran.s@zensciences.com to be added.`;
+      const err =
+        response.status === 403 || response.status === 404
+          ? `Account not registered: ${cleanEmail}. Only users with existing ZenFlow accounts are authorized to sign in. Please contact ${superEmail} to be added.`
+          : `Unable to verify session (${response.status}). Please try again.`;
       setAuthError(err);
       throw new Error(err);
     }

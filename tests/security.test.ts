@@ -5,7 +5,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fixtureServer, fixtureTask } from './fixtures';
-import { publicMember, SUPERADMIN_EMAIL } from '../server/security';
+import { createApiSecurity, getSuperadminEmail, publicMember, SUPERADMIN_EMAIL } from '../server/security';
 import { decryptSecret, encryptSecret } from '../server/crypto';
 
 async function withServer(run: (server: Awaited<ReturnType<typeof fixtureServer>>) => Promise<void>) {
@@ -346,3 +346,73 @@ test('security headers and at-rest secret encryption behave as configured', asyn
     else process.env.ZENFLOW_SECRETS_KEY = prevKey;
   }
 }));
+
+test('superadmin can exchange sessions, verify email, and access API without prior registration (default and env override)', async () => {
+  await withServer(async server => {
+    // Simulate a store where superadmin was not pre-registered
+    server.store.users = server.store.users.filter((u: any) => u.email.toLowerCase() !== SUPERADMIN_EMAIL.toLowerCase());
+    assert.equal(server.store.users.some((u: any) => u.email.toLowerCase() === SUPERADMIN_EMAIL.toLowerCase()), false);
+
+    const sessionRes = await server.request('/auth/session', 'kiran', 'POST', undefined, { 'x-zenflow-request': '1' });
+    assert.equal(sessionRes.status, 200);
+    const sessionBody = await sessionRes.json();
+    assert.equal(sessionBody.user.email.toLowerCase(), SUPERADMIN_EMAIL.toLowerCase());
+    assert.equal(sessionBody.user.isAdministrator, true);
+
+    // Direct API access also succeeds if superadmin is absent from store.users
+    server.store.users = server.store.users.filter((u: any) => u.email.toLowerCase() !== SUPERADMIN_EMAIL.toLowerCase());
+    const stateRes = await server.request('/state', 'kiran', 'GET');
+    assert.equal(stateRes.status, 200);
+
+    server.store.users = server.store.users.filter((u: any) => u.email.toLowerCase() !== SUPERADMIN_EMAIL.toLowerCase());
+    const verifyRes = await server.request('/auth/verify-email', 'kiran', 'POST', { email: SUPERADMIN_EMAIL });
+    assert.equal(verifyRes.status, 200);
+    const verifyBody = await verifyRes.json();
+    assert.equal(verifyBody.user.email.toLowerCase(), SUPERADMIN_EMAIL.toLowerCase());
+  });
+
+  // Environment variable override works dynamically without prior user entry
+  const prevEnv = process.env.ZENFLOW_SUPERADMIN_EMAIL;
+  process.env.ZENFLOW_SUPERADMIN_EMAIL = 'Custom.Super@Zensciences.com';
+  try {
+    assert.equal(getSuperadminEmail(), 'custom.super@zensciences.com');
+    const store = { users: [] as any[], tasks: [] as any[] };
+    const middleware = createApiSecurity({
+      getStore: () => store,
+      verify: async () => ({
+        email: 'custom.super@zensciences.com',
+        email_verified: true,
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        firebase: { sign_in_provider: 'google.com' },
+      }),
+    });
+    let status = 200;
+    let nextCalled = false;
+    const req: any = {
+      path: '/state',
+      method: 'GET',
+      headers: {},
+      query: {},
+      get: (h: string) => (h.toLowerCase() === 'authorization' ? 'Bearer ok' : undefined),
+    };
+    const res: any = {
+      locals: {},
+      setHeader: () => res,
+      json: () => res,
+      status: (code: number) => {
+        status = code;
+        return { json: () => res };
+      },
+    };
+    await middleware(req, res, () => {
+      nextCalled = true;
+    });
+    assert.equal(status, 200);
+    assert.equal(nextCalled, true);
+    assert.equal(res.locals.caller.email, 'custom.super@zensciences.com');
+    assert.equal(store.users.length, 1);
+  } finally {
+    if (prevEnv === undefined) delete process.env.ZENFLOW_SUPERADMIN_EMAIL;
+    else process.env.ZENFLOW_SUPERADMIN_EMAIL = prevEnv;
+  }
+});

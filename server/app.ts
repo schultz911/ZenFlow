@@ -8,7 +8,7 @@ import {
   isAdminMember,
   isBusinessLead,
   isSuperadmin as isSuperadminUser,
-  SUPERADMIN_EMAIL,
+  getSuperadminEmail,
   VALID_ROLES,
 } from '../src/domain/permissions';
 import { encryptSecret } from './crypto';
@@ -307,7 +307,21 @@ export function createServerApp(deps: ServerAppDeps): Express {
       ) {
         return res.status(401).json({ error: 'Verified Google identity required' });
       }
-      const user = repo.getUsers().find(m => m.email.toLowerCase() === identity.email?.toLowerCase());
+      const cleanIdentityEmail = identity.email?.trim().toLowerCase();
+      const superEmail = getSuperadminEmail();
+      let user = repo.getUsers().find(m => m.email.toLowerCase() === cleanIdentityEmail);
+      if (!user && cleanIdentityEmail === superEmail) {
+        user = repo.ensureSuperadmin();
+        broadcastEvent('user_created', user);
+        repo.appendAuditLog({
+          category: 'security',
+          action: 'superadmin_bootstrapped',
+          actor: { id: user.id, name: user.name, email: user.email, ip: req.ip },
+          targetId: user.id,
+          targetType: 'user',
+          details: `Superadmin bootstrap account initialized for ${superEmail}`,
+        });
+      }
       if (!user) return res.status(403).json({ error: 'Account not registered in ZenFlow' });
       res.setHeader('Cache-Control', 'no-store');
       res.cookie(SESSION_COOKIE, token, {
@@ -329,7 +343,7 @@ export function createServerApp(deps: ServerAppDeps): Express {
     res.status(204).end();
   });
 
-  app.use('/api', createApiSecurity({ getStore: () => repo.getStore(), verify: verifyIdentity }));
+  app.use('/api', createApiSecurity({ getStore: () => repo.getStore(), verify: verifyIdentity, ensureSuperadmin: () => repo.ensureSuperadmin() }));
 
   app.get('/api/health', (_req: Request, res: Response) => {
     res.setHeader('Cache-Control', 'no-store');
@@ -379,11 +393,12 @@ export function createServerApp(deps: ServerAppDeps): Express {
       return res.json({ user: existingUser, isNew: false });
     }
 
-    if (cleanEmail === SUPERADMIN_EMAIL.toLowerCase()) {
+    const superEmail = getSuperadminEmail();
+    if (cleanEmail === superEmail) {
       const superadmin: User = {
         id: 'user-superadmin-kiran',
         name: cleanName || 'Kiran S',
-        email: SUPERADMIN_EMAIL,
+        email: superEmail,
         role: cleanRole,
         avatarColor: 'from-blue-600 to-indigo-600',
         isCreativeDirector: true,
@@ -399,7 +414,7 @@ export function createServerApp(deps: ServerAppDeps): Express {
         actor: { id: superadmin.id, name: superadmin.name, email: superadmin.email, ip: req.ip },
         targetId: superadmin.id,
         targetType: 'user',
-        details: `Superadmin bootstrap account initialized for ${SUPERADMIN_EMAIL}`,
+        details: `Superadmin bootstrap account initialized for ${superEmail}`,
       });
       return res.status(201).json({ user: superadmin, isNew: true });
     }
@@ -414,7 +429,7 @@ export function createServerApp(deps: ServerAppDeps): Express {
     });
     return res.status(403).json({
       error:
-        'Account not registered. Only team members with an existing ZenFlow account are authorized to log in. Please contact kiran.s@zensciences.com to be added.',
+        `Account not registered. Only team members with an existing ZenFlow account are authorized to log in. Please contact ${superEmail} to be added.`,
     });
   });
 
@@ -423,7 +438,11 @@ export function createServerApp(deps: ServerAppDeps): Express {
     if (!email) return res.status(400).json({ error: 'Email is required' });
     const cleanEmail = sanitizeString(email).toLowerCase();
     repo.deduplicateUsers();
-    const user = repo.getUsers().find(u => u.email.toLowerCase() === cleanEmail);
+    let user = repo.getUsers().find(u => u.email.toLowerCase() === cleanEmail);
+    if (!user && cleanEmail === getSuperadminEmail()) {
+      user = repo.ensureSuperadmin();
+      broadcastEvent('user_created', user);
+    }
     if (!user) return res.status(404).json({ error: 'No account registered with this email address' });
     res.json({ user });
   });
@@ -529,7 +548,7 @@ export function createServerApp(deps: ServerAppDeps): Express {
         if (!isCallerSuper) {
           return res.status(403).json({ error: 'Only the Superadmin can edit user email addresses' });
         }
-        if (currentEmail === SUPERADMIN_EMAIL.toLowerCase()) {
+        if (currentEmail === getSuperadminEmail()) {
           return res.status(400).json({ error: 'The primary Superadmin email address cannot be modified' });
         }
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

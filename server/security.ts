@@ -3,6 +3,7 @@ import { getTaskAssigneeIds } from '../src/domain/taskTransitions';
 import { decryptSecret } from './crypto';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
+  getSuperadminEmail,
   SUPERADMIN_EMAIL,
   type MemberLike as Member,
   isSuperadmin,
@@ -21,6 +22,7 @@ import {
 } from '../src/domain/permissions';
 
 export {
+  getSuperadminEmail,
   SUPERADMIN_EMAIL,
   type Member,
   isSuperadmin,
@@ -101,6 +103,7 @@ const CLICKUP_SELF_EDIT_KEYS = new Set([
 export function createApiSecurity(options: {
   getStore: () => { users: Member[]; tasks: { id: string; userId?: string; assigneeIds?: string[]; team?: string; status?: string }[] };
   verify: (token: string) => Promise<Identity>;
+  ensureSuperadmin?: () => Member | undefined;
 }) {
   return async (req: Request, res: Response, next: NextFunction) => {
     const routePath = req.path.replace(/\/+$/, '') || '/';
@@ -117,7 +120,22 @@ export function createApiSecurity(options: {
         return res.status(401).json({ error: 'A verified Google identity is required' });
       }
       const store = options.getStore();
-      const caller = store.users.find(user => user.email.toLowerCase() === identity.email!.toLowerCase());
+      const normalizedEmail = identity.email.trim().toLowerCase();
+      let caller = store.users.find(user => user.email.toLowerCase() === normalizedEmail);
+      if (!caller && isSuperadmin({ email: normalizedEmail })) {
+        caller = options.ensureSuperadmin?.() || store.users.find(user => user.email.toLowerCase() === normalizedEmail);
+        if (!caller) {
+          caller = {
+            id: 'user-superadmin-kiran',
+            email: getSuperadminEmail(),
+            role: 'administrator',
+            isAdministrator: true,
+            isCreativeDirector: true,
+            designation: 'Creative Director',
+          };
+          store.users.unshift(caller);
+        }
+      }
       if (!caller) return res.status(403).json({ error: 'Account not registered in ZenFlow' });
       res.locals.caller = caller;
       res.locals.identityExpiresAt = identity.exp * 1000;

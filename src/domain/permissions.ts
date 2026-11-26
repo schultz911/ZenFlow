@@ -1,4 +1,19 @@
-export const SUPERADMIN_EMAIL = 'kiran.s@zensciences.com';
+export const DEFAULT_SUPERADMIN_EMAIL = 'kiran.s@zensciences.com';
+
+let clientSuperadminOverride = '';
+
+export function setSuperadminEmailOverride(email: string | undefined): void {
+  clientSuperadminOverride = email?.trim().toLowerCase() || '';
+}
+
+export function getSuperadminEmail(): string {
+  const proc = typeof process !== 'undefined' ? process.env : undefined;
+  const configured = proc?.ZENFLOW_SUPERADMIN_EMAIL || proc?.VITE_SUPERADMIN_EMAIL || clientSuperadminOverride;
+  const normalized = configured?.trim().toLowerCase();
+  return normalized || DEFAULT_SUPERADMIN_EMAIL;
+}
+
+export const SUPERADMIN_EMAIL = getSuperadminEmail();
 
 export const VALID_ROLES = ['content', 'design', 'account_manager', 'administrator'] as const;
 export type ValidRole = (typeof VALID_ROLES)[number];
@@ -30,7 +45,7 @@ export interface TaskPermissionLike {
 }
 
 export const isSuperadmin = (user: Pick<MemberLike, 'email'> | undefined | null): boolean =>
-  Boolean(user?.email && user.email.toLowerCase() === SUPERADMIN_EMAIL);
+  Boolean(user?.email && user.email.trim().toLowerCase() === getSuperadminEmail());
 
 export const isAdminMember = (user: MemberLike | undefined | null): boolean =>
   Boolean(user && (isSuperadmin(user) || user.isAdministrator || user.role === 'administrator'));

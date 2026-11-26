@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, AlertCircle, ShieldAlert, Loader2, LogIn } from 'lucide-react';
 import { useAuth } from '../context/DashboardContext';
+import { getSuperadminEmail } from '../domain/permissions';
 import { DialogPanel } from './ui/DialogPanel';
 
 interface SignInModalProps {
@@ -113,7 +114,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose }) => 
                   <p className="font-semibold text-neutral-800 dark:text-white/90">Authorized Workspace Access</p>
                   <p>
                     Only users pre-registered by an Administrator, Business Lead, Cluster Lead, or Creative Director
-                    can log in. Contact <span className="font-mono text-neutral-800 dark:text-white/90">kiran.s@zensciences.com</span> for onboarding.
+                    can log in. Contact <span className="font-mono text-neutral-800 dark:text-white/90">{getSuperadminEmail()}</span> for onboarding.
                   </p>
                 </div>
               </div>

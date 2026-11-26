@@ -3,8 +3,8 @@ import path from 'node:path';
 import type { ParentTask, Task, User } from '../src/types';
 import { readAuditTail } from './resources';
 import {
+  getSuperadminEmail,
   isSuperadmin,
-  SUPERADMIN_EMAIL,
   VALID_ROLES,
 } from '../src/domain/permissions';
 import {
@@ -295,12 +295,13 @@ export function deduplicateUsersInStore(appStore: AppStore): boolean {
 }
 
 export function ensureSuperadminInStore(appStore: AppStore): User {
+  const superEmail = getSuperadminEmail();
   let existing = appStore.users.find(u => isSuperadmin(u));
   if (!existing) {
     existing = {
       id: 'user-superadmin-kiran',
       name: 'Kiran S',
-      email: SUPERADMIN_EMAIL,
+      email: superEmail,
       role: 'administrator',
       avatarColor: 'from-blue-600 to-indigo-600',
       isAdministrator: true,
@@ -310,6 +311,7 @@ export function ensureSuperadminInStore(appStore: AppStore): User {
     };
     appStore.users.unshift(existing);
   } else {
+    existing.email = superEmail;
     existing.isAdministrator = true;
     existing.isCreativeDirector = true;
     if (!existing.role) existing.role = 'administrator';
@@ -657,7 +659,7 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
         let count = 0;
         for (const doc of usersSnap.docs.slice(i, i + FIRESTORE_CHUNK_SIZE)) {
           const email = String(doc.data()?.email || '').toLowerCase().trim();
-          if (email !== SUPERADMIN_EMAIL.toLowerCase()) {
+          if (email !== getSuperadminEmail()) {
             batch.delete(doc.ref);
             count++;
           }
@@ -785,6 +787,15 @@ export function createWorkspaceRepository(adapter: PersistenceAdapter) {
     saveLocal() {
       touch();
       adapter.scheduleSave(store);
+    },
+    ensureSuperadmin() {
+      const existed = store.users.some(u => isSuperadmin(u));
+      const superUser = ensureSuperadminInStore(store);
+      if (!existed) {
+        this.saveLocal();
+        adapter.saveUser(superUser).catch(e => console.error('Firestore superadmin sync err:', e));
+      }
+      return superUser;
     },
     flushSync() {
       adapter.flushSync(store);

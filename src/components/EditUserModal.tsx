@@ -2,6 +2,7 @@ import { DialogPanel } from './ui/DialogPanel';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth, useClickUp, useWorkspace } from '../context/DashboardContext';
+import { isSuperadmin as isSuperadminUser } from '../domain/permissions';
 import { User, Role } from '../types';
 import { ClickupMemberPicker } from './ClickupMemberPicker';
 import { MemberRoleFields } from './forms/MemberRoleFields';
@@ -112,7 +113,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, isSubmitting, isRemapping, onClose]);
 
-  const isTargetSuperadmin = Boolean(user?.email && user.email.toLowerCase() === 'kiran.s@zensciences.com');
+  const isTargetSuperadmin = isSuperadminUser(user);
   const cleanCurrentEmail = email.trim().toLowerCase();
   const isEmailChanged = Boolean(user && isSuperadmin && !isTargetSuperadmin && cleanCurrentEmail !== (user.email || '').toLowerCase());
   const duplicateTarget = (isEmailChanged && user)

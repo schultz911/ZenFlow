@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
 import { useAuth, useWorkspace } from '../context/DashboardContext';
+import { getSuperadminEmail } from '../domain/permissions';
 import { HoldToPurgeButton } from './HoldToPurgeButton';
 import { DialogPanel } from './ui/DialogPanel';
 
@@ -46,7 +47,8 @@ export const SuperadminPurgeModal: React.FC<SuperadminPurgeModalProps> = ({ isOp
   };
 
   if (!isSuperadmin || typeof document === 'undefined') return null;
-  const accountCount = users.filter(user => user.email.toLowerCase() !== 'kiran.s@zensciences.com').length;
+  const superEmail = getSuperadminEmail();
+  const accountCount = users.filter(user => user.email.trim().toLowerCase() !== superEmail).length;
 
   return createPortal(
     <AnimatePresence>
@@ -83,7 +85,7 @@ export const SuperadminPurgeModal: React.FC<SuperadminPurgeModalProps> = ({ isOp
                 <dl className="my-4 divide-y divide-[var(--border)] text-sm">
                   <div className="flex items-center justify-between py-2.5"><dt className="text-[var(--text-secondary)]">Tasks to delete</dt><dd className="font-medium tabular-nums">{tasks.length}</dd></div>
                   <div className="flex items-center justify-between py-2.5"><dt className="text-[var(--text-secondary)]">Accounts to remove</dt><dd className="font-medium tabular-nums">{accountCount}</dd></div>
-                  <div className="py-2.5"><dt className="text-[var(--text-secondary)]">Protected account</dt><dd className="mt-1 break-all">kiran.s@zensciences.com</dd></div>
+                  <div className="py-2.5"><dt className="text-[var(--text-secondary)]">Protected account</dt><dd className="mt-1 break-all">{superEmail}</dd></div>
                 </dl>
                 {error && <p role="alert" className="mb-3 rounded-lg bg-red-50 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-300">{error}</p>}
                 <HoldToPurgeButton onPurgeConfirm={execute} isLoading={isPurging} />
