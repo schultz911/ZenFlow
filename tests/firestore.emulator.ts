@@ -3,6 +3,9 @@ import { createRequire } from 'node:module';
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import os from 'node:os';
+import { createCloudDiskPersistenceAdapter, createWorkspaceRepository } from '../server/store';
+import { fixtureTask } from './fixtures';
 
 // Use the current Google Cloud gRPC transport to exercise the real emulator rules engine.
 const project = 'demo-zenflow';
@@ -32,13 +35,14 @@ const request = async (document: string, token: string, method = 'GET', fields?:
   }));
 };
 try {
-  for (const name of ['users', 'tasks', 'compliance_audit_logs', 'server_secrets']) {
+  const collections = ['users', 'tasks', 'parent_tasks', 'access_requests', 'compliance_audit_logs', 'server_secrets', 'workspace_meta', 'analytics_snapshots'];
+  for (const name of collections) {
     const response = await request(`${name}/fixture`, 'owner', 'PATCH', { id: { stringValue: 'fixture' }, title: { stringValue: 'Fixture' } });
     assert.equal(response.status, 200, await response.text());
   }
   let denied = 0;
   for (const token of ['', mockToken('owner-id', 'owner@example.invalid'), mockToken('other', 'kiran.s@zensciences.com')]) {
-    for (const name of ['users', 'tasks', 'compliance_audit_logs', 'server_secrets']) {
+    for (const name of collections) {
       for (const [document, method, fields] of [
         [name, 'GET', undefined], [`${name}/fixture`, 'GET', undefined],
         [`${name}/new`, 'PATCH', { isCreativeDirector: { booleanValue: true } }],
@@ -53,4 +57,30 @@ try {
     assert.equal(nested.status, 403); denied++;
   }
   console.log(`Firestore emulator: ${denied} unauthorized operations denied; Admin seed writes succeeded.`);
+
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'zenflow-cloud-test-'));
+  try {
+    delete process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    delete process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    process.env.FIREBASE_PROJECT_ID = project;
+    const adapter = createCloudDiskPersistenceAdapter(directory);
+    await adapter.init();
+    assert.equal(adapter.getFirestoreStatus().connected, true);
+    const repo = createWorkspaceRepository(adapter);
+    const at = '2026-11-26T18:29:00Z';
+    const task = fixtureTask('bundle-content', undefined, { parentTaskId: 'bundle' });
+    await repo.savePipelineBundle({ id: 'bundle', title: 'Bundle', createdAt: at, updatedAt: at }, [task]);
+    assert.equal((await repo.getWebhookDb().collection('parent_tasks').doc('bundle').get()).exists, true);
+    assert.equal((await repo.getWebhookDb().collection('tasks').doc(task.id).get()).exists, true);
+
+    repo.getTasks().push(task);
+    assert.equal(await repo.captureAnalyticsSnapshot(new Date(at)), true);
+    task.title = 'Edited later';
+    assert.equal((await adapter.loadAnalyticsSnapshot('2026-11-26', '2026-11-26'))?.tasks[0].title, 'Task bundle-content');
+    assert.equal(await adapter.loadAnalyticsSnapshot('2026-11-25', '2026-11-25'), null);
+    repo.flushSync();
+    console.log('Firestore emulator: production adapter persisted an atomic bundle and a dated analytics snapshot.');
+  } finally {
+    await fs.rm(directory, { recursive: true, force: true });
+  }
 } finally { client.close(); await environment.cleanup(); }

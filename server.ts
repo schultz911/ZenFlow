@@ -5,6 +5,7 @@ import { createCloudDiskPersistenceAdapter, createWorkspaceRepository } from './
 import { createClickUpService } from './server/clickup';
 import { createServerApp, createSseHub, sanitizeString } from './server/app';
 import { WebhookRegistry } from './server/webhooks';
+import { getAnalyticsClock } from './src/domain/analyticsDate';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const DATA_DIR = process.env.ZENFLOW_DATA_DIR || path.join(process.cwd(), 'data');
@@ -32,10 +33,18 @@ async function startServer() {
     sseHub,
   });
 
-  // Periodic background sweep to auto-archive Done tasks older than 7 days
   setInterval(() => {
-    repo.archiveExpiredDoneTasks(archived => sseHub.broadcastEvent('tasks_reordered', archived));
+    void repo.runMutation(() => repo.archiveExpiredDoneTasks(archived => sseHub.broadcastEvent('tasks_reordered', archived)));
   }, 60 * 60 * 1000).unref();
+
+  const captureSnapshot = () => {
+    if (!getAnalyticsClock().closing) return;
+    void repo.runMutation(() => repo.captureAnalyticsSnapshot()).catch(error =>
+      console.error('[Analytics] Snapshot could not be saved:', error)
+    );
+  };
+  captureSnapshot();
+  setInterval(captureSnapshot, 15_000).unref();
 
   const serveStaticFiles = () => {
     const distPath = path.join(process.cwd(), 'dist');

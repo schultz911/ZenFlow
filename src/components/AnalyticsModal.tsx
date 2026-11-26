@@ -3,7 +3,8 @@ import { DialogPanel } from './ui/DialogPanel';
 import React, { useState, useMemo, useEffect } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { useWorkspace } from '../context/DashboardContext';
-import { User, Task, AnalyticsScope, AnalyticsTimeframe } from '../types';
+import { User, Task, AnalyticsScope, AnalyticsTimeframe, AnalyticsSnapshot } from '../types';
+import { getAnalyticsClock } from '../domain/analyticsDate';
 import {
   calculateTasksEfficiency,
   formatHoursRatio,
@@ -12,7 +13,7 @@ import {
   getTaskBillableMs,
   calculateUserWorkload,
   getUserTag,
-  getUserDailyAssignedHours,
+  getAssignedHoursByMemberAndDate,
   isWorkingDay,
   getTaskAssigneeIds,
   isTaskAssignedToUser,
@@ -40,13 +41,18 @@ interface AnalyticsModalProps {
   onClose: () => void;
 }
 
+const EMPTY_USERS: User[] = [];
+const EMPTY_TASKS: Task[] = [];
+
 export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
-  const { users, tasks, creativeDirectors } = useWorkspace();
+  const workspace = useWorkspace();
+  const { fetchAnalyticsSnapshot } = workspace;
+  const { date: today } = getAnalyticsClock();
 
   // Active time frame & calendar state
   const [timeframe, setTimeframe] = useState<AnalyticsTimeframe>('today');
-  const [customDate, setCustomDate] = useState<string>(() => formatLocalDateKey(new Date()));
-  const [customEndDate, setCustomEndDate] = useState<string>(() => formatLocalDateKey(new Date()));
+  const [customDate, setCustomDate] = useState<string>(() => getAnalyticsClock().date);
+  const [customEndDate, setCustomEndDate] = useState<string>(() => getAnalyticsClock().date);
   const [isRangeMode, setIsRangeMode] = useState<boolean>(false);
 
   // Filter Scope State
@@ -55,6 +61,63 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
   const [selectedDeliveryUnitId, setSelectedDeliveryUnitId] = useState<string>('');
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [selectedUserId, setSelectedUserId] = useState<string>('');
+
+  const requestedDates = useMemo(() => {
+    if (timeframe === 'today') return [today];
+    const workspaceDate = parseLocalDate(today)!;
+    if (timeframe === 'week') {
+      const monday = new Date(workspaceDate);
+      monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+      return Array.from({ length: 7 }, (_, day) =>
+        formatLocalDateKey(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + day))
+      );
+    }
+    const start = parseLocalDate(customDate);
+    const end = parseLocalDate(isRangeMode ? customEndDate : customDate);
+    if (!start || !end || start > end) return [];
+    const dates: string[] = [];
+    for (const day = new Date(start); day <= end && dates.length < 366; day.setDate(day.getDate() + 1)) {
+      dates.push(formatLocalDateKey(day));
+    }
+    return dates;
+  }, [timeframe, today, customDate, customEndDate, isRangeMode]);
+
+  const start = requestedDates[0];
+  const end = requestedDates.at(-1);
+  const requestedHistory = Boolean(start && end && end < today);
+  const futureOnly = Boolean(start && start > today);
+  const historyKey = `${start}/${end}`;
+  const [historical, setHistorical] = useState<{ key: string; snapshot: AnalyticsSnapshot | null; error?: string }>();
+  useEffect(() => {
+    if (!isOpen || !requestedHistory || !start || !end) return;
+    const controller = new AbortController();
+    void fetchAnalyticsSnapshot(start, end, controller.signal)
+      .then(snapshot => {
+        if (!controller.signal.aborted) setHistorical({ key: historyKey, snapshot });
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setHistorical({ key: historyKey, snapshot: null, error: 'Historical analytics could not be loaded.' });
+      });
+    return () => controller.abort();
+  }, [end, fetchAnalyticsSnapshot, historyKey, isOpen, requestedHistory, start]);
+
+  const past = requestedHistory && historical?.key === historyKey ? historical : undefined;
+  const snapshot = past?.snapshot;
+  const isLocked = Boolean(snapshot);
+  const lockLabel = snapshot ? `Locked snapshot · ${snapshot.date}` : requestedHistory ? 'Historical analytics' : `Live · ${today}`;
+  const unavailable = !start ? 'Select a valid date range.'
+    : futureOnly ? 'Analytics are unavailable for future dates.'
+    : requestedHistory && !snapshot ? (past?.error || (past ? 'No historical snapshot was saved for this period.' : 'Loading historical analytics…'))
+    : '';
+  const users = requestedHistory ? snapshot?.users ?? EMPTY_USERS : workspace.users;
+  const tasks = requestedHistory ? snapshot?.tasks ?? EMPTY_TASKS : workspace.tasks;
+  const creativeDirectors = useMemo(() => requestedHistory
+    ? users.filter(user => user.isCreativeDirector)
+    : workspace.creativeDirectors, [requestedHistory, users, workspace.creativeDirectors]);
+  const reportDate = snapshot?.date ?? today;
+  const capturedMs = snapshot ? Date.parse(snapshot.capturedAt) : undefined;
+  const dateRange = useMemo(() => requestedHistory ? (snapshot ? [reportDate] : []) :
+    requestedDates.filter(date => date >= today), [requestedDates, reportDate, requestedHistory, snapshot, today]);
 
   // Delivery units extracted across workspace
   const deliveryUnits = useMemo(() => {
@@ -80,98 +143,37 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
 
   // Set default selection when filter scope changes
   useEffect(() => {
-    if (filterScope === 'client' && !selectedClientId && uniqueClients.length > 0) {
-      setSelectedClientId(uniqueClients[0]);
-    } else if (filterScope === 'delivery_unit' && !selectedDeliveryUnitId && deliveryUnits.length > 0) {
-      setSelectedDeliveryUnitId(deliveryUnits[0].id);
-    } else if (filterScope === 'project' && !selectedProjectId && uniqueProjects.length > 0) {
-      setSelectedProjectId(uniqueProjects[0]);
-    } else if (filterScope === 'user' && !selectedUserId && users.length > 0) {
-      setSelectedUserId(users[0].id);
+    if (requestedHistory && !snapshot) return;
+    if (filterScope === 'client' && !uniqueClients.includes(selectedClientId)) {
+      setSelectedClientId(uniqueClients[0] ?? '');
+    } else if (filterScope === 'delivery_unit' && !deliveryUnits.some(unit => unit.id === selectedDeliveryUnitId)) {
+      setSelectedDeliveryUnitId(deliveryUnits[0]?.id ?? '');
+    } else if (filterScope === 'project' && !uniqueProjects.includes(selectedProjectId)) {
+      setSelectedProjectId(uniqueProjects[0] ?? '');
+    } else if (filterScope === 'user' && !users.some(user => user.id === selectedUserId)) {
+      setSelectedUserId(users[0]?.id ?? '');
     }
-  }, [filterScope, uniqueClients, deliveryUnits, uniqueProjects, users, selectedClientId, selectedDeliveryUnitId, selectedProjectId, selectedUserId]);
-
-  // Compute active date range [startDate, endDate] in local time with safe bounds
-  const { dateRange, isLocked, lockLabel } = useMemo(() => {
-    const now = new Date();
-    const todayStr = formatLocalDateKey(now);
-
-    if (timeframe === 'today') {
-      const isPast2359 = now.getHours() === 23 && now.getMinutes() >= 59;
-      return {
-        dateRange: [todayStr],
-        isLocked: isPast2359,
-        lockLabel: isPast2359 ? 'Locked at 11:59 PM today' : 'Live · Locks at 11:59 PM today',
-      };
-    }
-
-    if (timeframe === 'week') {
-      const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const day = monday.getDay();
-      monday.setDate(monday.getDate() - day + (day === 0 ? -6 : 1));
-      const dates: string[] = [];
-      for (let i = 0; i < 7; i++) {
-        const cur = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
-        dates.push(formatLocalDateKey(cur));
-      }
-
-      const isSundayPast2359 = now.getDay() === 0 && now.getHours() === 23 && now.getMinutes() >= 59;
-      return {
-        dateRange: dates,
-        isLocked: isSundayPast2359,
-        lockLabel: isSundayPast2359 ? 'Locked at 11:59 PM Sunday' : 'Live · Locks Sunday 11:59 PM',
-      };
-    }
-
-    // Custom calendar tool (guard invalid dates and cap at 366 days)
-    const start = parseLocalDate(customDate);
-    const end = parseLocalDate(isRangeMode ? customEndDate : customDate);
-    if (!start || !end) {
-      return {
-        dateRange: [todayStr],
-        isLocked: false,
-        lockLabel: 'Select a valid date range',
-      };
-    }
-
-    const dates: string[] = [];
-    const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-    const MAX_DAYS = 366;
-    while (cur <= end && dates.length < MAX_DAYS) {
-      dates.push(formatLocalDateKey(cur));
-      cur.setDate(cur.getDate() + 1);
-    }
-
-    const endKey = formatLocalDateKey(end);
-    const isHistorical = endKey < todayStr || (endKey === todayStr && now.getHours() === 23 && now.getMinutes() >= 59);
-    return {
-      dateRange: dates,
-      isLocked: isHistorical,
-      lockLabel: isHistorical ? 'Locked Historical Snapshot' : 'Live · Locks at 11:59 PM',
-    };
-  }, [timeframe, customDate, customEndDate, isRangeMode]);
+  }, [filterScope, uniqueClients, deliveryUnits, uniqueProjects, users, selectedClientId, selectedDeliveryUnitId, selectedProjectId, selectedUserId, requestedHistory, snapshot]);
 
   // Filter tasks and users based on active scope
   const { scopedUsers, scopedTasks } = useMemo(() => {
     let uList = users;
     let tList = tasks;
 
-    if (filterScope === 'client' && selectedClientId) {
-      tList = tasks.filter(t => t.client === selectedClientId);
+    if (filterScope === 'client') {
+      tList = selectedClientId ? tasks.filter(t => t.client?.trim() === selectedClientId) : [];
       const clientUserIds = new Set(tList.flatMap(t => getTaskAssigneeIds(t)));
       uList = users.filter(u => clientUserIds.has(u.id));
-    } else if (filterScope === 'delivery_unit' && selectedDeliveryUnitId) {
+    } else if (filterScope === 'delivery_unit') {
       const du = deliveryUnits.find(d => d.id === selectedDeliveryUnitId);
-      if (du) {
-        const duUserIds = new Set(du.userIds);
-        uList = users.filter(u => duUserIds.has(u.id));
-        tList = tasks.filter(t => getTaskAssigneeIds(t).some(id => duUserIds.has(id)));
-      }
-    } else if (filterScope === 'project' && selectedProjectId) {
-      tList = tasks.filter(t => t.project === selectedProjectId);
+      const duUserIds = new Set(du?.userIds);
+      uList = users.filter(u => duUserIds.has(u.id));
+      tList = tasks.filter(t => getTaskAssigneeIds(t).some(id => duUserIds.has(id)));
+    } else if (filterScope === 'project') {
+      tList = selectedProjectId ? tasks.filter(t => t.project?.trim() === selectedProjectId) : [];
       const projUserIds = new Set(tList.flatMap(t => getTaskAssigneeIds(t)));
       uList = users.filter(u => projUserIds.has(u.id));
-    } else if (filterScope === 'user' && selectedUserId) {
+    } else if (filterScope === 'user') {
       uList = users.filter(u => u.id === selectedUserId);
       tList = tasks.filter(t => isTaskAssignedToUser(t, selectedUserId));
     }
@@ -185,8 +187,9 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
 
     // Total utilization across dateRange
     let totalUtilizedCount = 0;
+    const assignedHours = getAssignedHoursByMemberAndDate(scopedTasks, [reportDate], reportDate);
     for (const u of scopedUsers) {
-      const assigned = getUserDailyAssignedHours(u, scopedTasks);
+      const assigned = Math.round((assignedHours.get(u.id)?.get(reportDate) || 0) * 10) / 10;
       if (assigned > 3) {
         totalUtilizedCount++;
       }
@@ -194,14 +197,14 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
     const totalUtilization = totalEmployees > 0 ? Math.round((totalUtilizedCount / totalEmployees) * 100) : 0;
 
     // Total efficiency
-    const { efficiencyPercent, totalTimeTakenHours, totalEstimatedHours } = calculateTasksEfficiency(scopedTasks);
+    const { efficiencyPercent, totalTimeTakenHours, totalEstimatedHours } = calculateTasksEfficiency(scopedTasks, { nowMs: capturedMs });
 
     // Top accounts (ranked by higher of billable or estimated)
     const clientMap = new Map<string, { billableMs: number; estimatedHours: number }>();
     for (const t of scopedTasks) {
       const clientName = t.client?.trim() || 'Internal / Unassigned';
       const existing = clientMap.get(clientName) || { billableMs: 0, estimatedHours: 0 };
-      existing.billableMs += getTaskBillableMs(t);
+      existing.billableMs += getTaskBillableMs(t, capturedMs);
       if (t.estimatedHours) existing.estimatedHours += t.estimatedHours;
       clientMap.set(clientName, existing);
     }
@@ -225,7 +228,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
       topAccountsList,
       maxAccountHours,
     };
-  }, [scopedUsers, scopedTasks]);
+  }, [scopedUsers, scopedTasks, capturedMs, reportDate]);
 
   // SECTION 1: Underutilized Employees (< 3 hours per day assigned) with dates
   const underutilizedEmployees = useMemo(() => {
@@ -235,16 +238,17 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
       dates: string[];
     }> = [];
 
+    const evaluatedDates = dateRange.filter(key => {
+      const date = parseLocalDate(key);
+      return date && (dateRange.length === 1 || isWorkingDay(date));
+    });
+    const assignedHours = getAssignedHoursByMemberAndDate(scopedTasks, evaluatedDates, reportDate);
     for (const u of scopedUsers) {
       const underutilizedDates: string[] = [];
       let totalAssigned = 0;
 
-      for (const dateStr of dateRange) {
-        const d = parseLocalDate(dateStr);
-        if (!d) continue;
-        // Only evaluate working days
-        if (!isWorkingDay(d) && dateRange.length > 1) continue;
-        const dailyAssigned = getUserDailyAssignedHours(u, tasks, d);
+      for (const dateStr of evaluatedDates) {
+        const dailyAssigned = Math.round((assignedHours.get(u.id)?.get(dateStr) || 0) * 10) / 10;
         totalAssigned += dailyAssigned;
         if (dailyAssigned < 3) {
           underutilizedDates.push(dateStr);
@@ -252,7 +256,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
       }
 
       if (underutilizedDates.length > 0) {
-        const avg = dateRange.length > 0 ? Math.round((totalAssigned / dateRange.length) * 10) / 10 : 0;
+        const avg = Math.round((totalAssigned / evaluatedDates.length) * 10) / 10;
         result.push({
           user: u,
           avgAssigned: avg,
@@ -262,7 +266,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
     }
 
     return result.sort((a, b) => a.avgAssigned - b.avgAssigned);
-  }, [scopedUsers, tasks, dateRange]);
+  }, [scopedUsers, scopedTasks, dateRange, reportDate]);
 
   // SECTION 2: Low Efficiency Employees (< 50%) with dates
   const lowEfficiencyEmployees = useMemo(() => {
@@ -276,16 +280,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
 
     for (const u of scopedUsers) {
       const uTasks = scopedTasks.filter(t => isTaskAssignedToUser(t, u.id));
-      const { efficiencyPercent, totalTimeTakenHours, totalEstimatedHours } = calculateTasksEfficiency(uTasks, { forUserId: u.id });
-
-      // Check dates within timeframe
-      const lowDates: string[] = [];
-      for (const dateStr of dateRange) {
-        // If user has low efficiency overall, mark the dates within the selected range
-        if (efficiencyPercent < 50) {
-          lowDates.push(dateStr);
-        }
-      }
+      const { efficiencyPercent, totalTimeTakenHours, totalEstimatedHours } = calculateTasksEfficiency(uTasks, { forUserId: u.id, nowMs: capturedMs });
 
       if (efficiencyPercent < 50 && (totalEstimatedHours > 0 || totalTimeTakenHours > 0)) {
         result.push({
@@ -293,13 +288,13 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
           efficiencyPercent,
           timeTaken: totalTimeTakenHours,
           timeEstimated: totalEstimatedHours,
-          dates: lowDates,
+          dates: [reportDate],
         });
       }
     }
 
     return result.sort((a, b) => a.efficiencyPercent - b.efficiencyPercent);
-  }, [scopedUsers, scopedTasks, dateRange]);
+  }, [scopedUsers, scopedTasks, reportDate, capturedMs]);
 
   // SECTIONS 3 & 4: Key Accounts & Key Delivery Units (Contextually Adjusted by Filter)
   const sections3And4Data = useMemo(() => {
@@ -309,7 +304,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
       for (const t of taskList) {
         const pName = t.project?.trim() || 'General / Unnamed';
         const existing = map.get(pName) || { billableMs: 0, estimatedHours: 0 };
-        existing.billableMs += getTaskBillableMs(t);
+        existing.billableMs += getTaskBillableMs(t, capturedMs);
         if (t.estimatedHours) existing.estimatedHours += t.estimatedHours;
         map.set(pName, existing);
       }
@@ -326,7 +321,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
       for (const t of taskList) {
         const cName = t.client?.trim() || 'Internal / Unassigned';
         const existing = map.get(cName) || { billableMs: 0, estimatedHours: 0 };
-        existing.billableMs += getTaskBillableMs(t);
+        existing.billableMs += getTaskBillableMs(t, capturedMs);
         if (t.estimatedHours) existing.estimatedHours += t.estimatedHours;
         map.set(cName, existing);
       }
@@ -354,7 +349,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
             userIds: [user.id],
           };
           const existing = map.get(du.id) || { du, billableMs: 0, estimatedHours: 0 };
-          existing.billableMs += getTaskBillableMs(t) / share;
+          existing.billableMs += getTaskBillableMs(t, capturedMs) / share;
           if (t.estimatedHours) existing.estimatedHours += t.estimatedHours / share;
           map.set(du.id, existing);
         }
@@ -369,7 +364,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
     // Helper to compute tasks
     const computeKeyTasks = (taskList: Task[]) => {
       return taskList.map(t => {
-        const b = Math.round((getTaskBillableMs(t) / 3600000) * 10) / 10;
+        const b = Math.round((getTaskBillableMs(t, capturedMs) / 3600000) * 10) / 10;
         const e = Math.round((t.estimatedHours || 0) * 10) / 10;
         return { task: t, billableHours: b, estimatedHours: e, keyHours: Math.max(b, e) };
       }).sort((a, b) => b.keyHours - a.keyHours);
@@ -479,7 +474,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
       section4Type: 'all_key_units',
       section4Items: keyUnits,
     };
-  }, [filterScope, scopedTasks, tasks, users, deliveryUnits]);
+  }, [filterScope, scopedTasks, tasks, users, deliveryUnits, capturedMs]);
 
   // SECTION 5: Pressure Metrics (Teams with highest average workload score across members)
   const pressureMetrics = useMemo(() => {
@@ -495,12 +490,13 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
     }
 
     // Compute workload score for every user once
+    const referenceDate = parseLocalDate(reportDate)!;
     const workloadByUserId = new Map<string, ReturnType<typeof calculateUserWorkload>>();
     const userScores = new Map<string, { user: User; score: number; topProjects: Array<{ project: string; score: number }> }>();
 
     for (const u of scopedUsers) {
       const uTasks = tasksByUserId.get(u.id) || [];
-      const breakdown = calculateUserWorkload(uTasks);
+      const breakdown = calculateUserWorkload(uTasks, referenceDate, capturedMs);
       workloadByUserId.set(u.id, breakdown);
 
       // Group breakdown items by project
@@ -548,7 +544,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
       const getBreakdownForUser = (uid: string) => {
         let b = workloadByUserId.get(uid);
         if (!b) {
-          b = calculateUserWorkload(tasksByUserId.get(uid) || []);
+          b = calculateUserWorkload(tasksByUserId.get(uid) || [], referenceDate, capturedMs);
           workloadByUserId.set(uid, b);
         }
         return b;
@@ -586,7 +582,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
     if (filterScope === 'user') {
       // Per user view: tasks contributing highest workload scores
       const user = scopedUsers[0];
-      const breakdown = user ? (workloadByUserId.get(user.id) || calculateUserWorkload(tasksByUserId.get(user.id) || [])) : calculateUserWorkload([]);
+      const breakdown = user ? (workloadByUserId.get(user.id) || calculateUserWorkload(tasksByUserId.get(user.id) || [], referenceDate, capturedMs)) : calculateUserWorkload([]);
       const userRankedTasks = breakdown.items.map(item => ({
         item,
         task: taskById.get(item.taskId),
@@ -608,7 +604,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
       rankedUnits,
       topMembers,
     };
-  }, [scopedUsers, scopedTasks, tasks, users, deliveryUnits, filterScope]);
+  }, [scopedUsers, scopedTasks, tasks, users, deliveryUnits, filterScope, reportDate, capturedMs]);
 
   if (!isOpen) return null;
 
@@ -686,6 +682,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                   <Calendar className="h-3.5 w-3.5 text-blue-500 shrink-0" />
                   <input
                     type="date"
+                    aria-label="Analytics start date"
                     value={customDate}
                     onChange={e => setCustomDate(e.target.value)}
                     className="bg-transparent text-xs text-neutral-800 dark:text-white focus:outline-none cursor-pointer"
@@ -695,6 +692,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                       <span className="text-neutral-400">to</span>
                       <input
                         type="date"
+                        aria-label="Analytics end date"
                         value={customEndDate}
                         onChange={e => setCustomEndDate(e.target.value)}
                         className="bg-transparent text-xs text-neutral-800 dark:text-white focus:outline-none cursor-pointer"
@@ -798,6 +796,11 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
 
           {/* Modal Scrollable Content */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
+            {unavailable ? <p role="status" className="text-sm text-[var(--text-secondary)]">{unavailable}</p> : <>
+            {snapshot && <p className="text-xs text-[var(--text-secondary)]">
+              Cumulative metrics as of {snapshot.date}.
+              {snapshot.date !== end ? ' No snapshot was saved for the end of the selected period.' : ''}
+            </p>}
 
             {/* TOP GRAPHICAL SECTION: 4 Key Metric Cards & Visual Top Accounts */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -1342,6 +1345,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
 
             </div>
 
+            </>}
           </div>
         </DialogPanel>
       </div>

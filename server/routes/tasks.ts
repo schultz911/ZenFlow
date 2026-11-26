@@ -14,11 +14,18 @@ import {
   type RouteDeps,
 } from './validation';
 
+const UUID_PATTERN = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
+
 export function registerTaskRoutes(app: Express, deps: RouteDeps) {
-  const { repo, clickup, broadcastEvent } = deps;
+  const { repo, clickup, broadcastEvent, workspaceWrite } = deps;
+  const queueClickUpWrite = (write: () => Promise<unknown>) => {
+    void repo.runMutation(async () => {
+      if (!repo.purgeNeedsRetry()) await write();
+    }).catch(error => console.error('[ClickUp] Deferred sync failed:', error));
+  };
 
   app.get('/api/tasks', (req: Request, res: Response) => {
-    repo.maybeArchive(archived => broadcastEvent('tasks_reordered', archived));
+    void repo.runMutation(() => repo.maybeArchive(archived => broadcastEvent('tasks_reordered', archived)));
     const etag = `W/"zenflow-tasks-${repo.getRevision()}"`;
     res.setHeader('ETag', etag);
     res.setHeader('Cache-Control', 'private, no-cache, must-revalidate');
@@ -28,7 +35,7 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
     res.json(repo.getTasks());
   });
 
-  app.post('/api/tasks/pipeline-bundle', async (req: Request, res: Response) => {
+  app.post('/api/tasks/pipeline-bundle', workspaceWrite(async (req: Request, res: Response) => {
     const caller: User | undefined = res.locals.caller;
     if (!canCreatePipelineTask(caller)) {
       return res.status(403).json({ error: 'Only Accounts team members and users with authorized special roles can create pipeline tasks' });
@@ -75,59 +82,33 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
     const cleanTaskTypeId = body.clickupTaskTypeId ? sanitizeString(body.clickupTaskTypeId) : undefined;
     const cleanTaskTypeFieldId = body.clickupTaskTypeFieldId ? sanitizeString(body.clickupTaskTypeFieldId) : undefined;
 
-    const token = clickup.resolveToken({ req, caller });
-    const parentMarkdown = buildParentClickupMarkdown(cleanDescription, cleanBrandGuidelines);
-    const remoteParent =
-      token && cleanListId
-        ? await clickup.createRemoteParentTask({
-            token,
-            listId: cleanListId,
-            title: cleanTitle,
-            markdown: parentMarkdown,
-            dueDate: cleanDueDate,
-            taskTypeFieldId: cleanTaskTypeFieldId,
-            taskTypeId: cleanTaskTypeId,
-          })
-        : {};
-
+    const token = clickup.resolveToken(caller);
     const store = repo.getStore();
+    const requestId = body.requestId;
+    if (requestId !== undefined && (typeof requestId !== 'string' || !UUID_PATTERN.test(requestId))) {
+      return res.status(400).json({ error: 'Invalid pipeline creation ID' });
+    }
     const now = new Date().toISOString();
-    const parentTaskId = `parent-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-    const parentTask: ParentTask = {
+    const parentTaskId = requestId
+      ? `parent-${caller!.id}-${requestId}`
+      : `parent-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const previousParent = store.parentTasks.find(parent => parent.id === parentTaskId);
+    const parentTask: ParentTask = previousParent ?? {
       id: parentTaskId,
       title: cleanTitle,
       brief: cleanDescription,
       brandGuidelines: cleanBrandGuidelines,
-      clickupParentTaskId: remoteParent.clickupParentTaskId,
-      lastSyncedClickupDescHash: remoteParent.descHash,
       createdAt: now,
       updatedAt: now,
     };
 
-    const createdTasks: Task[] = [];
-    for (const disc of validDisciplines) {
+    const createdTasks: Task[] = previousParent ? store.tasks.filter(task => task.parentTaskId === parentTaskId) : [];
+    for (const disc of previousParent ? [] : validDisciplines) {
       const existingInPipeline = store.tasks.filter(t => t.team === disc && t.status === 'pipeline');
       const maxOrder = existingInPipeline.reduce((max, t) => Math.max(max, t.order ?? 0), -1);
       const discLabel = disc === 'content' ? 'Content' : 'Design';
-      const subtaskId = `task-${Date.now()}-${disc.slice(0, 3)}-${Math.random().toString(36).substring(2, 6)}`;
+      const subtaskId = `${parentTaskId}-${disc}`;
       const discMeta = sanitizedDisciplineSpecs[disc];
-      const subMarkdown = buildSubtaskClickupMarkdown(disc, discMeta);
-      const remoteSub =
-        token && cleanListId
-          ? await clickup.createRemoteSubtask({
-              token,
-              listId: cleanListId,
-              title: cleanTitle,
-              discLabel,
-              clickupParentTaskId: remoteParent.clickupParentTaskId,
-              parentClickupUrl: remoteParent.clickupUrl,
-              markdown: subMarkdown,
-              dueDate: cleanDueDate,
-              taskTypeFieldId: cleanTaskTypeFieldId,
-              taskTypeId: cleanTaskTypeId,
-            })
-          : { clickupUrl: remoteParent.clickupUrl };
-
       createdTasks.push({
         id: subtaskId,
         userId: undefined,
@@ -146,9 +127,6 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
         disciplineMetadata: discMeta,
         parentTaskId,
         parentTaskTitle: cleanTitle,
-        clickupTaskId: remoteSub.clickupTaskId,
-        clickupParentTaskId: remoteParent.clickupParentTaskId,
-        clickupUrl: remoteSub.clickupUrl,
         clickupSpaceId: cleanSpaceId,
         clickupSpaceName: cleanSpaceName,
         clickupFolderId: cleanFolderId,
@@ -158,7 +136,6 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
         clickupTaskType: cleanTaskType,
         clickupTaskTypeId: cleanTaskTypeId,
         clickupTaskTypeFieldId: cleanTaskTypeFieldId,
-        lastSyncedClickupDescHash: remoteSub.descHash,
         createdAt: now,
         updatedAt: now,
         activityLog: [
@@ -173,42 +150,124 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
       });
     }
 
-    try {
-      await repo.saveParentTask(parentTask);
-      await repo.batchSaveTasks(createdTasks);
-    } catch {
-      return res.status(503).json({ error: 'Cloud storage write failed; pipeline bundle was not saved. Please retry.' });
+    if (!previousParent) {
+      try {
+        await repo.savePipelineBundle(parentTask, createdTasks);
+      } catch {
+        return res.status(503).json({ error: 'Cloud storage write failed; pipeline bundle was not saved. Please retry.' });
+      }
+      store.parentTasks.push(parentTask);
+      store.tasks.push(...createdTasks);
+      repo.saveLocal();
+      for (const task of createdTasks) broadcastEvent('task_created', task);
+      repo.appendAuditLog({
+        category: 'task',
+        action: 'pipeline_bundle_created',
+        actor: { id: caller?.id, name: caller?.name, email: caller?.email, ip: req.ip },
+        targetId: parentTask.id,
+        targetType: 'task',
+        details: `Pipeline bundle "${cleanTitle}" created for ${validDisciplines.join(', ')}`,
+      });
     }
 
-    if (!Array.isArray(store.parentTasks)) store.parentTasks = [];
-    store.parentTasks.push(parentTask);
-    for (const subtask of createdTasks) {
-      store.tasks.push(subtask);
-      broadcastEvent('task_created', subtask);
+    const listId = createdTasks[0]?.clickupListId;
+    if (token && listId) {
+      const syncError = () => res.status(502).json({
+        error: 'Saved in ZenFlow. ClickUp sync is incomplete. Retry to finish sending this bundle.',
+      });
+      const uncertainSync = () => res.status(409).json({
+        error: 'Saved in ZenFlow. ClickUp did not confirm the creation. Check ClickUp before creating another copy.',
+      });
+      try {
+        if (!parentTask.clickupParentTaskId) {
+          if (parentTask.clickupCreationPending) return uncertainSync();
+          parentTask.clickupCreationPending = true;
+          try {
+            await repo.saveParentTask(parentTask);
+          } catch (error) {
+            delete parentTask.clickupCreationPending;
+            throw error;
+          }
+          repo.saveLocal();
+          const remote = await clickup.createRemoteParentTask({
+            token, listId, title: parentTask.title, dueDate: cleanDueDate,
+            markdown: buildParentClickupMarkdown(parentTask.brief, parentTask.brandGuidelines),
+            taskTypeFieldId: createdTasks[0].clickupTaskTypeFieldId,
+            taskTypeId: createdTasks[0].clickupTaskTypeId,
+          });
+          if (remote.uncertain) return uncertainSync();
+          delete parentTask.clickupCreationPending;
+          if (!remote.clickupParentTaskId) {
+            repo.saveLocal();
+            await repo.saveParentTask(parentTask);
+            return syncError();
+          }
+          parentTask.clickupParentTaskId = remote.clickupParentTaskId;
+          parentTask.lastSyncedClickupDescHash = remote.descHash;
+        }
+        repo.saveLocal();
+        await repo.saveParentTask(parentTask);
+        for (const task of createdTasks) {
+          if (!task.clickupTaskId) {
+            if (task.clickupCreationPending) return uncertainSync();
+            task.clickupCreationPending = true;
+            try {
+              await repo.saveTask(task);
+            } catch (error) {
+              delete task.clickupCreationPending;
+              throw error;
+            }
+            repo.saveLocal();
+            const remote = await clickup.createRemoteSubtask({
+              token, listId, title: parentTask.title, dueDate: cleanDueDate,
+              discLabel: task.team === 'content' ? 'Content' : 'Design',
+              clickupParentTaskId: parentTask.clickupParentTaskId,
+              markdown: buildSubtaskClickupMarkdown(task.team, task.disciplineMetadata),
+              taskTypeFieldId: task.clickupTaskTypeFieldId,
+              taskTypeId: task.clickupTaskTypeId,
+            });
+            if (remote.uncertain) return uncertainSync();
+            delete task.clickupCreationPending;
+            if (!remote.clickupTaskId) {
+              repo.saveLocal();
+              await repo.saveTask(task);
+              return syncError();
+            }
+            task.clickupTaskId = remote.clickupTaskId;
+            task.clickupParentTaskId = parentTask.clickupParentTaskId;
+            task.clickupUrl = remote.clickupUrl;
+            task.lastSyncedClickupDescHash = remote.descHash;
+          }
+          repo.saveLocal();
+          await repo.saveTask(task);
+          broadcastEvent('task_updated', task);
+        }
+      } catch {
+        return syncError();
+      }
     }
 
-    repo.saveLocal();
-    repo.appendAuditLog({
-      category: 'task',
-      action: 'pipeline_bundle_created',
-      actor: { id: caller?.id, name: caller?.name, email: caller?.email, ip: req.ip },
-      targetId: parentTask.id,
-      targetType: 'task',
-      details: `Pipeline bundle "${cleanTitle}" created for ${validDisciplines.join(', ')}`,
-    });
-
-    res.status(201).json({
+    res.status(previousParent ? 200 : 201).json({
       parentTaskId: parentTask.id,
       clickupParentTaskId: parentTask.clickupParentTaskId,
       parentTask,
       tasks: createdTasks,
     });
-  });
+  }));
 
-  app.post('/api/tasks', async (req: Request, res: Response) => {
+  app.post('/api/tasks', workspaceWrite(async (req: Request, res: Response) => {
     const body = req.body || {};
     const store = repo.getStore();
     const caller: User | undefined = res.locals.caller;
+    const idPrefix = `task-${caller?.id}-`;
+    if (body.id !== undefined) {
+      if (!caller || typeof body.id !== 'string' || !body.id.startsWith(idPrefix) ||
+          !UUID_PATTERN.test(body.id.slice(idPrefix.length))) {
+        return res.status(400).json({ error: 'Invalid task creation ID' });
+      }
+      const existing = store.tasks.find(task => task.id === body.id);
+      if (existing) return res.status(200).json(existing);
+    }
     const cleanTitle = sanitizeString(body.title);
     if (!cleanTitle) return res.status(400).json({ error: 'Title is required' });
 
@@ -265,7 +324,7 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
     const maxOrder = siblingPool.reduce((max, t) => Math.max(max, t.order ?? 0), -1);
 
     const newTask: Task = {
-      id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: body.id ?? `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       userId: rawAssigneeIds[0] || undefined,
       assigneeIds: rawAssigneeIds,
       team: resolvedTeam,
@@ -339,15 +398,16 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
       details: `Task "${newTask.title}" created`,
     });
 
-    const token = clickup.resolveToken({ req, caller, fallbackToAnyUser: false });
+    const token = clickup.resolveToken(caller);
     if (token) {
-      clickup.syncTaskToClickUp(newTask, token, firstUser, caller?.id).catch(() => {});
+      queueClickUpWrite(() => repo.getTasks().includes(newTask)
+        ? clickup.syncTaskToClickUp(newTask, token, firstUser, caller?.id) : Promise.resolve());
     }
 
     res.status(201).json(newTask);
-  });
+  }));
 
-  app.post('/api/tasks/:id/duplicate', async (req: Request, res: Response) => {
+  app.post('/api/tasks/:id/duplicate', workspaceWrite(async (req: Request, res: Response) => {
     const id = String(req.params.id || '');
     const store = repo.getStore();
     const sourceTask = store.tasks.find(t => t.id === id);
@@ -438,15 +498,15 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
     repo.saveLocal();
     broadcastEvent('task_created', duplicated);
 
-    const token = clickup.resolveToken({ req, caller: res.locals.caller, taskUser: targetUser, fallbackToAnyUser: false });
+    const token = clickup.resolveToken(res.locals.caller);
     if (token) {
       await clickup.syncTaskToClickUp(duplicated, token, targetUser, res.locals.caller?.id).catch(() => {});
     }
 
     res.status(201).json({ task: duplicated });
-  });
+  }));
 
-  app.put('/api/tasks/:id', async (req: Request, res: Response) => {
+  app.put('/api/tasks/:id', workspaceWrite(async (req: Request, res: Response) => {
     const id = String(req.params.id || '');
     const store = repo.getStore();
     const taskIndex = store.tasks.findIndex(t => t.id === id);
@@ -708,7 +768,7 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
       activityLog: activityEntries.slice(0, 15),
     };
 
-    const cuToken = clickup.resolveToken({ req, caller, fallbackToAnyUser: false });
+    const cuToken = clickup.resolveToken(caller);
     const siblingBroadcasts: Task[] = [];
     const siblingSnapshots = new Map<Task, Task>();
     const snapshotSibling = (sib: Task) => {
@@ -820,32 +880,31 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
     }
     broadcastEvent('task_updated', updatedTask);
 
-    if (parentToSave && parentToSave.clickupParentTaskId) {
-      const parentCuToken = cuToken || clickup.resolveToken({ fallbackToAnyUser: true });
-      if (parentCuToken) {
-        clickup.syncParentDescriptionToClickUp(parentToSave, parentCuToken).catch(() => {});
-      }
-    }
-    if (syncedDocToOwnTask && linkToPropagate) {
-      for (const sib of contentDocSiblings) {
-        clickup.syncContentLinkToClickUp(sib, linkToPropagate, cuToken).catch(() => {});
-      }
-      if (body.contentDocLink !== undefined) {
-        clickup.syncContentLinkToClickUp(updatedTask, linkToPropagate, cuToken).catch(() => {});
-      }
-    }
-
     const includeSpecsInTaskSync = specsChanged && !(syncedDocToOwnTask && body.contentDocLink !== undefined);
-    if (cuToken || includeSpecsInTaskSync || updatedTask.clickupTaskId) {
-      clickup.syncTaskToClickUp(updatedTask, cuToken, undefined, caller?.id, includeSpecsInTaskSync).catch(() => {});
-    }
+    if (cuToken) queueClickUpWrite(async () => {
+      if (parentToSave?.clickupParentTaskId && repo.getParentTasks().includes(parentToSave)) {
+        await clickup.syncParentDescriptionToClickUp(parentToSave, cuToken);
+      }
+      if (!repo.getTasks().includes(updatedTask)) return;
+      if (syncedDocToOwnTask && linkToPropagate) {
+        await Promise.all([
+          ...contentDocSiblings.filter(task => repo.getTasks().includes(task))
+            .map(task => clickup.syncContentLinkToClickUp(task, linkToPropagate, cuToken)),
+          ...(body.contentDocLink !== undefined ? [clickup.syncContentLinkToClickUp(updatedTask, linkToPropagate, cuToken)] : []),
+        ]);
+      }
+      await clickup.syncTaskToClickUp(updatedTask, cuToken, undefined, caller?.id, includeSpecsInTaskSync);
+    });
 
     res.json(updatedTask);
-  });
+  }));
 
-  app.delete('/api/tasks/:id', async (req: Request, res: Response) => {
+  app.delete('/api/tasks/:id', workspaceWrite(async (req: Request, res: Response) => {
     const id = String(req.params.id || '');
     const removeAssigneeId = typeof req.query.removeAssigneeId === 'string' ? req.query.removeAssigneeId : undefined;
+    if (req.query.removeAssigneeId !== undefined && !removeAssigneeId?.trim()) {
+      return res.status(400).json({ error: 'An assignee ID is required to remove an assignee' });
+    }
     const store = repo.getStore();
     const taskIndex = store.tasks.findIndex(t => t.id === id);
     if (taskIndex === -1) return res.status(404).json({ error: 'Task not found' });
@@ -854,23 +913,29 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
     if (removeAssigneeId) {
       const assignees = getTaskAssigneeIds(task);
       const remaining = assignees.filter(uid => uid !== removeAssigneeId);
-      if (remaining.length > 0 && remaining.length < assignees.length) {
-        const updatedTask: Task = {
-          ...task,
-          assigneeIds: remaining,
-          userId: remaining[0],
-          updatedAt: new Date().toISOString(),
-        };
-        try {
-          await repo.saveTask(updatedTask);
-        } catch {
-          return res.status(503).json({ error: 'Cloud storage write failed; assignee was not removed. Please retry.' });
-        }
-        store.tasks[taskIndex] = updatedTask;
-        repo.saveLocal();
-        broadcastEvent('task_updated', updatedTask);
-        return res.json({ success: true, task: updatedTask, partialUnassign: true });
+      if (remaining.length === assignees.length) {
+        return res.json({ success: true, task, partialUnassign: true });
       }
+      if (remaining.length === 0) {
+        return res.status(409).json({ error: 'This task now has one assignee. Refresh the board before deciding whether to delete it.' });
+      }
+      const updatedTask: Task = {
+        ...task,
+        assigneeIds: remaining,
+        userId: remaining[0],
+        updatedAt: new Date().toISOString(),
+      };
+      try {
+        await repo.saveTask(updatedTask);
+      } catch {
+        return res.status(503).json({ error: 'Cloud storage write failed; assignee was not removed. Please retry.' });
+      }
+      const currentIndex = store.tasks.findIndex(t => t.id === id);
+      if (currentIndex < 0) return res.status(409).json({ error: 'Task changed while removing the assignee' });
+      store.tasks[currentIndex] = updatedTask;
+      repo.saveLocal();
+      broadcastEvent('task_updated', updatedTask);
+      return res.json({ success: true, task: updatedTask, partialUnassign: true });
     }
 
     const removed = store.tasks[taskIndex];
@@ -906,15 +971,15 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
     });
 
     res.json({ success: true, deletedTask: removed });
-  });
+  }));
 
-  app.post('/api/tasks/reorder', async (req: Request, res: Response) => {
+  app.post('/api/tasks/reorder', workspaceWrite(async (req: Request, res: Response) => {
     const { updates } = req.body || {};
     if (!Array.isArray(updates)) return res.status(400).json({ error: 'Updates array is required' });
 
     const store = repo.getStore();
     const caller: User | undefined = res.locals.caller;
-    const cuToken = clickup.resolveToken({ req, caller, fallbackToAnyUser: false });
+    const cuToken = clickup.resolveToken(caller);
     const taskMap = new Map(store.tasks.map(t => [t.id, t]));
     const userMap = new Map(store.users.map(u => [u.id, u]));
 
@@ -1055,7 +1120,9 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
       task.updatedAt = nowIso;
       modifiedTasks.push(task);
 
-      if (task.team === 'content' && task.status === 'done' && task.contentDocLink) {
+      const before = rollbackSnapshots.get(task)!;
+      if (task.team === 'content' && task.status === 'done' && task.contentDocLink &&
+          (before.status !== task.status || before.contentDocLink !== task.contentDocLink)) {
         const siblings = store.tasks.filter(
           t =>
             t.id !== task.id &&
@@ -1094,13 +1161,25 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
 
     repo.saveLocal();
     broadcastEvent('tasks_reordered', allChanged);
-    for (const { task, link } of contentLinkSyncs) {
-      clickup.syncContentLinkToClickUp(task, link, cuToken).catch(() => {});
-    }
-    for (const task of modifiedTasks) {
-      clickup.syncTaskToClickUp(task, cuToken, undefined, caller?.id).catch(() => {});
-    }
+    const clickupChanges = [...new Set(modifiedTasks)].filter(task => {
+      const before = rollbackSnapshots.get(task)!;
+      const priorAssignees = getTaskAssigneeIds(before);
+      const assignees = getTaskAssigneeIds(task);
+      return before.status !== task.status || before.dueDate !== task.dueDate ||
+        before.cognitiveLoad !== task.cognitiveLoad || before.estimatedHours !== task.estimatedHours ||
+        before.contentDocLink !== task.contentDocLink ||
+        priorAssignees.length !== assignees.length ||
+        priorAssignees.some((id, index) => id !== assignees[index]);
+    });
+    if (cuToken && (contentLinkSyncs.length || clickupChanges.length)) queueClickUpWrite(async () => {
+      for (const { task, link } of contentLinkSyncs) {
+        if (repo.getTasks().includes(task)) await clickup.syncContentLinkToClickUp(task, link, cuToken);
+      }
+      for (const task of clickupChanges) {
+        if (repo.getTasks().includes(task)) await clickup.syncTaskToClickUp(task, cuToken, undefined, caller?.id);
+      }
+    });
 
     res.json({ success: true, tasks: modifiedTasks });
-  });
+  }));
 }

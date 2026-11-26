@@ -77,9 +77,9 @@ test('real HTTP slow reader reaches a bounded queue and is disconnected', async 
   }
 });
 
-async function eventReader(url: string) {
+async function eventReader(url: string, member = 'alice') {
   const controller = new AbortController();
-  const response = await fetch(url + '/api/events', { headers: { Authorization: 'Bearer alice' }, signal: controller.signal });
+  const response = await fetch(url + '/api/events', { headers: { Authorization: `Bearer ${member}` }, signal: controller.signal });
   assert.equal(response.status, 200);
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
@@ -150,4 +150,37 @@ test('workload scoring excludes retainer/pipeline and maintains numeric parity',
   const tasks = [task, fixtureTask('pipe', 'alice', 'pipeline'), fixtureTask('retainer', 'alice', 'retainer')];
   assert.equal(quickWorkloadScore(tasks as any), 1.2);
   assert.equal(calculateUserWorkload(tasks as any).totalScore, quickWorkloadScore(tasks as any));
+});
+
+test('live streams apply current manager access and close when a member is removed', { timeout: 5000 }, async () => {
+  const server = await fixtureServer();
+  const connected = await eventReader(server.url, 'cd');
+  try {
+    await connected.next('snapshot');
+    assert.equal((await server.request('/users/cd', 'root', 'PUT', { isCreativeDirector: false })).status, 200);
+    assert.equal((await connected.next('update')).type, 'user_updated');
+    server.ctx.broadcastEvent('access_request_created', { id: 'manager-only' });
+    server.ctx.broadcastEvent('task_updated', fixtureTask('public', 'alice'));
+    assert.equal((await connected.next('update')).type, 'task_updated');
+    assert.equal((await server.request('/users/cd', 'root', 'DELETE')).status, 200);
+    await assert.rejects(connected.next('update'), /stream ended/);
+  } finally {
+    connected.close();
+    await server.close();
+  }
+});
+
+test('an idle live connection closes when its identity expires', { timeout: 5000 }, async () => {
+  const server = await fixtureServer({ identityLifetimeMs: 1500 });
+  try {
+    const connected = await eventReader(server.url);
+    try {
+      await connected.next('snapshot');
+      await assert.rejects(connected.next('update'), /stream ended/);
+    } finally {
+      connected.close();
+    }
+  } finally {
+    await server.close();
+  }
 });

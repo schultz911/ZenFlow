@@ -140,6 +140,9 @@ test('Prevent assignments to users belonging to a different discipline', async (
 }));
 
 test('pipeline-bundle creates linked Content & Design subtasks under a ClickUp parent task and handles Content -> Sent link propagation', async () => withServer(async server => {
+  server.store.users.find(user => user.id === 'alice').clickupApiKey = 'pk_fixture_alice';
+  server.store.users.find(user => user.id === 'cd').clickupApiKey = 'pk_fixture_cd';
+
   const clickupCalls: Array<{ url: string; method: string; body: any }> = [];
   let createdClickupIdx = 100;
 
@@ -231,6 +234,7 @@ test('pipeline-bundle creates linked Content & Design subtasks under a ClickUp p
     assert.equal(siblingDesign.contentDocLink, docUrl);
 
     // Verify ClickUp received comment + description sync
+    await server.repo.runMutation(() => {});
     assert.ok(clickupCalls.some(c => c.url.includes(`/task/${contentSubtask.clickupTaskId}/comment`)));
     assert.ok(clickupCalls.some(c => c.url.includes(`/task/${designSubtask.clickupTaskId}/comment`)));
 
@@ -359,6 +363,9 @@ test('Existing tasks without team field migrate cleanly on server startup', asyn
 }));
 
 test('ParentTask collection, sibling Brief/BrandGuidelines sync, conflict-safe ClickUp sync, URL validation, and orphan cleanup', async () => withServer(async server => {
+  server.store.users.find(user => user.id === 'alice').clickupApiKey = 'pk_fixture_alice';
+  server.store.users.find(user => user.id === 'cd').clickupApiKey = 'pk_fixture_cd';
+
   const clickupState = new Map<string, { description: string }>();
   const clickupCalls: Array<{ url: string; method: string; body: any }> = [];
   let seq = 200;

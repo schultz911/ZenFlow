@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AccessRequest, ParentTask, Task, User } from '../src/types';
+import type { AccessRequest, AnalyticsSnapshot, ParentTask, Task, User } from '../src/types';
 import { readAuditTail } from './resources';
+import { getAnalyticsClock } from '../src/domain/analyticsDate';
 import {
   getSuperadminEmail,
   isSuperadmin,
@@ -43,8 +44,8 @@ export interface PersistenceAdapter {
   init(): Promise<void>;
   loadInitialStore(): AppStore;
   scheduleSave(store: AppStore): void;
-  flushSync(store: AppStore): void;
-  syncFromRemote(current: AppStore): Promise<{ store: AppStore; deletedLegacyTasks: number }>;
+  flushSync(store: AppStore): boolean;
+  syncFromRemote(current: AppStore): Promise<{ store: AppStore; deletedLegacyTasks: number } | null>;
   saveUser(user: User): Promise<void>;
   batchSaveUsers(users: User[]): Promise<void>;
   deleteUser(userId: string): Promise<void>;
@@ -52,11 +53,17 @@ export interface PersistenceAdapter {
   batchSaveTasks(tasks: Task[]): Promise<void>;
   deleteTask(taskId: string): Promise<void>;
   batchDeleteTasks(taskIds: string[]): Promise<void>;
+  savePipelineBundle(parent: ParentTask, tasks: Task[]): Promise<void>;
   saveParentTask(parentTask: ParentTask): Promise<void>;
   batchSaveParentTasks(parentTasks: ParentTask[]): Promise<void>;
   deleteParentTask(parentTaskId: string): Promise<void>;
   saveAccessRequest(accessRequest: AccessRequest): Promise<void>;
   purgeAllCollections(): Promise<void>;
+  hasPendingPurge(): boolean;
+  markPurgePending(): Promise<void>;
+  clearPendingPurge(): Promise<void>;
+  saveAnalyticsSnapshot(snapshot: AnalyticsSnapshot): Promise<void>;
+  loadAnalyticsSnapshot(start: string, end: string): Promise<AnalyticsSnapshot | null>;
   loadRecentAuditLogs(limit: number): Promise<AuditLogEntry[]>;
   appendAuditEntry(entry: AuditLogEntry): Promise<void>;
   getAuditLogFilePath(): string | null;
@@ -329,6 +336,9 @@ export function createMemoryPersistenceAdapter(initial?: Partial<AppStore>): Per
   };
   let auditLogs: AuditLogEntry[] = [];
 
+  const snapshots = new Map<string, AnalyticsSnapshot>();
+  let purgePending = false;
+
   return {
     async init() {},
     loadInitialStore() {
@@ -349,9 +359,10 @@ export function createMemoryPersistenceAdapter(initial?: Partial<AppStore>): Per
     },
     flushSync(next) {
       this.scheduleSave(next);
+      return true;
     },
-    async syncFromRemote(current) {
-      return { store: current, deletedLegacyTasks: 0 };
+    async syncFromRemote() {
+      return null;
     },
     async saveUser() {},
     async batchSaveUsers() {},
@@ -360,12 +371,24 @@ export function createMemoryPersistenceAdapter(initial?: Partial<AppStore>): Per
     async batchSaveTasks() {},
     async deleteTask() {},
     async batchDeleteTasks() {},
+    async savePipelineBundle() {},
     async saveParentTask() {},
     async batchSaveParentTasks() {},
     async deleteParentTask() {},
     async saveAccessRequest() {},
+    hasPendingPurge: () => purgePending,
+    async markPurgePending() { purgePending = true; },
+    async clearPendingPurge() { purgePending = false; },
     async purgeAllCollections() {
+      snapshots.clear();
       persisted = { users: [], tasks: [], parentTasks: [], accessRequests: [] };
+    },
+    async saveAnalyticsSnapshot(snapshot) {
+      if (!snapshots.has(snapshot.date)) snapshots.set(snapshot.date, structuredClone(snapshot));
+    },
+    async loadAnalyticsSnapshot(start, end) {
+      const date = [...snapshots.keys()].filter(key => key >= start && key <= end).sort().at(-1);
+      return date ? structuredClone(snapshots.get(date)!) : null;
     },
     async loadRecentAuditLogs(limit) {
       return auditLogs.slice(0, limit);
@@ -394,6 +417,9 @@ export function createMemoryPersistenceAdapter(initial?: Partial<AppStore>): Per
 export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceAdapter {
   const dataFile = path.join(dataDir, 'store.json');
   const auditLogFile = path.join(dataDir, 'compliance-audit.jsonl');
+  const snapshotDir = path.join(dataDir, 'analytics');
+  const purgeMarker = path.join(dataDir, 'purge-pending');
+  let remotePurgePending = false;
 
   let adminDb: any = null;
   let firestoreInitialized = false;
@@ -401,6 +427,7 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
   let pendingSave: AppStore | null = null;
   let saveDebounceTimer: NodeJS.Timeout | null = null;
   let isWriting = false;
+  let diskSaveGeneration = 0;
 
   const findServiceAccount = (): any | null => {
     const envKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS;
@@ -562,17 +589,23 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
     init: initFirestore,
     loadInitialStore(): AppStore {
       try {
-        if (fs.existsSync(dataFile)) {
-          const raw = fs.readFileSync(dataFile, 'utf-8');
-          const parsed = JSON.parse(raw);
-          const cleanUsers = (parsed.users || []).filter((u: User) => !DUMMY_USER_IDS.has(u.id));
-          const cleanTasks = (parsed.tasks || []).filter((t: Task) => !DUMMY_TASK_IDS.has(t.id));
-          const cleanParents = Array.isArray(parsed.parentTasks) ? parsed.parentTasks : [];
-          const cleanAccessRequests = Array.isArray(parsed.accessRequests) ? parsed.accessRequests : [];
-          return { users: cleanUsers, tasks: cleanTasks, parentTasks: cleanParents, accessRequests: cleanAccessRequests };
+        const parsed = JSON.parse(fs.readFileSync(dataFile, 'utf-8'));
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) ||
+            !Array.isArray(parsed.users) || !Array.isArray(parsed.tasks) ||
+            (parsed.parentTasks !== undefined && !Array.isArray(parsed.parentTasks)) ||
+            (parsed.accessRequests !== undefined && !Array.isArray(parsed.accessRequests))) {
+          throw new Error('Invalid workspace store structure');
         }
+        return {
+          users: parsed.users.filter((u: User) => !DUMMY_USER_IDS.has(u.id)),
+          tasks: parsed.tasks.filter((t: Task) => !DUMMY_TASK_IDS.has(t.id)),
+          parentTasks: parsed.parentTasks ?? [],
+          accessRequests: parsed.accessRequests ?? [],
+        };
       } catch (err) {
-        console.error('Failed to read store.json, starting fresh:', err);
+        if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw new Error(`Cannot load workspace store at ${dataFile}. The original file was preserved.`, { cause: err });
+        }
       }
       return { users: [], tasks: [], parentTasks: [], accessRequests: [] };
     },
@@ -583,12 +616,14 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
         if (isWriting || !pendingSave) return;
         isWriting = true;
         const dataToWrite = pendingSave;
+        const generation = diskSaveGeneration;
         pendingSave = null;
         try {
           await fs.promises.mkdir(dataDir, { recursive: true });
           const tempPath = `${dataFile}.tmp.${Date.now()}`;
           await fs.promises.writeFile(tempPath, JSON.stringify(dataToWrite, null, 2), { encoding: 'utf-8', mode: 0o600 });
-          await fs.promises.rename(tempPath, dataFile);
+          if (generation === diskSaveGeneration) fs.renameSync(tempPath, dataFile);
+          else await fs.promises.rm(tempPath, { force: true });
         } catch (err) {
           console.error('Failed to persist store asynchronously:', err);
         } finally {
@@ -600,6 +635,7 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
       }, 50);
     },
     flushSync(storeToSave: AppStore) {
+      diskSaveGeneration++;
       try {
         if (saveDebounceTimer) {
           clearTimeout(saveDebounceTimer);
@@ -613,13 +649,18 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
         const tempPath = `${dataFile}.tmp.${process.pid}.${Date.now()}`;
         fs.writeFileSync(tempPath, JSON.stringify(dataToWrite, null, 2), { encoding: 'utf-8', mode: 0o600 });
         fs.renameSync(tempPath, dataFile);
+        return true;
       } catch (err) {
         console.error('[Process] Failed synchronous emergency persistence:', err);
+        return false;
       }
     },
     async syncFromRemote(current: AppStore) {
       if (!adminDb) await initFirestore();
-      if (!adminDb) return { store: current, deletedLegacyTasks: 0 };
+      if (!adminDb || fs.existsSync(purgeMarker)) return null;
+      const marker = await adminDb.collection('workspace_meta').doc('pending_purge').get();
+      remotePurgePending = marker.exists;
+      if (remotePurgePending) return null;
 
       let nextStore = current;
       const usersSnap = await adminDb.collection('users').get();
@@ -660,13 +701,87 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
     batchSaveTasks: (tasks) => batchUpsertDocs('tasks', tasks.map(t => ({ id: t.id, data: t }))),
     deleteTask: (taskId) => deleteDoc('tasks', taskId),
     batchDeleteTasks: (taskIds) => batchDeleteDocs('tasks', taskIds),
+    async savePipelineBundle(parent, tasks) {
+      if (!adminDb) await initFirestore();
+      if (!adminDb) return;
+      const batch = adminDb.batch();
+      batch.set(adminDb.collection('parent_tasks').doc(parent.id), cleanDocData(parent));
+      for (const task of tasks) batch.set(adminDb.collection('tasks').doc(task.id), cleanDocData(task));
+      await batch.commit();
+    },
     saveParentTask: (parentTask) => upsertDoc('parent_tasks', parentTask.id, parentTask),
     batchSaveParentTasks: (parentTasks) => batchUpsertDocs('parent_tasks', parentTasks.map(p => ({ id: p.id, data: p }))),
     deleteParentTask: (parentTaskId) => deleteDoc('parent_tasks', parentTaskId),
     saveAccessRequest: (accessRequest) => upsertDoc('access_requests', accessRequest.id, accessRequest),
+    async saveAnalyticsSnapshot(snapshot) {
+      if (adminDb) {
+        const ref = adminDb.collection('analytics_snapshots').doc(snapshot.date);
+        const batch = adminDb.batch();
+        batch.create(ref, { date: snapshot.date, capturedAt: snapshot.capturedAt });
+        const data = Buffer.from(JSON.stringify(snapshot));
+        for (let offset = 0; offset < data.length; offset += 500_000) {
+          batch.create(ref.collection('chunks').doc(String(offset).padStart(12, '0')), {
+            data: data.subarray(offset, offset + 500_000),
+          });
+        }
+        try {
+          await batch.commit();
+        } catch (error) {
+          if ((error as { code?: number }).code !== 6) throw error;
+        }
+        return;
+      }
+      await fs.promises.mkdir(snapshotDir, { recursive: true });
+      const target = path.join(snapshotDir, snapshot.date + '.json');
+      const temporary = target + '.tmp';
+      await fs.promises.writeFile(temporary, JSON.stringify(snapshot), { mode: 0o600 });
+      try {
+        await fs.promises.link(temporary, target);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      } finally {
+        await fs.promises.unlink(temporary);
+      }
+    },
+    async loadAnalyticsSnapshot(start, end) {
+      if (adminDb) {
+        const matching = await adminDb.collection('analytics_snapshots')
+          .where('date', '>=', start).where('date', '<=', end).orderBy('date', 'desc').limit(1).get();
+        if (matching.empty) return null;
+        const chunks = await matching.docs[0].ref.collection('chunks').get();
+        const buffers = chunks.docs.map((doc: { data(): { data: Buffer } }) => doc.data().data);
+        return JSON.parse(Buffer.concat(buffers).toString('utf8')) as AnalyticsSnapshot;
+      }
+      const files = await fs.promises.readdir(snapshotDir).catch(error => {
+        if (error.code === 'ENOENT') return [];
+        throw error;
+      });
+      const file = files.filter(name => /^\d{4}-\d{2}-\d{2}\.json$/.test(name) &&
+        name.slice(0, 10) >= start && name.slice(0, 10) <= end).sort().at(-1);
+      return file ? JSON.parse(await fs.promises.readFile(path.join(snapshotDir, file), 'utf8')) as AnalyticsSnapshot : null;
+    },
+    hasPendingPurge: () => remotePurgePending || fs.existsSync(purgeMarker),
+    async markPurgePending() {
+      await fs.promises.mkdir(dataDir, { recursive: true });
+      await fs.promises.writeFile(purgeMarker, 'pending', { mode: 0o600 });
+      if (!adminDb) await initFirestore();
+      if (adminDb) {
+        await adminDb.collection('workspace_meta').doc('pending_purge').set({ pending: true });
+        remotePurgePending = true;
+      }
+    },
+    async clearPendingPurge() {
+      if (adminDb) await adminDb.collection('workspace_meta').doc('pending_purge').delete();
+      remotePurgePending = false;
+      await fs.promises.rm(purgeMarker, { force: true });
+    },
     async purgeAllCollections() {
       if (!adminDb) await initFirestore();
-      if (!adminDb) return;
+      if (!adminDb) {
+        await fs.promises.rm(snapshotDir, { recursive: true, force: true });
+        return;
+      }
+      await adminDb.recursiveDelete(adminDb.collection('analytics_snapshots'));
       for (const col of ['tasks', 'parent_tasks', 'access_requests']) {
         const snap = await adminDb.collection(col).get();
         for (let i = 0; i < snap.docs.length; i += FIRESTORE_CHUNK_SIZE) {
@@ -690,6 +805,7 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
         }
         if (count > 0) await batch.commit();
       }
+      await fs.promises.rm(snapshotDir, { recursive: true, force: true });
       firestoreLastError = null;
     },
     async loadRecentAuditLogs(limit) {
@@ -767,9 +883,13 @@ export function createWorkspaceRepository(adapter: PersistenceAdapter) {
   let stateRevision = Date.now();
   let recentAuditLogs: AuditLogEntry[] = [];
   let lastArchiveSweepMs = 0;
+  let lastSyncTime: string | undefined;
+  let mutationTail = Promise.resolve();
+  let purgeNeedsRetry = adapter.hasPendingPurge();
+  let lastSnapshotDate: string | undefined;
 
   const touch = () => {
-    stateRevision = Date.now();
+    stateRevision = Math.max(stateRevision + 1, Date.now());
   };
 
   // Run initial migrations & superadmin guarantee on boot
@@ -782,6 +902,30 @@ export function createWorkspaceRepository(adapter: PersistenceAdapter) {
   }
 
   return {
+    runMutation<T>(operation: () => T | Promise<T>): Promise<T> {
+      const result = mutationTail.then(operation);
+      mutationTail = result.then(() => {}, () => {});
+      return result;
+    },
+    purgeNeedsRetry: () => purgeNeedsRetry,
+    async captureAnalyticsSnapshot(now = new Date()) {
+      const { date, closing } = getAnalyticsClock(now);
+      if (!closing || lastSnapshotDate === date || purgeNeedsRetry) return false;
+      const users = store.users.map(({ id, name, role, createdAt, designation, isCreativeDirector,
+        creativeDirectorId, isAdministrator, isBusinessLead, isClusterLead, isTeamLead }) =>
+        ({ id, name, email: '', role, createdAt, designation, isCreativeDirector, creativeDirectorId,
+          isAdministrator, isBusinessLead, isClusterLead, isTeamLead }));
+      const tasks = store.tasks.map(({ id, userId, assigneeIds, title, status, cognitiveLoad,
+        order, client, project, estimatedHours, startDate, dueDate, createdAt, updatedAt,
+        inProgressStartedAt, inProgressDurationMs, activityLog }) =>
+        ({ id, userId, assigneeIds, title, status, cognitiveLoad, order, client, project, estimatedHours,
+          startDate, dueDate, createdAt, updatedAt, inProgressStartedAt, inProgressDurationMs,
+          activityLog: activityLog?.map(({ id, timestamp, action, from, to }) => ({ id, timestamp, action, from, to })) }));
+      await adapter.saveAnalyticsSnapshot({ date, capturedAt: now.toISOString(), users, tasks });
+      lastSnapshotDate = date;
+      return true;
+    },
+    loadAnalyticsSnapshot: (start: string, end: string) => adapter.loadAnalyticsSnapshot(start, end),
     getStore: () => store,
     getRevision: () => stateRevision,
     getUsers: () => store.users,
@@ -807,39 +951,46 @@ export function createWorkspaceRepository(adapter: PersistenceAdapter) {
     async init() {
       await adapter.init();
       await this.syncRemote();
-      this.archiveExpiredDoneTasks();
+      await this.archiveExpiredDoneTasks();
       recentAuditLogs = await adapter.loadRecentAuditLogs(MAX_RECENT_AUDIT_LOGS);
     },
     async syncRemote() {
       try {
         const res = await adapter.syncFromRemote(store);
+        if (!res) {
+          purgeNeedsRetry ||= adapter.hasPendingPurge();
+          return { synced: false, deletedLegacyTasks: 0 };
+        }
         store.users = res.store.users;
         store.tasks = res.store.tasks;
         store.parentTasks = res.store.parentTasks;
+        store.accessRequests = res.store.accessRequests || [];
         ensureSuperadminInStore(store);
         deduplicateUsersInStore(store);
         migrateLegacyRolesInStore(store);
         this.saveLocal();
+        lastSyncTime = new Date().toISOString();
         return { synced: true, deletedLegacyTasks: res.deletedLegacyTasks };
       } catch (err) {
         console.error('[Firestore Sync Error]:', err);
         return { synced: false, deletedLegacyTasks: 0 };
       }
     },
-    deduplicateUsers() {
+    async deduplicateUsers() {
+      if (purgeNeedsRetry) return false;
       if (deduplicateUsersInStore(store)) {
         this.saveLocal();
-        adapter.batchSaveUsers(store.users).catch(() => {});
-        adapter.batchSaveTasks(store.tasks).catch(() => {});
+        await Promise.all([adapter.batchSaveUsers(store.users), adapter.batchSaveTasks(store.tasks)]).catch(() => {});
         return true;
       }
       return false;
     },
-    archiveExpiredDoneTasks(onArchived?: (tasks: Task[]) => void): boolean {
+    async archiveExpiredDoneTasks(onArchived?: (tasks: Task[]) => void): Promise<boolean> {
+      if (purgeNeedsRetry) return false;
       const newlyArchived = archiveDoneTasksDomain(store.tasks);
       if (newlyArchived.length > 0) {
         this.saveLocal();
-        adapter.batchSaveTasks(newlyArchived).catch(e =>
+        await adapter.batchSaveTasks(newlyArchived).catch(e =>
           console.error('[Auto-Archive] Firestore batch save error:', e)
         );
         onArchived?.(newlyArchived);
@@ -847,23 +998,29 @@ export function createWorkspaceRepository(adapter: PersistenceAdapter) {
       }
       return false;
     },
-    maybeArchive(onArchived?: (tasks: Task[]) => void) {
+    async maybeArchive(onArchived?: (tasks: Task[]) => void) {
       const now = Date.now();
       if (now - lastArchiveSweepMs < ARCHIVE_DEBOUNCE_MS) return;
       lastArchiveSweepMs = now;
-      this.archiveExpiredDoneTasks(onArchived);
+      await this.archiveExpiredDoneTasks(onArchived);
     },
     async purgeAll(): Promise<{ deletedTasks: number; deletedUsers: number; retainedUser: User }> {
       const deletedTasks = store.tasks.length;
       const nonSuperCount = store.users.filter(u => !isSuperadmin(u)).length;
+      const rootAdmin = ensureSuperadminInStore(store);
+      purgeNeedsRetry = true;
+      await adapter.markPurgePending();
+      await adapter.saveUser(rootAdmin);
+      // Each retry scans the remaining documents, including after a partial batch failure.
+      await adapter.purgeAllCollections();
       store.tasks = [];
       store.parentTasks = [];
       store.accessRequests = [];
       store.users = store.users.filter(u => isSuperadmin(u));
-      const rootAdmin = ensureSuperadminInStore(store);
       this.saveLocal();
-      await adapter.purgeAllCollections();
-      await adapter.saveUser(rootAdmin);
+      if (!adapter.flushSync(store)) throw new Error('Could not persist the purged workspace locally');
+      await adapter.clearPendingPurge();
+      purgeNeedsRetry = false;
       return { deletedTasks, deletedUsers: nonSuperCount, retainedUser: rootAdmin };
     },
     saveUser: (user: User) => adapter.saveUser(user),
@@ -873,6 +1030,7 @@ export function createWorkspaceRepository(adapter: PersistenceAdapter) {
     batchSaveTasks: (tasks: Task[]) => adapter.batchSaveTasks(tasks),
     deleteTask: (taskId: string) => adapter.deleteTask(taskId),
     batchDeleteTasks: (taskIds: string[]) => adapter.batchDeleteTasks(taskIds),
+    savePipelineBundle: (parent: ParentTask, tasks: Task[]) => adapter.savePipelineBundle(parent, tasks),
     saveParentTask: (parentTask: ParentTask) => adapter.saveParentTask(parentTask),
     batchSaveParentTasks: (parentTasks: ParentTask[]) => adapter.batchSaveParentTasks(parentTasks),
     deleteParentTask: (parentTaskId: string) => adapter.deleteParentTask(parentTaskId),
@@ -892,8 +1050,11 @@ export function createWorkspaceRepository(adapter: PersistenceAdapter) {
     getRecentAuditLogs: () => recentAuditLogs,
     getAuditLogFilePath: () => adapter.getAuditLogFilePath(),
     readAllAuditLogs: () => adapter.readAllAuditLogs(),
-    getFirestoreStatus: () => adapter.getFirestoreStatus(),
-    saveCredentials: (json: Record<string, any>) => adapter.saveCredentials(json),
+    getFirestoreStatus: () => ({ ...adapter.getFirestoreStatus(), lastSyncTime }),
+    saveCredentials: (json: Record<string, any>) => {
+      lastSyncTime = undefined;
+      return adapter.saveCredentials(json);
+    },
     getWebhookDb: () => adapter.getWebhookDb(),
   };
 }

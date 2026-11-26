@@ -21,6 +21,7 @@ import {
   AuditLogEntry,
   TaskDisciplineMetadata,
   AccessRequest,
+  AnalyticsSnapshot,
 } from '../types';
 import { ClickUpProvider, useClickUp, type ClickUpContextValue } from './ClickUpContext';
 
@@ -144,8 +145,10 @@ export interface WorkspaceContextValue {
   remapUserTasks: (fromUserIdOrEmail: string, toUserId: string, deleteSourceUser?: boolean) => Promise<{ success: boolean; remappedCount: number; error?: string }>;
   deleteUser: (userId: string) => Promise<void>;
   fetchAuditLogs: (limit?: number) => Promise<AuditLogEntry[]>;
+  fetchAnalyticsSnapshot: (start: string, end: string, signal: AbortSignal) => Promise<AnalyticsSnapshot | null>;
   downloadAuditLogs: () => void;
   createPipelineBundle: (data: {
+    requestId?: string;
     title: string;
     description?: string;
     brandGuidelines?: string;
@@ -423,11 +426,24 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, []);
 
   const isReplayingRef = useRef(false);
+  const replayTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (replayTimerRef.current !== null) clearTimeout(replayTimerRef.current);
+    replayTimerRef.current = null;
+  }, [currentUser?.id]);
+
   const runReplay = useCallback(async () => {
-    if (!getApiMemberId() || isReplayingRef.current) return;
+    const owner = getApiMemberId();
+    if (!owner || isReplayingRef.current || replayTimerRef.current !== null) return;
     isReplayingRef.current = true;
     try {
       const result = await replayMutationQueue();
+      if (result.retryAfterMs !== undefined && getApiMemberId() === owner && currentUserRef.current?.id === owner) {
+        replayTimerRef.current = setTimeout(() => {
+          replayTimerRef.current = null;
+          if (getApiMemberId() === owner && navigator.onLine) void runReplay();
+        }, result.retryAfterMs);
+      }
       if (result.completed && result.hadItems) {
         await fetchState();
         await refreshFirestoreStatus();
@@ -517,10 +533,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         } else if (type === 'task_created') {
           setTasks(prev => {
             const map = new Map<string, Task>();
-            for (const t of prev) {
-              if (t.id.startsWith('temp-') && t.userId === payload.userId && t.title === payload.title) continue;
-              map.set(t.id, t);
-            }
+            for (const t of prev) map.set(t.id, t);
             map.set(payload.id, payload);
             return Array.from(map.values());
           });
@@ -833,6 +846,12 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     return (await res.json()).logs || [];
   }, []);
 
+  const fetchAnalyticsSnapshot = useCallback<WorkspaceContextValue['fetchAnalyticsSnapshot']>(async (start, end, signal) => {
+    const res = await fetch(`/api/analytics/snapshots?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, { signal });
+    if (!res.ok) throw new Error('Historical analytics could not be loaded.');
+    return (await res.json()).snapshot;
+  }, []);
+
   const downloadAuditLogs = useCallback(() => {
     window.open('/api/audit/download', '_blank', 'noopener,noreferrer');
   }, []);
@@ -894,7 +913,10 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, []);
 
   const createTask = useCallback<WorkspaceContextValue['createTask']>(async data => {
-    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const memberId = getApiMemberId() || currentUserRef.current?.id;
+    if (!memberId) throw new Error('Sign in to create a task');
+    const taskId = `task-${memberId}-${crypto.randomUUID()}`;
+    const payload = { ...data, id: taskId };
     const now = new Date();
     const nowIso = now.toISOString();
     const status: TaskStatus = data.status || 'todo';
@@ -913,7 +935,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       : [];
 
     const optimisticTask: Task = {
-      id: tempId,
+      id: taskId,
       userId: assigneeIds[0] || undefined,
       assigneeIds,
       team: data.team,
@@ -955,21 +977,16 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       const res = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         const createdTask: Task = await res.json();
-        setTasks(prev => {
-          const map = new Map<string, Task>();
-          for (const t of prev) if (t.id !== tempId) map.set(t.id, t);
-          map.set(createdTask.id, createdTask);
-          return Array.from(map.values());
-        });
+        setTasks(prev => Array.from(new Map([...prev, createdTask].map(task => [task.id, task])).values()));
         return createdTask;
       }
       const errData = await res.json().catch(() => ({}));
       if (res.status >= 400 && res.status < 500) {
-        setTasks(prev => prev.filter(t => t.id !== tempId));
+        setTasks(prev => prev.filter(t => t.id !== taskId));
         throw new ClientRejectedError(errData.error || `Server rejected request (${res.status})`, res.status);
       }
       throw new Error(`Server returned ${res.status}`);
@@ -977,7 +994,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       if (err instanceof ClientRejectedError) {
         throw err;
       }
-      enqueueMutation({ type: 'create_task', endpoint: '/api/tasks', method: 'POST', payload: data });
+      enqueueMutation({ type: 'create_task', endpoint: '/api/tasks', method: 'POST', payload, optimisticTask });
       setSyncStatus('offline');
       return optimisticTask;
     }
@@ -1114,19 +1131,13 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   const removeAssigneeOrDeleteTask = useCallback(
     async (id: string, removeAssigneeId?: string): Promise<void> => {
-      const task = tasksRef.current.find(t => t.id === id);
-      const assignees = task ? getTaskAssigneeIds(task) : [];
-      if (removeAssigneeId && assignees.includes(removeAssigneeId) && assignees.length > 1) {
-        const remaining = assignees.filter(uid => uid !== removeAssigneeId);
-        setTasks(prev => prev.map(t => (t.id === id ? { ...t, assigneeIds: remaining, userId: remaining[0] } : t)));
-        try {
-          const res = await fetch(`/api/tasks/${id}?removeAssigneeId=${encodeURIComponent(removeAssigneeId)}`, {
-            method: 'DELETE',
-          });
-          if (!res.ok) throw new Error(`Server returned ${res.status}`);
-        } catch (err) {
-          console.warn('Partial unassign failed:', err);
-        }
+      if (removeAssigneeId) {
+        const res = await fetch(`/api/tasks/${id}?removeAssigneeId=${encodeURIComponent(removeAssigneeId)}`, {
+          method: 'DELETE',
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Could not remove the assignee');
+        setTasks(prev => prev.map(t => t.id === id ? data.task : t));
         return;
       }
       await deleteTask(id);
@@ -1391,6 +1402,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       remapUserTasks,
       deleteUser,
       fetchAuditLogs,
+      fetchAnalyticsSnapshot,
       downloadAuditLogs,
       createPipelineBundle,
       createTask,
@@ -1422,6 +1434,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       remapUserTasks,
       deleteUser,
       fetchAuditLogs,
+      fetchAnalyticsSnapshot,
       downloadAuditLogs,
       createPipelineBundle,
       createTask,

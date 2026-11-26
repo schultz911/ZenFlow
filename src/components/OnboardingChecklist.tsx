@@ -45,6 +45,16 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
   const [webhookNotice, setWebhookNotice] = useState<string | null>(null);
   const [webhookNonFatalDone, setWebhookNonFatalDone] = useState(false);
   const autoWebhookAttemptedRef = useRef<string | null>(null);
+  const membersLoadedForUserRef = useRef<string | null>(null);
+  const prevSelectedSpaceRef = useRef<string>(selectedClickupSpaceId);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const userId = currentUser?.id || '';
 
@@ -57,48 +67,61 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
       setDismissed(false);
       setHasSynced(false);
     }
+    setSpaceIdInput('');
+    prevSelectedSpaceRef.current = '';
     setKeyError(null);
     setSyncNotice(null);
     setWebhookNotice(null);
     setWebhookNonFatalDone(false);
     autoWebhookAttemptedRef.current = null;
+    membersLoadedForUserRef.current = null;
   }, [userId]);
 
   useEffect(() => {
-    if (selectedClickupSpaceId) {
+    if (selectedClickupSpaceId && selectedClickupSpaceId !== prevSelectedSpaceRef.current) {
+      prevSelectedSpaceRef.current = selectedClickupSpaceId;
       setSpaceIdInput(selectedClickupSpaceId);
-    } else if (clickupSpaces.length > 0 && !spaceIdInput) {
-      setSpaceIdInput(clickupSpaces[0].id);
+      return;
+    }
+    prevSelectedSpaceRef.current = selectedClickupSpaceId;
+    if (!spaceIdInput) {
+      if (selectedClickupSpaceId) {
+        setSpaceIdInput(selectedClickupSpaceId);
+      } else if (clickupSpaces.length > 0) {
+        setSpaceIdInput(clickupSpaces[0].id);
+      }
     }
   }, [selectedClickupSpaceId, clickupSpaces, spaceIdInput]);
 
-  const step1Done = Boolean(currentUser?.clickupApiKey) || isClickupConnected;
+  const step1Done = isClickupConnected;
   const step2Done = step1Done && hasSynced;
-  const step3Done = Boolean(clickupWebhookStatus?.registered) || webhookNonFatalDone;
+  const webhookStatusLoaded = clickupWebhookStatus !== null;
+  const webhookRegistered = Boolean(clickupWebhookStatus?.registered);
+  const step3Done = webhookRegistered;
   const allComplete = step1Done && step2Done && step3Done;
   const shouldShow = Boolean(currentUser) && (forceOpen || (!dismissed && !allComplete));
 
   useEffect(() => {
     if (!shouldShow || !currentUser || !step1Done) return;
-    if (clickupMembers.length === 0) {
+    if (clickupMembers.length === 0 && membersLoadedForUserRef.current !== userId) {
+      membersLoadedForUserRef.current = userId;
       loadClickupMembers('').catch(() => {});
     }
-    if (clickupWebhookStatus === null) {
+    if (!webhookStatusLoaded) {
       refreshClickupWebhookStatus().catch(() => {});
     }
-  }, [shouldShow, currentUser, step1Done, clickupMembers.length, loadClickupMembers, clickupWebhookStatus, refreshClickupWebhookStatus]);
+  }, [shouldShow, currentUser, userId, step1Done, clickupMembers.length, loadClickupMembers, webhookStatusLoaded, refreshClickupWebhookStatus]);
 
   useEffect(() => {
-    if (!shouldShow || !currentUser || !step1Done || !step2Done) return;
-    if (!clickupWebhookStatus || clickupWebhookStatus.registered || webhookNonFatalDone) return;
-    if (autoWebhookAttemptedRef.current === currentUser.id) return;
+    if (!shouldShow || !userId || !step1Done || !step2Done) return;
+    if (!webhookStatusLoaded || webhookRegistered || webhookNonFatalDone) return;
+    if (autoWebhookAttemptedRef.current === userId) return;
 
-    autoWebhookAttemptedRef.current = currentUser.id;
-    let cancelled = false;
+    autoWebhookAttemptedRef.current = userId;
     setRegisteringWebhook(true);
     registerClickupWebhook()
       .then(res => {
-        if (cancelled) return;
+        if (!isMountedRef.current || autoWebhookAttemptedRef.current !== userId) return;
         if (res.success) {
           setWebhookNotice(res.message || 'Webhook enabled');
         } else {
@@ -108,14 +131,17 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
           );
         }
       })
+      .catch(err => {
+        if (!isMountedRef.current || autoWebhookAttemptedRef.current !== userId) return;
+        setWebhookNonFatalDone(true);
+        setWebhookNotice(
+          err?.message || 'Webhook requires ClickUp admin rights; manual sync remains available.'
+        );
+      })
       .finally(() => {
-        if (!cancelled) setRegisteringWebhook(false);
+        if (isMountedRef.current) setRegisteringWebhook(false);
       });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [shouldShow, currentUser, step1Done, step2Done, clickupWebhookStatus, webhookNonFatalDone, registerClickupWebhook]);
+  }, [shouldShow, userId, step1Done, step2Done, webhookStatusLoaded, webhookRegistered, webhookNonFatalDone, registerClickupWebhook]);
 
   if (!shouldShow || !currentUser) return null;
 
@@ -195,6 +221,9 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
         setWebhookNonFatalDone(true);
         setWebhookNotice(res.message || 'Webhook requires ClickUp admin rights; manual sync remains active.');
       }
+    } catch (err: any) {
+      setWebhookNonFatalDone(true);
+      setWebhookNotice(err?.message || 'Webhook requires ClickUp admin rights; manual sync remains active.');
     } finally {
       setRegisteringWebhook(false);
     }
@@ -293,7 +322,7 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
                   ? 'Complete Step 1 first to load available spaces.'
                   : matchedMember
                   ? `Matched ClickUp profile: ${matchedMember.username || matchedMember.email}`
-                  : 'Select your default delivery space and pull assigned tasks.'}
+                  : 'Select your default delivery space and send your ZenFlow tasks to ClickUp.'}
               </p>
               {syncNotice && (
                 <p className="text-[11px] text-[var(--text-secondary)] mt-1">{syncNotice}</p>

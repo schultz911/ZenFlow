@@ -85,4 +85,8 @@ export interface RouteDeps {
   clickup: ClickUpService;
   broadcastEvent: (type: string, payload: any) => void;
   firestoreLimiter: RequestHandler;
+  workspaceWrite: (
+    handler: (...args: Parameters<RequestHandler>) => unknown,
+    options?: { purge?: boolean }
+  ) => RequestHandler;
 }

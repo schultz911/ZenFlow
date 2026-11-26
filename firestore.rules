@@ -6,21 +6,5 @@ service cloud.firestore {
     match /{document=**} {
       allow read, write: if false;
     }
-
-    match /users/{userId} {
-      allow read, write: if false;
-    }
-
-    match /tasks/{taskId} {
-      allow read, write: if false;
-    }
-
-    match /parent_tasks/{parentId} {
-      allow read, write: if false;
-    }
-
-    match /compliance_audit_logs/{logId} {
-      allow read, write: if false;
-    }
   }
 }

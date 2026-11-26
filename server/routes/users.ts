@@ -26,13 +26,13 @@ function remapTaskAssignees(task: Task, sourceRefs: string[], targetUserId: stri
 }
 
 export function registerUserRoutes(app: Express, deps: RouteDeps) {
-  const { repo, broadcastEvent } = deps;
+  const { repo, broadcastEvent, workspaceWrite } = deps;
 
-  app.post('/api/auth/verify-email', (req: Request, res: Response) => {
+  app.post('/api/auth/verify-email', workspaceWrite(async (req: Request, res: Response) => {
     const { email } = req.body || {};
     if (!email) return res.status(400).json({ error: 'Email is required' });
     const cleanEmail = sanitizeString(email).toLowerCase();
-    repo.deduplicateUsers();
+    await repo.deduplicateUsers();
     let user = repo.getUsers().find(u => u.email.toLowerCase() === cleanEmail);
     if (!user && cleanEmail === getSuperadminEmail()) {
       user = repo.ensureSuperadmin();
@@ -40,10 +40,10 @@ export function registerUserRoutes(app: Express, deps: RouteDeps) {
     }
     if (!user) return res.status(404).json({ error: 'No account registered with this email address' });
     res.json({ user });
-  });
+  }));
 
   app.get('/api/users', (req: Request, res: Response) => {
-    repo.deduplicateUsers();
+    void repo.runMutation(() => repo.deduplicateUsers());
     const etag = `W/"zenflow-users-${repo.getRevision()}"`;
     res.setHeader('ETag', etag);
     res.setHeader('Cache-Control', 'private, no-cache, must-revalidate');
@@ -53,7 +53,7 @@ export function registerUserRoutes(app: Express, deps: RouteDeps) {
     res.json(repo.getUsers());
   });
 
-  app.post('/api/users', async (req: Request, res: Response) => {
+  app.post('/api/users', workspaceWrite(async (req: Request, res: Response) => {
     const body = req.body || {};
     const cleanName = sanitizeString(body.name);
     const cleanEmail = sanitizeString(body.email).toLowerCase();
@@ -121,7 +121,9 @@ export function registerUserRoutes(app: Express, deps: RouteDeps) {
         reqItem.status = 'approved';
         reqItem.resolvedAt = nowIso;
         reqItem.resolvedBy = res.locals.caller?.email || res.locals.caller?.id;
-        await repo.saveAccessRequest(reqItem).catch(() => {});
+        await repo.saveAccessRequest(reqItem).catch(err => {
+          console.error('[AccessRequest] Failed to persist approval:', err);
+        });
         broadcastEvent('access_request_updated', reqItem);
       }
     }
@@ -138,7 +140,7 @@ export function registerUserRoutes(app: Express, deps: RouteDeps) {
     });
 
     res.status(201).json(newUser);
-  });
+  }));
 
   app.get('/api/access-requests', (_req: Request, res: Response) => {
     const pending = repo
@@ -148,15 +150,24 @@ export function registerUserRoutes(app: Express, deps: RouteDeps) {
     res.json({ requests: pending });
   });
 
-  app.post('/api/access-requests/:id/dismiss', async (req: Request, res: Response) => {
+  app.post('/api/access-requests/:id/dismiss', workspaceWrite(async (req: Request, res: Response) => {
     const id = String(req.params.id || '');
     const target = repo.getAccessRequests().find(r => r.id === id);
     if (!target) return res.status(404).json({ error: 'Access request not found' });
     if (target.status === 'pending') {
+      const prevResolvedAt = target.resolvedAt;
+      const prevResolvedBy = target.resolvedBy;
       target.status = 'dismissed';
       target.resolvedAt = new Date().toISOString();
       target.resolvedBy = res.locals.caller?.email || res.locals.caller?.id;
-      await repo.saveAccessRequest(target);
+      try {
+        await repo.saveAccessRequest(target);
+      } catch {
+        target.status = 'pending';
+        target.resolvedAt = prevResolvedAt;
+        target.resolvedBy = prevResolvedBy;
+        return res.status(503).json({ error: 'Cloud storage write failed; access request was not dismissed. Please retry.' });
+      }
       repo.saveLocal();
       broadcastEvent('access_request_updated', target);
       repo.appendAuditLog({
@@ -169,9 +180,9 @@ export function registerUserRoutes(app: Express, deps: RouteDeps) {
       });
     }
     res.json({ request: target });
-  });
+  }));
 
-  app.put('/api/users/:id', async (req: Request, res: Response) => {
+  app.put('/api/users/:id', workspaceWrite(async (req: Request, res: Response) => {
     const id = String(req.params.id || '');
     const store = repo.getStore();
     const userIndex = store.users.findIndex(u => u.id === id);
@@ -355,9 +366,9 @@ export function registerUserRoutes(app: Express, deps: RouteDeps) {
     broadcastEvent('user_updated', updated);
 
     res.json(updated);
-  });
+  }));
 
-  app.post('/api/users/remap-tasks', async (req: Request, res: Response) => {
+  app.post('/api/users/remap-tasks', workspaceWrite(async (req: Request, res: Response) => {
     const caller: User | undefined = res.locals.caller;
     if (!isSuperadminUser(caller)) {
       return res.status(403).json({ error: 'Only the Superadmin can remap tasks across users' });
@@ -442,9 +453,9 @@ export function registerUserRoutes(app: Express, deps: RouteDeps) {
       targetUser,
       deletedSourceUserId,
     });
-  });
+  }));
 
-  app.delete('/api/users/:id', async (req: Request, res: Response) => {
+  app.delete('/api/users/:id', workspaceWrite(async (req: Request, res: Response) => {
     const id = String(req.params.id || '');
     const store = repo.getStore();
     const userIndex = store.users.findIndex(u => u.id === id);
@@ -479,5 +490,5 @@ export function registerUserRoutes(app: Express, deps: RouteDeps) {
       metadata: { deletedTaskCount: deletedTaskIds.length },
     });
     res.json({ success: true, deletedUser: removedUser, deletedTaskCount: deletedTaskIds.length });
-  });
+  }));
 }

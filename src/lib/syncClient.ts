@@ -1,4 +1,4 @@
-import { apiFetch as fetch, ensureApiSession, getApiMemberId } from './api';
+import { apiFetch as fetch, ensureApiSession, getApiMemberId, ApiSessionRateLimitError, getRateLimitRetryMs } from './api';
 import type { QueuedMutation, RealtimeEvent } from '../types';
 
 const OFFLINE_QUEUE_KEY = 'zenflow_mutation_queue_v1';
@@ -46,7 +46,7 @@ export function enqueueMutation(mutation: Omit<QueuedMutation, 'id' | 'timestamp
   saveMutationQueue(queue.length > MAX_QUEUE_SIZE ? queue.slice(-MAX_QUEUE_SIZE) : queue);
 }
 
-export async function replayMutationQueue(): Promise<{ completed: boolean; hadItems: boolean }> {
+export async function replayMutationQueue(): Promise<{ completed: boolean; hadItems: boolean; retryAfterMs?: number }> {
   const replayOwner = getApiMemberId();
   if (!replayOwner) return { completed: false, hadItems: false };
 
@@ -54,6 +54,7 @@ export async function replayMutationQueue(): Promise<{ completed: boolean; hadIt
   if (queue.length === 0) return { completed: true, hadItems: false };
 
   const remainingQueue: QueuedMutation[] = [];
+  let retryAfterMs: number | undefined;
 
   for (let i = 0; i < queue.length; i++) {
     if (getApiMemberId() !== replayOwner) break;
@@ -70,6 +71,11 @@ export async function replayMutationQueue(): Promise<{ completed: boolean; hadIt
         headers: { 'Content-Type': 'application/json' },
         body: item.payload ? JSON.stringify(item.payload) : undefined,
       });
+      if (res.status === 429) {
+        retryAfterMs = getRateLimitRetryMs(res);
+        remainingQueue.push(...queue.slice(i));
+        break;
+      }
       if (res.status === 401 || res.status === 403) {
         remainingQueue.push(...queue.slice(i));
         break;
@@ -81,7 +87,12 @@ export async function replayMutationQueue(): Promise<{ completed: boolean; hadIt
         remainingQueue.push(item, ...queue.slice(i + 1));
         break;
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof ApiSessionRateLimitError) {
+        retryAfterMs = error.retryAfterMs;
+        remainingQueue.push(...queue.slice(i));
+        break;
+      }
       item.retryCount = (item.retryCount || 0) + 1;
       remainingQueue.push(item, ...queue.slice(i + 1));
       break;
@@ -97,6 +108,7 @@ export async function replayMutationQueue(): Promise<{ completed: boolean; hadIt
   return {
     completed: remainingQueue.length === 0 && getApiMemberId() === replayOwner,
     hadItems: true,
+    retryAfterMs,
   };
 }
 

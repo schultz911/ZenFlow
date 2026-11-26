@@ -285,7 +285,13 @@ export const ClickUpProvider: React.FC<ClickUpProviderProps> = ({
             message: data.message || 'Sync complete',
           };
         }
-        return { success: false, syncedCount: 0, archivedCount: 0, message: data?.error || 'Failed to sync with ClickUp' };
+        if (data.syncedCount > 0) await fetchState();
+        return {
+          success: false,
+          syncedCount: data.syncedCount || 0,
+          archivedCount: 0,
+          message: data.message || data.error || 'Failed to sync with ClickUp',
+        };
       } catch (err: any) {
         return { success: false, syncedCount: 0, archivedCount: 0, message: err.message || 'Sync request failed' };
       }

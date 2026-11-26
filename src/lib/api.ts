@@ -6,6 +6,17 @@ let sessionRequest: Promise<void> | null = null;
 let generation = 0;
 export const getApiMemberId = () => sessionMemberId;
 
+export function getRateLimitRetryMs(response: Response): number {
+  const seconds = Number(response.headers.get('Retry-After'));
+  return Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds, 3600) * 1000 : 60_000;
+}
+
+export class ApiSessionRateLimitError extends Error {
+  constructor(readonly retryAfterMs: number) {
+    super('Google session exchange was rate limited');
+  }
+}
+
 // Migrate old shared storage once, retaining offline work under its original owner.
 try {
   const cached = JSON.parse(localStorage.getItem('team_dash_current_user_v1') || 'null');
@@ -33,6 +44,7 @@ export async function ensureApiSession(): Promise<void> {
       method: 'POST', credentials: 'same-origin',
       headers: { Authorization: `Bearer ${token}`, 'x-zenflow-request': '1' },
     });
+    if (response.status === 429) throw new ApiSessionRateLimitError(getRateLimitRetryMs(response));
     if (!response.ok) throw new Error((await response.json()).error || 'Google session rejected');
     const data = await response.json();
     if (generation !== started || auth.currentUser?.uid !== user.uid) throw new Error('Google session changed');

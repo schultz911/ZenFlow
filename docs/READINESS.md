@@ -26,12 +26,20 @@ Run Node 22 and Java 21:
 ```sh
 npm ci
 npm test
+npx playwright install chromium
+npm run test:e2e
 npm run test:rules
 npm run lint
 npx tsc --noEmit --noUnusedLocals --noUnusedParameters
 npm run build
 node --expose-gc --import tsx tests/benchmark-audit.ts
 ```
+
+ClickUp operations use the acting member's personal key. Each member who needs outbound sync must connect their own account in Workspace Setup.
+
+Analytics snapshots are captured at 11:59 p.m. Asia/Kolkata while the server is running. Historical reports show cumulative metrics as of the latest saved date in the selected range. Periods without a saved snapshot are labeled unavailable.
+
+If a purge stops midway, workspace writes pause and the Superadmin can retry the purge. Keep the configured data volume mounted so the local retry marker survives restarts.
 
 The ordinary test suite executes actual extracted server handlers behind the real authorization middleware with fixture identity/persistence, plus actual client session logic, real HTTP SSE tests, offline reconciliation, and audit-tail edge cases. It never accesses production credentials or services. The emulator suite compiles the real rules and checks anonymous/authenticated/claimed-admin operations and server-owned seed writes against the emulator rules engine. CI repeats verification on Linux with Node 22 / Java 21. The initial GitHub run passed all 25 tests, all 63 emulator-denial checks, type checks, build and production smoke checks. Local Windows emulator HTTP/2 transport failed; its failures were not counted as passes. The final head also includes the large-workspace handshake regression test.
 

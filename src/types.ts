@@ -125,6 +125,7 @@ export interface ParentTask {
   brief?: string;
   brandGuidelines?: string;
   clickupParentTaskId?: string;
+  clickupCreationPending?: true;
   lastSyncedClickupDescHash?: string;
   createdAt: string;
   updatedAt: string;
@@ -172,12 +173,21 @@ export interface Task {
   clickupTaskTypeId?: string;
   clickupTaskTypeFieldId?: string;
   clickupParentTaskId?: string;
+  clickupCreationPending?: true;
+}
+
+export interface AnalyticsSnapshot {
+  date: string;
+  capturedAt: string;
+  users: User[];
+  tasks: Task[];
 }
 
 export type AnalyticsScope = 'all' | 'client' | 'delivery_unit' | 'project' | 'user';
 export type AnalyticsTimeframe = 'today' | 'week' | 'custom';
 
 export interface QueuedMutation {
+  optimisticTask?: Task;
   id: string;
   type: 'create_task' | 'update_task' | 'delete_task' | 'reorder_tasks' | 'delete_user';
   endpoint: string;

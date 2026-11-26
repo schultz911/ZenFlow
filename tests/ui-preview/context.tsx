@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import type { Task, User } from '../../src/types';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import type { ClickupMember, ClickupSpace, ClickupWebhookStatus, Task, User } from '../../src/types';
 import { applyOptimisticTaskUpdate } from '../../src/domain/taskTransitions';
 
 const dayIso = (offsetDays: number) => {
@@ -32,7 +32,8 @@ export const fixtureTasks: Task[] = [
 const PreviewContext = createContext<any>(null);
 
 export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [users] = useState<User[]>(fixtureUsers);
+  const isFreshOnboarding = new URLSearchParams(window.location.search).get('onboarding') === 'fresh';
+  const [users, setUsers] = useState<User[]>(fixtureUsers);
   const [tasks, setTasks] = useState<Task[]>(fixtureTasks);
   const [activeRoleTab, setActiveRoleTab] = useState<'all' | 'content' | 'design'>('all');
   const [activeBoardId, setActiveBoardId] = useState<string>('all');
@@ -45,9 +46,68 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   }, [darkMode]);
   const [activeDragInfo, setActiveDragInfo] = useState<any>(null);
   const [authError, setAuthError] = useState<string | null>(null);
-  const currentUser = fixtureUsers[0];
+  const [isClickupConnected, setIsClickupConnected] = useState<boolean>(!isFreshOnboarding);
+  const [clickupSpaces, setClickupSpaces] = useState<ClickupSpace[]>(
+    isFreshOnboarding ? [] : [{ id: 'sp-1', name: 'ZenClient', private: false }, { id: 'sp-2', name: 'Growth Ops', private: false }]
+  );
+  const [selectedClickupSpaceId, setSelectedClickupSpaceIdState] = useState<string>(isFreshOnboarding ? '' : 'sp-1');
+  const [clickupMembers, setClickupMembers] = useState<ClickupMember[]>([]);
+  const [clickupWebhookStatus, setClickupWebhookStatus] = useState<ClickupWebhookStatus | null>(
+    isFreshOnboarding ? null : { listening: true, registered: true, webhookId: 'wh-1', totalEventsCount: 0, endpointUrl: '/api/clickup/webhook' }
+  );
+  const currentUser = users[0];
   const yes = () => true;
-  const noopAsync = async () => ({});
+  const noopAsync = useCallback(async () => ({}), []);
+
+  const updateUserProfile = useCallback(async (id: string, u: any) => {
+    let updated = fixtureUsers[0];
+    setUsers(prev => prev.map(user => (user.id === id ? (updated = { ...user, ...u }) : user)));
+    return updated;
+  }, []);
+
+  const loadClickupMembers = useCallback(async () => {
+    const list: ClickupMember[] = [{ id: 'cu-1', username: 'Kiran S', email: 'kiran.s@zensciences.com' }];
+    setClickupMembers(list);
+    return list;
+  }, []);
+
+  const connectClickup = useCallback(async (apiKey: string) => {
+    if (apiKey.trim() === 'invalid') {
+      return { success: false, error: 'Invalid ClickUp API Key' };
+    }
+    setIsClickupConnected(true);
+    setClickupSpaces([
+      { id: 'sp-1', name: 'ZenClient', private: false },
+      { id: 'sp-2', name: 'Growth Ops', private: false },
+    ]);
+    setSelectedClickupSpaceIdState(prev => prev || 'sp-1');
+    setClickupMembers([{ id: 'cu-1', username: 'Kiran S', email: 'kiran.s@zensciences.com' }]);
+    return { success: true };
+  }, []);
+
+  const disconnectClickup = useCallback(() => {
+    setIsClickupConnected(false);
+    setClickupSpaces([]);
+    setSelectedClickupSpaceIdState('');
+  }, []);
+
+  const setSelectedClickupSpaceId = useCallback(async (spaceId: string, spaceName?: string) => {
+    setSelectedClickupSpaceIdState(spaceId);
+    setUsers(prev => prev.map((u, idx) => (idx === 0 ? { ...u, selectedClickupSpaceId: spaceId, selectedClickupSpaceName: spaceName } : u)));
+  }, []);
+
+  const syncUserTasksWithClickUp = useCallback(async () => {
+    return { success: true, syncedCount: 2, archivedCount: 0, message: 'Sent 2 task(s) to ClickUp.' };
+  }, []);
+
+  const refreshClickupWebhookStatus = useCallback(async () => {
+    setClickupWebhookStatus(prev => prev ?? { listening: true, registered: false, totalEventsCount: 0, endpointUrl: '/api/clickup/webhook' });
+  }, []);
+
+  const registerClickupWebhook = useCallback(async () => {
+    setClickupWebhookStatus({ listening: true, registered: true, webhookId: 'wh-1', totalEventsCount: 0, endpointUrl: '/api/clickup/webhook' });
+    return { success: true, message: 'ClickUp real-time webhook registered successfully!', webhookId: 'wh-1' };
+  }, []);
 
   const value = {
     currentUser,
@@ -79,7 +139,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     loginWithGoogle: async () => currentUser,
     logout: () => {},
     createUser: async (d: any) => ({ ...d, id: `u-${Date.now()}`, avatarColor: 'from-blue-500 to-cyan-500', createdAt: new Date().toISOString() }),
-    updateUserProfile: async (id: string, u: any) => ({ ...fixtureUsers[0], id, ...u }),
+    updateUserProfile,
     remapUserTasks: async () => ({ success: true, remappedCount: 0 }),
     deleteUser: noopAsync,
     isSuperadmin: true,
@@ -96,27 +156,33 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     canEditUserTasks: yes,
     canSwitchBoards: true,
     isZensciencesUser: true,
-    isClickupConnected: true,
-    clickupMembers: [],
-    loadClickupMembers: async () => [],
-    clickupSpaces: [{ id: 'sp-1', name: 'ZenClient', private: false }],
-    selectedClickupSpaceId: 'sp-1',
+    isClickupConnected,
+    clickupMembers,
+    loadClickupMembers,
+    clickupSpaces,
+    selectedClickupSpaceId,
     spaceFoldersAndListsMap: { 'sp-1': { folders: [{ id: 'f-1', name: 'Campaigns', lists: [{ id: 'l-1', name: 'Q4 Launch' }] }], folderlessLists: [] } },
     getFoldersAndListsForSpace: async () => ({ folders: [{ id: 'f-1', name: 'Campaigns', lists: [{ id: 'l-1', name: 'Q4 Launch' }] }], folderlessLists: [] }),
-    connectClickup: async () => ({ success: true }),
-    disconnectClickup: () => {},
-    setSelectedClickupSpaceId: noopAsync,
+    connectClickup,
+    disconnectClickup,
+    setSelectedClickupSpaceId,
     createClickupSpace: async (name: string) => ({ id: 'sp-new', name, private: false }),
     createClickupList: async (name: string) => ({ id: 'l-new', name }),
-    syncUserTasksWithClickUp: async () => ({ success: true, syncedCount: 0, archivedCount: 0, message: 'ok' }),
+    syncUserTasksWithClickUp,
     clickupCustomFieldOptions: [{ id: 'opt-1', name: 'Campaign' }],
     clickupTaskTypeFieldId: 'cf-1',
     isLoadingTaskTypes: false,
     fetchClickupCustomFields: async () => [{ id: 'opt-1', name: 'Campaign' }],
-    clickupWebhookStatus: { registered: true, webhookId: 'wh-1', totalEventsCount: 0, endpointUrl: '/api/clickup/webhook' },
-    refreshClickupWebhookStatus: noopAsync,
-    registerClickupWebhook: async () => ({ success: true, message: 'ok' }),
+    clickupWebhookStatus,
+    refreshClickupWebhookStatus,
+    registerClickupWebhook,
     fetchAuditLogs: async () => [],
+    fetchAnalyticsSnapshot: async (start: string, end: string) => {
+      const date = '2026-01-09';
+      return start <= date && date <= end
+        ? { date, capturedAt: '2026-01-09T18:29:00Z', users: [fixtureUsers[0]], tasks: [] }
+        : null;
+    },
     downloadAuditLogs: () => {},
     createPipelineBundle: async (data: any) => {
       const pid = `parent-${Date.now()}`;

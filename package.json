@@ -14,7 +14,8 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-zenflow \"node --import tsx tests/firestore.emulator.ts\""
+    "test:rules": "firebase emulators:exec --only firestore --project demo-zenflow \"node --import tsx tests/firestore.emulator.ts\"",
+    "test:e2e": "node --import tsx tests/e2e-browser.ts"
   },
   "dependencies": {
     "compression": "^1.8.1",
@@ -38,6 +39,7 @@
     "@vitejs/plugin-react": "^5.0.4",
     "esbuild": "^0.25.0",
     "firebase-tools": "^15.34.1",
+    "playwright": "^1.62.1",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",

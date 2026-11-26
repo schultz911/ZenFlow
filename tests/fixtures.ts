@@ -37,7 +37,7 @@ export function fixtureTask(
 }
 
 export async function fixtureServer(
-  directoryOrOptions?: string | { directory?: string; clickupTransport?: ClickUpTransport }
+  directoryOrOptions?: string | { directory?: string; clickupTransport?: ClickUpTransport; identityLifetimeMs?: number }
 ) {
   const opts = typeof directoryOrOptions === 'string' ? { directory: directoryOrOptions } : directoryOrOptions || {};
   const owningTmpDir = !opts.directory;
@@ -124,7 +124,7 @@ export async function fixtureServer(
     transport: (url, init) => (activeTransport ? activeTransport(url, init) : fetch(url, init)),
   });
 
-  const futureExp = Math.floor(Date.now() / 1000) + 3600;
+  const futureExp = (Date.now() + (opts.identityLifetimeMs ?? 3_600_000)) / 1000;
   const verifyIdentity = async (token: string): Promise<Identity> => {
     if (token === 'expired') {
       return { email: 'alice@zensciences.com', email_verified: true, exp: 1000, firebase: { sign_in_provider: 'google.com' } };

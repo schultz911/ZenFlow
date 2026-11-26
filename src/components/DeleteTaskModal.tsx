@@ -23,6 +23,9 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
   onConfirmDelete,
 }) => {
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
+  useEffect(() => setDeleteError(''), [isOpen, task?.id, targetUserId]);
 
   // Close on Escape key
   useEffect(() => {
@@ -41,13 +44,14 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
 
   const handleDelete = async () => {
     if (!task) return;
+    setDeleteError('');
     try {
       setIsDeleting(true);
       await onConfirmDelete(task.id, isSharedRemoval ? targetUserId : undefined);
       setIsDeleting(false);
       onClose();
     } catch (err) {
-      console.error('Failed to delete task:', err);
+      setDeleteError(err instanceof Error ? err.message : 'The task could not be updated. Please try again.');
       setIsDeleting(false);
     }
   };
@@ -135,6 +139,7 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
               ? `Remove ${owner?.name || 'this member'} from this shared task? It will remain active on the other ${assigneeIds.length - 1} assignee(s)' board(s).`
               : 'Are you sure you want to delete this task? This action cannot be undone.'}
           </div>
+          {deleteError && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{deleteError}</p>}
         </div>
 
         {/* Footer Actions */}

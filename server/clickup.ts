@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Express, Request, Response } from 'express';
 import type { ParentTask, Task, User } from '../src/types';
 import { formatBillableHours, getTaskAssigneeIds } from '../src/domain/taskTransitions';
-import { isAdminMember, isBusinessLead, isSuperadmin } from '../src/domain/permissions';
+import { canEdit, isSuperadmin } from '../src/domain/permissions';
 import { decryptSecret } from './crypto';
 import { validSignature } from './security';
 import type { WorkspaceRepository } from './store';
@@ -123,7 +123,7 @@ const defaultSanitize = (input: unknown, maxLen = 1000): string =>
 
 export function createClickUpService(deps: CreateClickUpServiceDeps) {
   const { repo, webhookRegistry, broadcastEvent } = deps;
-  const transport: ClickUpTransport = deps.transport || ((url, init) => fetch(url, init));
+  const transport: ClickUpTransport = deps.transport || ((url, init) => fetch(url, { ...init, signal: AbortSignal.timeout(10_000) }));
   const sanitize = deps.sanitizeString || defaultSanitize;
 
   const MAX_CACHE_ENTRIES = 500;
@@ -135,6 +135,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
 
   let registeredWebhookId: string | null = webhookRegistry.latest()?.id || null;
   let activeWebhookEndpoint: string | null = webhookRegistry.latest()?.endpoint || null;
+  let webhookRegistrationInFlight: Promise<void> | null = null;
   let totalEventsCount = 0;
   let lastEventAt: string | undefined;
   let lastEventAction: string | undefined;
@@ -179,29 +180,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     }
   };
 
-  const resolveToken = (options?: {
-    explicitToken?: string;
-    req?: Request;
-    caller?: User;
-    taskUser?: User;
-    fallbackToAnyUser?: boolean;
-  }): string => {
-    const store = repo.getStore();
-    const candidates = [
-      options?.explicitToken,
-      decryptSecret(options?.caller?.clickupApiKey),
-      decryptSecret(options?.taskUser?.clickupApiKey),
-      options?.req?.headers?.['x-clickup-api-key'] as string | undefined,
-      options?.req?.body?.apiKey as string | undefined,
-      options?.fallbackToAnyUser !== false
-        ? decryptSecret(store.users.find(u => decryptSecret(u.clickupApiKey))?.clickupApiKey)
-        : undefined,
-    ];
-    for (const c of candidates) {
-      if (typeof c === 'string' && c.trim()) return c.trim();
-    }
-    return '';
-  };
+  const resolveToken = (caller?: User): string => decryptSecret(caller?.clickupApiKey);
 
   const resolveTeamId = async (token: string): Promise<string | null> => {
     const key = tokenCacheKey(token);
@@ -243,7 +222,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     if (timeMs < 1000) return true;
 
     const isOwnBoard = !callerUserId || callerUserId === taskUser.id;
-    const boardUserToken = decryptSecret(taskUser.clickupApiKey);
+    const boardUserToken = isOwnBoard ? callerToken : '';
     const boardUserClickupId = taskUser.clickupUserId ? parseInt(taskUser.clickupUserId, 10) : undefined;
 
     if (boardUserToken) {
@@ -328,7 +307,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     commentHeader: string;
     initialLiveDesc?: string;
     skipConflictComment?: boolean;
-  }): Promise<{ hash?: string; conflict: boolean }> => {
+  }): Promise<{ hash?: string; synced: boolean }> => {
     const {
       clickupId,
       desiredMarkdown,
@@ -340,7 +319,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       skipConflictComment,
     } = params;
     const safeId = sanitizeClickupId(clickupId);
-    if (!safeId || !token) return { hash: lastSyncedHash, conflict: false };
+    if (!safeId || !token) return { hash: lastSyncedHash, synced: false };
 
     let liveDesc = initialLiveDesc;
     if (liveDesc === undefined) {
@@ -358,13 +337,13 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     }
 
     if (liveDesc === undefined) {
-      return { hash: lastSyncedHash, conflict: false };
+      return { hash: lastSyncedHash, synced: false };
     }
 
     const liveHash = hashClickupDescription(liveDesc);
     const desiredHash = hashClickupDescription(desiredMarkdown);
     if (liveHash === desiredHash) {
-      return { hash: desiredHash, conflict: false };
+      return { hash: desiredHash, synced: true };
     }
 
     const fallbackHash = fallbackLegacyDesc ? hashClickupDescription(fallbackLegacyDesc) : '';
@@ -381,17 +360,17 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
           body: JSON.stringify({ description: desiredMarkdown }),
         });
         if (putRes.ok) {
-          return { hash: desiredHash, conflict: false };
+          return { hash: desiredHash, synced: true };
         }
       } catch (err) {
         console.warn(`[ClickUp Desc Sync] Failed updating ClickUp description on ${clickupId}:`, err);
       }
-      return { hash: lastSyncedHash, conflict: false };
+      return { hash: lastSyncedHash, synced: false };
     }
 
     if (!skipConflictComment && desiredMarkdown.trim()) {
       try {
-        await transport(`${CLICKUP_API}/task/${clickupId}/comment`, {
+        const comment = await transport(`${CLICKUP_API}/task/${safeId}/comment`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: token },
           body: JSON.stringify({
@@ -399,11 +378,13 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
             notify_all: false,
           }),
         });
+        return { hash: lastSyncedHash, synced: comment.ok };
       } catch (err) {
         console.warn(`[ClickUp Desc Sync] Failed posting conflict comment on ${clickupId}:`, err);
+        return { hash: lastSyncedHash, synced: false };
       }
     }
-    return { hash: lastSyncedHash, conflict: true };
+    return { hash: lastSyncedHash, synced: true };
   };
 
   const syncParentDescriptionToClickUp = async (parentTask: ParentTask, token: string): Promise<void> => {
@@ -421,16 +402,14 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       parentTask.lastSyncedClickupDescHash = result.hash;
       parentTask.updatedAt = new Date().toISOString();
       repo.saveLocal();
-      repo.saveParentTask(parentTask).catch(e => console.error('Firestore parent hash err:', e));
+      await repo.saveParentTask(parentTask).catch(e => console.error('Firestore parent hash err:', e));
     }
   };
 
   const syncContentLinkToClickUp = async (task: Task, link: string, explicitToken?: string): Promise<void> => {
     const clickupId = task.clickupTaskId;
     if (!clickupId || !link) return;
-    const store = repo.getStore();
-    const taskUser = task.userId ? store.users.find(u => u.id === task.userId) : undefined;
-    const token = resolveToken({ explicitToken, taskUser });
+    const token = explicitToken;
     if (!token) return;
 
     try {
@@ -448,7 +427,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
           task.lastSyncedClickupDescHash = result.hash;
           task.updatedAt = new Date().toISOString();
           repo.saveLocal();
-          repo.saveTask(task).catch(e => console.error('Firestore task hash err:', e));
+          await repo.saveTask(task).catch(e => console.error('Firestore task hash err:', e));
         }
       }
 
@@ -471,22 +450,24 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     userOverride?: User,
     callerUserId?: string,
     includeSpecsSync?: boolean
-  ): Promise<void> => {
+  ): Promise<boolean> => {
     const store = repo.getStore();
     const assignees = getTaskAssigneeIds(task);
     const assignedUsers = assignees
       .map(uid => store.users.find(u => u.id === uid))
       .filter((u): u is User => Boolean(u));
     const taskUser = userOverride || assignedUsers[0] || store.users.find(u => u.id === task.userId);
-    const token = resolveToken({ explicitToken, taskUser });
-    if (!token) return;
+    const token = explicitToken;
+    if (!token) return false;
 
     const clickupAssigneeIds = assignedUsers
       .map(u => (u.clickupUserId ? parseInt(u.clickupUserId, 10) : NaN))
       .filter(id => !isNaN(id));
 
     const clickupStatus = ZENFLOW_TO_CLICKUP_STATUS[task.status] || 'to do';
-    const timeEstimateMs = COGNITIVE_LOAD_ESTIMATES_MS[task.cognitiveLoad] || 24 * 3600 * 1000;
+    const timeEstimateMs = task.estimatedHours !== undefined && Number.isFinite(task.estimatedHours)
+      ? Math.round(task.estimatedHours * 3600 * 1000)
+      : COGNITIVE_LOAD_ESTIMATES_MS[task.cognitiveLoad] || 24 * 3600 * 1000;
 
     const safeTaskId = task.clickupTaskId ? sanitizeClickupId(task.clickupTaskId) : null;
     if (safeTaskId) {
@@ -505,6 +486,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
           body: JSON.stringify(updatePayload),
         });
 
+        if (!res.ok) return false;
         let liveDesc: string | undefined;
         if (res.ok) {
           try {
@@ -518,13 +500,14 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
         }
 
         if (clickupAssigneeIds.length > 0) {
-          await transport(`${CLICKUP_API}/task/${safeTaskId}`, {
+          const assigneeResponse = await transport(`${CLICKUP_API}/task/${safeTaskId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json', Authorization: token },
             body: JSON.stringify({
               assignees: { add: clickupAssigneeIds, rem: [] },
             }),
-          }).catch(() => {});
+          });
+          if (!assigneeResponse.ok) return false;
         }
 
         const hasParentSpecs = Boolean(task.parentTaskId);
@@ -543,11 +526,12 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
               commentHeader: 'ZenFlow Specifications Update (manual ClickUp edits preserved)',
               initialLiveDesc: liveDesc,
             });
+            if (!descResult.synced) return false;
             if (descResult.hash && descResult.hash !== task.lastSyncedClickupDescHash) {
               task.lastSyncedClickupDescHash = descResult.hash;
               task.updatedAt = new Date().toISOString();
               repo.saveLocal();
-              repo.saveTask(task).catch(e => console.error('Firestore save desc hash err:', e));
+              await repo.saveTask(task);
             }
           }
         }
@@ -565,17 +549,17 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
               callerUserId,
               callerToken: token,
             });
-            if (timePosted) {
-              taskWithSync.lastSyncedClickupTimeMs = trackedMs;
-              repo.saveLocal();
-              repo.saveTask(task).catch(e => console.error('Firestore save time err:', e));
-            }
+            if (!timePosted) return false;
+            taskWithSync.lastSyncedClickupTimeMs = trackedMs;
+            repo.saveLocal();
+            await repo.saveTask(task);
           }
         }
       } catch (err) {
         console.warn('[ClickUp Auto-Sync] Update error:', err);
+        return false;
       }
-      return;
+      return true;
     }
 
     // Create task in ClickUp
@@ -611,7 +595,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       }
     }
 
-    if (!targetListId) return;
+    if (!targetListId || task.clickupCreationPending) return false;
 
     try {
       const hasParentSpecs = Boolean(task.parentTaskId);
@@ -647,6 +631,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
 
       if (cRes.ok) {
         const cData = await cRes.json();
+        if (!sanitizeClickupId(cData.id)) return false;
         task.clickupTaskId = cData.id;
         task.clickupUrl = cData.url;
         task.clickupListId = targetListId;
@@ -657,7 +642,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
               : hashClickupDescription(initialDesc);
         }
         repo.saveLocal();
-        repo.saveTask(task).catch(e => console.error('Firestore save err:', e));
+        await repo.saveTask(task);
         broadcastEvent('task_updated', task);
 
         if (task.inProgressDurationMs && task.inProgressDurationMs >= 1000 && taskUser) {
@@ -669,15 +654,16 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
             callerUserId,
             callerToken: token,
           });
-          if (timePosted) {
-            (task as Task & { lastSyncedClickupTimeMs?: number }).lastSyncedClickupTimeMs = trackedMs;
-            repo.saveLocal();
-            repo.saveTask(task).catch(e => console.error('Firestore save time err:', e));
-          }
+          if (!timePosted) return false;
+          (task as Task & { lastSyncedClickupTimeMs?: number }).lastSyncedClickupTimeMs = trackedMs;
+          repo.saveLocal();
+          await repo.saveTask(task);
         }
       }
+      return cRes.ok;
     } catch (err) {
       console.warn('[ClickUp Auto-Sync] Creation error:', err);
+      return false;
     }
   };
 
@@ -689,7 +675,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     dueDate?: string;
     taskTypeFieldId?: string;
     taskTypeId?: string;
-  }): Promise<{ clickupParentTaskId?: string; clickupUrl?: string; descHash?: string }> => {
+  }): Promise<{ clickupParentTaskId?: string; clickupUrl?: string; descHash?: string; uncertain?: boolean }> => {
     const { token, listId, title, markdown, dueDate, taskTypeFieldId, taskTypeId } = params;
     const safeListId = sanitizeClickupId(listId);
     if (!token || !safeListId) return {};
@@ -710,6 +696,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       });
       if (pRes.ok) {
         const pData = await pRes.json();
+        if (!sanitizeClickupId(pData.id)) return { uncertain: true };
         const descHash = markdown
           ? typeof pData.description === 'string'
             ? hashClickupDescription(pData.description) || hashClickupDescription(markdown)
@@ -721,11 +708,12 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
           descHash,
         };
       }
-      console.warn('[ClickUp Bundle] Failed to create parent task:', await pRes.text());
+      console.warn('[ClickUp Bundle] Failed to create parent task:', pRes.status);
+      return { uncertain: pRes.status >= 500 || pRes.status === 408 };
     } catch (err) {
       console.warn('[ClickUp Bundle] Parent task error:', err);
+      return { uncertain: true };
     }
-    return {};
   };
 
   const createRemoteSubtask = async (params: {
@@ -739,7 +727,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     dueDate?: string;
     taskTypeFieldId?: string;
     taskTypeId?: string;
-  }): Promise<{ clickupTaskId?: string; clickupUrl?: string; descHash?: string }> => {
+  }): Promise<{ clickupTaskId?: string; clickupUrl?: string; descHash?: string; uncertain?: boolean }> => {
     const {
       token,
       listId,
@@ -772,6 +760,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       });
       if (sRes.ok) {
         const sData = await sRes.json();
+        if (!sanitizeClickupId(sData.id)) return { uncertain: true };
         const descHash = markdown
           ? typeof sData.description === 'string'
             ? hashClickupDescription(sData.description) || hashClickupDescription(markdown)
@@ -783,11 +772,12 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
           descHash,
         };
       }
-      console.warn(`[ClickUp Bundle] Failed to create ${discLabel} subtask:`, await sRes.text());
+      console.warn(`[ClickUp Bundle] Failed to create ${discLabel} subtask:`, sRes.status);
+      return { uncertain: sRes.status >= 500 || sRes.status === 408 };
     } catch (err) {
       console.warn(`[ClickUp Bundle] ${discLabel} subtask error:`, err);
+      return { uncertain: true };
     }
-    return { clickupUrl: parentClickupUrl };
   };
 
   const processWebhookEvent = async (params: {
@@ -835,7 +825,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     let clickupTaskData: any = null;
     const assignees = getTaskAssigneeIds(existingTask);
     const assignedUser = assignees[0] ? store.users.find(u => u.id === assignees[0]) : undefined;
-    const token = resolveToken({ taskUser: assignedUser });
+    const token = resolveToken(assignedUser);
 
     if (token) {
       const safeTaskId = sanitizeClickupId(taskId);
@@ -900,7 +890,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     }
 
     if (hasDivergence && token) {
-      syncTaskToClickUp(existingTask, token, assignedUser).catch(e =>
+      await syncTaskToClickUp(existingTask, token, assignedUser).catch(e =>
         console.error('[ClickUp Webhook] Error pushing authoritative state to ClickUp:', e)
       );
       repo.appendAuditLog({
@@ -931,7 +921,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
         });
         existingTask.activityLog = activityEntries.slice(0, 15);
         repo.saveLocal();
-        repo.saveTask(existingTask).catch(e => console.error('Firestore save err:', e));
+        await repo.saveTask(existingTask).catch(e => console.error('Firestore save err:', e));
         broadcastEvent('task_updated', existingTask);
       }
     }
@@ -941,7 +931,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     refreshWebhookPointer();
 
     app.post('/api/clickup/verify', async (req: Request, res: Response) => {
-      const token = resolveToken({ explicitToken: req.body?.apiKey, req, caller: res.locals.caller, fallbackToAnyUser: false });
+      const token = typeof req.body?.apiKey === 'string' ? req.body.apiKey.trim() : '';
       if (!token) return res.status(400).json({ error: 'API key is required' });
       try {
         const userRes = await transport(`${CLICKUP_API}/user`, { headers: { Authorization: token } });
@@ -955,8 +945,8 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       }
     });
 
-    app.get('/api/clickup/spaces', async (req: Request, res: Response) => {
-      const token = resolveToken({ req, caller: res.locals.caller });
+    app.get('/api/clickup/spaces', async (_req: Request, res: Response) => {
+      const token = resolveToken(res.locals.caller);
       if (!token) return res.status(400).json({ error: 'ClickUp API token not configured' });
 
       const cacheKey = `spaces:${tokenCacheKey(token)}`;
@@ -982,8 +972,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
 
     app.post('/api/clickup/spaces', async (req: Request, res: Response) => {
       const caller = res.locals.caller as User | undefined;
-      const allowShared = isSuperadmin(caller) || isAdminMember(caller) || isBusinessLead(caller);
-      const token = resolveToken({ req, caller, fallbackToAnyUser: allowShared });
+      const token = resolveToken(caller);
       const spaceName = sanitize(req.body?.name);
       if (!token || !spaceName) {
         return res.status(400).json({ error: 'ClickUp token and space name are required' });
@@ -1010,8 +999,8 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       }
     });
 
-    app.get('/api/clickup/members', async (req: Request, res: Response) => {
-      const token = resolveToken({ req, caller: res.locals.caller });
+    app.get('/api/clickup/members', async (_req: Request, res: Response) => {
+      const token = resolveToken(res.locals.caller);
       if (!token) return res.status(400).json({ error: 'ClickUp API token not configured' });
 
       const cacheKey = `members:${tokenCacheKey(token)}`;
@@ -1046,7 +1035,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     });
 
     app.get('/api/clickup/folders-and-lists', async (req: Request, res: Response) => {
-      const token = resolveToken({ req, caller: res.locals.caller });
+      const token = resolveToken(res.locals.caller);
       const safeSpaceId = sanitizeClickupId(sanitize(req.query.spaceId));
       if (!token || !safeSpaceId) return res.status(400).json({ error: 'Valid spaceId and ClickUp token are required' });
 
@@ -1070,7 +1059,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     });
 
     app.get('/api/clickup/custom-fields', async (req: Request, res: Response) => {
-      const token = resolveToken({ req, caller: res.locals.caller });
+      const token = resolveToken(res.locals.caller);
       const rawListId = sanitize(req.query.listId);
       const safeListId = rawListId ? sanitizeClickupId(rawListId) : null;
       if (rawListId && !safeListId) return res.status(400).json({ error: 'Invalid listId format' });
@@ -1108,8 +1097,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
 
     app.post('/api/clickup/lists', async (req: Request, res: Response) => {
       const caller = res.locals.caller as User | undefined;
-      const allowShared = isSuperadmin(caller) || isAdminMember(caller) || isBusinessLead(caller);
-      const token = resolveToken({ req, caller, fallbackToAnyUser: allowShared });
+      const token = resolveToken(caller);
       const name = sanitize(req.body?.name);
       const rawSpaceId = sanitize(req.body?.spaceId);
       const rawFolderId = sanitize(req.body?.folderId);
@@ -1142,21 +1130,36 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       if (!targetUser) return res.status(404).json({ error: 'User not found' });
 
       const caller = res.locals.caller;
-      const token = resolveToken({ req, caller, taskUser: targetUser });
+      const token = resolveToken(caller);
       if (!token) return res.status(400).json({ error: 'ClickUp API token not configured' });
 
       const userTasks = store.tasks.filter(t => getTaskAssigneeIds(t).includes(targetUser.id));
-      let syncedCount = 0;
-      for (const t of userTasks) {
-        await syncTaskToClickUp(t, token, targetUser, caller?.id);
-        syncedCount++;
+      const results: Array<{ taskId: string; synced: boolean }> = [];
+      for (const task of userTasks) {
+        const synced = await repo.runMutation(async () => {
+          const currentCaller = repo.getUsers().find(user => user.id === caller.id && user.email === caller.email);
+          const currentTarget = repo.getUsers().find(user => user.id === userId);
+          if (repo.purgeNeedsRetry() || !currentCaller || !currentTarget ||
+              res.locals.identityExpiresAt <= Date.now() ||
+              (currentCaller.id !== currentTarget.id && !canEdit(currentCaller, currentTarget))) return false;
+          const currentTask = repo.getTasks().find(item => item.id === task.id);
+          if (!currentTask || !getTaskAssigneeIds(currentTask).includes(userId)) return false;
+          return syncTaskToClickUp(currentTask, resolveToken(currentCaller), currentTarget, currentCaller.id);
+        });
+        results.push({ taskId: task.id, synced });
       }
+      const syncedCount = results.filter(result => result.synced).length;
+      const failedCount = results.length - syncedCount;
 
       return res.json({
-        success: true,
+        success: failedCount === 0,
         syncedCount,
+        failedCount,
+        results,
         archivedCount: 0,
-        message: `Synced ${syncedCount} task(s) for ${targetUser.name}`,
+        message: failedCount > 0
+          ? `Sent ${syncedCount} of ${results.length} tasks to ClickUp. ${failedCount} failed. Retry to finish syncing.`
+          : `Sent ${syncedCount} task(s) to ClickUp.`,
       });
     });
 
@@ -1174,75 +1177,104 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       const historyItems = Array.isArray(body.history_items) ? body.history_items : [];
 
       res.json({ ok: true });
-      processWebhookEvent({ taskId, eventType, historyItems, rawBody: body, ip: req.ip }).catch(err =>
-        console.error('[ClickUp Webhook] Unhandled processing error:', err)
-      );
+      void repo.runMutation(() => {
+        if (repo.purgeNeedsRetry()) return;
+        return processWebhookEvent({ taskId, eventType, historyItems, rawBody: body, ip: req.ip });
+      }).catch(err => console.error('[ClickUp Webhook] Unhandled processing error:', err));
     });
 
     app.post('/api/clickup/webhook/register', async (req: Request, res: Response) => {
+      while (webhookRegistrationInFlight) {
+        await webhookRegistrationInFlight.catch(() => {});
+      }
+
       const existingWebhook = webhookRegistry.latest();
-      if (existingWebhook?.id && !isSuperadmin(res.locals.caller)) {
+      const callerIsSuperadmin = isSuperadmin(res.locals.caller);
+      if (existingWebhook?.id && !callerIsSuperadmin) {
         return res.status(403).json({ error: 'ClickUp webhook already registered; only Superadmin can replace it' });
       }
-      const token = resolveToken({ req, caller: res.locals.caller });
+      const token = resolveToken(res.locals.caller);
       if (!token) return res.status(400).json({ error: 'ClickUp API token required' });
 
-      const endpoint =
-        sanitize(req.body?.endpoint) ||
-        `${req.protocol}://${req.get('host')}/api/clickup/webhook`;
+      const defaultEndpoint = `${req.protocol}://${req.get('host')}/api/clickup/webhook`;
+      const requestedEndpoint = sanitize(req.body?.endpoint);
+      const endpoint = callerIsSuperadmin && requestedEndpoint ? requestedEndpoint : defaultEndpoint;
       if (!isValidWebhookEndpoint(endpoint, req)) {
         return res.status(400).json({ error: 'Webhook endpoint must be a valid https:// URL' });
       }
 
-      const teamId = await resolveTeamId(token);
-      if (!teamId) return res.status(404).json({ error: 'No ClickUp workspace team found' });
+      let outcomeStatus = 502;
+      let outcomeBody: Record<string, any> = { error: 'Failed registering webhook' };
 
-      try {
-        const createRes = await transport(`${CLICKUP_API}/team/${teamId}/webhook`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: token },
-          body: JSON.stringify({
-            endpoint,
-            events: [
-              'taskStatusUpdated',
-              'taskAssigneeUpdated',
-              'taskDueDateUpdated',
-              'taskTimeTrackedUpdated',
-              'taskDeleted',
-            ],
-          }),
-        });
-        if (!createRes.ok) {
-          return res.status(createRes.status).json({ error: 'Failed to register ClickUp webhook' });
+      const run = (async () => {
+        const teamId = await resolveTeamId(token);
+        if (!teamId) {
+          outcomeStatus = 404;
+          outcomeBody = { error: 'No ClickUp workspace team found' };
+          return;
         }
-        const data = await createRes.json();
-        const webhook = data.webhook || data;
-        const reg = {
-          id: String(webhook.id || `wh-${Date.now()}`),
-          endpoint,
-          secret: String(webhook.secret || ''),
-        };
-        await webhookRegistry.save(reg, repo.getWebhookDb());
-        refreshWebhookPointer();
 
-        repo.appendAuditLog({
-          category: 'webhook',
-          action: 'clickup_webhook_registered',
-          actor: { id: res.locals.caller?.id, email: res.locals.caller?.email, ip: req.ip },
-          targetId: reg.id,
-          targetType: 'webhook',
-          details: `ClickUp webhook registered at ${endpoint}`,
-        });
+        try {
+          const createRes = await transport(`${CLICKUP_API}/team/${teamId}/webhook`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: token },
+            body: JSON.stringify({
+              endpoint,
+              events: [
+                'taskStatusUpdated',
+                'taskAssigneeUpdated',
+                'taskDueDateUpdated',
+                'taskTimeTrackedUpdated',
+                'taskDeleted',
+              ],
+            }),
+          });
+          if (!createRes.ok) {
+            outcomeStatus = createRes.status;
+            outcomeBody = { error: 'Failed to register ClickUp webhook' };
+            return;
+          }
+          const data = await createRes.json();
+          const webhook = data.webhook || data;
+          const reg = {
+            id: String(webhook.id || `wh-${Date.now()}`),
+            endpoint,
+            secret: String(webhook.secret || ''),
+          };
+          await webhookRegistry.save(reg, repo.getWebhookDb());
+          refreshWebhookPointer();
 
-        return res.json({
-          success: true,
-          webhookId: reg.id,
-          endpoint: reg.endpoint,
-          message: 'ClickUp webhook registered',
-        });
-      } catch (err: any) {
-        return res.status(502).json({ error: err?.message || 'Failed registering webhook' });
+          repo.appendAuditLog({
+            category: 'webhook',
+            action: 'clickup_webhook_registered',
+            actor: { id: res.locals.caller?.id, email: res.locals.caller?.email, ip: req.ip },
+            targetId: reg.id,
+            targetType: 'webhook',
+            details: `ClickUp webhook registered at ${endpoint}`,
+          });
+
+          outcomeStatus = 200;
+          outcomeBody = {
+            success: true,
+            webhookId: reg.id,
+            endpoint: reg.endpoint,
+            message: 'ClickUp webhook registered',
+          };
+        } catch (err: any) {
+          outcomeStatus = 502;
+          outcomeBody = { error: err?.message || 'Failed registering webhook' };
+        }
+      })();
+
+      webhookRegistrationInFlight = run;
+      try {
+        await run;
+      } finally {
+        if (webhookRegistrationInFlight === run) {
+          webhookRegistrationInFlight = null;
+        }
       }
+      return res.status(outcomeStatus).json(outcomeBody);
     });
 
     app.get('/api/clickup/webhook/status', (_req: Request, res: Response) => {
@@ -1261,7 +1293,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     app.delete('/api/clickup/webhook/:id', async (req: Request, res: Response) => {
       const safeId = sanitizeClickupId(String(req.params.id || ''));
       if (!safeId) return res.status(400).json({ error: 'Invalid webhook ID' });
-      const token = resolveToken({ req, caller: res.locals.caller });
+      const token = resolveToken(res.locals.caller);
       if (token) {
         await transport(`${CLICKUP_API}/webhook/${safeId}`, {
           method: 'DELETE',
@@ -1283,7 +1315,6 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     createRemoteParentTask,
     createRemoteSubtask,
     processWebhookEvent,
-    hasRegisteredWebhook: () => Boolean(webhookRegistry.latest()?.id),
     registerRoutes,
   };
 }

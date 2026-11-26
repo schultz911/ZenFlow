@@ -14,8 +14,8 @@ export function reconcileSnapshot(snapshot: { tasks: Task[]; users: User[] }, qu
       tasks.clear();
       for (const t of keptTasks) tasks.set(t.id, t);
     } else if (item.type === 'create_task') {
-      const task = local.get(item.payload?.id) || item.payload;
-      if (task?.id) tasks.set(task.id, task);
+      const task = item.optimisticTask || local.get(item.payload?.id) || item.payload;
+      if (task?.id && !tasks.has(task.id)) tasks.set(task.id, task);
     } else if (Array.isArray(item.payload?.updates)) {
       for (const update of item.payload.updates) {
         const task = tasks.get(update.id) || local.get(update.id);

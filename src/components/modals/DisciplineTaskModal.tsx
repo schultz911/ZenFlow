@@ -1,6 +1,6 @@
 import { DialogPanel } from '../ui/DialogPanel';
 import { ContentSpecFields, DesignSpecFields } from '../forms/DisciplineSpecFields';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { useAuth, useBoardUi, useClickUp, useWorkspace } from '../../context/DashboardContext';
 import { RoleFilter, TaskDisciplineMetadata } from '../../types';
@@ -313,6 +313,9 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
     return list;
   }, [needsContent, needsDesign]);
 
+  const creationId = useRef<string | undefined>(undefined);
+  useEffect(() => { if (!isOpen) creationId.current = undefined; }, [isOpen]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || isSubmitting) return;
@@ -353,7 +356,9 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
       : undefined;
 
     try {
+      creationId.current ??= crypto.randomUUID();
       await createPipelineBundle({
+        requestId: creationId.current,
         title: title.trim(),
         description: description.trim() || undefined,
         brandGuidelines: trimmedBrandGuidelines || undefined,

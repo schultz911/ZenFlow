@@ -67,3 +67,44 @@ test('logout wins over an in-flight exchange and clears its cookie after complet
   assert.equal(fixture.api.getApiMemberId(), '');
   assert.equal(fixture.calls.at(-1).options.method, 'DELETE');
 });
+
+test('a rate-limited replay retains the edits in order and retries without spending attempts', async () => {
+  const queueKey = 'zenflow_mutation_queue_v1:alice';
+  const items = [
+    { id: 'edit-1', endpoint: '/api/tasks/a', method: 'PUT', payload: { title: 'One' }, retryCount: 0 },
+    { id: 'edit-2', endpoint: '/api/tasks/b', method: 'PUT', payload: { title: 'Two' }, retryCount: 0 },
+  ];
+  const data = new Map([[queueKey, JSON.stringify(items)]]);
+  const attempted: string[] = [];
+  let limited = true;
+  const module: { exports: any } = { exports: {} };
+  const code = ts.transpileModule(fs.readFileSync('src/lib/syncClient.ts', 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  vm.runInNewContext(code, {
+    exports: module.exports,
+    require: () => ({
+      getApiMemberId: () => 'alice',
+      getRateLimitRetryMs: (response: Response) => Number(response.headers.get('Retry-After')) * 1000,
+      apiFetch: async (endpoint: string) => {
+        attempted.push(endpoint);
+        return limited ? new Response(null, { status: 429, headers: { 'Retry-After': '3' } }) : new Response(null, { status: 204 });
+      },
+    }),
+    localStorage: {
+      getItem: (key: string) => data.get(key),
+      setItem: (key: string, value: string) => data.set(key, value),
+      removeItem: (key: string) => data.delete(key),
+    },
+  });
+
+  const result = await module.exports.replayMutationQueue();
+  assert.equal(result.completed, false);
+  assert.equal(result.retryAfterMs, 3000);
+  assert.deepEqual(attempted, ['/api/tasks/a']);
+  assert.deepEqual(JSON.parse(data.get(queueKey)!), items);
+  limited = false;
+  assert.equal((await module.exports.replayMutationQueue()).completed, true);
+  assert.deepEqual(attempted, ['/api/tasks/a', '/api/tasks/a', '/api/tasks/b']);
+  assert.equal(data.has(queueKey), false);
+});

@@ -233,14 +233,13 @@ export function quickWorkloadScore(userTasks: Task[]): number {
  * Calculates days remaining from today (local time) to the task's due date.
  * Negative number means overdue.
  */
-export function getDaysRemaining(dueDateStr?: string): number | null {
+export function getDaysRemaining(dueDateStr?: string, now = new Date()): number | null {
   if (!dueDateStr) return null;
   const parts = dueDateStr.split('-');
   if (parts.length < 3) return null;
   const targetDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
   if (isNaN(targetDate.getTime())) return null;
 
-  const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const diffTime = targetDate.getTime() - today.getTime();
   return Math.round(diffTime / (1000 * 60 * 60 * 24));
@@ -520,7 +519,7 @@ export function formatBillableDetailed(ms: number): string {
  * - to do with no deadline: 0.5
  * - done / archived: 0.0
  */
-export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
+export function calculateUserWorkload(userTasks: Task[], referenceDate = new Date(), nowMs = Date.now()): WorkloadBreakdown {
   let totalScore = 0;
   let pipelineCount = 0;
   let inProgressCount = 0;
@@ -549,7 +548,7 @@ export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
     }
 
     const hasDeadline = Boolean(task.dueDate && task.dueDate.trim() !== '');
-    const daysRemaining = getDaysRemaining(task.dueDate);
+    const daysRemaining = getDaysRemaining(task.dueDate, referenceDate);
     const cognitiveWeight = COGNITIVE_LOAD_WEIGHTS[task.cognitiveLoad] || 1.0;
 
     let statusWeight = 0;
@@ -582,7 +581,7 @@ export function calculateUserWorkload(userTasks: Task[]): WorkloadBreakdown {
     } else if (task.status === 'in_review') {
       inReviewCount++;
       const ratePerHour = IN_REVIEW_HOURLY_RATES[task.cognitiveLoad] ?? 0.15;
-      const billableMs = getTaskBillableMs(task);
+      const billableMs = getTaskBillableMs(task, nowMs);
       billableHours = billableMs / (1000 * 60 * 60);
       taskScore = (billableHours * ratePerHour) / assigneeCount;
       statusWeight = ratePerHour;
@@ -978,13 +977,20 @@ export function isWorkingDay(d: Date): boolean {
  * Returns estimated daily hours allocated to a task split equally across its working days
  * (using startDate if recorded, falling back to createdAt), divided by assignee count when perAssignee is true.
  */
-export function getTaskDailyEstimatedHours(task: Task, onDate?: Date, perAssignee: boolean = true): number {
-  if (!task.estimatedHours || task.estimatedHours <= 0) return 0;
+function getTaskAllocation(task: Task) {
+  if (!task.estimatedHours || task.estimatedHours <= 0) return null;
   const start = parseLocalDate(task.startDate || task.createdAt) || parseLocalDate(formatLocalDateKey(new Date()))!;
   const end = parseLocalDate(task.dueDate) || start;
   const workingDays = getWorkingDaysCount(formatLocalDateKey(start), formatLocalDateKey(end));
+  return { start, end, estimatedHours: task.estimatedHours, workingDays };
+}
+
+export function getTaskDailyEstimatedHours(task: Task, onDate?: Date, perAssignee: boolean = true): number {
+  const allocation = getTaskAllocation(task);
+  if (!allocation) return 0;
+  const { start, end } = allocation;
   const divisor = perAssignee ? getTaskAssigneeCount(task) : 1;
-  const dailyHours = task.estimatedHours / divisor / workingDays;
+  const dailyHours = allocation.estimatedHours / divisor / allocation.workingDays;
 
   if (!onDate) return Math.round(dailyHours * 10) / 10;
 
@@ -1013,10 +1019,8 @@ export function getUserDailyAssignedHours(user: User, tasks: Task[], onDate: Dat
     if (isTargetToday) {
       // For today: include active assigned tasks (including assigned pipeline deliverables)
       if (t.status === 'pipeline' || t.status === 'todo' || t.status === 'in_progress' || t.status === 'in_review') {
-        const start = parseLocalDate(t.startDate || t.createdAt) || parseLocalDate(targetDateStr)!;
-        const end = parseLocalDate(t.dueDate) || start;
-        const workingDays = getWorkingDaysCount(formatLocalDateKey(start), formatLocalDateKey(end));
-        totalDailyHours += (t.estimatedHours / getTaskAssigneeCount(t) / workingDays);
+        const allocation = getTaskAllocation(t);
+        if (allocation) totalDailyHours += allocation.estimatedHours / getTaskAssigneeCount(t) / allocation.workingDays;
       }
     } else {
       const daily = getTaskDailyEstimatedHours(t, onDate, true);
@@ -1025,6 +1029,41 @@ export function getUserDailyAssignedHours(user: User, tasks: Task[], onDate: Dat
   }
 
   return Math.round(totalDailyHours * 10) / 10;
+}
+
+export function getAssignedHoursByMemberAndDate(tasks: Task[], dates: string[], today = formatLocalDateKey(new Date())) {
+  const days = dates.flatMap(key => {
+    const date = parseLocalDate(key);
+    return date ? [{ key, time: date.getTime(), working: isWorkingDay(date) }] : [];
+  });
+  const totals = new Map<string, Map<string, number>>();
+  for (const task of tasks) {
+    const assignees = getTaskAssigneeIds(task);
+    if (assignees.length === 0) continue;
+    const allocation = getTaskAllocation(task);
+    if (!allocation) continue;
+    const start = allocation.start.getTime();
+    const end = allocation.end.getTime();
+    const dailyHours = allocation.estimatedHours / assignees.length / allocation.workingDays;
+    const roundedHours = Math.round(dailyHours * 10) / 10;
+    const active = task.status === 'pipeline' || task.status === 'todo' ||
+      task.status === 'in_progress' || task.status === 'in_review';
+    for (const day of days) {
+      const hours = day.key === today
+        ? (active ? dailyHours : 0)
+        : (day.working && day.time >= start && day.time <= end ? roundedHours : 0);
+      if (hours === 0) continue;
+      for (const id of assignees) {
+        let byDate = totals.get(id);
+        if (!byDate) {
+          byDate = new Map();
+          totals.set(id, byDate);
+        }
+        byDate.set(day.key, (byDate.get(day.key) || 0) + hours);
+      }
+    }
+  }
+  return totals;
 }
 
 /**
@@ -1069,7 +1108,7 @@ export function calculateTeamUtilization(teamUsers: User[], tasks: Task[], onDat
  */
 export function calculateTasksEfficiency(
   taskList: Task[],
-  options?: { forUserId?: string }
+  options?: { forUserId?: string; nowMs?: number }
 ): {
   efficiencyPercent: number;
   totalTimeTakenHours: number;
@@ -1084,7 +1123,7 @@ export function calculateTasksEfficiency(
     if (t.id) seen.add(t.id);
     if (options?.forUserId && !isTaskAssignedToUser(t, options.forUserId)) continue;
     const divisor = options?.forUserId ? getTaskAssigneeCount(t) : 1;
-    const billableMs = getTaskBillableMs(t) / divisor;
+    const billableMs = getTaskBillableMs(t, options?.nowMs) / divisor;
     totalTimeTakenMs += billableMs;
     if (t.estimatedHours && t.estimatedHours > 0) {
       totalEstimatedHours += t.estimatedHours / divisor;

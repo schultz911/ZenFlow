@@ -1,6 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
 import { getTaskAssigneeIds } from '../src/domain/taskTransitions';
-import { decryptSecret } from './crypto';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
   getSuperadminEmail,
@@ -52,7 +51,12 @@ export function publicMember(user: any) {
 export function redactPayload(value: any): any {
   if (Array.isArray(value)) return value.map(redactPayload);
   if (!value || typeof value !== 'object') return value;
-  if (typeof value.id === 'string' && typeof value.email === 'string' && (typeof value.role === 'string' || value.role === undefined)) {
+  if (
+    typeof value.id === 'string' &&
+    typeof value.email === 'string' &&
+    typeof value.requestedAt !== 'string' &&
+    (typeof value.role === 'string' || value.role === undefined)
+  ) {
     return publicMember(value);
   }
   // Task fields are explicitly constructed by handlers and contain no credentials.
@@ -104,10 +108,9 @@ export function createApiSecurity(options: {
   getStore: () => { users: Member[]; tasks: { id: string; userId?: string; assigneeIds?: string[]; team?: string; status?: string }[] };
   verify: (token: string) => Promise<Identity>;
   ensureSuperadmin?: () => Member | undefined;
-  hasRegisteredWebhook?: () => boolean;
 }) {
   return async (req: Request, res: Response, next: NextFunction) => {
-    const routePath = req.path.replace(/\/+$/, '') || '/';
+    const routePath = req.path.replace(/^\/api(?=\/)/, '').replace(/\/+$/, '') || '/';
     if (req.method === 'GET' && routePath === '/health') return next();
     // ClickUp inbound webhook uses HMAC signature verification instead of a Google session.
     if (req.method === 'POST' && routePath === '/clickup/webhook') return next();
@@ -116,7 +119,7 @@ export function createApiSecurity(options: {
     if (!token) return res.status(401).json({ error: 'Google authentication required' });
     if (!['GET', 'HEAD'].includes(req.method) && !bearer && !sameOriginMutation(req)) return res.status(403).json({ error: 'Invalid request origin' });
     try {
-      const identity = await options.verify(token);
+      const identity: Identity = res.locals.verifiedIdentity ?? await options.verify(token);
       if (!identity.email_verified || identity.firebase?.sign_in_provider !== 'google.com' || !identity.email || identity.exp * 1000 <= Date.now()) {
         return res.status(401).json({ error: 'A verified Google identity is required' });
       }
@@ -138,6 +141,7 @@ export function createApiSecurity(options: {
         }
       }
       if (!caller) return res.status(403).json({ error: 'Account not registered in ZenFlow' });
+      res.locals.verifiedIdentity = identity;
       res.locals.caller = caller;
       res.locals.identityExpiresAt = identity.exp * 1000;
       const superadmin = isSuperadmin(caller);
@@ -150,18 +154,18 @@ export function createApiSecurity(options: {
       const edit = (id: unknown) => canEdit(caller, owner(id));
       const canEditTaskLocal = (task: { userId?: string; assigneeIds?: string[]; status?: string } | undefined) =>
         canEditTask(caller, task, store.users);
-      const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? req.body : {};
+      const body = req.body && typeof req.body === 'object' && !Array.isArray(req.body) ? { ...req.body } : {};
+      if (!res.locals.authorizationBody) res.locals.authorizationBody = { ...body };
       req.body = body;
 
       if (routePath.startsWith('/audit/') && !manager) return denied();
       if (routePath.startsWith('/access-requests') && !manager) return denied();
       if (routePath.startsWith('/firestore/') && req.method !== 'GET' && !superadmin) return denied();
-      if (routePath === '/clickup/webhook/register' && !superadmin && options.hasRegisteredWebhook?.()) return denied();
       if (routePath.startsWith('/clickup/webhook/') && req.method === 'DELETE' && !superadmin) return denied();
       if ((routePath === '/clickup/spaces' || routePath === '/clickup/lists') && req.method === 'POST' && !manager && !canCreatePipelineTask(caller)) {
         return denied();
       }
-      if (routePath === '/clickup/sync-user-tasks' && !edit(body.userId)) return denied();
+      if (routePath === '/clickup/sync-user-tasks' && body.userId !== caller.id && !edit(body.userId)) return denied();
       if (routePath === '/auth/verify-email') body.email = caller.email;
 
       if (routePath === '/users/remap-tasks' && !superadmin) return denied();
@@ -184,13 +188,14 @@ export function createApiSecurity(options: {
       const userMatch = routePath.match(/^\/users\/([^/]+)$/);
       if (userMatch && ['PUT', 'DELETE'].includes(req.method)) {
         const target = owner(decodeURIComponent(userMatch[1]));
-        if (target && !edit(target.id)) return denied();
+        const onlyClickupSelfFields = req.method === 'PUT' && target?.id === caller.id &&
+          Object.keys(body).length > 0 && Object.keys(body).every(key => CLICKUP_SELF_EDIT_KEYS.has(key));
+        if (target && !edit(target.id) && !onlyClickupSelfFields) return denied();
         if (target && !superadmin && !isCallerAdmin && (isAdminMember(target) || isBusinessLead(target) || (isCreativeDirector(target) && target.id !== caller.id))) {
           return denied();
         }
         if (req.method === 'DELETE' && (!manager || (target && isSuperadmin(target)))) return denied();
         if (req.method === 'PUT') {
-          const onlyClickupSelfFields = Object.keys(body).length > 0 && Object.keys(body).every(key => CLICKUP_SELF_EDIT_KEYS.has(key));
           const forbiddenSelfOrPeerEscalation =
             body.role === 'administrator' ||
             body.isAdministrator !== undefined ||
@@ -200,7 +205,7 @@ export function createApiSecurity(options: {
             body.designation !== undefined;
           if (!superadmin && !isCallerAdmin && forbiddenSelfOrPeerEscalation) return denied();
           if (!superadmin && !isCallerAdmin && body.email !== undefined) return denied();
-          if (!manager && !(onlyClickupSelfFields && target?.id === caller.id)) return denied();
+          if (!manager && !onlyClickupSelfFields) return denied();
           if (!superadmin && !isCallerAdmin && body.creativeDirectorId !== undefined && body.creativeDirectorId !== caller.id) return denied();
           if (body.clickupApiKey !== undefined && target?.id !== caller.id && !superadmin) return denied();
         }
@@ -279,21 +284,11 @@ export function createApiSecurity(options: {
       body.callerUserId = caller.id;
       body.callerEmail = caller.email;
       body.isSuperadmin = superadmin;
-      const isClickupStructureWrite = req.method === 'POST' && (routePath === '/clickup/spaces' || routePath === '/clickup/lists');
-      const allowSharedPatFallback = superadmin || isCallerAdmin || !isClickupStructureWrite;
-      const callerPat = decryptSecret((caller as any).clickupApiKey);
-      const workspacePat = allowSharedPatFallback
-        ? decryptSecret((store.users.find(user => decryptSecret((user as any).clickupApiKey)) as any)?.clickupApiKey)
-        : '';
-      const savedKey = callerPat || workspacePat;
-      if (routePath !== '/clickup/verify') {
-        req.headers['x-clickup-api-key'] = savedKey || '';
-        body.apiKey = savedKey || '';
-        if (!routePath.startsWith('/users')) body.clickupApiKey = savedKey || '';
-        delete req.query.apiKey;
+      if (!res.locals.responseRedacted) {
+        const json = res.json.bind(res);
+        res.json = ((value: any) => json(redactPayload(value))) as Response['json'];
+        res.locals.responseRedacted = true;
       }
-      const json = res.json.bind(res);
-      res.json = ((value: any) => json(redactPayload(value))) as Response['json'];
       res.setHeader('Cache-Control', 'private, no-cache, must-revalidate');
       return next();
     } catch {
