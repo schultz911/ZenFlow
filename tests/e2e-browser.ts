@@ -207,8 +207,19 @@ try {
     await page.getByText('Cumulative metrics as of 2026-01-09.').waitFor({ state: 'visible' });
     await page.keyboard.press('Escape');
 
-    await page.locator('#free-pool-trigger').click();
+    const freePoolToggle = page.locator('#free-pool-trigger');
     const freePool = page.getByRole('complementary', { name: 'Free Pool' });
+    await freePoolToggle.focus();
+    await page.keyboard.press('Enter');
+    await freePool.waitFor();
+    assert.equal(await freePoolToggle.getAttribute('aria-expanded'), 'true');
+    assert.equal(await freePoolToggle.evaluate(el => document.activeElement === el), true);
+    await freePool.getByRole('button', { name: /^All / }).focus();
+    await page.keyboard.press('Escape');
+    await freePool.waitFor({ state: 'hidden' });
+    assert.equal(await freePoolToggle.getAttribute('aria-expanded'), 'false');
+    assert.equal(await freePoolToggle.evaluate(el => document.activeElement === el), true);
+    await page.keyboard.press('Space');
     await freePool.getByRole('button', { name: 'Add task for Mia Designer' }).click();
     const taskDetails = page.getByRole('dialog', { name: 'Task details' });
     await taskDetails.getByText('design Team', { exact: true }).waitFor();

@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { User, Task, TaskStatus, RoleFilter } from '../types';
 import {
   DAILY_UTILIZATION_TARGET_HOURS,
@@ -11,7 +10,7 @@ import {
 } from '../utils/workload';
 import { getAnalyticsClock } from '../domain/analyticsDate';
 import {
-  ChevronLeft,
+  UsersRound,
   X,
   PanelRightClose,
   PanelRightOpen,
@@ -44,38 +43,29 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
   isDocked,
   onDockedChange,
 }) => {
-  const reduceMotion = useReducedMotion();
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const closeRef = useRef<HTMLButtonElement>(null);
-  const restoreFocusRef = useRef(false);
-
-  useEffect(() => {
-    if (isExpanded) {
-      closeRef.current?.focus({ preventScroll: true });
-    }
-  }, [isExpanded]);
 
   useEffect(() => {
     if (!isExpanded) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key === 'Escape' && !e.defaultPrevented) {
         e.preventDefault();
-        restoreFocusRef.current = true;
+        triggerRef.current?.focus({ preventScroll: true });
         onExpandedChange(false);
       }
     };
-    const onOutside = (e: MouseEvent) => {
+    const onOutside = (e: PointerEvent) => {
       if ((!isDocked || !window.matchMedia('(min-width: 1280px)').matches) && containerRef.current && !containerRef.current.contains(e.target as Node)) {
         onExpandedChange(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
-    document.addEventListener('mousedown', onOutside);
+    document.addEventListener('pointerdown', onOutside);
     return () => {
       window.removeEventListener('keydown', onKeyDown);
-      document.removeEventListener('mousedown', onOutside);
+      document.removeEventListener('pointerdown', onOutside);
     };
   }, [isExpanded, isDocked, onExpandedChange]);
 
@@ -130,178 +120,156 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
   ] as const;
 
   return (
-    <div ref={containerRef} className="free-pool-root">
-      <button
-        id="free-pool-trigger"
-        ref={triggerRef}
-        type="button"
-        aria-expanded={isExpanded}
-        aria-controls="free-pool-popover"
-        aria-label={`Free Pool, ${freeUsers.length} available`}
-        data-available={freeUsers.length > 0}
-        onClick={() => onExpandedChange(!isExpanded)}
-        className={`free-pool-handle ${isExpanded ? 'free-pool-handle-hidden' : ''}`}
+    <div ref={containerRef} className="free-pool-root" data-expanded={isExpanded} data-docked={isDocked}>
+      <div className="free-pool-header">
+        <div className="free-pool-heading" aria-hidden={!isExpanded}>
+          <h2 id="free-pool-title" className="text-sm font-semibold">Free Pool</h2>
+          <p className="text-xs text-white/75">Under {targetHoursLabel} assigned today</p>
+        </div>
+        <button
+          id="free-pool-trigger"
+          ref={triggerRef}
+          type="button"
+          aria-expanded={isExpanded}
+          aria-controls="free-pool-popover"
+          aria-label={isExpanded ? 'Close Free Pool' : `Free Pool, ${freeUsers.length} available`}
+          title={isExpanded ? 'Close Free Pool' : 'Free Pool'}
+          data-available={freeUsers.length > 0}
+          onClick={() => onExpandedChange(!isExpanded)}
+          className="free-pool-handle"
+        >
+          <span className="free-pool-handle-summary" aria-hidden="true">
+            <UsersRound className="size-3.5 shrink-0" />
+            <span className="free-pool-handle-count">{freeUsers.length > 99 ? '99+' : freeUsers.length}</span>
+          </span>
+          <X aria-hidden="true" className="free-pool-handle-close size-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onDockedChange(!isDocked)}
+          aria-label={isDocked ? 'Undock Free Pool' : 'Dock Free Pool'}
+          aria-pressed={isDocked}
+          aria-hidden={!isExpanded}
+          title={isDocked ? 'Undock Free Pool' : 'Dock Free Pool'}
+          disabled={!isExpanded}
+          className="free-pool-dock-control items-center justify-center size-11 rounded-[6px] text-white/80 hover:bg-white/10 hover:text-white"
+        >
+          {isDocked ? <PanelRightOpen className="size-4" /> : <PanelRightClose className="size-4" />}
+        </button>
+      </div>
+
+      <aside
+        id="free-pool-popover"
+        aria-labelledby="free-pool-title"
+        inert={!isExpanded}
+        className="free-pool-sidebar"
       >
-        <ChevronLeft aria-hidden="true" className="hidden size-3.5 sm:block" />
-        Free Pool
-        <span className="free-pool-handle-count">{freeUsers.length}</span>
-      </button>
-
-      <AnimatePresence onExitComplete={() => {
-        if (restoreFocusRef.current) {
-          restoreFocusRef.current = false;
-          requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }));
-          setTimeout(() => {
-            if (document.activeElement === document.body && triggerRef.current?.getAttribute('aria-expanded') === 'false') {
-              triggerRef.current.focus({ preventScroll: true });
-            }
-          }, 100);
-        }
-      }}>
-        {isExpanded && (
-          <motion.aside
-            id="free-pool-popover"
-            aria-labelledby="free-pool-title"
-            initial={reduceMotion ? false : { x: '100%' }}
-            animate={{ x: 0 }}
-            exit={reduceMotion ? { opacity: 0 } : { x: '100%' }}
-            transition={{ duration: reduceMotion ? 0 : 0.22, ease: [0.2, 0.7, 0.2, 1] }}
-            className={`free-pool-panel free-pool-sidebar ${isDocked ? 'free-pool-sidebar-docked' : ''}`}
-          >
-            <div className="free-pool-header flex items-center justify-between gap-2 px-4 py-3">
-              <div className="min-w-0">
-                <h2 id="free-pool-title" className="text-sm font-semibold">Free Pool</h2>
-                <p className="text-xs text-white/75">Under {targetHoursLabel} assigned today</p>
-              </div>
-              <div className="flex items-center gap-1">
+        <div className="free-pool-content flex min-h-0 flex-1 flex-col">
+          <div className="free-pool-filters px-3.5 py-2 border-b border-[var(--border-subtle)] bg-[var(--surface)]">
+            <div className="segmented-track w-full" role="group" aria-label="Filter available members by discipline">
+              {roleOptions.map(({ role, count }) => (
                 <button
+                  key={role}
                   type="button"
-                  onClick={() => onDockedChange(!isDocked)}
-                  aria-label={isDocked ? 'Undock Free Pool' : 'Dock Free Pool'}
-                  aria-pressed={isDocked}
-                  title={isDocked ? 'Undock Free Pool' : 'Dock Free Pool'}
-                  className="free-pool-dock-control items-center justify-center size-11 rounded-[6px] text-white/80 hover:bg-white/10 hover:text-white"
+                  aria-pressed={roleFilter === role}
+                  onClick={() => setRoleFilter(role)}
+                  className={`segmented-item flex-1 tabular-nums ${roleFilter === role ? 'segmented-item-active' : ''}`}
                 >
-                  {isDocked ? <PanelRightOpen className="h-4 w-4" /> : <PanelRightClose className="h-4 w-4" />}
+                  {roleLabels[role]} ({count})
                 </button>
-                <button
-                  type="button"
-                  onClick={() => { restoreFocusRef.current = true; onExpandedChange(false); }}
-                  ref={closeRef}
-                  aria-label="Close Free Pool"
-                  className="flex items-center justify-center size-11 rounded-[6px] hover:bg-white/10 text-white/80 hover:text-white"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+              ))}
             </div>
+          </div>
 
-            <div className="free-pool-filters px-3.5 py-2 border-b border-[var(--border-subtle)] bg-[var(--surface)]">
-              <div className="segmented-track w-full" role="group" aria-label="Filter available members by discipline">
-                {roleOptions.map(({ role, count }) => (
-                  <button
-                    key={role}
-                    type="button"
-                    aria-pressed={roleFilter === role}
-                    onClick={() => setRoleFilter(role)}
-                    className={`segmented-item flex-1 tabular-nums ${roleFilter === role ? 'segmented-item-active' : ''}`}
+          {/* Member List */}
+          <div className="overflow-y-auto flex-1 min-h-0 divide-y divide-[var(--border-subtle)]">
+            {filteredFreeUsers.length === 0 ? (
+              <p className="px-4 py-6 text-center text-xs text-[var(--text-secondary)]">
+                {freeUsers.length === 0
+                  ? 'No members available today.'
+                  : `No ${roleLabels[roleFilter]} members available today.`}
+              </p>
+            ) : (
+              filteredFreeUsers.map(user => {
+                const stats = userStats.get(user.id);
+                const tagInfo = getUserTag(user);
+                const assignedHours = stats?.assignedHours ?? 0;
+                const roundedHours = formatHours(assignedHours);
+                const assignedHoursLabel = roundedHours === targetHoursLabel ? `<${targetHoursLabel}` : roundedHours;
+                const hoursId = `free-pool-${user.id}-hours`;
+
+                return (
+                  <div
+                    key={user.id}
+                    className="flex items-center gap-3 px-3.5 py-2 hover:bg-[var(--surface-muted)] focus-within:bg-[var(--surface-muted)] transition-colors"
                   >
-                    {roleLabels[role]} ({count})
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Member List */}
-            <div className="overflow-y-auto flex-1 min-h-0 divide-y divide-[var(--border-subtle)]">
-              {filteredFreeUsers.length === 0 ? (
-                <p className="px-4 py-6 text-center text-xs text-[var(--text-secondary)]">
-                  {freeUsers.length === 0
-                    ? 'No members available today.'
-                    : `No ${roleLabels[roleFilter]} members available today.`}
-                </p>
-              ) : (
-                filteredFreeUsers.map(user => {
-                  const stats = userStats.get(user.id);
-                  const tagInfo = getUserTag(user);
-                  const assignedHours = stats?.assignedHours ?? 0;
-                  const roundedHours = formatHours(assignedHours);
-                  const assignedHoursLabel = roundedHours === targetHoursLabel ? `<${targetHoursLabel}` : roundedHours;
-                  const hoursId = `free-pool-${user.id}-hours`;
-
-                  return (
-                    <div
-                      key={user.id}
-                      className="flex items-center gap-3 px-3.5 py-2 hover:bg-[var(--surface-muted)] focus-within:bg-[var(--surface-muted)] transition-colors"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onExpandedChange(false);
+                        onSelectUser?.(user);
+                      }}
+                      aria-label={`Jump to ${user.name}'s swimlane`}
+                      aria-describedby={hoursId}
+                      className="free-pool-row-action group flex flex-1 items-center gap-2.5 min-w-0 rounded-[6px] text-left"
                     >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onExpandedChange(false);
-                          onSelectUser?.(user);
-                        }}
-                        aria-label={`Jump to ${user.name}'s swimlane`}
-                        aria-describedby={hoursId}
-                        className="free-pool-row-action group flex flex-1 items-center gap-2.5 min-w-0 rounded-[6px] text-left"
+                      <span
+                        aria-hidden="true"
+                        className={`flex size-7 shrink-0 items-center justify-center rounded-[6px] bg-gradient-to-br text-xs font-semibold text-white ${
+                          user.avatarColor || 'from-blue-600 to-indigo-600'
+                        }`}
                       >
-                        <span
-                          aria-hidden="true"
-                          className={`flex size-7 shrink-0 items-center justify-center rounded-[6px] bg-gradient-to-br text-xs font-semibold text-white ${
-                            user.avatarColor || 'from-blue-600 to-indigo-600'
-                          }`}
-                        >
-                          {(user.name || '?').charAt(0).toUpperCase()}
-                        </span>
+                        {(user.name || '?').charAt(0).toUpperCase()}
+                      </span>
 
-                        <span className="min-w-0">
-                          <span className="flex items-center gap-1.5">
-                            <span className="text-xs font-semibold text-[var(--text-primary)] truncate group-hover:underline group-focus-visible:underline">
-                              {user.name}
-                            </span>
-                            <ArrowUpRight aria-hidden="true" className="size-3 shrink-0 text-[var(--text-secondary)]" />
-                            <span className="text-[11px] text-[var(--text-secondary)] truncate">
-                              {tagInfo.label}
-                            </span>
+                      <span className="min-w-0">
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-xs font-semibold text-[var(--text-primary)] truncate group-hover:underline group-focus-visible:underline">
+                            {user.name}
                           </span>
-
-                          <span id={hoursId} className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-[var(--text-secondary)] tabular-nums">
-                            <span className="free-pool-hours-scale" aria-hidden="true">
-                              {capacityScale.map(hour => (
-                                <span key={hour}>
-                                  <span style={{ width: `${Math.max(0, Math.min(1, assignedHours - hour)) * 100}%` }} />
-                                </span>
-                              ))}
-                            </span>
-                            <span className="whitespace-nowrap">{assignedHoursLabel} assigned</span>
-                            {stats && stats.inReview > 0 ? (
-                              <span className="whitespace-nowrap">· {stats.inReview} in review</span>
-                            ) : stats && stats.pipeline > 0 ? (
-                              <span className="whitespace-nowrap">· {stats.pipeline} in pipeline</span>
-                            ) : null}
+                          <ArrowUpRight aria-hidden="true" className="size-3 shrink-0 text-[var(--text-secondary)]" />
+                          <span className="text-[11px] text-[var(--text-secondary)] truncate">
+                            {tagInfo.label}
                           </span>
                         </span>
-                      </button>
 
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onExpandedChange(false);
-                          onAddTask(user.id, 'todo');
-                        }}
-                        aria-label={`Add task for ${user.name}`}
-                        className="free-pool-row-action flex shrink-0 items-center gap-1 rounded-[6px] bg-emerald-700 px-2.5 text-[11px] font-semibold text-white transition-colors hover:bg-emerald-800 active:bg-emerald-900"
-                      >
-                        <Plus aria-hidden="true" className="size-3" />
-                        Task
-                      </button>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </motion.aside>
-        )}
-      </AnimatePresence>
+                        <span id={hoursId} className="mt-0.5 flex flex-wrap items-center gap-x-2 text-[11px] text-[var(--text-secondary)] tabular-nums">
+                          <span className="free-pool-hours-scale" aria-hidden="true">
+                            {capacityScale.map(hour => (
+                              <span key={hour}>
+                                <span style={{ width: `${Math.max(0, Math.min(1, assignedHours - hour)) * 100}%` }} />
+                              </span>
+                            ))}
+                          </span>
+                          <span className="whitespace-nowrap">{assignedHoursLabel} assigned</span>
+                          {stats && stats.inReview > 0 ? (
+                            <span className="whitespace-nowrap">· {stats.inReview} in review</span>
+                          ) : stats && stats.pipeline > 0 ? (
+                            <span className="whitespace-nowrap">· {stats.pipeline} in pipeline</span>
+                          ) : null}
+                        </span>
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onExpandedChange(false);
+                        onAddTask(user.id, 'todo');
+                      }}
+                      aria-label={`Add task for ${user.name}`}
+                      className="free-pool-row-action flex shrink-0 items-center gap-1 rounded-[6px] bg-emerald-700 px-2.5 text-[11px] font-semibold text-white transition-colors hover:bg-emerald-800 active:bg-emerald-900"
+                    >
+                      <Plus aria-hidden="true" className="size-3" />
+                      Task
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </aside>
     </div>
   );
 };

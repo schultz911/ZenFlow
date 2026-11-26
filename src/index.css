@@ -46,6 +46,7 @@
     --shadow-floating: 0 12px 32px rgba(18, 20, 24, 0.12), 0 2px 6px rgba(18, 20, 24, 0.06);
     --shadow-dialog: 0 24px 64px rgba(18, 20, 24, 0.18), 0 4px 12px rgba(18, 20, 24, 0.08);
     --header-height: 6.1875rem;
+    --free-pool-toggle-width: 3.25rem;
   }
 
   :root.dark {
@@ -547,69 +548,163 @@ select::-ms-expand {
   scrollbar-width: none;
 }
 
-/* The Free Pool stays at the viewport edge while the board scrolls. */
+/* Clear the fixed tab while retaining the board's left gutter. */
+.marquee-ribbon-layout {
+  padding-inline-start: var(--ribbon-gutter);
+  padding-inline-end: max(var(--ribbon-gutter), calc(var(--free-pool-toggle-width) + 6px - max(0px, (100vw - 1400px) / 2)));
+}
+
+/* The toggle and roster share a fixed top-right anchor. */
 .free-pool-root {
   --free-pool-ink: #121418;
   --free-pool-ink-hover: #252c3b;
+  --free-pool-header-height: 68px;
+  --free-pool-duration: 180ms;
+  --free-pool-ease: cubic-bezier(0.32, 0, 0.4, 1);
+  position: fixed;
+  z-index: 40;
+  inset: var(--header-height) 0 0 auto;
+  width: min(360px, calc(100vw - 16px));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  pointer-events: none;
 }
 :root.dark .free-pool-root {
   --free-pool-ink: #1a1f2a;
 }
-.free-pool-handle, .free-pool-header {
-  --focus: var(--color-blue-400);
-  background: var(--free-pool-ink);
-  color: white;
+.free-pool-root[data-expanded="true"] {
+  --free-pool-duration: 260ms;
+  --free-pool-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
-.free-pool-handle {
-  position: fixed;
-  z-index: 40;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
+.free-pool-header {
+  --focus: var(--color-blue-400);
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 7px;
-  min-height: 44px;
-  padding: 0 10px;
-  border: 1px solid var(--free-pool-ink-hover);
-  border-right: 0;
+  justify-content: flex-end;
+  flex: none;
+  width: var(--free-pool-toggle-width);
+  height: 44px;
+  overflow: clip;
   border-radius: var(--radius-control) 0 0 var(--radius-control);
-  font-size: 12px;
-  font-weight: 600;
+  background: var(--free-pool-ink);
+  color: white;
+  pointer-events: auto;
+  transition: width var(--free-pool-duration) var(--free-pool-ease),
+              height var(--free-pool-duration) var(--free-pool-ease),
+              border-radius var(--free-pool-duration) var(--free-pool-ease);
+}
+.free-pool-root[data-expanded="true"] .free-pool-header {
+  width: 100%;
+  height: var(--free-pool-header-height);
+  border-radius: 0;
+}
+.free-pool-heading, .free-pool-dock-control { position: absolute; }
+.free-pool-heading, .free-pool-dock-control, .free-pool-content {
+  opacity: 0;
+  transition: opacity 85ms ease-out;
+}
+.free-pool-heading {
+  left: 16px;
+  white-space: nowrap;
+}
+.free-pool-dock-control {
+  display: none;
+  right: var(--free-pool-toggle-width);
+}
+.free-pool-root[data-expanded="true"] :is(.free-pool-heading, .free-pool-dock-control, .free-pool-content) {
+  opacity: 1;
+  transition: opacity 125ms ease-out 55ms;
+}
+.free-pool-handle {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--free-pool-toggle-width);
+  height: 44px;
+  border-radius: var(--radius-control) 0 0 var(--radius-control);
+  color: inherit;
 }
 .free-pool-handle:hover { background: var(--free-pool-ink-hover); }
 .free-pool-handle:active { background: var(--free-pool-ink); }
 .free-pool-handle:focus-visible { outline-offset: -4px; }
-.free-pool-handle-hidden { visibility: hidden; }
+.free-pool-root[data-expanded="true"] .free-pool-handle {
+  border-radius: var(--radius-control);
+}
+.free-pool-handle-summary, .free-pool-handle-close {
+  grid-area: 1 / 1;
+  z-index: 0;
+  transition: opacity 65ms ease-out;
+}
+.free-pool-handle-summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .free-pool-handle-count {
-  min-width: 22px;
-  padding: 1px 4px;
-  border: 1px solid currentColor;
-  border-color: color-mix(in srgb, currentColor 35%, transparent);
-  border-radius: 4px;
   color: var(--color-slate-300);
-  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .free-pool-handle[data-available="true"] .free-pool-handle-count {
   color: var(--color-emerald-300);
 }
+.free-pool-handle-close,
+.free-pool-root[data-expanded="true"] .free-pool-handle-summary {
+  opacity: 0;
+}
+.free-pool-root[data-expanded="true"] .free-pool-handle-close {
+  opacity: 1;
+}
+.free-pool-root[data-expanded="false"] .free-pool-handle-summary,
+.free-pool-root[data-expanded="true"] .free-pool-handle-close {
+  transition-delay: 45ms;
+}
 .free-pool-sidebar {
-  position: fixed;
-  z-index: 40;
-  top: var(--header-height);
-  right: 0;
-  bottom: 0;
-  width: min(360px, calc(100vw - 16px));
+  width: 100%;
+  min-height: 0;
   display: flex;
+  flex: 1;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid var(--border);
+  border-top: 0;
   border-right: 0;
   background: var(--surface);
   padding-bottom: env(safe-area-inset-bottom);
+  position: relative;
+  clip-path: inset(0 0 100% calc(100% - var(--free-pool-toggle-width)));
+  visibility: hidden;
+  transition: clip-path var(--free-pool-duration) var(--free-pool-ease),
+              visibility 0s linear var(--free-pool-duration);
 }
-.free-pool-dock-control { display: none; }
+.free-pool-root[data-expanded="true"] .free-pool-sidebar {
+  clip-path: inset(0 0 0 0);
+  visibility: visible;
+  pointer-events: auto;
+  transition: clip-path var(--free-pool-duration) var(--free-pool-ease),
+              visibility 0s;
+}
+.free-pool-root::before {
+  content: "";
+  position: absolute;
+  inset: var(--free-pool-header-height) 0 0;
+  box-shadow: var(--shadow-floating);
+  opacity: 0;
+  transition: opacity 60ms ease-out;
+}
+.free-pool-root[data-expanded="true"]::before {
+  opacity: 1;
+  transition: opacity 90ms ease-out 170ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .free-pool-root::before,
+  .free-pool-root :is(.free-pool-header, .free-pool-sidebar, .free-pool-heading, .free-pool-dock-control, .free-pool-content, .free-pool-handle-summary, .free-pool-handle-close) {
+    transition: none !important;
+  }
+}
 .free-pool-hours-scale {
   display: inline-flex;
   align-items: center;
@@ -635,5 +730,5 @@ select::-ms-expand {
 @media (min-width: 1280px) {
   .free-pool-dock-control { display: flex; }
   .free-pool-workspace-docked { margin-right: 360px; }
-  .free-pool-sidebar-docked { box-shadow: none; }
+  .free-pool-root[data-docked="true"]::before { display: none; }
 }

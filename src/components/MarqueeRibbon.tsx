@@ -67,7 +67,7 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
 
   return (
     <div className="sticky top-[var(--header-height)] z-20 w-full bg-[var(--canvas)]/96 backdrop-blur-md border-b border-[var(--border-subtle)]">
-      <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8 py-1.5">
+      <div className="marquee-ribbon-layout mx-auto max-w-[1400px] py-1.5 [--ribbon-gutter:1rem] sm:[--ribbon-gutter:1.5rem] lg:[--ribbon-gutter:2rem]">
         <div
           id="due-tasks-marquee-ribbon"
           className="flex items-center gap-2 sm:gap-3 rounded-[10px] border border-red-200 dark:border-red-500/35 bg-[#fef2f2] dark:bg-[#231418] px-2.5 sm:px-3 py-1.5 text-xs overflow-hidden"
