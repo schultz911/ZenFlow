@@ -115,6 +115,17 @@ export function registerUserRoutes(app: Express, deps: RouteDeps) {
       return res.status(503).json({ error: 'Cloud storage write failed; team member was not saved. Please retry.' });
     }
 
+    const nowIso = new Date().toISOString();
+    for (const reqItem of repo.getAccessRequests()) {
+      if (reqItem.status === 'pending' && reqItem.email.toLowerCase() === cleanEmail) {
+        reqItem.status = 'approved';
+        reqItem.resolvedAt = nowIso;
+        reqItem.resolvedBy = res.locals.caller?.email || res.locals.caller?.id;
+        await repo.saveAccessRequest(reqItem).catch(() => {});
+        broadcastEvent('access_request_updated', reqItem);
+      }
+    }
+
     repo.saveLocal();
     broadcastEvent('user_created', newUser);
     repo.appendAuditLog({
@@ -127,6 +138,37 @@ export function registerUserRoutes(app: Express, deps: RouteDeps) {
     });
 
     res.status(201).json(newUser);
+  });
+
+  app.get('/api/access-requests', (_req: Request, res: Response) => {
+    const pending = repo
+      .getAccessRequests()
+      .filter(r => r.status === 'pending')
+      .sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
+    res.json({ requests: pending });
+  });
+
+  app.post('/api/access-requests/:id/dismiss', async (req: Request, res: Response) => {
+    const id = String(req.params.id || '');
+    const target = repo.getAccessRequests().find(r => r.id === id);
+    if (!target) return res.status(404).json({ error: 'Access request not found' });
+    if (target.status === 'pending') {
+      target.status = 'dismissed';
+      target.resolvedAt = new Date().toISOString();
+      target.resolvedBy = res.locals.caller?.email || res.locals.caller?.id;
+      await repo.saveAccessRequest(target);
+      repo.saveLocal();
+      broadcastEvent('access_request_updated', target);
+      repo.appendAuditLog({
+        category: 'security',
+        action: 'access_request_dismissed',
+        actor: { id: res.locals.caller?.id, email: res.locals.caller?.email, ip: req.ip },
+        targetId: target.id,
+        targetType: 'user',
+        details: `Access request for ${target.email} dismissed`,
+      });
+    }
+    res.json({ request: target });
   });
 
   app.put('/api/users/:id', async (req: Request, res: Response) => {

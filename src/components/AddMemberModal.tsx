@@ -9,9 +9,10 @@ import { MemberRoleFields } from './forms/MemberRoleFields';
 interface AddMemberModalProps {
   isOpen: boolean;
   onClose: () => void;
+  prefillMember?: { name: string; email: string } | null;
 }
 
-export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose }) => {
+export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose, prefillMember }) => {
   const { currentUser, isSuperadmin, isAdministrator, canManageMembers } = useAuth();
   const { createUser, creativeDirectors, clusterLeads } = useWorkspace();
   const { isClickupConnected, clickupMembers, loadClickupMembers } = useClickUp();
@@ -34,8 +35,8 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose 
 
   useEffect(() => {
     if (!isOpen) return;
-    setName('');
-    setEmail('');
+    setName(prefillMember?.name || '');
+    setEmail(prefillMember?.email || '');
     setRole('content');
     setIsAdministratorPrivilege(false);
     setIsBusinessLead(false);
@@ -49,7 +50,7 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose 
     if (isClickupConnected) {
       loadClickupMembers('');
     }
-  }, [isOpen, currentUser, isClickupConnected, loadClickupMembers]);
+  }, [isOpen, prefillMember, currentUser, isClickupConnected, loadClickupMembers]);
 
   useEffect(() => {
     if (!email.trim() || clickupMembers.length === 0) return;

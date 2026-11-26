@@ -1180,6 +1180,10 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     });
 
     app.post('/api/clickup/webhook/register', async (req: Request, res: Response) => {
+      const existingWebhook = webhookRegistry.latest();
+      if (existingWebhook?.id && !isSuperadmin(res.locals.caller)) {
+        return res.status(403).json({ error: 'ClickUp webhook already registered; only Superadmin can replace it' });
+      }
       const token = resolveToken({ req, caller: res.locals.caller });
       if (!token) return res.status(400).json({ error: 'ClickUp API token required' });
 
@@ -1279,6 +1283,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     createRemoteParentTask,
     createRemoteSubtask,
     processWebhookEvent,
+    hasRegisteredWebhook: () => Boolean(webhookRegistry.latest()?.id),
     registerRoutes,
   };
 }

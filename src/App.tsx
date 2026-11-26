@@ -20,6 +20,7 @@ import { AnalyticsModal } from './components/AnalyticsModal';
 import { TeamPipeline } from './components/TeamPipeline';
 import { DisciplineTaskModal } from './components/modals/DisciplineTaskModal';
 import { TaskAssignmentModal } from './components/TaskAssignmentModal';
+import { OnboardingChecklist } from './components/OnboardingChecklist';
 import { User, Task, TaskStatus } from './types';
 import { getTaskAssigneeIds } from './utils/workload';
 import { UserPlus, FileText, Palette, Search, Trash2, AlertTriangle, X, Loader2 } from 'lucide-react';
@@ -54,6 +55,8 @@ function DashboardContent() {
   // Modals state
   const [loginModalOpen, setLoginModalOpen] = useState(false);
   const [isNewAccountModal, setIsNewAccountModal] = useState(false);
+  const [newMemberPrefill, setNewMemberPrefill] = useState<{ name: string; email: string } | null>(null);
+  const [setupChecklistOpen, setSetupChecklistOpen] = useState(false);
   const [taskModalOpen, setTaskModalOpen] = useState(false);
   const [taskToEdit, setTaskToEdit] = useState<Task | null>(null);
   const [adjustBillableTask, setAdjustBillableTask] = useState<Task | null>(null);
@@ -356,7 +359,8 @@ function DashboardContent() {
     setLoginModalOpen(true);
   }, []);
 
-  const handleOpenNewUser = useCallback(() => {
+  const handleOpenNewUser = useCallback((prefill?: { name: string; email: string } | null) => {
+    setNewMemberPrefill(prefill ?? null);
     setIsNewAccountModal(true);
     setLoginModalOpen(true);
   }, []);
@@ -553,6 +557,7 @@ function DashboardContent() {
           onOpenLoginModal={handleOpenLogin}
           onOpenNewUserModal={handleOpenNewUser}
           onOpenFirestoreModal={handleOpenFirestore}
+          onOpenSetupModal={() => setSetupChecklistOpen(true)}
         />
 
         {/* Pinned Ribbons — sticky just below the header */}
@@ -583,6 +588,12 @@ function DashboardContent() {
           }}
           className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 lg:px-8 pb-20"
         >
+
+          {/* Onboarding Checklist */}
+          <OnboardingChecklist
+            forceOpen={setupChecklistOpen}
+            onCloseForceOpen={() => setSetupChecklistOpen(false)}
+          />
 
           {/* Overview Bar */}
           <OverviewBar
@@ -698,7 +709,7 @@ function DashboardContent() {
                 </button>
               ) : canManageMembers && (
                 <button
-                  onClick={handleOpenNewUser}
+                  onClick={() => handleOpenNewUser()}
                   className="mt-4 flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 transition-colors shadow-xs cursor-pointer"
                 >
                   <UserPlus className="h-3.5 w-3.5" />
@@ -870,7 +881,11 @@ function DashboardContent() {
       />
       <AddMemberModal
         isOpen={Boolean(currentUser && loginModalOpen && isNewAccountModal)}
-        onClose={() => setLoginModalOpen(false)}
+        prefillMember={newMemberPrefill}
+        onClose={() => {
+          setLoginModalOpen(false);
+          setNewMemberPrefill(null);
+        }}
       />
     </>
   );

@@ -251,7 +251,19 @@ export type RealtimeEventType =
   | 'task_updated'
   | 'task_deleted'
   | 'tasks_reordered'
+  | 'access_request_created'
+  | 'access_request_updated'
   | 'sync_all';
+
+export interface AccessRequest {
+  id: string;
+  email: string;
+  name: string;
+  status: 'pending' | 'approved' | 'dismissed';
+  requestedAt: string;
+  resolvedAt?: string;
+  resolvedBy?: string;
+}
 
 export interface RealtimeEvent {
   type: RealtimeEventType;

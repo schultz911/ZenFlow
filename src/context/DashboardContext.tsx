@@ -20,6 +20,7 @@ import {
   TaskActivity,
   AuditLogEntry,
   TaskDisciplineMetadata,
+  AccessRequest,
 } from '../types';
 import { ClickUpProvider, useClickUp, type ClickUpContextValue } from './ClickUpContext';
 
@@ -34,7 +35,7 @@ export class ClientRejectedError extends Error {
   }
 }
 import { compareTasksByDeadline, formatBillableHours, getTaskBillableMs, getTaskAssigneeIds } from '../utils/workload';
-import { signInWithGoogle, signOutFirebase, onFirebaseAuthStateChanged } from '../lib/firebase';
+import { signInWithGoogle, signOutFirebase, onFirebaseAuthStateChanged, getFirebaseAuth } from '../lib/firebase';
 import {
   getSuperadminEmail,
   setSuperadminEmailOverride,
@@ -76,11 +77,19 @@ export interface FirestoreStatus {
   lastSyncTime?: string;
 }
 
+export interface AccessRequestNotice {
+  email: string;
+  status: 'pending';
+  deduplicated: boolean;
+}
+
 export interface AuthContextValue {
   currentUser: User | null;
   isAuthChecking: boolean;
   authError: string | null;
   setAuthError: (err: string | null) => void;
+  accessRequestNotice: AccessRequestNotice | null;
+  setAccessRequestNotice: (notice: AccessRequestNotice | null) => void;
   loginWithGoogle: () => Promise<User>;
   logout: () => void;
   isSuperadmin: boolean;
@@ -101,6 +110,8 @@ export interface AuthContextValue {
 export interface WorkspaceContextValue {
   users: User[];
   tasks: Task[];
+  accessRequests: AccessRequest[];
+  dismissAccessRequest: (id: string) => Promise<void>;
   creativeDirectors: User[];
   clusterLeads: User[];
   syncStatus: 'connected' | 'connecting' | 'offline';
@@ -252,6 +263,9 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [activeBoardId, setActiveBoardId] = useState<string>('all');
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [accessRequestNotice, setAccessRequestNotice] = useState<AccessRequestNotice | null>(null);
+  const [accessRequests, setAccessRequests] = useState<AccessRequest[]>([]);
+  const isManualLoginRef = useRef<boolean>(false);
   const [syncStatus, setSyncStatus] = useState<'connected' | 'connecting' | 'offline'>('connecting');
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [firestoreStatus, setFirestoreStatus] = useState<FirestoreStatus | null>(null);
@@ -424,11 +438,39 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, [fetchState, refreshFirestoreStatus]);
 
+  const fetchAccessRequests = useCallback(async () => {
+    if (!canManageMembersPolicy(currentUserRef.current)) {
+      setAccessRequests([]);
+      return;
+    }
+    try {
+      const res = await fetch('/api/access-requests');
+      if (res.ok) {
+        const data = await res.json();
+        setAccessRequests(Array.isArray(data.requests) ? data.requests : []);
+      }
+    } catch {
+      // Non-critical if offline
+    }
+  }, []);
+
+  const dismissAccessRequest = useCallback(async (id: string) => {
+    setAccessRequests(prev => prev.filter(r => r.id !== id));
+    const res = await fetch(`/api/access-requests/${encodeURIComponent(id)}/dismiss`, {
+      method: 'POST',
+    });
+    if (!res.ok) {
+      await fetchAccessRequests();
+      throw new Error('Failed to dismiss access request');
+    }
+  }, [fetchAccessRequests]);
+
   useEffect(() => {
     if (!currentUser) return;
     fetchState();
     refreshFirestoreStatus();
-  }, [currentUser?.id, fetchState, refreshFirestoreStatus]);
+    fetchAccessRequests();
+  }, [currentUser?.id, fetchState, refreshFirestoreStatus, fetchAccessRequests]);
 
   useEffect(() => {
     const handleOnline = () => {
@@ -499,10 +541,69 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         } else if (type === 'sync_all') {
           if (payload.users) setUsers(Array.from(new Map((payload.users as User[]).map(u => [u.id, u])).values()));
           if (payload.tasks) setTasks(Array.from(new Map((payload.tasks as Task[]).map(t => [t.id, t])).values()));
+          fetchAccessRequests();
+        } else if (type === 'access_request_created' && canManageMembersPolicy(currentUserRef.current)) {
+          const reqItem = payload as AccessRequest;
+          if (reqItem?.id && reqItem.status === 'pending') {
+            setAccessRequests(prev => [reqItem, ...prev.filter(r => r.id !== reqItem.id)]);
+          }
+        } else if (type === 'access_request_updated' && canManageMembersPolicy(currentUserRef.current)) {
+          const reqItem = payload as AccessRequest;
+          if (reqItem?.id) {
+            setAccessRequests(prev =>
+              reqItem.status === 'pending'
+                ? [reqItem, ...prev.filter(r => r.id !== reqItem.id)]
+                : prev.filter(r => r.id !== reqItem.id)
+            );
+          }
         }
       },
     });
-  }, [runReplay, currentUser?.id]);
+  }, [runReplay, currentUser?.id, fetchAccessRequests]);
+
+  const submitAccessRequestWithToken = useCallback(
+    async (idToken: string, email: string, name?: string) => {
+      const cleanEmail = email.trim().toLowerCase();
+      if (!cleanEmail.endsWith('@zensciences.com')) {
+        setAccessRequestNotice(null);
+        return {
+          allowed: false as const,
+          error: `Access denied for ${cleanEmail}. Only @zensciences.com Google accounts can sign in or request access.`,
+        };
+      }
+      try {
+        const res = await window.fetch('/api/auth/request-access', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-zenflow-request': '1',
+            Authorization: `Bearer ${idToken}`,
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify({ name: name || undefined }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          setAccessRequestNotice({
+            email: cleanEmail,
+            status: 'pending',
+            deduplicated: Boolean(data.deduplicated),
+          });
+          return { allowed: true as const };
+        }
+        return {
+          allowed: false as const,
+          error: data.error || `Unable to submit access request (${res.status})`,
+        };
+      } catch (err: any) {
+        return {
+          allowed: false as const,
+          error: err?.message || 'Unable to submit access request',
+        };
+      }
+    },
+    []
+  );
 
   // Firebase Google Auth state subscription
   useEffect(() => {
@@ -512,11 +613,16 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     const unsubPromise = onFirebaseAuthStateChanged(async fbUser => {
       const revision = ++authRevision;
       if (!isMounted) return;
+      if (isManualLoginRef.current) {
+        setIsAuthChecking(false);
+        return;
+      }
 
       if (!fbUser) {
         clearApiSession().catch(() => {});
         setUsers([]);
         setTasks([]);
+        setAccessRequests([]);
         setIsLoading(false);
         setCurrentUser(null);
         try { localStorage.removeItem(USER_SESSION_KEY); } catch {}
@@ -534,9 +640,9 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         return;
       }
 
-      const superEmail = getSuperadminEmail();
       let matched: User | undefined;
       let sessionError: string | null = null;
+      let notRegistered = false;
       try {
         const res = await fetch('/api/auth/verify-email', {
           method: 'POST',
@@ -544,7 +650,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
           body: JSON.stringify({ email }),
         });
         if (res.ok) matched = (await res.json()).user;
-        else if (res.status !== 403 && res.status !== 404) {
+        else if (res.status === 403 || res.status === 404) notRegistered = true;
+        else {
           const payload = await res.json().catch(() => ({}));
           sessionError = payload.error || `Authentication verification failed (${res.status})`;
         }
@@ -553,18 +660,26 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         sessionError = e?.message || 'Unable to verify Google session with server';
       }
 
-      if (!isMounted || revision !== authRevision) return;
+      if (!isMounted || revision !== authRevision || isManualLoginRef.current) return;
       if (matched) {
+        setAccessRequestNotice(null);
         setCurrentUser(matched);
         setAuthError(null);
       } else {
+        let finalError = sessionError;
+        if (notRegistered) {
+          const idToken = await fbUser.getIdToken().catch(() => undefined);
+          if (idToken) {
+            const reqResult = await submitAccessRequestWithToken(idToken, email, fbUser.displayName || undefined);
+            if (!reqResult.allowed) finalError = reqResult.error;
+          } else {
+            finalError = `Account not registered: ${email}. Only @zensciences.com accounts can request access.`;
+          }
+        }
         await signOutFirebase();
         setCurrentUser(null);
         try { localStorage.removeItem(USER_SESSION_KEY); } catch {}
-        setAuthError(
-          sessionError ||
-            `Account not registered: ${email}. Only registered ZenFlow team members can view the board. Please contact ${superEmail} to be added.`
-        );
+        setAuthError(finalError);
       }
       setIsAuthChecking(false);
     });
@@ -573,36 +688,55 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       isMounted = false;
       unsubPromise.then(unsub => unsub?.()).catch(() => {});
     };
-  }, []);
+  }, [submitAccessRequestWithToken]);
 
   const loginWithGoogle = useCallback(async (): Promise<User> => {
-    setAuthError(null);
-    const googleUser = await signInWithGoogle();
-    const cleanEmail = googleUser.email.trim().toLowerCase();
-    const superEmail = getSuperadminEmail();
-    const response = await fetch('/api/auth/verify-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: cleanEmail }),
-    });
-    const existing: User | undefined = response.ok ? (await response.json()).user : undefined;
-    if (!existing) {
-      await signOutFirebase();
-      const err =
-        response.status === 403 || response.status === 404
-          ? `Account not registered: ${cleanEmail}. Only users with existing ZenFlow accounts are authorized to sign in. Please contact ${superEmail} to be added.`
-          : `Unable to verify session (${response.status}). Please try again.`;
-      setAuthError(err);
-      throw new Error(err);
+    isManualLoginRef.current = true;
+    try {
+      setAuthError(null);
+      setAccessRequestNotice(null);
+      const googleUser = await signInWithGoogle();
+      const cleanEmail = googleUser.email.trim().toLowerCase();
+      const fbAuth = await getFirebaseAuth();
+      const idToken = await fbAuth?.currentUser?.getIdToken().catch(() => undefined);
+      const response = await fetch('/api/auth/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: cleanEmail }),
+      });
+      const existing: User | undefined = response.ok ? (await response.json()).user : undefined;
+      if (!existing) {
+        if ((response.status === 403 || response.status === 404) && idToken) {
+          const reqResult = await submitAccessRequestWithToken(idToken, cleanEmail, googleUser.name);
+          await signOutFirebase();
+          if (reqResult.allowed) {
+            throw Object.assign(
+              new Error(`Access request submitted for ${cleanEmail}. Pending manager approval.`),
+              { isAccessRequestSubmitted: true }
+            );
+          }
+          setAuthError(reqResult.error);
+          throw new Error(reqResult.error);
+        }
+        await signOutFirebase();
+        const err = `Unable to verify session (${response.status}). Please try again.`;
+        setAuthError(err);
+        throw new Error(err);
+      }
+      setAccessRequestNotice(null);
+      setCurrentUser(existing);
+      setActiveRoleTab(existing.role === 'content' || existing.role === 'design' ? existing.role : 'all');
+      return existing;
+    } finally {
+      isManualLoginRef.current = false;
     }
-    setCurrentUser(existing);
-    setActiveRoleTab(existing.role === 'content' || existing.role === 'design' ? existing.role : 'all');
-    return existing;
-  }, []);
+  }, [submitAccessRequestWithToken]);
 
   const logout = useCallback(() => {
     setCurrentUser(null);
     setUsers([]);
+    setAccessRequests([]);
+    setAccessRequestNotice(null);
     setTasks([]);
     clearApiSession().catch(() => {});
     try { localStorage.removeItem(USER_SESSION_KEY); } catch {}
@@ -1197,6 +1331,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       isAuthChecking,
       authError,
       setAuthError,
+      accessRequestNotice,
+      setAccessRequestNotice,
       loginWithGoogle,
       logout,
       isSuperadmin,
@@ -1217,6 +1353,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       currentUser,
       isAuthChecking,
       authError,
+      accessRequestNotice,
       loginWithGoogle,
       logout,
       isSuperadmin,
@@ -1239,6 +1376,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     () => ({
       users,
       tasks,
+      accessRequests,
+      dismissAccessRequest,
       creativeDirectors,
       clusterLeads,
       syncStatus,
@@ -1268,6 +1407,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     [
       users,
       tasks,
+      accessRequests,
+      dismissAccessRequest,
       creativeDirectors,
       clusterLeads,
       syncStatus,

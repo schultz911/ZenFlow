@@ -15,6 +15,7 @@ import { writeSse } from './resources';
 import { registerUserRoutes } from './routes/users';
 import { registerTaskRoutes } from './routes/tasks';
 import { registerAdminRoutes } from './routes/admin';
+import { sanitizeString } from './routes/validation';
 
 export {
   AVATAR_COLORS,
@@ -257,7 +258,69 @@ export function createServerApp(deps: ServerAppDeps): Express {
     res.status(204).end();
   });
 
-  app.use('/api', createApiSecurity({ getStore: () => repo.getStore(), verify: verifyIdentity, ensureSuperadmin: () => repo.ensureSuperadmin() }));
+  app.post('/api/auth/request-access', authLimiter, async (req: Request, res: Response) => {
+    if (!sameOriginMutation(req)) return res.status(403).json({ error: 'Invalid request origin' });
+    const token = req.get('authorization')?.match(/^Bearer (\S+)$/)?.[1];
+    if (!token) return res.status(401).json({ error: 'Google identity required' });
+    try {
+      const identity = await verifyIdentity(token);
+      if (
+        !identity.email_verified ||
+        identity.firebase?.sign_in_provider !== 'google.com' ||
+        identity.exp * 1000 <= Date.now()
+      ) {
+        return res.status(401).json({ error: 'Verified Google identity required' });
+      }
+      const cleanEmail = identity.email?.trim().toLowerCase() || '';
+      if (!cleanEmail.endsWith('@zensciences.com')) {
+        return res.status(403).json({ error: 'Only @zensciences.com Google accounts are permitted to request access.' });
+      }
+      const existingUser = repo.getUsers().find(u => u.email.toLowerCase() === cleanEmail);
+      if (existingUser) {
+        return res.json({ status: 'already_registered' });
+      }
+      const requests = repo.getAccessRequests();
+      const existingPending = requests.find(
+        r => r.email.toLowerCase() === cleanEmail && r.status === 'pending'
+      );
+      if (existingPending) {
+        return res.json({ request: existingPending, deduplicated: true });
+      }
+      const displayName = sanitizeString(req.body?.name) || cleanEmail.split('@')[0];
+      const accessReq = {
+        id: `req-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        email: cleanEmail,
+        name: displayName,
+        status: 'pending' as const,
+        requestedAt: new Date().toISOString(),
+      };
+      requests.push(accessReq);
+      await repo.saveAccessRequest(accessReq);
+      repo.saveLocal();
+      broadcastEvent('access_request_created', accessReq);
+      repo.appendAuditLog({
+        category: 'security',
+        action: 'access_request_created',
+        actor: { email: cleanEmail, name: displayName, ip: req.ip },
+        targetId: accessReq.id,
+        targetType: 'user',
+        details: `Access request submitted by ${cleanEmail}`,
+      });
+      return res.status(201).json({ request: accessReq, deduplicated: false });
+    } catch {
+      return res.status(401).json({ error: 'Google session expired or invalid' });
+    }
+  });
+
+  app.use(
+    '/api',
+    createApiSecurity({
+      getStore: () => repo.getStore(),
+      verify: verifyIdentity,
+      ensureSuperadmin: () => repo.ensureSuperadmin(),
+      hasRegisteredWebhook: clickup.hasRegisteredWebhook,
+    })
+  );
 
   app.get('/api/health', (_req: Request, res: Response) => {
     res.setHeader('Cache-Control', 'no-store');

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, AlertCircle, ShieldAlert, Loader2, LogIn } from 'lucide-react';
+import { X, AlertCircle, ShieldAlert, Loader2, LogIn, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/DashboardContext';
 import { getSuperadminEmail } from '../domain/permissions';
 import { DialogPanel } from './ui/DialogPanel';
@@ -11,7 +11,7 @@ interface SignInModalProps {
 }
 
 export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose }) => {
-  const { loginWithGoogle, authError, setAuthError } = useAuth();
+  const { loginWithGoogle, authError, setAuthError, accessRequestNotice, setAccessRequestNotice } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -23,11 +23,14 @@ export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose }) => 
     setIsSubmitting(true);
     setError(null);
     setAuthError(null);
+    setAccessRequestNotice(null);
     try {
       await loginWithGoogle();
       onClose();
     } catch (err: any) {
-      setError(err.message || 'Google Sign-In failed');
+      if (!err?.isAccessRequestSubmitted) {
+        setError(err.message || 'Google Sign-In failed');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -81,7 +84,21 @@ export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose }) => 
             </div>
 
             <div className="pt-5 space-y-4">
-              {error && (
+              {accessRequestNotice && (
+                <div className="flex items-start gap-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/25 p-3 text-xs text-emerald-700 dark:text-emerald-300">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                  <div className="space-y-0.5">
+                    <p className="font-semibold">
+                      {accessRequestNotice.deduplicated ? 'Access Request Already Pending' : 'Access Request Submitted'}
+                    </p>
+                    <p className="text-[11px] opacity-90">
+                      <span className="font-mono">{accessRequestNotice.email}</span> is queued for workspace approval. Try signing in again once a manager adds your account.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {error && !accessRequestNotice && (
                 <div className="flex items-start gap-2 rounded-xl bg-red-500/10 border border-red-500/20 p-3 text-xs text-red-600 dark:text-red-400">
                   <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                   <span>{error}</span>
@@ -113,8 +130,7 @@ export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose }) => 
                 <div className="text-[11px] text-[var(--text-secondary)] space-y-1">
                   <p className="font-semibold text-neutral-800 dark:text-white/90">Authorized Workspace Access</p>
                   <p>
-                    Only users pre-registered by an Administrator, Business Lead, Cluster Lead, or Creative Director
-                    can log in. Contact <span className="font-mono text-neutral-800 dark:text-white/90">{getSuperadminEmail()}</span> for onboarding.
+                    Sign in with an <span className="font-mono text-neutral-800 dark:text-white/90">@zensciences.com</span> Google account. Unregistered domain accounts automatically submit an approval request to workspace managers ({getSuperadminEmail()}).
                   </p>
                 </div>
               </div>

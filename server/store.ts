@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { ParentTask, Task, User } from '../src/types';
+import type { AccessRequest, ParentTask, Task, User } from '../src/types';
 import { readAuditTail } from './resources';
 import {
   getSuperadminEmail,
@@ -17,6 +17,7 @@ export interface AppStore {
   users: User[];
   tasks: Task[];
   parentTasks: ParentTask[];
+  accessRequests?: AccessRequest[];
 }
 
 export interface AuditLogEntry {
@@ -54,6 +55,7 @@ export interface PersistenceAdapter {
   saveParentTask(parentTask: ParentTask): Promise<void>;
   batchSaveParentTasks(parentTasks: ParentTask[]): Promise<void>;
   deleteParentTask(parentTaskId: string): Promise<void>;
+  saveAccessRequest(accessRequest: AccessRequest): Promise<void>;
   purgeAllCollections(): Promise<void>;
   loadRecentAuditLogs(limit: number): Promise<AuditLogEntry[]>;
   appendAuditEntry(entry: AuditLogEntry): Promise<void>;
@@ -323,6 +325,7 @@ export function createMemoryPersistenceAdapter(initial?: Partial<AppStore>): Per
     users: [...(initial?.users || [])],
     tasks: [...(initial?.tasks || [])],
     parentTasks: [...(initial?.parentTasks || [])],
+    accessRequests: [...(initial?.accessRequests || [])],
   };
   let auditLogs: AuditLogEntry[] = [];
 
@@ -333,6 +336,7 @@ export function createMemoryPersistenceAdapter(initial?: Partial<AppStore>): Per
         users: persisted.users.map(u => ({ ...u })),
         tasks: persisted.tasks.map(t => ({ ...t })),
         parentTasks: persisted.parentTasks.map(p => ({ ...p })),
+        accessRequests: (persisted.accessRequests || []).map(r => ({ ...r })),
       };
     },
     scheduleSave(next) {
@@ -340,6 +344,7 @@ export function createMemoryPersistenceAdapter(initial?: Partial<AppStore>): Per
         users: next.users.map(u => ({ ...u })),
         tasks: next.tasks.map(t => ({ ...t })),
         parentTasks: next.parentTasks.map(p => ({ ...p })),
+        accessRequests: (next.accessRequests || []).map(r => ({ ...r })),
       };
     },
     flushSync(next) {
@@ -358,8 +363,9 @@ export function createMemoryPersistenceAdapter(initial?: Partial<AppStore>): Per
     async saveParentTask() {},
     async batchSaveParentTasks() {},
     async deleteParentTask() {},
+    async saveAccessRequest() {},
     async purgeAllCollections() {
-      persisted = { users: [], tasks: [], parentTasks: [] };
+      persisted = { users: [], tasks: [], parentTasks: [], accessRequests: [] };
     },
     async loadRecentAuditLogs(limit) {
       return auditLogs.slice(0, limit);
@@ -562,12 +568,13 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
           const cleanUsers = (parsed.users || []).filter((u: User) => !DUMMY_USER_IDS.has(u.id));
           const cleanTasks = (parsed.tasks || []).filter((t: Task) => !DUMMY_TASK_IDS.has(t.id));
           const cleanParents = Array.isArray(parsed.parentTasks) ? parsed.parentTasks : [];
-          return { users: cleanUsers, tasks: cleanTasks, parentTasks: cleanParents };
+          const cleanAccessRequests = Array.isArray(parsed.accessRequests) ? parsed.accessRequests : [];
+          return { users: cleanUsers, tasks: cleanTasks, parentTasks: cleanParents, accessRequests: cleanAccessRequests };
         }
       } catch (err) {
         console.error('Failed to read store.json, starting fresh:', err);
       }
-      return { users: [], tasks: [], parentTasks: [] };
+      return { users: [], tasks: [], parentTasks: [], accessRequests: [] };
     },
     scheduleSave(storeToSave: AppStore) {
       pendingSave = storeToSave;
@@ -618,21 +625,25 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
       const usersSnap = await adminDb.collection('users').get();
       const tasksSnap = await adminDb.collection('tasks').get();
       const parentsSnap = await adminDb.collection('parent_tasks').get();
+      const accessRequestsSnap = await adminDb.collection('access_requests').get();
 
       const firestoreUsers = usersSnap.docs.map((d: any) => d.data() as User).filter((u: User) => !DUMMY_USER_IDS.has(u.id));
       const firestoreTasks = tasksSnap.docs.map((d: any) => d.data() as Task).filter((t: Task) => !DUMMY_TASK_IDS.has(t.id));
       const firestoreParents = parentsSnap.docs.map((d: any) => d.data() as ParentTask);
+      const firestoreAccessRequests = accessRequestsSnap.docs.map((d: any) => d.data() as AccessRequest);
 
-      if (firestoreUsers.length > 0 || firestoreTasks.length > 0 || firestoreParents.length > 0) {
+      if (firestoreUsers.length > 0 || firestoreTasks.length > 0 || firestoreParents.length > 0 || firestoreAccessRequests.length > 0) {
         nextStore = {
           users: firestoreUsers,
           tasks: firestoreTasks,
           parentTasks: firestoreParents,
+          accessRequests: firestoreAccessRequests,
         };
       } else {
         await batchUpsertDocs('users', current.users.map(u => ({ id: u.id, data: u })));
         await batchUpsertDocs('tasks', current.tasks.map(t => ({ id: t.id, data: t })));
         await batchUpsertDocs('parent_tasks', current.parentTasks.map(p => ({ id: p.id, data: p })));
+        await batchUpsertDocs('access_requests', (current.accessRequests || []).map(a => ({ id: a.id, data: a })));
       }
 
       const legacyResult = migrateLegacyRolesInStore(nextStore);
@@ -652,10 +663,11 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
     saveParentTask: (parentTask) => upsertDoc('parent_tasks', parentTask.id, parentTask),
     batchSaveParentTasks: (parentTasks) => batchUpsertDocs('parent_tasks', parentTasks.map(p => ({ id: p.id, data: p }))),
     deleteParentTask: (parentTaskId) => deleteDoc('parent_tasks', parentTaskId),
+    saveAccessRequest: (accessRequest) => upsertDoc('access_requests', accessRequest.id, accessRequest),
     async purgeAllCollections() {
       if (!adminDb) await initFirestore();
       if (!adminDb) return;
-      for (const col of ['tasks', 'parent_tasks']) {
+      for (const col of ['tasks', 'parent_tasks', 'access_requests']) {
         const snap = await adminDb.collection(col).get();
         for (let i = 0; i < snap.docs.length; i += FIRESTORE_CHUNK_SIZE) {
           const batch = adminDb.batch();
@@ -775,6 +787,7 @@ export function createWorkspaceRepository(adapter: PersistenceAdapter) {
     getUsers: () => store.users,
     getTasks: () => store.tasks,
     getParentTasks: () => store.parentTasks,
+    getAccessRequests: () => (store.accessRequests ||= []),
     saveLocal() {
       touch();
       adapter.scheduleSave(store);
@@ -845,6 +858,7 @@ export function createWorkspaceRepository(adapter: PersistenceAdapter) {
       const nonSuperCount = store.users.filter(u => !isSuperadmin(u)).length;
       store.tasks = [];
       store.parentTasks = [];
+      store.accessRequests = [];
       store.users = store.users.filter(u => isSuperadmin(u));
       const rootAdmin = ensureSuperadminInStore(store);
       this.saveLocal();
@@ -862,6 +876,7 @@ export function createWorkspaceRepository(adapter: PersistenceAdapter) {
     saveParentTask: (parentTask: ParentTask) => adapter.saveParentTask(parentTask),
     batchSaveParentTasks: (parentTasks: ParentTask[]) => adapter.batchSaveParentTasks(parentTasks),
     deleteParentTask: (parentTaskId: string) => adapter.deleteParentTask(parentTaskId),
+    saveAccessRequest: (accessRequest: AccessRequest) => adapter.saveAccessRequest(accessRequest),
     appendAuditLog(entry: Omit<AuditLogEntry, 'id' | 'timestamp'> & { id?: string; timestamp?: string }) {
       const fullEntry: AuditLogEntry = {
         id: entry.id || `audit-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,

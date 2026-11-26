@@ -104,6 +104,7 @@ export function createApiSecurity(options: {
   getStore: () => { users: Member[]; tasks: { id: string; userId?: string; assigneeIds?: string[]; team?: string; status?: string }[] };
   verify: (token: string) => Promise<Identity>;
   ensureSuperadmin?: () => Member | undefined;
+  hasRegisteredWebhook?: () => boolean;
 }) {
   return async (req: Request, res: Response, next: NextFunction) => {
     const routePath = req.path.replace(/\/+$/, '') || '/';
@@ -153,8 +154,9 @@ export function createApiSecurity(options: {
       req.body = body;
 
       if (routePath.startsWith('/audit/') && !manager) return denied();
+      if (routePath.startsWith('/access-requests') && !manager) return denied();
       if (routePath.startsWith('/firestore/') && req.method !== 'GET' && !superadmin) return denied();
-      if (routePath === '/clickup/webhook/register' && !superadmin) return denied();
+      if (routePath === '/clickup/webhook/register' && !superadmin && options.hasRegisteredWebhook?.()) return denied();
       if (routePath.startsWith('/clickup/webhook/') && req.method === 'DELETE' && !superadmin) return denied();
       if ((routePath === '/clickup/spaces' || routePath === '/clickup/lists') && req.method === 'POST' && !manager && !canCreatePipelineTask(caller)) {
         return denied();

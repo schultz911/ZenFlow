@@ -10,19 +10,22 @@ import {
   Crown,
   Shield,
   Database,
+  ListChecks,
 } from 'lucide-react';
 import { getUserTag } from '../utils/workload';
 
 interface HeaderProps {
   onOpenLoginModal: () => void;
-  onOpenNewUserModal: () => void;
+  onOpenNewUserModal: (prefill?: { name: string; email: string } | null) => void;
   onOpenFirestoreModal: () => void;
+  onOpenSetupModal?: () => void;
 }
 
 const HeaderComponent: React.FC<HeaderProps> = ({
   onOpenLoginModal,
   onOpenNewUserModal,
   onOpenFirestoreModal,
+  onOpenSetupModal,
 }) => {
   const {
     currentUser,
@@ -31,7 +34,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
     isCreativeDirector,
     canManageMembers,
   } = useAuth();
-  const { users, syncStatus } = useWorkspace();
+  const { users, syncStatus, accessRequests, dismissAccessRequest } = useWorkspace();
   const {
     activeRoleTab,
     setActiveRoleTab,
@@ -218,6 +221,14 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                       {isSuperadmin ? 'Superadmin' : currentUserTag.label}
                     </span>
                   </div>
+                  {canManageMembers && accessRequests.length > 0 && (
+                    <span
+                      title={`${accessRequests.length} pending access request${accessRequests.length === 1 ? '' : 's'}`}
+                      className="rounded-full bg-[#1d4ed8] px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white tabular-nums"
+                    >
+                      {accessRequests.length}
+                    </span>
+                  )}
                   <ChevronDown className="h-3.5 w-3.5 text-[var(--text-secondary)] shrink-0" />
                 </button>
               ) : (
@@ -235,7 +246,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
               {userDropdownOpen && (
                 <div
                   id="user-profile-menu"
-                  className="menu-surface absolute right-0 mt-1.5 w-64 rounded-[10px] border border-[var(--border)] p-1.5 z-50 text-[var(--text-primary)]"
+                  className="menu-surface absolute right-0 mt-1.5 w-72 rounded-[10px] border border-[var(--border)] p-1.5 z-50 text-[var(--text-primary)]"
                 >
                   {currentUser && (
                     <div className="border-b border-[var(--border-subtle)] px-2.5 pb-2.5 pt-1.5">
@@ -254,17 +265,75 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                   )}
 
                   <div className="pt-1 space-y-0.5">
+                    {canManageMembers && accessRequests.length > 0 && (
+                      <div className="mb-1 border-b border-[var(--border-subtle)] pb-1.5">
+                        <div className="flex items-center justify-between px-2.5 py-1 text-[11px] font-semibold text-[var(--text-secondary)]">
+                          <span>Pending Access</span>
+                          <span className="tabular-nums text-[#1d4ed8] dark:text-blue-400">{accessRequests.length}</span>
+                        </div>
+                        <div className="max-h-48 overflow-y-auto space-y-1 px-1">
+                          {accessRequests.map(reqItem => (
+                            <div
+                              key={reqItem.id}
+                              className="flex items-center justify-between gap-2 rounded-[6px] px-2 py-1.5 hover:bg-[var(--surface-subtle)]"
+                            >
+                              <div className="min-w-0">
+                                <p className="text-xs font-medium text-[var(--text-primary)] truncate">{reqItem.name}</p>
+                                <p className="text-[11px] text-[var(--text-secondary)] truncate">{reqItem.email}</p>
+                              </div>
+                              <div className="flex items-center gap-1 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setUserDropdownOpen(false);
+                                    onOpenNewUserModal({ name: reqItem.name, email: reqItem.email });
+                                  }}
+                                  className="rounded-[5px] bg-[#1d4ed8] px-2 py-1 text-[11px] font-medium text-white hover:bg-blue-700 cursor-pointer"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  aria-label={`Dismiss request for ${reqItem.email}`}
+                                  onClick={() => {
+                                    dismissAccessRequest(reqItem.id).catch(() => {});
+                                  }}
+                                  className="rounded-[5px] border border-[var(--border)] px-1.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] cursor-pointer"
+                                >
+                                  Dismiss
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
                     {canManageMembers && (
                       <button
                         type="button"
                         onClick={() => {
                           setUserDropdownOpen(false);
-                          onOpenNewUserModal();
+                          onOpenNewUserModal(null);
                         }}
                         className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors"
                       >
                         <UserPlus className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
                         <span>Add Team Member</span>
+                      </button>
+                    )}
+
+                    {onOpenSetupModal && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUserDropdownOpen(false);
+                          onOpenSetupModal();
+                        }}
+                        className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                      >
+                        <ListChecks className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
+                        <span>Workspace Setup</span>
                       </button>
                     )}
 
