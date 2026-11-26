@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task, TaskStatus, RoleFilter } from '../types';
-import { getUserTag, getUserDailyAssignedHours, getTaskAssigneeIds } from '../utils/workload';
+import { getUserTag, formatHours, getAssignedHoursByMemberAndDate, getTaskAssigneeIds, meetsDailyUtilizationTarget } from '../utils/workload';
+import { getAnalyticsClock } from '../domain/analyticsDate';
 import {
   Users,
   ChevronDown,
@@ -68,19 +69,21 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
       }
     }
 
+    const reportDate = getAnalyticsClock().date;
+    const hoursByMember = getAssignedHoursByMemberAndDate(tasks, [reportDate], reportDate);
     const free: User[] = [];
     const stats = new Map<string, { inReview: number; pipeline: number; assignedHours: number }>();
 
     for (const u of users) {
       if (u.role !== 'content' && u.role !== 'design') continue;
-      const assignedHours = getUserDailyAssignedHours(u, tasks);
+      const assignedHours = hoursByMember.get(u.id)?.get(reportDate) ?? 0;
       stats.set(u.id, {
         inReview: inReviewCounts.get(u.id) || 0,
         pipeline: pipelineCounts.get(u.id) || 0,
         assignedHours,
       });
 
-      if (assignedHours < 3) {
+      if (!meetsDailyUtilizationTarget(assignedHours)) {
         free.push(u);
       }
     }
@@ -119,7 +122,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                 {freeUsers.length} under 3h/d
               </span>
             </div>
-            <ChevronUp className="h-3.5 w-3.5 text-neutral-400 group-hover:text-white transition-colors" />
+            <ChevronUp className="h-3.5 w-3.5 text-white/60 group-hover:text-white transition-colors" />
           </motion.button>
         ) : (
           <motion.div
@@ -145,7 +148,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                 type="button"
                 onClick={toggleExpanded}
                 aria-label="Minimize Free Pool"
-                className="p-1 rounded-[5px] hover:bg-white/10 text-neutral-300 hover:text-white transition-colors cursor-pointer"
+                className="p-1 rounded-[5px] hover:bg-white/10 text-white/70 hover:text-white transition-colors cursor-pointer"
                 title="Minimize Free Pool"
               >
                 <ChevronDown className="h-4 w-4" />
@@ -250,7 +253,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
 
                           <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-secondary)] tabular-nums">
                             <span className="font-semibold text-emerald-700 dark:text-emerald-400">
-                              {stats?.assignedHours !== undefined ? `${stats.assignedHours}h/day` : '0h/day'}
+                              {stats?.assignedHours !== undefined ? `${formatHours(stats.assignedHours)}/day` : '0h/day'}
                             </span>
                             <span>·</span>
                             {stats && stats.inReview > 0 ? (

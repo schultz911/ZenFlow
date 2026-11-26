@@ -8,6 +8,7 @@ import {
   calculateTasksEfficiency,
   formatHoursRatio,
   getTaskAssigneeIds,
+  groupTasksByAssignee,
 } from '../utils/workload';
 import {
   Search,
@@ -113,14 +114,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
 
   const { avgWorkload, overloadedMembersCount } = useMemo(() => {
     if (displayedUsers.length === 0) return { avgWorkload: 0, overloadedMembersCount: 0 };
-    const tasksByUser = new Map<string, typeof tasks>();
-    for (const t of tasks) {
-      for (const uid of getTaskAssigneeIds(t)) {
-        const arr = tasksByUser.get(uid);
-        if (arr) arr.push(t);
-        else tasksByUser.set(uid, [t]);
-      }
-    }
+    const tasksByUser = groupTasksByAssignee(tasks);
 
     let overloaded = 0;
     const totalScores = displayedUsers.map(u => {
@@ -153,9 +147,9 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
     return calculateTeamUtilization(displayedUsers, tasks);
   }, [displayedUsers, tasks]);
 
-  const teamEfficiency = useMemo(() => {
-    return calculateTasksEfficiency(teamTasks);
-  }, [teamTasks]);
+  const teamEfficiency = useMemo(() => calculateTasksEfficiency(teamTasks, {
+    memberIds: new Set(displayedUsers.map(user => user.id)),
+  }), [displayedUsers, teamTasks]);
 
   return (
     <div className="mb-3.5 space-y-3">
@@ -189,26 +183,26 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
               <span className="text-sm font-semibold tracking-normal">%</span>
             </p>
             <p className="metric-detail">
-              {teamUtilization.utilizedCount} of {teamUtilization.totalCount} above 3h/day
+              {teamUtilization.utilizedCount} of {teamUtilization.totalCount} at 3h/day or more
             </p>
           </div>
 
           <div className="metric-card col-span-3 sm:col-span-1 border-b lg:border-b-0 sm:border-r border-[var(--border-subtle)]">
             <h2 className="metric-label whitespace-nowrap">Efficiency</h2>
             <p className="metric-value mt-1 text-[#1d4ed8] dark:text-blue-400">
-              {teamEfficiency.totalEstimatedHours > 0 ? (
+              {teamEfficiency.efficiencyPercent !== null ? (
                 <>
-                  {teamEfficiency.efficiencyPercent}
+                  {Math.round(teamEfficiency.efficiencyPercent)}
                   <span className="text-sm font-semibold tracking-normal">%</span>
                 </>
               ) : (
                 '—'
               )}
             </p>
-            <p className="metric-detail">
-              {teamEfficiency.totalEstimatedHours > 0
-                ? formatHoursRatio(teamEfficiency.totalTimeTakenHours, teamEfficiency.totalEstimatedHours)
-                : 'No estimates yet'}
+            <p className="metric-detail" title="Estimated / billable hours on completed work">
+              {teamEfficiency.efficiencyPercent !== null
+                ? formatHoursRatio(teamEfficiency.estimatedHours, teamEfficiency.billableHours)
+                : 'No measured work'}
             </p>
           </div>
 

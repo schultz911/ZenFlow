@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   KeyRound,
+  ChevronDown,
 } from 'lucide-react';
 
 interface EditUserModalProps {
@@ -239,278 +240,278 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
           }}
         >
           <DialogPanel aria-label="Edit team member" onClose={onClose} busy={isSubmitting || isRemapping}
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.16, ease: [0.2, 0.7, 0.2, 1] }}
             onClick={e => e.stopPropagation()}
             id="edit-user-modal"
-            className="w-full max-w-lg overflow-y-auto rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 "
+            className="w-full max-w-lg my-auto flex flex-col overflow-hidden"
           >
             {/* Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-neutral-100 dark:border-white/5">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                  <UserCog className="h-5 w-5" />
+            <div className="dialog-header">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-400">
+                  <UserCog className="h-4 w-4" />
                 </div>
-                <div>
-                  <h2 className="text-base font-semibold tracking-tight">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
                     Edit Team Member
                   </h2>
-                  <p className="text-xs text-[var(--text-secondary)]">
+                  <p className="text-[11px] text-[var(--text-secondary)] truncate">
                     {user.email}
                   </p>
                 </div>
               </div>
-              <button aria-label="Close dialog"
+              <button
+                type="button"
+                aria-label="Close dialog"
                 onClick={onClose}
                 disabled={isSubmitting || isRemapping}
-                className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white transition-colors cursor-pointer"
+                className="icon-button shrink-0"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
             {/* Form Body */}
-            <form onSubmit={handleSubmit} className="mt-4 space-y-4">
-              {error && (
-                <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-600 dark:text-red-400">
-                  {error}
-                </div>
-              )}
+            <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+              <div className="p-5 overflow-y-auto flex-1 space-y-4">
+                {error && (
+                  <div role="alert" className="callout callout-danger">
+                    {error}
+                  </div>
+                )}
 
-              {/* Email Address */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)]" htmlFor="editusermodal-field-1">
-                    Email Address
-                  </label>
-                  {isSuperadmin && !isTargetSuperadmin && (
-                    <span className="inline-flex items-center gap-1 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[11px] px-2 py-0.5 font-semibold border border-amber-500/20">
-                      <KeyRound className="w-3 h-3" />
-                      Superadmin Editable
-                    </span>
+                {/* Email Address */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="field-label !mb-0" htmlFor="editusermodal-field-1">
+                      Email Address
+                    </label>
+                    {isSuperadmin && !isTargetSuperadmin && (
+                      <span className="inline-flex items-center gap-1 rounded-[5px] bg-amber-600/10 text-amber-700 dark:text-amber-400 text-[10.5px] px-1.5 py-0.5 font-semibold border border-amber-600/25">
+                        <KeyRound className="w-3 h-3" />
+                        <span>Superadmin Editable</span>
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[var(--text-muted)]">
+                      <Mail className="h-3.5 w-3.5" />
+                    </div>
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      disabled={!isSuperadmin || isTargetSuperadmin}
+                      onChange={e => setEmail(e.target.value)}
+                      placeholder="e.g. member@zensciences.com"
+                      className="field-control pl-9"
+                      id="editusermodal-field-1"
+                    />
+                  </div>
+
+                  <p className="mt-1 text-[11px] text-[var(--text-muted)]">
+                    {isTargetSuperadmin
+                      ? 'The primary Superadmin email address is the root workspace anchor and cannot be modified.'
+                      : isSuperadmin
+                      ? 'As Superadmin, you can correct mistyped emails. Mapped tasks are preserved and remapped.'
+                      : 'Registered email is anchored to Google Workspace authentication. Only the Superadmin can edit it.'}
+                  </p>
+
+                  {/* Real-time Email Change / Conflict Indicator */}
+                  {isSuperadmin && !isTargetSuperadmin && user && cleanCurrentEmail !== (user.email || '').toLowerCase() && (
+                    <div className="mt-2.5">
+                      {duplicateTarget ? (
+                        <div className="callout callout-warning space-y-1">
+                          <div className="flex items-center gap-1.5 font-semibold">
+                            <AlertTriangle className="h-4 w-4 shrink-0" />
+                            <span>Existing Account Detected ({duplicateTarget.name})</span>
+                          </div>
+                          <p className="text-[11px] leading-relaxed opacity-90">
+                            An account with email <strong>{duplicateTarget.email}</strong> already exists ({duplicateUserTasksCount} tasks).
+                            Saving will <strong>merge these profiles</strong> and remap all {userTasksCount} task(s) to <strong>{duplicateTarget.name}</strong>.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="callout callout-info flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 shrink-0" />
+                          <span>Email will be updated to <strong>{cleanCurrentEmail}</strong>. All {userTasksCount} task(s) remain safely mapped.</span>
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
 
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-neutral-400">
-                    <Mail className="h-4 w-4" />
-                  </div>
+                {/* Full Name */}
+                <div>
+                  <label className="field-label" htmlFor="editusermodal-field-2">
+                    Full Name
+                  </label>
                   <input
-                    type="email"
+                    type="text"
                     required
-                    value={email}
-                    disabled={!isSuperadmin || isTargetSuperadmin}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="e.g. member@zensciences.com"
-                    className={`w-full rounded-xl pl-9 pr-3 py-2 text-xs transition-colors ${
-                      isSuperadmin && !isTargetSuperadmin
-                        ? 'border border-neutral-300 dark:border-white/10 bg-[var(--surface)] text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500'
-                        : 'border border-[var(--border)] bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-neutral-400 cursor-not-allowed'
-                    }`} id="editusermodal-field-1"
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="e.g. Alex Morgan"
+                    className="field-control"
+                    id="editusermodal-field-2"
                   />
                 </div>
 
-                {isTargetSuperadmin ? (
-                  <p className="mt-1 text-[11px] text-neutral-400 dark:text-neutral-500">
-                    The primary Superadmin email address is the root workspace anchor and cannot be modified.
-                  </p>
-                ) : isSuperadmin ? (
-                  <p className="mt-1 text-[11px] text-neutral-400 dark:text-neutral-500">
-                    As Superadmin, you can correct mistyped emails. Any tasks mapped to the wrong email will be preserved and remapped.
-                  </p>
-                ) : (
-                  <p className="mt-1 text-[11px] text-neutral-400 dark:text-neutral-500">
-                    Registered email is anchored to Google Workspace authentication. Only the Superadmin can edit it.
-                  </p>
+                <MemberRoleFields
+                  idPrefix="edituser"
+                  role={role}
+                  onChangeRole={setRole}
+                  isAdministrator={isAdminPrivilege}
+                  onChangeAdministrator={setIsAdminPrivilege}
+                  canAssignAdmin={canAssignAdmin}
+                  isTargetSuperadmin={isTargetSuperadmin}
+                  isBusinessLead={isBusinessLead}
+                  onChangeBusinessLead={checked => {
+                    setIsBusinessLead(checked);
+                    if (checked) {
+                      setSelectedCDId('');
+                      setSelectedClusterLeadId('');
+                    }
+                  }}
+                  isCreativeDirector={isCD}
+                  onChangeCreativeDirector={setIsCD}
+                  isClusterLead={isClusterLead}
+                  onChangeClusterLead={setIsClusterLead}
+                  isTeamLead={isTeamLead}
+                  onChangeTeamLead={setIsTeamLead}
+                  creativeDirectorId={selectedCDId}
+                  onChangeCreativeDirectorId={setSelectedCDId}
+                  clusterLeadId={selectedClusterLeadId}
+                  onChangeClusterLeadId={setSelectedClusterLeadId}
+                  creativeDirectors={creativeDirectors}
+                  clusterLeads={clusterLeads}
+                  excludeUserId={user.id}
+                />
+
+                {/* ClickUp Workspace Member Mapping */}
+                {isClickupConnected && (
+                  <div>
+                    <label className="field-label">
+                      ClickUp Member Mapping
+                    </label>
+                    <ClickupMemberPicker
+                      members={clickupMembers}
+                      selectedMemberId={clickupUserId || undefined}
+                      onRefresh={loadClickupMembers}
+                      onSelect={member => {
+                        setClickupUserId(member ? member.id : '');
+                        setClickupUsername(member ? member.username : '');
+                      }}
+                    />
+                  </div>
                 )}
 
-                {/* Real-time Email Change / Conflict Indicator */}
-                {isSuperadmin && !isTargetSuperadmin && user && cleanCurrentEmail !== (user.email || '').toLowerCase() && (
-                  <div className="mt-2.5">
-                    {duplicateTarget ? (
-                      <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-200 space-y-1 animate-in fade-in duration-150">
-                        <div className="flex items-center gap-1.5 font-semibold text-amber-700 dark:text-amber-300">
-                          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
-                          <span>Existing Account Detected ({duplicateTarget.name})</span>
-                        </div>
-                        <p className="text-[11px] leading-relaxed text-amber-700/90 dark:text-amber-300/90">
-                          An account with email <strong>{duplicateTarget.email}</strong> already exists on the board ({duplicateUserTasksCount} tasks).
-                          Saving will <strong>merge these profiles</strong> and automatically <strong>remap all {userTasksCount} task(s)</strong> from this profile to <strong>{duplicateTarget.name}</strong>.
+                {/* Superadmin Task Remapping & Transfer Section */}
+                {isSuperadmin && (
+                  <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => setShowRemapTool(prev => !prev)}
+                      className="w-full flex items-center justify-between gap-2 px-3.5 py-2.5 text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer text-left"
+                    >
+                      <span className="flex items-center gap-2 min-w-0">
+                        <ArrowRightLeft className="w-3.5 h-3.5 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
+                        <span>Task Remapping Tool</span>
+                      </span>
+                      <span className="text-[11px] font-medium text-[var(--text-secondary)] shrink-0">
+                        {showRemapTool ? 'Collapse' : 'Remap from another account'}
+                      </span>
+                    </button>
+
+                    {showRemapTool && (
+                      <div className="p-3.5 border-t border-[var(--border-subtle)] bg-[var(--surface)] space-y-3">
+                        <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                          Transfer all tasks mapped to another member or mistaken email directly to <strong className="text-[var(--text-primary)]">{user.name}</strong>.
                         </p>
-                      </div>
-                    ) : (
-                      <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-2.5 text-xs text-blue-700 dark:text-blue-300 flex items-center gap-2 animate-in fade-in duration-150">
-                        <CheckCircle2 className="h-4 w-4 shrink-0 text-blue-500" />
-                        <span>Email will be updated to <strong>{cleanCurrentEmail}</strong>. All {userTasksCount} task(s) remain safely mapped.</span>
+
+                        <div>
+                          <label className="field-label" htmlFor="editusermodal-field-5">
+                            Source Member / Account
+                          </label>
+                          <div className="relative">
+                            <select
+                              value={remapSourceUserId}
+                              onChange={e => setRemapSourceUserId(e.target.value)}
+                              className="field-control pr-8 cursor-pointer"
+                              id="editusermodal-field-5"
+                            >
+                              <option value="">-- Select member with misassigned tasks --</option>
+                              {otherUsers.map(u => {
+                                const count = tasks.filter(t => isTaskAssignedToUser(t, u.id)).length;
+                                return (
+                                  <option key={u.id} value={u.id}>
+                                    {u.name} ({u.email}) — {count} task(s)
+                                  </option>
+                                );
+                              })}
+                            </select>
+                            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
+                          </div>
+                        </div>
+
+                        {remapSourceUserId && (
+                          <div className="space-y-2.5">
+                            <label className="flex items-center gap-2 text-xs text-[var(--text-secondary)] cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={remapDeleteSource}
+                                onChange={e => setRemapDeleteSource(e.target.checked)}
+                                className="rounded border-[var(--border)] h-3.5 w-3.5"
+                              />
+                              <span>Delete source member profile after transferring tasks</span>
+                            </label>
+
+                            <button
+                              type="button"
+                              disabled={isRemapping}
+                              onClick={handleExecuteRemap}
+                              className="button-primary w-full"
+                            >
+                              {isRemapping ? (
+                                <>
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  <span>Transferring tasks...</span>
+                                </>
+                              ) : (
+                                <>
+                                  <ArrowRightLeft className="w-3.5 h-3.5" />
+                                  <span className="tabular-nums">
+                                    Transfer Tasks to {user.name} ({selectedSourceTaskCount} task{selectedSourceTaskCount === 1 ? '' : 's'})
+                                  </span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        )}
+
+                        {remapStatusMessage && (
+                          <div role="status" className="callout callout-success flex items-center gap-2">
+                            <CheckCircle2 className="w-4 h-4 shrink-0" />
+                            <span>{remapStatusMessage}</span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 )}
               </div>
 
-              {/* Full Name */}
-              <div>
-                <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5" htmlFor="editusermodal-field-2">
-                  Full Name
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="e.g. Alex Morgan"
-                  className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] px-3 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" id="editusermodal-field-2"
-                />
-              </div>
-
-              <MemberRoleFields
-                idPrefix="edituser"
-                role={role}
-                onChangeRole={setRole}
-                isAdministrator={isAdminPrivilege}
-                onChangeAdministrator={setIsAdminPrivilege}
-                canAssignAdmin={canAssignAdmin}
-                isTargetSuperadmin={isTargetSuperadmin}
-                isBusinessLead={isBusinessLead}
-                onChangeBusinessLead={checked => {
-                  setIsBusinessLead(checked);
-                  if (checked) {
-                    setSelectedCDId('');
-                    setSelectedClusterLeadId('');
-                  }
-                }}
-                isCreativeDirector={isCD}
-                onChangeCreativeDirector={setIsCD}
-                isClusterLead={isClusterLead}
-                onChangeClusterLead={setIsClusterLead}
-                isTeamLead={isTeamLead}
-                onChangeTeamLead={setIsTeamLead}
-                creativeDirectorId={selectedCDId}
-                onChangeCreativeDirectorId={setSelectedCDId}
-                clusterLeadId={selectedClusterLeadId}
-                onChangeClusterLeadId={setSelectedClusterLeadId}
-                creativeDirectors={creativeDirectors}
-                clusterLeads={clusterLeads}
-                excludeUserId={user.id}
-              />
-
-              {/* ClickUp Workspace Member Mapping */}
-              {isClickupConnected && (
-                <div>
-                  <label className="block text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1.5">
-                    ClickUp Member Mapping
-                  </label>
-                  <ClickupMemberPicker
-                    members={clickupMembers}
-                    selectedMemberId={clickupUserId || undefined}
-                    onRefresh={loadClickupMembers}
-                    onSelect={member => {
-                      setClickupUserId(member ? member.id : '');
-                      setClickupUsername(member ? member.username : '');
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* Superadmin Task Remapping & Transfer Section */}
-              {isSuperadmin && (
-                <div className="rounded-xl border border-purple-500/20 bg-purple-50/20 dark:bg-purple-950/10 p-3.5 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => setShowRemapTool(prev => !prev)}
-                      className="flex items-center gap-2 text-xs font-semibold text-purple-900 dark:text-purple-300 hover:text-purple-700 dark:hover:text-purple-200 transition-colors cursor-pointer text-left"
-                    >
-                      <ArrowRightLeft className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                      <span>Task Remapping Tool</span>
-                      <span className="text-[11px] text-purple-600 dark:text-purple-400 font-normal">
-                        {showRemapTool ? '(Collapse)' : '(Remap tasks from another account)'}
-                      </span>
-                    </button>
-                  </div>
-
-                  {showRemapTool && (
-                    <div className="pt-2 border-t border-purple-500/10 space-y-3 animate-in fade-in duration-150">
-                      <p className="text-[11px] text-neutral-600 dark:text-white/60 leading-relaxed">
-                        Transfer all tasks mapped to another member or mistaken email directly to <strong>{user.name}</strong>.
-                      </p>
-
-                      <div>
-                        <label className="block text-[11px] uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1" htmlFor="editusermodal-field-5">
-                          Source Member / Account
-                        </label>
-                        <select
-                          value={remapSourceUserId}
-                          onChange={e => setRemapSourceUserId(e.target.value)}
-                          className="w-full appearance-none rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-purple-500 focus:outline-none" id="editusermodal-field-5"
-                        >
-                          <option value="">-- Select member with misassigned tasks --</option>
-                          {otherUsers.map(u => {
-                            const count = tasks.filter(t => isTaskAssignedToUser(t, u.id)).length;
-                            return (
-                              <option key={u.id} value={u.id}>
-                                {u.name} ({u.email}) — {count} task(s)
-                              </option>
-                            );
-                          })}
-                        </select>
-                      </div>
-
-                      {remapSourceUserId && (
-                        <div className="space-y-2">
-                          <label className="flex items-center gap-2 text-xs text-neutral-600 dark:text-white/70 cursor-pointer">
-                            <input
-                              type="checkbox"
-                              checked={remapDeleteSource}
-                              onChange={e => setRemapDeleteSource(e.target.checked)}
-                              className="rounded border-neutral-300 dark:border-neutral-700 text-purple-600 focus:ring-purple-500"
-                            />
-                            <span>Delete source member profile after transferring tasks</span>
-                          </label>
-
-                          <button
-                            type="button"
-                            disabled={isRemapping}
-                            onClick={handleExecuteRemap}
-                            className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 text-xs font-semibold shadow transition-colors disabled:opacity-50 cursor-pointer"
-                          >
-                            {isRemapping ? (
-                              <>
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                <span>Transferring tasks...</span>
-                              </>
-                            ) : (
-                              <>
-                                <ArrowRightLeft className="w-3.5 h-3.5" />
-                                <span>
-                                  Transfer Tasks to {user.name} ({selectedSourceTaskCount} task{selectedSourceTaskCount === 1 ? '' : 's'})
-                                </span>
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      )}
-
-                      {remapStatusMessage && (
-                        <div className="rounded-lg bg-green-500/10 border border-green-500/20 p-2.5 text-xs text-green-700 dark:text-green-300 flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 shrink-0 text-green-500" />
-                          <span>{remapStatusMessage}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Action Buttons */}
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-neutral-100 dark:border-white/5">
+              <div className="dialog-footer">
                 <button
                   type="button"
                   onClick={onClose}
                   disabled={isSubmitting || isRemapping}
-                  className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2 text-xs font-medium text-neutral-600 dark:text-white/50 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                  className="button-secondary"
                 >
                   Cancel
                 </button>
@@ -518,7 +519,7 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                   type="submit"
                   id="edit-user-submit-btn"
                   disabled={isSubmitting || isRemapping || !name.trim()}
-                  className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-500 transition-colors disabled:opacity-50 cursor-pointer"
+                  className="button-primary"
                 >
                   {isSubmitting ? (
                     <>

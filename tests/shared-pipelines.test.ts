@@ -308,8 +308,7 @@ function fixtureTaskSafe(id: string, userId: string) {
 test('Assigned pipeline tasks accurately reflect in individual workload and utilization metrics', () => {
   const alice: User = { id: 'alice', name: 'Alice', email: 'alice@example.invalid', role: 'content', createdAt: '2026-10-01' };
 
-  // Task 1: Assigned to Alice in pipeline with 8 estimated hours over 2 working days (4h/day)
-  const today = new Date().toISOString().slice(0, 10);
+  const date = new Date('2026-10-26T12:00:00Z');
   const assignedPipelineTask: Task = {
     id: 't-pipe',
     userId: 'alice',
@@ -319,22 +318,21 @@ test('Assigned pipeline tasks accurately reflect in individual workload and util
     cognitiveLoad: 'high',
     order: 0,
     estimatedHours: 8,
-    createdAt: new Date().toISOString(),
-    dueDate: today,
-    updatedAt: new Date().toISOString(),
+    createdAt: date.toISOString(),
+    updatedAt: date.toISOString(),
   };
 
   const tasks = [assignedPipelineTask];
 
   // Alice daily assigned hours includes her assigned pipeline task (8h over 1 day = 8h/day)
-  const dailyHours = getUserDailyAssignedHours(alice, tasks);
+  const dailyHours = getUserDailyAssignedHours(alice, tasks, date);
   assert.equal(dailyHours, 8);
 
-  // Alice is considered utilized (> 3h/day)
-  assert.equal(isUserUtilized(alice, tasks), true);
+  // Alice is considered utilized (at least 3h/day)
+  assert.equal(isUserUtilized(alice, tasks, date), true);
 
   // Team utilization reflects Alice as utilized
-  const teamUtil = calculateTeamUtilization([alice], tasks);
+  const teamUtil = calculateTeamUtilization([alice], tasks, date);
   assert.equal(teamUtil.utilizationPercent, 100);
   assert.equal(teamUtil.utilizedCount, 1);
 });

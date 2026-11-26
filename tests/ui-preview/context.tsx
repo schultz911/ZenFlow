@@ -27,6 +27,7 @@ export const fixtureTasks: Task[] = [
   { id: 't-ava-3', userId: 'u-content', assigneeIds: ['u-content'], team: 'content', title: 'Product Architecture Blog Series', client: 'VeloAI', project: 'Launch', cognitiveLoad: 'high', status: 'todo', order: 0, dueDate: dayIso(1), startDate: dayIso(0), estimatedHours: 6, createdAt: recentStartIso(24), updatedAt: recentStartIso(2) },
   { id: 't-ava-4', userId: 'u-content', assigneeIds: ['u-content'], team: 'content', title: 'Analyst Briefing Messaging Pack', client: 'Zen', project: 'PR', cognitiveLoad: 'high', status: 'todo', order: 1, dueDate: dayIso(1), startDate: dayIso(0), estimatedHours: 5, createdAt: recentStartIso(20), updatedAt: recentStartIso(2) },
   { id: 't-ava-5', userId: 'u-content', assigneeIds: ['u-content'], team: 'content', title: 'Customer Onboarding Email Flow', client: 'NovaPay', project: 'Lifecycle', cognitiveLoad: 'high', status: 'in_progress', order: 2, dueDate: dayIso(1), startDate: dayIso(0), estimatedHours: 4, inProgressStartedAt: recentStartIso(0.5), inProgressDurationMs: 2 * 3600_000, createdAt: recentStartIso(18), updatedAt: recentStartIso(1) },
+  { id: 't-completed-shared', userId: 'u-content', assigneeIds: ['u-content', 'cd-1'], team: 'content', title: 'Completed Editorial Brief', client: 'VeloAI', project: 'Launch', cognitiveLoad: 'medium', status: 'done', order: 0, estimatedHours: 10, inProgressDurationMs: 6 * 3600_000, createdAt: recentStartIso(72), updatedAt: recentStartIso(24), completedAt: recentStartIso(24) },
 ];
 
 const PreviewContext = createContext<any>(null);

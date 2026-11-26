@@ -16,6 +16,7 @@ import {
   Check,
   FolderKanban,
   Loader2,
+  ChevronDown,
 } from 'lucide-react';
 
 interface DisciplineTaskModalProps {
@@ -395,28 +396,34 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-black/60">
+      <div
+        className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+        onClick={e => {
+          if (e.target === e.currentTarget && !isSubmitting) onClose();
+        }}
+      >
         <DialogPanel
           aria-label="Create pipeline requirement"
           onClose={onClose}
           busy={isSubmitting}
-          initial={{ opacity: 0, scale: 0.95, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          transition={{ duration: 0.2 }}
-          className="relative w-full max-w-2xl max-h-[92vh] flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden"
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 6 }}
+          transition={{ duration: 0.16, ease: [0.2, 0.7, 0.2, 1] }}
+          onClick={e => e.stopPropagation()}
+          className="relative w-full max-w-2xl max-h-[92vh] my-auto flex flex-col overflow-hidden"
         >
           {/* Header */}
-          <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-4 bg-neutral-50/50 dark:bg-white/[0.02]">
-            <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                <Sparkles className="h-5 w-5" />
+          <div className="dialog-header">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-400">
+                <Sparkles className="h-4 w-4" />
               </div>
-              <div>
-                <h3 className="text-base font-semibold text-neutral-900 dark:text-white">
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
                   Add Pipeline Deliverable
                 </h3>
-                <p className="text-[11px] text-[var(--text-secondary)]">
+                <p className="text-[11px] text-[var(--text-secondary)] truncate">
                   Creates a parent ClickUp deliverable and subtask(s) for selected disciplines.
                 </p>
               </div>
@@ -425,14 +432,14 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
               aria-label="Close dialog"
               type="button"
               onClick={onClose}
-              className="rounded-lg p-1.5 text-neutral-400 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+              className="icon-button shrink-0"
             >
-              <X className="h-5 w-5" />
+              <X className="h-4 w-4" />
             </button>
           </div>
 
-          {/* Requirement Type Checkboxes */}
-          <div className="px-6 py-3 border-b border-[var(--border)] bg-neutral-50/30 dark:bg-white/[0.01]">
+          {/* Requirement Type Bar */}
+          <div className="px-5 py-2.5 border-b border-[var(--border)] bg-[var(--surface)] shrink-0">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
                 Requirement Type
@@ -441,17 +448,17 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setNeedsContent(prev => !prev)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-[7px] text-xs font-semibold border transition-colors cursor-pointer ${
                     needsContent
-                      ? 'bg-blue-600 border-blue-600 text-white shadow-xs'
-                      : 'border-[var(--border)] bg-[var(--surface-muted)] text-neutral-600 dark:text-white/60 hover:text-neutral-900 dark:hover:text-white'
+                      ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
+                      : 'border-[var(--border)] bg-[var(--surface-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                   }`}
                 >
                   <span
-                    className={`flex h-3.5 w-3.5 items-center justify-center rounded border ${
+                    className={`flex h-3.5 w-3.5 items-center justify-center rounded-[4px] border ${
                       needsContent
-                        ? 'border-white bg-white text-blue-600'
-                        : 'border-neutral-400 dark:border-white/30'
+                        ? 'border-white bg-white text-[#1d4ed8]'
+                        : 'border-[var(--text-muted)]'
                     }`}
                   >
                     {needsContent && <Check className="h-2.5 w-2.5 stroke-[3]" />}
@@ -463,17 +470,17 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setNeedsDesign(prev => !prev)}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-[7px] text-xs font-semibold border transition-colors cursor-pointer ${
                     needsDesign
-                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-xs'
-                      : 'border-[var(--border)] bg-[var(--surface-muted)] text-neutral-600 dark:text-white/60 hover:text-neutral-900 dark:hover:text-white'
+                      ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
+                      : 'border-[var(--border)] bg-[var(--surface-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                   }`}
                 >
                   <span
-                    className={`flex h-3.5 w-3.5 items-center justify-center rounded border ${
+                    className={`flex h-3.5 w-3.5 items-center justify-center rounded-[4px] border ${
                       needsDesign
-                        ? 'border-white bg-white text-indigo-600'
-                        : 'border-neutral-400 dark:border-white/30'
+                        ? 'border-white bg-white text-[#1d4ed8]'
+                        : 'border-[var(--text-muted)]'
                     }`}
                   >
                     {needsDesign && <Check className="h-2.5 w-2.5 stroke-[3]" />}
@@ -486,429 +493,460 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
           </div>
 
           {/* Scrollable Form Body */}
-          <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
-            {submitError && (
-              <div className="rounded-xl border border-red-500/20 bg-red-50 dark:bg-red-950/20 p-3 flex items-start gap-2 text-xs text-red-600 dark:text-red-400">
-                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>{submitError}</span>
-              </div>
-            )}
-
-            {/* ClickUp Destination Section */}
-            <div className="rounded-xl border border-purple-500/20 bg-purple-50/30 dark:bg-purple-950/10 p-4 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <FolderKanban className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                  <span className="text-xs font-semibold text-neutral-900 dark:text-white">
-                    ClickUp Destination
-                  </span>
-                </div>
-                {!isClickupConnected && (
-                  <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
-                    Connect ClickUp in Settings to sync spaces & lists
-                  </span>
-                )}
-              </div>
-
-              {clickupActionError && (
-                <div className="rounded-lg border border-red-500/20 bg-red-50 dark:bg-red-950/20 px-3 py-2 text-[11px] text-red-600 dark:text-red-400">
-                  {clickupActionError}
+          <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+            <div className="flex-1 overflow-y-auto p-5 space-y-5">
+              {submitError && (
+                <div role="alert" className="callout callout-danger flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{submitError}</span>
                 </div>
               )}
 
-              {isClickupConnected && (
-                <div className="space-y-3">
-                  {/* Space Selector + Inline Creator */}
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-semibold text-neutral-700 dark:text-white/80">
-                        ClickUp Space
-                      </label>
-                      {!isCreatingSpace && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsCreatingSpace(true);
-                            setClickupActionError(null);
-                          }}
-                          className="flex items-center gap-1 text-[11px] font-semibold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
-                        >
-                          <Plus className="h-3 w-3" />
-                          <span>New Space</span>
-                        </button>
-                      )}
-                    </div>
-
-                    {isCreatingSpace ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={newSpaceName}
-                          onChange={e => setNewSpaceName(e.target.value)}
-                          placeholder="New ClickUp Space name (e.g. Acme Corp)"
-                          disabled={isSubmittingSpace}
-                          className="flex-1 rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-purple-500 focus:outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleCreateSpace}
-                          disabled={!newSpaceName.trim() || isSubmittingSpace}
-                          className="px-3 py-1.5 rounded-xl bg-purple-600 text-white text-xs font-semibold hover:bg-purple-500 disabled:opacity-50"
-                        >
-                          {isSubmittingSpace ? 'Creating...' : 'Create'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsCreatingSpace(false);
-                            setNewSpaceName('');
-                          }}
-                          className="px-2.5 py-1.5 rounded-xl border border-[var(--border)] text-xs text-neutral-500 hover:text-neutral-900 dark:hover:text-white"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    ) : (
-                      <select
-                        value={selectedSpaceId}
-                        onChange={e => handleSpaceChange(e.target.value)}
-                        className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-purple-500 focus:outline-none"
-                      >
-                        <option value="">-- Select ClickUp Space (Optional) --</option>
-                        {clickupSpaces.map(sp => (
-                          <option key={sp.id} value={sp.id}>
-                            {sp.name}
-                          </option>
-                        ))}
-                      </select>
-                    )}
+              {/* ClickUp Destination Section */}
+              <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] overflow-hidden">
+                <div className="flex items-center justify-between gap-2 px-3.5 py-2 border-b border-[var(--border-subtle)]">
+                  <div className="flex items-center gap-2">
+                    <FolderKanban className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-primary)]">
+                      ClickUp Destination
+                    </span>
                   </div>
+                  {!isClickupConnected && (
+                    <span className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
+                      Connect ClickUp in Settings to sync spaces &amp; lists
+                    </span>
+                  )}
+                </div>
 
-                  {/* Folder & List Selectors */}
-                  {selectedSpaceId && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
-                          Folder (Optional)
-                        </label>
-                        <select
-                          value={selectedFolderId}
-                          onChange={e => handleFolderChange(e.target.value)}
-                          disabled={isLoadingLists}
-                          className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-purple-500 focus:outline-none disabled:opacity-50"
-                        >
-                          <option value="">Folderless Lists (Direct)</option>
-                          {availableFolders.map(folder => (
-                            <option key={folder.id} value={folder.id}>
-                              {folder.name}
-                            </option>
-                          ))}
-                        </select>
+                {(clickupActionError || isClickupConnected) && (
+                  <div className="p-3.5 space-y-3">
+                    {clickupActionError && (
+                      <div role="alert" className="callout callout-danger text-[11px]">
+                        {clickupActionError}
                       </div>
+                    )}
 
-                      <div>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="text-xs font-semibold text-neutral-700 dark:text-white/80 flex items-center gap-1.5">
-                            <span>ClickUp List</span>
-                            {isLoadingLists && <Loader2 className="h-3 w-3 animate-spin text-purple-500" />}
-                          </label>
-                          {!isCreatingList && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsCreatingList(true);
-                                setClickupActionError(null);
-                              }}
-                              className="flex items-center gap-1 text-[11px] font-semibold text-purple-600 dark:text-purple-400 hover:underline cursor-pointer"
-                            >
-                              <Plus className="h-3 w-3" />
-                              <span>New List</span>
-                            </button>
+                    {isClickupConnected && (
+                      <div className="space-y-3">
+                        {/* Space Selector + Inline Creator */}
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <label className="field-label !mb-0">
+                              ClickUp Space
+                            </label>
+                            {!isCreatingSpace && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsCreatingSpace(true);
+                                  setClickupActionError(null);
+                                }}
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer"
+                                style={{ minHeight: 'auto' }}
+                              >
+                                <Plus className="h-3 w-3" />
+                                <span>New Space</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {isCreatingSpace ? (
+                            <div className="flex items-center gap-1.5">
+                              <input
+                                type="text"
+                                value={newSpaceName}
+                                onChange={e => setNewSpaceName(e.target.value)}
+                                placeholder="New ClickUp Space name (e.g. Acme Corp)"
+                                disabled={isSubmittingSpace}
+                                className="field-control flex-1"
+                              />
+                              <button
+                                type="button"
+                                onClick={handleCreateSpace}
+                                disabled={!newSpaceName.trim() || isSubmittingSpace}
+                                className="button-primary shrink-0"
+                              >
+                                {isSubmittingSpace ? 'Creating...' : 'Create'}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsCreatingSpace(false);
+                                  setNewSpaceName('');
+                                }}
+                                className="button-secondary shrink-0"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="relative">
+                              <select
+                                value={selectedSpaceId}
+                                onChange={e => handleSpaceChange(e.target.value)}
+                                className="field-control pr-8 cursor-pointer"
+                              >
+                                <option value="">-- Select ClickUp Space (Optional) --</option>
+                                {clickupSpaces.map(sp => (
+                                  <option key={sp.id} value={sp.id}>
+                                    {sp.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
+                            </div>
                           )}
                         </div>
 
-                        {isCreatingList ? (
-                          <div className="flex items-center gap-1.5">
-                            <input
-                              type="text"
-                              value={newListName}
-                              onChange={e => setNewListName(e.target.value)}
-                              placeholder="New List name"
-                              disabled={isSubmittingList}
-                              className="flex-1 min-w-0 rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-2.5 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-purple-500 focus:outline-none"
-                            />
-                            <button
-                              type="button"
-                              onClick={handleCreateList}
-                              disabled={!newListName.trim() || isSubmittingList}
-                              className="px-2.5 py-1.5 rounded-xl bg-purple-600 text-white text-xs font-semibold hover:bg-purple-500 disabled:opacity-50 shrink-0"
-                            >
-                              {isSubmittingList ? '...' : 'Add'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsCreatingList(false);
-                                setNewListName('');
-                              }}
-                              className="px-2 py-1.5 rounded-xl border border-[var(--border)] text-xs text-neutral-500 shrink-0"
-                            >
-                              ✕
-                            </button>
+                        {/* Folder & List Selectors */}
+                        {selectedSpaceId && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="field-label">
+                                Folder (Optional)
+                              </label>
+                              <div className="relative">
+                                <select
+                                  value={selectedFolderId}
+                                  onChange={e => handleFolderChange(e.target.value)}
+                                  disabled={isLoadingLists}
+                                  className="field-control pr-8 cursor-pointer"
+                                >
+                                  <option value="">Folderless Lists (Direct)</option>
+                                  {availableFolders.map(folder => (
+                                    <option key={folder.id} value={folder.id}>
+                                      {folder.name}
+                                    </option>
+                                  ))}
+                                </select>
+                                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
+                              </div>
+                            </div>
+
+                            <div>
+                              <div className="flex items-center justify-between mb-1.5">
+                                <label className="field-label !mb-0 flex items-center gap-1.5">
+                                  <span>ClickUp List</span>
+                                  {isLoadingLists && <Loader2 className="h-3 w-3 animate-spin text-[#1d4ed8] dark:text-blue-400" />}
+                                </label>
+                                {!isCreatingList && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setIsCreatingList(true);
+                                      setClickupActionError(null);
+                                    }}
+                                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer"
+                                    style={{ minHeight: 'auto' }}
+                                  >
+                                    <Plus className="h-3 w-3" />
+                                    <span>New List</span>
+                                  </button>
+                                )}
+                              </div>
+
+                              {isCreatingList ? (
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="text"
+                                    value={newListName}
+                                    onChange={e => setNewListName(e.target.value)}
+                                    placeholder="New List name"
+                                    disabled={isSubmittingList}
+                                    className="field-control flex-1 min-w-0"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={handleCreateList}
+                                    disabled={!newListName.trim() || isSubmittingList}
+                                    className="button-primary shrink-0"
+                                  >
+                                    {isSubmittingList ? '...' : 'Add'}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label="Cancel new list"
+                                    onClick={() => {
+                                      setIsCreatingList(false);
+                                      setNewListName('');
+                                    }}
+                                    className="icon-button border border-[var(--border)] bg-[var(--surface)] shrink-0"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="relative">
+                                  <select
+                                    value={selectedListId}
+                                    onChange={e => handleListChange(e.target.value)}
+                                    disabled={isLoadingLists}
+                                    className="field-control pr-8 cursor-pointer"
+                                  >
+                                    <option value="">-- Select List --</option>
+                                    {availableLists.map(list => (
+                                      <option key={list.id} value={list.id}>
+                                        {list.name}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        ) : (
-                          <select
-                            value={selectedListId}
-                            onChange={e => handleListChange(e.target.value)}
-                            disabled={isLoadingLists}
-                            className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-purple-500 focus:outline-none disabled:opacity-50"
-                          >
-                            <option value="">-- Select List --</option>
-                            {availableLists.map(list => (
-                              <option key={list.id} value={list.id}>
-                                {list.name}
-                              </option>
-                            ))}
-                          </select>
+                        )}
+
+                        {/* ClickUp Custom Task Type Field */}
+                        {selectedListId && (clickupCustomFieldOptions.length > 0 || isLoadingTaskTypes) && (
+                          <div>
+                            <label className="field-label flex items-center gap-1.5">
+                              <span>ClickUp Type Custom Field</span>
+                              {isLoadingTaskTypes && <Loader2 className="h-3 w-3 animate-spin text-[#1d4ed8] dark:text-blue-400" />}
+                            </label>
+                            <div className="relative">
+                              <select
+                                value={selectedTaskTypeId}
+                                onChange={e => setSelectedTaskTypeId(e.target.value)}
+                                disabled={isLoadingTaskTypes}
+                                className="field-control pr-8 cursor-pointer"
+                              >
+                                <option value="">-- None --</option>
+                                {clickupCustomFieldOptions.map(opt => (
+                                  <option key={opt.id} value={opt.id}>
+                                    {opt.name}
+                                  </option>
+                                ))}
+                              </select>
+                              <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
+                            </div>
+                          </div>
                         )}
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                )}
+              </div>
 
-                  {/* ClickUp Custom Task Type Field */}
-                  {selectedListId && (clickupCustomFieldOptions.length > 0 || isLoadingTaskTypes) && (
-                    <div>
-                      <label className="flex items-center gap-1.5 text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
-                        <span>ClickUp Type Custom Field</span>
-                        {isLoadingTaskTypes && <Loader2 className="h-3 w-3 animate-spin text-purple-500" />}
-                      </label>
-                      <select
-                        value={selectedTaskTypeId}
-                        onChange={e => setSelectedTaskTypeId(e.target.value)}
-                        disabled={isLoadingTaskTypes}
-                        className="w-full rounded-xl border border-[var(--border)] bg-white dark:bg-[#181818] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-purple-500 focus:outline-none"
-                      >
-                        <option value="">-- None --</option>
-                        {clickupCustomFieldOptions.map(opt => (
-                          <option key={opt.id} value={opt.id}>
-                            {opt.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+              {/* Shared Section: Task Basics */}
+              <div className="space-y-4">
+                <div>
+                  <label className="field-label" htmlFor="disciplinetaskmodal-field-1">
+                    Parent Deliverable Title <span className="text-red-600 dark:text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={title}
+                    onChange={e => setTitle(e.target.value)}
+                    placeholder="e.g. Q4 Product Launch Campaign Pack"
+                    className="field-control"
+                    id="disciplinetaskmodal-field-1"
+                  />
                 </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="field-label !mb-0" htmlFor="disciplinetaskmodal-field-2">
+                      Brief
+                    </label>
+                    <span className="text-[11px] text-[var(--text-muted)]">
+                      Shared &amp; linked to parent task
+                    </span>
+                  </div>
+                  <textarea
+                    rows={4}
+                    value={description}
+                    onChange={e => setDescription(e.target.value)}
+                    placeholder="Detailed campaign brief, objectives, audience, messaging, and context..."
+                    className="field-control resize-y"
+                    id="disciplinetaskmodal-field-2"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="field-label !mb-0" htmlFor="disciplinetaskmodal-brand-guidelines">
+                      Brand Guidelines Link
+                    </label>
+                    <span className="text-[11px] text-[var(--text-muted)]">
+                      Shared &amp; linked to parent task
+                    </span>
+                  </div>
+                  <input
+                    type="url"
+                    value={brandGuidelines}
+                    onChange={e => setBrandGuidelines(e.target.value)}
+                    placeholder="https://... (Brand book, Notion, Google Drive, Figma)"
+                    className="field-control"
+                    id="disciplinetaskmodal-brand-guidelines"
+                  />
+                </div>
+
+                {/* Account / Client & Project */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="field-label" htmlFor="disciplinetaskmodal-field-3">
+                      Account / Client
+                    </label>
+                    <input
+                      type="text"
+                      list="discipline-client-options"
+                      value={client}
+                      onChange={e => setClient(e.target.value)}
+                      placeholder="Auto-filled from Space/Folder or custom"
+                      className="field-control"
+                      id="disciplinetaskmodal-field-3"
+                    />
+                    <datalist id="discipline-client-options">
+                      {existingClients.map(c => (
+                        <option key={c} value={c} />
+                      ))}
+                    </datalist>
+                  </div>
+
+                  <div>
+                    <label className="field-label" htmlFor="disciplinetaskmodal-field-4">
+                      Project / Campaign
+                    </label>
+                    <input
+                      type="text"
+                      list="discipline-project-options"
+                      value={project}
+                      onChange={e => setProject(e.target.value)}
+                      placeholder="Auto-filled from List or custom"
+                      className="field-control"
+                      id="disciplinetaskmodal-field-4"
+                    />
+                    <datalist id="discipline-project-options">
+                      {existingProjects.map(p => (
+                        <option key={p} value={p} />
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
+
+                {/* Priority & Deadline */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="field-label">
+                      Priority
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      {(['low', 'medium', 'high'] as const).map(p => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setPriority(p)}
+                          className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-[7px] py-1.5 text-xs font-semibold capitalize border transition-colors cursor-pointer ${
+                            priority === p
+                              ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
+                              : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]'
+                          }`}
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${
+                              p === 'high'
+                                ? 'bg-red-600 dark:bg-red-400'
+                                : p === 'medium'
+                                ? 'bg-amber-600 dark:bg-amber-400'
+                                : 'bg-emerald-600 dark:bg-emerald-400'
+                            }`}
+                          />
+                          <span>{p}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="field-label !mb-0" htmlFor="disciplinetaskmodal-field-5">
+                        Target Deadline
+                      </label>
+                      <div className="flex items-center gap-1 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => setQuickDate(1)}
+                          className="text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer"
+                          style={{ minHeight: 'auto' }}
+                        >
+                          Tomorrow
+                        </button>
+                        <span className="text-[var(--text-muted)]">·</span>
+                        <button
+                          type="button"
+                          onClick={() => setQuickDate(7)}
+                          className="text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer"
+                          style={{ minHeight: 'auto' }}
+                        >
+                          1W
+                        </button>
+                        <span className="text-[var(--text-muted)]">·</span>
+                        <button
+                          type="button"
+                          onClick={() => setQuickDate(null, true)}
+                          className="text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer"
+                          style={{ minHeight: 'auto' }}
+                        >
+                          End Month
+                        </button>
+                      </div>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="date"
+                        value={dueDate}
+                        onChange={e => setDueDate(e.target.value)}
+                        className="field-control tabular-nums cursor-pointer"
+                        id="disciplinetaskmodal-field-5"
+                      />
+                      {dueDate && (
+                        <button
+                          type="button"
+                          onClick={() => setDueDate('')}
+                          title="Clear deadline"
+                          aria-label="Clear deadline"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                          style={{ minHeight: 'auto' }}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content Discipline Fields */}
+              {needsContent && (
+                <ContentSpecFields
+                  idPrefix="disciplinetaskmodal"
+                  contentType={contentType}
+                  onChangeContentType={setContentType}
+                  contentSpecifications={contentSpecifications}
+                  onChangeContentSpecifications={setContentSpecifications}
+                  sourceContentReferences={sourceContentReferences}
+                  onChangeSourceContentReferences={setSourceContentReferences}
+                />
+              )}
+
+              {/* Design Discipline Fields */}
+              {needsDesign && (
+                <DesignSpecFields
+                  idPrefix="disciplinetaskmodal"
+                  assetType={assetType}
+                  onChangeAssetType={setAssetType}
+                  designSpecifications={designSpecifications}
+                  onChangeDesignSpecifications={setDesignSpecifications}
+                  brandAssetsReferences={brandAssetsReferences}
+                  onChangeBrandAssetsReferences={setBrandAssetsReferences}
+                />
               )}
             </div>
 
-            {/* Shared Section: Task Basics */}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-1">
-                  Parent Deliverable Title <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={title}
-                  onChange={e => setTitle(e.target.value)}
-                  placeholder="e.g. Q4 Product Launch Campaign Pack"
-                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none"
-                  id="disciplinetaskmodal-field-1"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-neutral-700 dark:text-white/80" htmlFor="disciplinetaskmodal-field-2">
-                    Brief
-                  </label>
-                  <span className="text-[11px] text-[var(--text-secondary)]">
-                    Shared &amp; linked to parent task
-                  </span>
-                </div>
-                <textarea
-                  rows={4}
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  placeholder="Detailed campaign brief, objectives, audience, messaging, and context..."
-                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none resize-y"
-                  id="disciplinetaskmodal-field-2"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-neutral-700 dark:text-white/80" htmlFor="disciplinetaskmodal-brand-guidelines">
-                    Brand Guidelines Link
-                  </label>
-                  <span className="text-[11px] text-[var(--text-secondary)]">
-                    Shared &amp; linked to parent task
-                  </span>
-                </div>
-                <input
-                  type="url"
-                  value={brandGuidelines}
-                  onChange={e => setBrandGuidelines(e.target.value)}
-                  placeholder="https://... (Brand book, Notion, Google Drive, Figma)"
-                  className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none"
-                  id="disciplinetaskmodal-brand-guidelines"
-                />
-              </div>
-
-              {/* Account / Client & Project */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-3">
-                    Account / Client
-                  </label>
-                  <input
-                    type="text"
-                    list="discipline-client-options"
-                    value={client}
-                    onChange={e => setClient(e.target.value)}
-                    placeholder="Auto-filled from Space/Folder or custom"
-                    className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none"
-                    id="disciplinetaskmodal-field-3"
-                  />
-                  <datalist id="discipline-client-options">
-                    {existingClients.map(c => (
-                      <option key={c} value={c} />
-                    ))}
-                  </datalist>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1" htmlFor="disciplinetaskmodal-field-4">
-                    Project / Campaign
-                  </label>
-                  <input
-                    type="text"
-                    list="discipline-project-options"
-                    value={project}
-                    onChange={e => setProject(e.target.value)}
-                    placeholder="Auto-filled from List or custom"
-                    className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none"
-                    id="disciplinetaskmodal-field-4"
-                  />
-                  <datalist id="discipline-project-options">
-                    {existingProjects.map(p => (
-                      <option key={p} value={p} />
-                    ))}
-                  </datalist>
-                </div>
-              </div>
-
-              {/* Priority & Deadline */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-700 dark:text-white/80 mb-1">
-                    Priority
-                  </label>
-                  <div className="flex items-center gap-1.5">
-                    {(['low', 'medium', 'high'] as const).map(p => (
-                      <button
-                        key={p}
-                        type="button"
-                        onClick={() => setPriority(p)}
-                        className={`flex-1 rounded-xl py-1.5 text-xs font-semibold capitalize border transition-all cursor-pointer ${
-                          priority === p
-                            ? p === 'high'
-                              ? 'bg-red-500/15 border-red-500 text-red-600 dark:text-red-400'
-                              : p === 'medium'
-                              ? 'bg-amber-500/15 border-amber-500 text-amber-600 dark:text-amber-400'
-                              : 'bg-emerald-500/15 border-emerald-500 text-emerald-600 dark:text-emerald-400'
-                            : 'border-[var(--border)] bg-[var(--surface-muted)] text-[var(--text-secondary)] hover:text-neutral-900 dark:hover:text-white'
-                        }`}
-                      >
-                        {p}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-semibold text-neutral-700 dark:text-white/80" htmlFor="disciplinetaskmodal-field-5">
-                      Target Deadline (Optional)
-                    </label>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setQuickDate(1)}
-                        className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                      >
-                        Tomorrow
-                      </button>
-                      <span className="text-[11px] text-neutral-300 dark:text-white/20">·</span>
-                      <button
-                        type="button"
-                        onClick={() => setQuickDate(7)}
-                        className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                      >
-                        1W
-                      </button>
-                      <span className="text-[11px] text-neutral-300 dark:text-white/20">·</span>
-                      <button
-                        type="button"
-                        onClick={() => setQuickDate(null, true)}
-                        className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                      >
-                        End Month
-                      </button>
-                    </div>
-                  </div>
-                  <div className="relative">
-                    <input
-                      type="date"
-                      value={dueDate}
-                      onChange={e => setDueDate(e.target.value)}
-                      className="w-full rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none"
-                      id="disciplinetaskmodal-field-5"
-                    />
-                    {dueDate && (
-                      <button
-                        type="button"
-                        onClick={() => setDueDate('')}
-                        title="Clear deadline"
-                        className="absolute right-2.5 top-2.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-white text-[11px]"
-                      >
-                        ✕
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Content Discipline Fields */}
-            {needsContent && (
-              <ContentSpecFields
-                idPrefix="disciplinetaskmodal"
-                contentType={contentType}
-                onChangeContentType={setContentType}
-                contentSpecifications={contentSpecifications}
-                onChangeContentSpecifications={setContentSpecifications}
-                sourceContentReferences={sourceContentReferences}
-                onChangeSourceContentReferences={setSourceContentReferences}
-              />
-            )}
-
-            {/* Design Discipline Fields */}
-            {needsDesign && (
-              <DesignSpecFields
-                idPrefix="disciplinetaskmodal"
-                assetType={assetType}
-                onChangeAssetType={setAssetType}
-                designSpecifications={designSpecifications}
-                onChangeDesignSpecifications={setDesignSpecifications}
-                brandAssetsReferences={brandAssetsReferences}
-                onChangeBrandAssetsReferences={setBrandAssetsReferences}
-              />
-            )}
-
             {/* Footer Buttons */}
-            <div className="flex items-center justify-between pt-2 border-t border-[var(--border)]">
+            <div className="dialog-footer !justify-between flex-wrap">
               <span className="text-[11px] text-[var(--text-secondary)]">
                 {selectedDisciplines.length === 2
                   ? 'Creates parent task + Content & Design subtasks in Pipeline.'
@@ -920,14 +958,14 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="px-4 py-2 rounded-xl border border-[var(--border)] text-xs font-semibold text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+                  className="button-secondary"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={!title.trim() || selectedDisciplines.length === 0 || isSubmitting}
-                  className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-xs font-semibold text-white shadow-md shadow-blue-500/20 transition-all cursor-pointer disabled:opacity-40"
+                  className="button-primary"
                 >
                   {isSubmitting
                     ? 'Creating...'

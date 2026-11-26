@@ -53,30 +53,30 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
 
   return (
     <div className="space-y-2" ref={containerRef}>
-      {/* Current selection summary card if selected and not actively searching */}
+      {/* Current selection summary if selected and not actively searching */}
       {selectedMember && !isOpen ? (
-        <div className="flex items-center justify-between rounded-xl border border-indigo-200 dark:border-indigo-800/40 bg-indigo-50/50 dark:bg-indigo-950/30 p-2.5 transition-all">
+        <div className="flex items-center justify-between rounded-[7px] border border-[var(--accent)]/40 bg-[var(--accent-soft)] p-2.5 transition-colors">
           <div className="flex items-center gap-2.5 min-w-0">
             {selectedMember.profilePicture ? (
               <img
                 src={selectedMember.profilePicture}
                 alt={selectedMember.username}
-                className="h-7 w-7 rounded-full object-cover shrink-0 border border-indigo-300 dark:border-indigo-700"
+                className="h-7 w-7 rounded-[6px] object-cover shrink-0 border border-[var(--border)]"
               />
             ) : (
               <div
-                style={{ backgroundColor: selectedMember.color || '#6366f1' }}
-                className="flex h-7 w-7 items-center justify-center rounded-full text-[11px] font-bold text-white shrink-0 shadow-xs"
+                style={{ backgroundColor: selectedMember.color || '#1d4ed8' }}
+                className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[11px] font-bold text-white shrink-0"
               >
                 {selectedMember.initials || (selectedMember.username ? selectedMember.username.slice(0, 2).toUpperCase() : '??')}
               </div>
             )}
             <div className="min-w-0">
-              <p className="text-xs font-semibold text-neutral-900 dark:text-white truncate">
+              <p className="text-xs font-semibold text-[var(--text-primary)] truncate">
                 {selectedMember.username}
               </p>
               {selectedMember.email && (
-                <p className="text-[10px] text-neutral-500 dark:text-white/40 truncate">
+                <p className="text-[11px] text-[var(--text-secondary)] truncate">
                   {selectedMember.email}
                 </p>
               )}
@@ -91,7 +91,8 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
                 setIsOpen(true);
                 setTimeout(() => inputRef.current?.focus(), 50);
               }}
-              className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:underline px-1.5 py-0.5 rounded cursor-pointer"
+              className="text-[11px] font-semibold text-[#1d4ed8] dark:text-blue-400 hover:underline px-1.5 py-0.5 rounded-[5px] cursor-pointer"
+              style={{ minHeight: 'auto' }}
             >
               Change
             </button>
@@ -100,7 +101,9 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
               disabled={disabled}
               onClick={() => onSelect(null)}
               title="Clear ClickUp mapping"
-              className="rounded p-1 text-neutral-400 hover:text-red-500 hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+              aria-label="Clear ClickUp mapping"
+              className="rounded-[5px] p-1 text-[var(--text-muted)] hover:text-red-600 dark:hover:text-red-400 hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+              style={{ minHeight: 'auto' }}
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -110,7 +113,7 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
         /* In-Line Search Input and Results */
         <div className="relative">
           <div className="relative">
-            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-neutral-400 dark:text-white/40">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--text-muted)]">
               <Search className="h-3.5 w-3.5" />
             </div>
             <input
@@ -124,22 +127,23 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
                 setIsOpen(true);
               }}
               placeholder="Search ClickUp member by name or email..."
-              className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-white dark:bg-[#141414] py-2 pl-9 pr-8 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
+              className="field-control pl-9 pr-8"
             />
             {searchQuery && (
               <button
                 type="button"
+                aria-label="Clear ClickUp search"
                 onClick={() => setSearchQuery('')}
-                className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-xs text-neutral-400 hover:text-neutral-700 dark:hover:text-white cursor-pointer"
+                className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
               >
-                ×
+                <X className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
 
           {/* Dropdown Options */}
           {isOpen && (
-            <div className="mt-1.5 w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414] shadow-xl p-1.5 z-30 max-h-56 overflow-y-auto space-y-0.5 animate-in fade-in duration-100">
+            <div className="menu-surface mt-1.5 w-full rounded-[9px] border border-[var(--border)] p-1.5 z-30 max-h-56 overflow-y-auto space-y-0.5">
               <button
                 type="button"
                 onClick={() => {
@@ -147,28 +151,28 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
                   setIsOpen(false);
                   setSearchQuery('');
                 }}
-                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-[6px] text-xs transition-colors cursor-pointer ${
                   !selectedMemberId
-                    ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold'
-                    : 'text-neutral-600 dark:text-white/60 hover:bg-neutral-100 dark:hover:bg-white/5'
+                    ? 'bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 font-semibold'
+                    : 'text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-neutral-200 dark:bg-white/10 text-neutral-500 dark:text-white/40 text-[10px]">
-                    ∅
+                  <div className="flex h-6 w-6 items-center justify-center rounded-[5px] bg-[var(--surface-subtle)] border border-[var(--border)] text-[var(--text-muted)] text-[10px]">
+                    —
                   </div>
-                  <span>-- No ClickUp Mapping (Unassigned) --</span>
+                  <span>No ClickUp Mapping (Unassigned)</span>
                 </div>
                 {!selectedMemberId && <Check className="h-3.5 w-3.5 shrink-0" />}
               </button>
 
               {isLoading ? (
-                <div className="flex items-center justify-center gap-2 py-4 text-xs text-neutral-500 dark:text-white/40">
-                  <Loader2 className="h-4 w-4 animate-spin text-indigo-500" />
+                <div className="flex items-center justify-center gap-2 py-4 text-xs text-[var(--text-secondary)]">
+                  <Loader2 className="h-4 w-4 animate-spin text-[#1d4ed8] dark:text-blue-400" />
                   <span>Loading ClickUp members...</span>
                 </div>
               ) : filteredMembers.length === 0 ? (
-                <div className="py-4 text-center text-xs text-neutral-400 dark:text-white/40">
+                <div className="py-4 text-center text-xs text-[var(--text-secondary)]">
                   No ClickUp members match &ldquo;{searchQuery}&rdquo;
                 </div>
               ) : (
@@ -183,10 +187,10 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
                         setIsOpen(false);
                         setSearchQuery('');
                       }}
-                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${
+                      className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-[6px] text-xs transition-colors cursor-pointer ${
                         isCurrent
-                          ? 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-semibold'
-                          : 'text-neutral-800 dark:text-white hover:bg-neutral-100 dark:hover:bg-white/5'
+                          ? 'bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 font-semibold'
+                          : 'text-[var(--text-primary)] hover:bg-[var(--surface-subtle)]'
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -194,12 +198,12 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
                           <img
                             src={m.profilePicture}
                             alt={m.username}
-                            className="h-6 w-6 rounded-full object-cover shrink-0"
+                            className="h-6 w-6 rounded-[5px] object-cover shrink-0"
                           />
                         ) : (
                           <div
-                            style={{ backgroundColor: m.color || '#6366f1' }}
-                            className="flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold text-white shrink-0"
+                            style={{ backgroundColor: m.color || '#1d4ed8' }}
+                            className="flex h-6 w-6 items-center justify-center rounded-[5px] text-[10px] font-bold text-white shrink-0"
                           >
                             {m.initials || (m.username ? m.username.slice(0, 2).toUpperCase() : '??')}
                           </div>
@@ -207,13 +211,13 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
                         <div className="text-left min-w-0">
                           <p className="truncate font-medium">{m.username}</p>
                           {m.email && (
-                            <p className="text-[10px] text-neutral-400 dark:text-white/40 truncate">
+                            <p className="text-[11px] text-[var(--text-secondary)] truncate">
                               {m.email}
                             </p>
                           )}
                         </div>
                       </div>
-                      {isCurrent && <Check className="h-3.5 w-3.5 text-indigo-500 shrink-0 ml-2" />}
+                      {isCurrent && <Check className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400 shrink-0 ml-2" />}
                     </button>
                   );
                 })
@@ -224,12 +228,13 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
       )}
 
       {members.length === 0 && !isLoading && onRefresh && (
-        <div className="flex items-center justify-between text-[11px] text-neutral-500 dark:text-white/40 px-1">
+        <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)] px-0.5">
           <span>No workspace members loaded.</span>
           <button
             type="button"
             onClick={onRefresh}
-            className="flex items-center gap-1 text-indigo-600 dark:text-indigo-400 hover:underline font-semibold cursor-pointer"
+            className="inline-flex items-center gap-1 text-[#1d4ed8] dark:text-blue-400 hover:underline font-semibold cursor-pointer"
+            style={{ minHeight: 'auto' }}
           >
             <RefreshCw className="h-3 w-3" />
             <span>Fetch from ClickUp</span>

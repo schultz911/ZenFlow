@@ -34,7 +34,7 @@
 
 ### 1. Cognitive Load & Workload Scoring
 
-- **Dynamic Load Scoring**: Tasks are weighted by cognitive strain (`Low = 1`, `Medium = 2`, `High = 3`), dynamically calculating active workload pressure per team member.
+- **Dynamic Load Scoring**: Tasks are weighted by cognitive strain (`Low = 1`, `Medium = 1.5`, `High = 2`), dynamically calculating active workload pressure per team member.
 - **WIP Limits & Demand Alarms**: Configurable Work-In-Progress thresholds flag overloaded members with immediate visual warnings and demand alerts before task assignments breach capacity.
 - **Billable Hours & Cycle Metrics**: Active time accumulation while tasks reside in `in_progress`, alongside manual time adjustments, cycle tracking, and historical activity trails.
 

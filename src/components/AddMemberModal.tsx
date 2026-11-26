@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, UserPlus, AlertCircle, Loader2, ShieldAlert } from 'lucide-react';
+import { X, UserPlus, AlertCircle, Loader2, ShieldAlert, ChevronDown } from 'lucide-react';
 import { useAuth, useClickUp, useWorkspace } from '../context/DashboardContext';
 import { Role } from '../types';
 import { DialogPanel } from './ui/DialogPanel';
@@ -133,151 +133,157 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose,
             aria-label="Add team member"
             onClose={onClose}
             busy={isSubmitting}
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.16, ease: [0.2, 0.7, 0.2, 1] }}
             onClick={e => e.stopPropagation()}
             id="add-member-modal"
-            className="w-full max-w-lg rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 my-auto"
+            className="w-full max-w-lg my-auto flex flex-col overflow-hidden"
           >
-            <div className="flex items-center justify-between pb-4 border-b border-neutral-100 dark:border-white/5">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                  <UserPlus className="h-5 w-5" />
+            <div className="dialog-header">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-400">
+                  <UserPlus className="h-4 w-4" />
                 </div>
-                <div>
-                  <h2 className="text-base font-semibold tracking-tight">Add Team Member</h2>
-                  <p className="text-xs text-[var(--text-secondary)]">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">Add Team Member</h2>
+                  <p className="text-[11px] text-[var(--text-secondary)] truncate">
                     Provision a team member, select roles, and configure permissions.
                   </p>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={onClose}
                 disabled={isSubmitting}
                 aria-label="Close modal"
-                className="rounded-lg p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white transition-colors cursor-pointer"
+                className="icon-button shrink-0"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="pt-4 space-y-4">
-              {error && (
-                <div className="flex items-start gap-2 rounded-xl bg-red-500/10 border border-red-500/20 p-3 text-xs text-red-600 dark:text-red-400">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>{error}</span>
-                </div>
-              )}
+            <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+              <div className="p-5 overflow-y-auto flex-1 space-y-4">
+                {error && (
+                  <div role="alert" className="callout callout-danger flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>{error}</span>
+                  </div>
+                )}
 
-              <div>
-                <label className="text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1 block" htmlFor="addmember-name">
-                  Full Name
-                </label>
-                <input
-                  id="addmember-name"
-                  type="text"
-                  required
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="e.g. Ananya Sharma"
-                  className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] px-3 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1 block" htmlFor="addmember-email">
-                  Google Workspace Email
-                </label>
-                <input
-                  id="addmember-email"
-                  type="email"
-                  required
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="name@zensciences.com"
-                  className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] px-3 py-2 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                />
-              </div>
-
-              <MemberRoleFields
-                idPrefix="addmember"
-                role={role}
-                onChangeRole={setRole}
-                isAdministrator={isAdministratorPrivilege}
-                onChangeAdministrator={setIsAdministratorPrivilege}
-                canAssignAdmin={canAssignAdmin}
-                isBusinessLead={isBusinessLead}
-                onChangeBusinessLead={checked => {
-                  setIsBusinessLead(checked);
-                  if (checked) {
-                    setCreativeDirectorId('');
-                    setClusterLeadId('');
-                  }
-                }}
-                isCreativeDirector={isCreativeDirector}
-                onChangeCreativeDirector={setIsCreativeDirector}
-                isClusterLead={isClusterLead}
-                onChangeClusterLead={setIsClusterLead}
-                isTeamLead={isTeamLead}
-                onChangeTeamLead={setIsTeamLead}
-                creativeDirectorId={creativeDirectorId}
-                onChangeCreativeDirectorId={setCreativeDirectorId}
-                clusterLeadId={clusterLeadId}
-                onChangeClusterLeadId={setClusterLeadId}
-                creativeDirectors={creativeDirectors}
-                clusterLeads={clusterLeads}
-              />
-
-              {isClickupConnected && clickupMembers.length > 0 && (
                 <div>
-                  <label className="text-xs uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1 block" htmlFor="addmember-clickup">
-                    Link ClickUp User (Optional)
+                  <label className="field-label" htmlFor="addmember-name">
+                    Full Name
                   </label>
-                  <select
-                    id="addmember-clickup"
-                    value={selectedClickupUserId}
-                    onChange={e => setSelectedClickupUserId(e.target.value)}
-                    className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface)] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none cursor-pointer"
-                  >
-                    <option value="">— Auto-match by email —</option>
-                    {clickupMembers.map(m => (
-                      <option key={m.id} value={m.id}>
-                        {m.username} ({m.email})
-                      </option>
-                    ))}
-                  </select>
+                  <input
+                    id="addmember-name"
+                    type="text"
+                    required
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="e.g. Ananya Sharma"
+                    className="field-control"
+                  />
                 </div>
-              )}
 
-              <div className="pt-2 flex items-center justify-end gap-2">
+                <div>
+                  <label className="field-label" htmlFor="addmember-email">
+                    Google Workspace Email
+                  </label>
+                  <input
+                    id="addmember-email"
+                    type="email"
+                    required
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="name@zensciences.com"
+                    className="field-control"
+                  />
+                </div>
+
+                <MemberRoleFields
+                  idPrefix="addmember"
+                  role={role}
+                  onChangeRole={setRole}
+                  isAdministrator={isAdministratorPrivilege}
+                  onChangeAdministrator={setIsAdministratorPrivilege}
+                  canAssignAdmin={canAssignAdmin}
+                  isBusinessLead={isBusinessLead}
+                  onChangeBusinessLead={checked => {
+                    setIsBusinessLead(checked);
+                    if (checked) {
+                      setCreativeDirectorId('');
+                      setClusterLeadId('');
+                    }
+                  }}
+                  isCreativeDirector={isCreativeDirector}
+                  onChangeCreativeDirector={setIsCreativeDirector}
+                  isClusterLead={isClusterLead}
+                  onChangeClusterLead={setIsClusterLead}
+                  isTeamLead={isTeamLead}
+                  onChangeTeamLead={setIsTeamLead}
+                  creativeDirectorId={creativeDirectorId}
+                  onChangeCreativeDirectorId={setCreativeDirectorId}
+                  clusterLeadId={clusterLeadId}
+                  onChangeClusterLeadId={setClusterLeadId}
+                  creativeDirectors={creativeDirectors}
+                  clusterLeads={clusterLeads}
+                />
+
+                {isClickupConnected && clickupMembers.length > 0 && (
+                  <div>
+                    <label className="field-label" htmlFor="addmember-clickup">
+                      Link ClickUp User (Optional)
+                    </label>
+                    <div className="relative">
+                      <select
+                        id="addmember-clickup"
+                        value={selectedClickupUserId}
+                        onChange={e => setSelectedClickupUserId(e.target.value)}
+                        className="field-control pr-8 cursor-pointer"
+                      >
+                        <option value="">— Auto-match by email —</option>
+                        {clickupMembers.map(m => (
+                          <option key={m.id} value={m.id}>
+                            {m.username} ({m.email})
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
+                    </div>
+                  </div>
+                )}
+
+                {isClickupConnected && (
+                  <div className="callout callout-info flex items-start gap-2.5 text-[11px]">
+                    <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" />
+                    <p>
+                      The new member will be able to sign in immediately using their registered Google email.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="dialog-footer">
                 <button
                   type="button"
                   onClick={onClose}
-                  className="rounded-xl border border-[var(--border)] px-3.5 py-2 text-xs font-medium text-neutral-700 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-white/5 cursor-pointer"
+                  className="button-secondary"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 disabled:opacity-50 transition-colors cursor-pointer"
+                  className="button-primary"
                 >
                   {isSubmitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
                   <span>{isSubmitting ? 'Adding...' : 'Add Team Member'}</span>
                 </button>
               </div>
             </form>
-
-            {isClickupConnected && (
-              <div className="mt-4 rounded-xl border border-blue-500/15 bg-blue-500/5 p-3 flex items-start gap-2.5">
-                <ShieldAlert className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
-                <p className="text-[11px] text-[var(--text-secondary)]">
-                  The new member will be able to sign in immediately using their registered Google email.
-                </p>
-              </div>
-            )}
           </DialogPanel>
         </motion.div>
       )}

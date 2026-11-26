@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import { createCloudDiskPersistenceAdapter, createMemoryPersistenceAdapter, createWorkspaceRepository } from '../server/store';
 import { reconcileSnapshot } from '../src/lib/reconcile';
 import type { QueuedMutation } from '../src/types';
-import { getAssignedHoursByMemberAndDate, getTaskBillableMs, getUserDailyAssignedHours, parseLocalDate } from '../src/utils/workload';
+import { getAssignedHoursByMemberAndDate, getTaskBillableMs, getUserDailyAssignedHours } from '../src/utils/workload';
 import { fixtureServer, fixtureTask } from './fixtures';
 
 test('overlapping delete and edit preserve the other task', { timeout: 5000 }, async () => {
@@ -206,7 +206,7 @@ test('batched analytics allocations match the daily calculation for shared work'
     const dates = ['2026-01-05', '2026-01-07', '2026-01-10'];
     const allocations = getAssignedHoursByMemberAndDate(tasks, dates);
     for (const date of dates) {
-      assert.equal(allocations.get('alice')?.get(date) || 0, getUserDailyAssignedHours(alice, tasks, parseLocalDate(date)!));
+      assert.equal(allocations.get('alice')?.get(date) || 0, getUserDailyAssignedHours(alice, tasks, new Date(`${date}T12:00:00+05:30`)));
     }
   } finally {
     await server.close();

@@ -87,7 +87,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
           <div className="flex items-center gap-2.5 shrink-0">
             <div
               id="zenflow-logo"
-              className="flex h-8 w-8 items-center justify-center rounded-[7px] bg-[#121418] dark:bg-[#1e2430] border border-neutral-800 dark:border-white/10 text-blue-500 shrink-0"
+              className="flex h-8 w-8 items-center justify-center rounded-[7px] bg-[#121418] dark:bg-[#1e2430] border border-[#262b36] dark:border-white/10 text-blue-500 shrink-0"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -102,10 +102,10 @@ const HeaderComponent: React.FC<HeaderProps> = ({
               </svg>
             </div>
             <div className="flex items-baseline leading-none" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
-              <span className="text-xl font-bold tracking-tight text-neutral-900 dark:text-white">
+              <span className="text-xl font-bold tracking-tight text-[var(--text-primary)]">
                 zen
               </span>
-              <span className="font-flowy text-2xl font-bold text-blue-600 dark:text-blue-400 ml-0.5 select-none">
+              <span className="font-flowy text-2xl font-bold text-[#1d4ed8] dark:text-blue-400 ml-0.5 select-none">
                 Flow
               </span>
             </div>
@@ -246,7 +246,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
               {userDropdownOpen && (
                 <div
                   id="user-profile-menu"
-                  className="menu-surface absolute right-0 mt-1.5 w-72 rounded-[10px] border border-[var(--border)] p-1.5 z-50 text-[var(--text-primary)]"
+                  className="menu-surface absolute right-0 mt-1.5 w-72 rounded-[9px] border border-[var(--border)] p-1.5 z-50 text-[var(--text-primary)]"
                 >
                   {currentUser && (
                     <div className="border-b border-[var(--border-subtle)] px-2.5 pb-2.5 pt-1.5">

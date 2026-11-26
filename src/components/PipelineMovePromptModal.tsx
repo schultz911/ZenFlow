@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { Task, CognitiveLoad, User } from '../types';
 import { X, Calendar, Clock, Brain, ArrowRight, AlertCircle } from 'lucide-react';
 import { getCognitiveLoadLabel } from '../utils/workload';
+import { DialogPanel } from './ui/DialogPanel';
 
 interface PipelineMovePromptModalProps {
   isOpen: boolean;
@@ -53,9 +55,7 @@ export const PipelineMovePromptModal: React.FC<PipelineMovePromptModalProps> = (
     setError('');
   }, [isOpen, task]);
 
-  if (!isOpen || !task || !targetUser) return null;
-
-  const startDate = task.startDate || todayDate;
+  const startDate = task?.startDate || todayDate;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,138 +79,172 @@ export const PipelineMovePromptModal: React.FC<PipelineMovePromptModalProps> = (
   const cognitiveOptions: CognitiveLoad[] = ['low', 'medium', 'high'];
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 dark:bg-black/70 backdrop-blur-sm p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-2xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#141414] shadow-2xl overflow-hidden"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between border-b border-neutral-200 dark:border-white/10 px-5 py-4">
-          <div>
-            <h3 className="text-base font-semibold text-neutral-900 dark:text-white">
-              Assign Pipeline Task
-            </h3>
-            <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5 truncate max-w-[320px]">
-              {task.title}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 dark:hover:bg-white/10 hover:text-neutral-600 dark:hover:text-neutral-200 transition-colors"
+    <AnimatePresence>
+      {isOpen && task && targetUser && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
+          onClick={e => {
+            if (e.target === e.currentTarget) onClose();
+          }}
+        >
+          <DialogPanel
+            aria-label="Assign pipeline task"
+            onClose={onClose}
+            busy={false}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.16, ease: [0.2, 0.7, 0.2, 1] }}
+            onClick={e => e.stopPropagation()}
+            className="w-full max-w-md my-auto overflow-hidden"
           >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          <div className="rounded-xl border border-neutral-200 dark:border-white/10 bg-neutral-50 dark:bg-white/[0.03] px-3.5 py-2.5 flex items-center justify-between text-xs">
-            <div>
-              <span className="text-neutral-500 dark:text-neutral-400">Assignee: </span>
-              <span className="font-semibold text-neutral-900 dark:text-white">{targetUser.name}</span>
-              <span className="ml-1.5 uppercase text-[10px] font-semibold px-1.5 py-0.5 rounded bg-neutral-200/70 dark:bg-white/10 text-neutral-600 dark:text-neutral-300">
-                {targetUser.role}
-              </span>
-            </div>
-            <div className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium">
-              <Calendar className="h-3.5 w-3.5" />
-              <span>Start: {startDate}</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="flex items-center gap-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
-                <Clock className="h-3.5 w-3.5 text-neutral-400" />
-                Estimated Time (hrs) <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="number"
-                min="0.25"
-                step="0.25"
-                value={estimatedHours}
-                onChange={(e) => {
-                  setEstimatedHours(e.target.value);
-                  setError('');
-                }}
-                autoFocus
-                className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#1a1a1a] px-3 py-2 text-sm text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-neutral-900/20 dark:focus:ring-white/20"
-              />
+            <div className="dialog-header">
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
+                  Assign Pipeline Task
+                </h3>
+                <p className="text-[11px] text-[var(--text-secondary)] truncate mt-0.5">
+                  {task.title}
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close dialog"
+                onClick={onClose}
+                className="icon-button shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
 
-            <div>
-              <label className="flex items-center gap-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
-                <Calendar className="h-3.5 w-3.5 text-neutral-400" />
-                Deadline <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => {
-                  setDueDate(e.target.value);
-                  setError('');
-                }}
-                className="w-full rounded-xl border border-neutral-200 dark:border-white/10 bg-white dark:bg-[#1a1a1a] px-3 py-2 text-sm text-neutral-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-neutral-900/20 dark:focus:ring-white/20"
-              />
-            </div>
-          </div>
+            <form onSubmit={handleSubmit}>
+              <div className="p-5 space-y-4">
+                <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5 flex items-center justify-between gap-2 text-xs">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-[var(--text-secondary)] shrink-0">Assignee:</span>
+                    <span className="font-semibold text-[var(--text-primary)] truncate">{targetUser.name}</span>
+                    {targetUser.role && (
+                      <span className="ledger-badge uppercase shrink-0">
+                        {targetUser.role}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 text-emerald-700 dark:text-emerald-400 font-semibold text-[11px] tabular-nums shrink-0">
+                    <Calendar className="h-3 w-3" />
+                    <span>Start {startDate}</span>
+                  </div>
+                </div>
 
-          <div>
-            <label className="flex items-center gap-1.5 text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">
-              <Brain className="h-3.5 w-3.5 text-neutral-400" />
-              Cognitive Load <span className="text-red-500">*</span>
-            </label>
-            <div className="grid grid-cols-3 gap-2">
-              {cognitiveOptions.map((level) => {
-                const active = cognitiveLoad === level;
-                return (
-                  <button
-                    key={level}
-                    type="button"
-                    onClick={() => setCognitiveLoad(level)}
-                    className={`rounded-xl border px-3 py-2 text-xs font-medium transition-all ${
-                      active
-                        ? 'border-neutral-900 dark:border-white bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 shadow-sm'
-                        : 'border-neutral-200 dark:border-white/10 bg-white dark:bg-[#1a1a1a] text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-white/5'
-                    }`}
-                  >
-                    <span className="block capitalize font-semibold">{level}</span>
-                    <span className={`block text-[10px] mt-0.5 truncate ${active ? 'opacity-80' : 'text-neutral-400'}`}>
-                      {getCognitiveLoadLabel(level, targetUser.role)}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="field-label flex items-center gap-1.5" htmlFor="pipeline-move-hours">
+                      <Clock className="h-3 w-3 text-[var(--text-muted)]" />
+                      <span>
+                        Estimated Time (hrs) <span className="text-red-600 dark:text-red-400">*</span>
+                      </span>
+                    </label>
+                    <input
+                      id="pipeline-move-hours"
+                      type="number"
+                      min="0.25"
+                      step="0.25"
+                      value={estimatedHours}
+                      onChange={e => {
+                        setEstimatedHours(e.target.value);
+                        setError('');
+                      }}
+                      autoFocus
+                      className="field-control tabular-nums"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="field-label flex items-center gap-1.5" htmlFor="pipeline-move-deadline">
+                      <Calendar className="h-3 w-3 text-[var(--text-muted)]" />
+                      <span>
+                        Deadline <span className="text-red-600 dark:text-red-400">*</span>
+                      </span>
+                    </label>
+                    <input
+                      id="pipeline-move-deadline"
+                      type="date"
+                      value={dueDate}
+                      onChange={e => {
+                        setDueDate(e.target.value);
+                        setError('');
+                      }}
+                      className="field-control tabular-nums cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="field-label flex items-center gap-1.5">
+                    <Brain className="h-3 w-3 text-[var(--text-muted)]" />
+                    <span>
+                      Cognitive Load <span className="text-red-600 dark:text-red-400">*</span>
                     </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {cognitiveOptions.map(level => {
+                      const active = cognitiveLoad === level;
+                      return (
+                        <button
+                          key={level}
+                          type="button"
+                          onClick={() => setCognitiveLoad(level)}
+                          className={`rounded-[7px] border px-2.5 py-2 text-left transition-colors cursor-pointer ${
+                            active
+                              ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
+                              : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]'
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5 text-xs capitalize font-semibold">
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                                level === 'high'
+                                  ? 'bg-red-600 dark:bg-red-400'
+                                  : level === 'medium'
+                                  ? 'bg-amber-600 dark:bg-amber-400'
+                                  : 'bg-emerald-600 dark:bg-emerald-400'
+                              }`}
+                            />
+                            <span>{level}</span>
+                          </span>
+                          <span className="block text-[10.5px] mt-0.5 truncate text-[var(--text-secondary)]">
+                            {getCognitiveLoadLabel(level, targetUser.role)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
 
-          {error && (
-            <div className="flex items-center gap-2 rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-3 py-2 text-xs text-red-600 dark:text-red-400">
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
+                {error && (
+                  <div role="alert" className="callout callout-danger flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                )}
+              </div>
 
-          <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-100 dark:border-white/5">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-xl px-4 py-2 text-xs font-medium text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="inline-flex items-center gap-1.5 rounded-xl bg-neutral-900 dark:bg-white px-4 py-2 text-xs font-semibold text-white dark:text-neutral-900 hover:opacity-90 transition-opacity"
-            >
-              <span>Assign & Start</span>
-              <ArrowRight className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+              <div className="dialog-footer">
+                <button type="button" onClick={onClose} className="button-secondary">
+                  Cancel
+                </button>
+                <button type="submit" className="button-primary">
+                  <span>Assign &amp; Start</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </form>
+          </DialogPanel>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };

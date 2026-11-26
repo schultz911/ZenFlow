@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, Loader2, X, KeyRound, FolderKanban, Webhook } from 'lucide-react';
+import { Check, Loader2, X, KeyRound, FolderKanban, Webhook, ChevronDown } from 'lucide-react';
 import { useAuth, useClickUp, useWorkspace } from '../context/DashboardContext';
 
 interface OnboardingChecklistProps {
@@ -233,19 +233,20 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
     <section
       id="workspace-onboarding-checklist"
       aria-label="Workspace Setup"
-      className="mb-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] overflow-hidden"
+      className="ledger-frame mb-4"
     >
-      <div className="flex items-center justify-between gap-4 border-b border-[var(--border-subtle)] px-4 py-2.5">
-        <div className="flex items-center gap-3">
-          <h2 className="text-xs font-semibold text-[var(--text-primary)]">Workspace Setup</h2>
-          <span className="text-[11px] font-medium tabular-nums text-[var(--text-secondary)]">
+      <div className="ledger-band flex items-center justify-between gap-4 px-4 py-2.5 sm:px-5">
+        <div className="flex items-center gap-2.5">
+          <h2 className="text-[13px] font-bold tracking-tight text-[var(--text-primary)]">Workspace Setup</h2>
+          <span className="text-[11px] font-semibold tabular-nums text-[var(--text-secondary)]">
             {completedCount}/3 complete
           </span>
         </div>
         <button
           type="button"
           onClick={handleDismiss}
-          className="inline-flex items-center gap-1 rounded-[6px] px-2 py-1 text-[11px] font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] cursor-pointer"
+          className="inline-flex items-center gap-1 rounded-[5px] px-2 py-1 text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+          style={{ minHeight: 'auto' }}
         >
           <span>{allComplete ? 'Close' : 'Skip for now'}</span>
           <X className="h-3.5 w-3.5" />
@@ -254,19 +255,19 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
 
       <div className="divide-y divide-[var(--border-subtle)]">
         {/* Step 1 */}
-        <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="px-4 sm:px-5 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-start gap-2.5 min-w-0">
             <span
               className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums ${
                 step1Done
-                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                  ? 'bg-emerald-600/15 text-emerald-700 dark:text-emerald-400'
                   : 'bg-[var(--surface-subtle)] text-[var(--text-secondary)] border border-[var(--border)]'
               }`}
             >
               {step1Done ? <Check className="h-3 w-3" /> : '1'}
             </span>
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-primary)]">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-primary)]">
                 <KeyRound className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
                 <span>Add personal ClickUp API key</span>
               </div>
@@ -287,12 +288,12 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
                 onChange={e => setApiKeyInput(e.target.value)}
                 placeholder="pk_..."
                 aria-label="Personal ClickUp API key"
-                className="w-48 rounded-[6px] border border-[var(--border)] bg-[var(--canvas)] px-2.5 py-1.5 text-xs font-mono text-[var(--text-primary)] outline-none focus:border-[#1d4ed8]"
+                className="field-control w-48 font-mono"
               />
               <button
                 type="submit"
                 disabled={connectingKey || !apiKeyInput.trim()}
-                className="button-primary text-xs disabled:opacity-50"
+                className="button-primary shrink-0"
               >
                 {connectingKey ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Connect'}
               </button>
@@ -301,21 +302,21 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
         </div>
 
         {/* Step 2 */}
-        <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="px-4 sm:px-5 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-start gap-2.5 min-w-0">
             <span
               className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums ${
                 step2Done
-                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                  ? 'bg-emerald-600/15 text-emerald-700 dark:text-emerald-400'
                   : 'bg-[var(--surface-subtle)] text-[var(--text-secondary)] border border-[var(--border)]'
               }`}
             >
               {step2Done ? <Check className="h-3 w-3" /> : '2'}
             </span>
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-primary)]">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-primary)]">
                 <FolderKanban className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
-                <span>Confirm ClickUp Space & sync tasks</span>
+                <span>Confirm ClickUp Space &amp; sync tasks</span>
               </div>
               <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
                 {!step1Done
@@ -333,24 +334,27 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
           {step1Done && (
             <div className="flex items-center gap-2 shrink-0">
               {clickupSpaces.length > 0 && (
-                <select
-                  aria-label="Default ClickUp Space"
-                  value={spaceIdInput}
-                  onChange={e => setSpaceIdInput(e.target.value)}
-                  className="max-w-[180px] rounded-[6px] border border-[var(--border)] bg-[var(--canvas)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] outline-none focus:border-[#1d4ed8]"
-                >
-                  {clickupSpaces.map(sp => (
-                    <option key={sp.id} value={sp.id}>
-                      {sp.name}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                  <select
+                    aria-label="Default ClickUp Space"
+                    value={spaceIdInput}
+                    onChange={e => setSpaceIdInput(e.target.value)}
+                    className="field-control max-w-[180px] pr-7"
+                  >
+                    {clickupSpaces.map(sp => (
+                      <option key={sp.id} value={sp.id}>
+                        {sp.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
+                </div>
               )}
               <button
                 type="button"
                 disabled={syncingTasks}
                 onClick={handleSyncSpace}
-                className="button-secondary text-xs disabled:opacity-50"
+                className="button-secondary shrink-0"
               >
                 {syncingTasks ? (
                   <>
@@ -368,19 +372,19 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
         </div>
 
         {/* Step 3 */}
-        <div className="px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="px-4 sm:px-5 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-start gap-2.5 min-w-0">
             <span
               className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums ${
                 step3Done
-                  ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                  ? 'bg-emerald-600/15 text-emerald-700 dark:text-emerald-400'
                   : 'bg-[var(--surface-subtle)] text-[var(--text-secondary)] border border-[var(--border)]'
               }`}
             >
               {step3Done ? <Check className="h-3 w-3" /> : '3'}
             </span>
             <div className="min-w-0">
-              <div className="flex items-center gap-1.5 text-xs font-medium text-[var(--text-primary)]">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-primary)]">
                 <Webhook className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
                 <span>Enable real-time ClickUp webhook</span>
               </div>
@@ -397,7 +401,7 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
               type="button"
               disabled={registeringWebhook}
               onClick={handleManualWebhook}
-              className="button-secondary text-xs shrink-0 disabled:opacity-50"
+              className="button-secondary shrink-0"
             >
               {registeringWebhook ? (
                 <>

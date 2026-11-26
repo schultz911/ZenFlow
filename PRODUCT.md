@@ -20,7 +20,7 @@ zenFlow is an internal real-time workload orchestration platform for ZenSciences
 
 ## Positioning
 
-Unlike using ClickUp or a standard kanban board directly, zenFlow pairs cognitive-load scoring (`Low = 1`, `Medium = 2`, `High = 3`), WIP limit alarms, and a live cross-board Free Pool (`< 3h/day` assigned) with two-way ClickUp parent/subtask synchronization.
+Unlike using ClickUp or a standard kanban board directly, zenFlow pairs cognitive-load scoring (`Low = 1`, `Medium = 1.5`, `High = 2`), WIP limit alarms, and a live cross-board Free Pool (`< 3h/day` assigned) with two-way ClickUp parent/subtask synchronization.
 
 ## Operating Context
 
@@ -33,7 +33,7 @@ Unlike using ClickUp or a standard kanban board directly, zenFlow pairs cognitiv
 
 - **Scope:** Internal ZenSciences tool only; no external client-facing views or multi-tenant SaaS requirements.
 - **RBAC & Zero-Trust:** Server-owned Firestore security rules (`allow read, write: if false` for direct client access); strict role-based permissions for board editing, pipeline creation, user provisioning, and superadmin-only database purge.
-- **Metrics:** Working-day daily estimated hour splits, teamwise utilization (`> 3h/day` threshold), individual and team efficiency (`billable hours / time estimated`), and executive analytics with locked historical snapshots.
+- **Metrics:** Working-day daily estimated hour splits, team utilization (at least 3 assigned hours per day), individual and team efficiency (estimated hours divided by billable hours for completed work with both values), and executive analytics with locked historical snapshots.
 - **Theme parity:** Must maintain both light and dark modes across all surfaces.
 
 ## Brand Commitments

@@ -14,6 +14,7 @@ import {
   ArrowRight,
   UserCheck,
   GitFork,
+  ChevronDown,
 } from 'lucide-react';
 
 interface DuplicateTaskModalProps {
@@ -278,343 +279,329 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
           }}
         >
           <DialogPanel aria-label="Duplicate task" onClose={onClose} busy={isSubmitting}
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.16, ease: [0.2, 0.7, 0.2, 1] }}
             onClick={e => e.stopPropagation()}
-            className="w-full max-w-xl rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 relative overflow-hidden"
+            className="w-full max-w-xl my-auto flex flex-col overflow-hidden"
           >
-          {/* Header */}
-          <div className="flex items-start justify-between pb-4 border-b border-neutral-100 dark:border-white/5">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 shadow-2xs">
-                <CopyPlus className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-semibold text-neutral-900 dark:text-white flex items-center gap-2">
-                  <span>Create and Assign Subtask</span>
+            {/* Header */}
+            <div className="dialog-header">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-400">
+                  <CopyPlus className="h-4 w-4" />
+                </div>
+                <h3 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
+                  Create and Assign Subtask
                 </h3>
               </div>
-            </div>
-            <button aria-label="Close dialog"
-              onClick={onClose}
-              className="rounded-lg p-1 text-neutral-400 hover:text-neutral-700 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleDuplicate} className="space-y-4 pt-4">
-
-            {/* Source Parent Task Summary Card */}
-            <div className="rounded-xl border border-neutral-200/80 dark:border-white/10 bg-[var(--surface-muted)] p-3.5 space-y-2.5">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
-                    Parent Task
-                  </span>
-                  <h4 className="text-xs font-semibold text-neutral-900 dark:text-white mt-0.5 line-clamp-1">
-                    {task.title}
-                  </h4>
-                </div>
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium border ${task.cognitiveLoad === 'high'
-                      ? 'bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-red-200 dark:border-red-500/20'
-                      : task.cognitiveLoad === 'medium'
-                        ? 'bg-yellow-50 dark:bg-yellow-950/30 text-yellow-600 dark:text-yellow-400 border-yellow-200 dark:border-yellow-500/20'
-                        : 'bg-green-50 dark:bg-green-950/30 text-green-600 dark:text-green-400 border-green-200 dark:border-green-500/20'
-                    }`}
-                >
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${task.cognitiveLoad === 'high'
-                        ? 'bg-red-500'
-                        : task.cognitiveLoad === 'medium'
-                          ? 'bg-yellow-500'
-                          : 'bg-green-500'
-                      }`}
-                  />
-                  <span className="capitalize">{task.cognitiveLoad} load</span>
-                </span>
-              </div>
-
-              {/* Source Owner & Board metadata */}
-              <div className="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-neutral-200/50 dark:border-white/5">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-[var(--text-secondary)] shrink-0">Parent Owner:</span>
-                  <span className="font-semibold text-neutral-800 dark:text-white truncate">
-                    {sourceUser?.name || 'Unassigned'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span className="text-[var(--text-secondary)] shrink-0">Parent Board:</span>
-                  <span className="font-semibold text-neutral-800 dark:text-white truncate">
-                    {sourceBoard ? `${sourceBoard.name}'s Team` : 'Direct / Independent'}
-                  </span>
-                </div>
-              </div>
+              <button
+                type="button"
+                aria-label="Close dialog"
+                onClick={onClose}
+                className="icon-button shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
 
-            {/* Selection Steps */}
-            <div className="space-y-3.5">
-              {/* Step 1: Destination Board */}
-              <div>
-                <label className="block text-xs font-semibold text-neutral-900 dark:text-white mb-1.5 flex items-center gap-1.5" htmlFor="duplicatetaskmodal-field-1">
-                  <Layers className="h-3.5 w-3.5 text-blue-500" />
-                  <span>1. Select Destination Board (Team)</span>
-                </label>
-                <select
-                  value={selectedBoardId}
-                  onChange={e => setSelectedBoardId(e.target.value)}
-                  disabled={isSubmitting || feedback?.type === 'success'}
-                  className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface-raised)] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer disabled:opacity-50" id="duplicatetaskmodal-field-1"
-                >
-                  {availableBoards.map(b => (
-                    <option key={b.id} value={b.id}>
-                      {b.name} ({b.memberCount} member{b.memberCount !== 1 ? 's' : ''})
-                    </option>
-                  ))}
-                </select>
-              </div>
+            {/* Form */}
+            <form onSubmit={handleDuplicate} className="flex flex-col flex-1 min-h-0">
+              <div className="p-5 overflow-y-auto flex-1 space-y-4">
+                {/* Source Parent Task Summary */}
+                <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] divide-y divide-[var(--border-subtle)]">
+                  <div className="flex items-start justify-between gap-2 px-3.5 py-2.5">
+                    <div className="min-w-0">
+                      <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
+                        Parent Task
+                      </span>
+                      <h4 className="text-xs font-semibold text-[var(--text-primary)] mt-0.5 truncate">
+                        {task.title}
+                      </h4>
+                    </div>
+                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold capitalize text-[var(--text-secondary)] shrink-0 mt-0.5">
+                      <span
+                        className={`h-1.5 w-1.5 rounded-full ${
+                          task.cognitiveLoad === 'high'
+                            ? 'bg-red-600 dark:bg-red-400'
+                            : task.cognitiveLoad === 'medium'
+                            ? 'bg-amber-600 dark:bg-amber-400'
+                            : 'bg-emerald-600 dark:bg-emerald-400'
+                        }`}
+                      />
+                      <span>{task.cognitiveLoad} load</span>
+                    </span>
+                  </div>
 
-              {/* Step 2: Destination Assignee on that Board */}
-              <div>
-                <label className="block text-xs font-semibold text-neutral-900 dark:text-white mb-1.5 flex items-center gap-1.5" htmlFor="duplicatetaskmodal-field-2">
-                  <UserCheck className="h-3.5 w-3.5 text-blue-500" />
-                  <span>2. Select Subtask Owner on Destination Board</span>
-                </label>
-                {availableUsers.length > 0 ? (
-                  <div className="space-y-1.5">
-                    <select
-                      value={selectedUserId}
-                      onChange={e => setSelectedUserId(e.target.value)}
-                      disabled={isSubmitting || feedback?.type === 'success'}
-                      className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface-raised)] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer disabled:opacity-50" id="duplicatetaskmodal-field-2"
-                    >
-                      {availableUsers.map(u => (
-                        <option key={u.id} value={u.id}>
-                          {u.name} ({getUserTag(u).label.toUpperCase()}) — {u.email}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="grid grid-cols-2 divide-x divide-[var(--border-subtle)] text-[11px]">
+                    <div className="flex items-center gap-1.5 px-3.5 py-2 min-w-0">
+                      <span className="text-[var(--text-secondary)] shrink-0">Owner:</span>
+                      <span className="font-semibold text-[var(--text-primary)] truncate">
+                        {sourceUser?.name || 'Unassigned'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 px-3.5 py-2 min-w-0">
+                      <span className="text-[var(--text-secondary)] shrink-0">Board:</span>
+                      <span className="font-semibold text-[var(--text-primary)] truncate">
+                        {sourceBoard ? `${sourceBoard.name}'s Team` : 'Direct / Independent'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
-                    {/* Selected user preview pill */}
-                    {selectedTargetUser && (
-                      <div className="flex items-center justify-between rounded-lg bg-neutral-100 dark:bg-white/5 px-2.5 py-1.5 text-[11px] border border-neutral-200/60 dark:border-white/5">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold text-white bg-gradient-to-br ${selectedTargetUser.avatarColor || 'from-blue-600 to-indigo-600'
-                              }`}
+                {/* Selection Steps */}
+                <div className="space-y-3.5">
+                  {/* Step 1: Destination Board */}
+                  <div>
+                    <label className="field-label flex items-center gap-1.5" htmlFor="duplicatetaskmodal-field-1">
+                      <Layers className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
+                      <span>1. Destination Board (Team)</span>
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={selectedBoardId}
+                        onChange={e => setSelectedBoardId(e.target.value)}
+                        disabled={isSubmitting || feedback?.type === 'success'}
+                        className="field-control pr-8 cursor-pointer"
+                        id="duplicatetaskmodal-field-1"
+                      >
+                        {availableBoards.map(b => (
+                          <option key={b.id} value={b.id}>
+                            {b.name} ({b.memberCount} member{b.memberCount !== 1 ? 's' : ''})
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
+                    </div>
+                  </div>
+
+                  {/* Step 2: Destination Assignee on that Board */}
+                  <div>
+                    <label className="field-label flex items-center gap-1.5" htmlFor="duplicatetaskmodal-field-2">
+                      <UserCheck className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
+                      <span>2. Subtask Owner</span>
+                    </label>
+                    {availableUsers.length > 0 ? (
+                      <div className="space-y-2">
+                        <div className="relative">
+                          <select
+                            value={selectedUserId}
+                            onChange={e => setSelectedUserId(e.target.value)}
+                            disabled={isSubmitting || feedback?.type === 'success'}
+                            className="field-control pr-8 cursor-pointer"
+                            id="duplicatetaskmodal-field-2"
                           >
-                            {selectedTargetUser.name.charAt(0).toUpperCase()}
-                          </div>
-                          <span className="font-medium text-neutral-800 dark:text-neutral-200">
-                            {selectedTargetUser.name}
-                          </span>
-                          <span className="rounded bg-neutral-200 dark:bg-white/10 px-1 py-0.2 text-[11px] uppercase font-semibold text-neutral-600 dark:text-neutral-300">
-                            {selectedTargetUser.role}
-                          </span>
+                            {availableUsers.map(u => (
+                              <option key={u.id} value={u.id}>
+                                {u.name} ({getUserTag(u).label.toUpperCase()}) — {u.email}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
                         </div>
+
+                        {selectedTargetUser && (
+                          <div className="flex items-center justify-between rounded-[7px] bg-[var(--surface-muted)] px-2.5 py-1.5 text-[11px] border border-[var(--border)]">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div
+                                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] text-[10px] font-semibold text-white bg-gradient-to-br ${
+                                  selectedTargetUser.avatarColor || 'from-blue-600 to-indigo-600'
+                                }`}
+                              >
+                                {selectedTargetUser.name.charAt(0).toUpperCase()}
+                              </div>
+                              <span className="font-semibold text-[var(--text-primary)] truncate">
+                                {selectedTargetUser.name}
+                              </span>
+                              {selectedTargetUser.role && (
+                                <span className="ledger-badge uppercase">
+                                  {selectedTargetUser.role}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="callout callout-warning flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        <span>No eligible members on this board. Please pick a different destination board.</span>
                       </div>
                     )}
                   </div>
-                ) : (
-                  <div className="rounded-xl border border-amber-500/20 bg-amber-50/30 dark:bg-amber-950/20 p-3 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 shrink-0" />
-                    <span>No eligible members on this board. Please pick a different destination board.</span>
-                  </div>
-                )}
-              </div>
 
-              {/* Step 3: Subtask Title */}
-              <div>
-                <label className="block text-xs font-semibold text-neutral-900 dark:text-white mb-1.5 flex items-center justify-between" htmlFor="duplicatetaskmodal-field-3">
-                  <span className="flex items-center gap-1.5">
-                    <GitFork className="h-3.5 w-3.5 text-blue-500" />
-                    <span>3. Subtask Title</span>
-                  </span>
-                  {subtaskTitle !== task.title && (
-                    <button
-                      type="button"
-                      onClick={() => setSubtaskTitle(task.title)}
-                      className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                    >
-                      Reset to parent title
-                    </button>
-                  )}
-                </label>
-                <input
-                  type="text"
-                  value={subtaskTitle}
-                  onChange={e => setSubtaskTitle(e.target.value)}
-                  placeholder={task.title}
-                  disabled={isSubmitting || feedback?.type === 'success'}
-                  className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface-raised)] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors disabled:opacity-50"
-                  required id="duplicatetaskmodal-field-3"
-                />
-              </div>
-
-              {/* Step 4: Workflow Initial Status & Due Date */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-900 dark:text-white mb-1.5" htmlFor="duplicatetaskmodal-field-4">
-                    Initial Status on Board
-                  </label>
-                  <select
-                    value={targetStatus}
-                    onChange={e => setTargetStatus(e.target.value as TaskStatus)}
-                    disabled={isSubmitting || feedback?.type === 'success'}
-                    className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface-raised)] px-3 py-2 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer capitalize disabled:opacity-50" id="duplicatetaskmodal-field-4"
-                  >
-                    {task.status !== 'retainer' && (
-                      <option value={task.status}>Keep Original ({task.status.replace('_', ' ')})</option>
-                    )}
-                    <option value="pipeline">Pipeline</option>
-                    <option value="todo">To Do</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="in_review">In Review</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-neutral-900 dark:text-white mb-1.5 flex items-center justify-between" htmlFor="duplicatetaskmodal-field-5">
-                    <span>Deadline</span>
-                    {targetDueDate && (
-                      <span className="text-[11px] text-blue-600 dark:text-blue-400 font-medium">
-                        {formatDateOnly(targetDueDate)}
-                      </span>
-                    )}
-                  </label>
-                  <div className="relative">
+                  {/* Step 3: Subtask Title */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="field-label !mb-0 flex items-center gap-1.5" htmlFor="duplicatetaskmodal-field-3">
+                        <GitFork className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
+                        <span>3. Subtask Title</span>
+                      </label>
+                      {subtaskTitle !== task.title && (
+                        <button
+                          type="button"
+                          onClick={() => setSubtaskTitle(task.title)}
+                          className="text-[11px] font-medium text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer"
+                          style={{ minHeight: 'auto' }}
+                        >
+                          Reset to parent title
+                        </button>
+                      )}
+                    </div>
                     <input
-                      type="date"
-                      value={targetDueDate}
-                      onChange={e => setTargetDueDate(e.target.value)}
+                      type="text"
+                      value={subtaskTitle}
+                      onChange={e => setSubtaskTitle(e.target.value)}
+                      placeholder={task.title}
                       disabled={isSubmitting || feedback?.type === 'success'}
-                      className="w-full rounded-xl border border-neutral-300 dark:border-white/10 bg-[var(--surface-raised)] px-3 py-1.5 text-xs text-neutral-900 dark:text-white focus:border-blue-500 focus:outline-none transition-colors cursor-pointer disabled:opacity-50" id="duplicatetaskmodal-field-5"
+                      className="field-control"
+                      required
+                      id="duplicatetaskmodal-field-3"
                     />
                   </div>
-                  {/* Quick Preset Buttons */}
-                  <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => setTargetDueDate(task.dueDate || '')}
-                      disabled={isSubmitting || feedback?.type === 'success'}
-                      className="rounded px-1.5 py-0.5 text-[11px] font-medium bg-neutral-100 dark:bg-white/5 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
-                    >
-                      Original
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSetQuickDeadline(1)}
-                      disabled={isSubmitting || feedback?.type === 'success'}
-                      className="rounded px-1.5 py-0.5 text-[11px] font-medium bg-neutral-100 dark:bg-white/5 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
-                    >
-                      +1d
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSetQuickDeadline(3)}
-                      disabled={isSubmitting || feedback?.type === 'success'}
-                      className="rounded px-1.5 py-0.5 text-[11px] font-medium bg-neutral-100 dark:bg-white/5 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
-                    >
-                      +3d
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSetQuickDeadline(7)}
-                      disabled={isSubmitting || feedback?.type === 'success'}
-                      className="rounded px-1.5 py-0.5 text-[11px] font-medium bg-neutral-100 dark:bg-white/5 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
-                    >
-                      +1w
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSetEndOfMonth}
-                      disabled={isSubmitting || feedback?.type === 'success'}
-                      className="rounded px-1.5 py-0.5 text-[11px] font-medium bg-neutral-100 dark:bg-white/5 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white cursor-pointer"
-                    >
-                      EOM
-                    </button>
+
+                  {/* Step 4: Workflow Initial Status & Due Date */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="field-label" htmlFor="duplicatetaskmodal-field-4">
+                        Initial Status
+                      </label>
+                      <div className="relative">
+                        <select
+                          value={targetStatus}
+                          onChange={e => setTargetStatus(e.target.value as TaskStatus)}
+                          disabled={isSubmitting || feedback?.type === 'success'}
+                          className="field-control pr-8 capitalize cursor-pointer"
+                          id="duplicatetaskmodal-field-4"
+                        >
+                          {task.status !== 'retainer' && (
+                            <option value={task.status}>Keep Original ({task.status.replace('_', ' ')})</option>
+                          )}
+                          <option value="pipeline">Pipeline</option>
+                          <option value="todo">To Do</option>
+                          <option value="in_progress">In Progress</option>
+                          <option value="in_review">In Review</option>
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <label className="field-label !mb-0" htmlFor="duplicatetaskmodal-field-5">
+                          Deadline
+                        </label>
+                        {targetDueDate && (
+                          <span className="text-[11px] tabular-nums text-[#1d4ed8] dark:text-blue-400 font-semibold">
+                            {formatDateOnly(targetDueDate)}
+                          </span>
+                        )}
+                      </div>
+                      <input
+                        type="date"
+                        value={targetDueDate}
+                        onChange={e => setTargetDueDate(e.target.value)}
+                        disabled={isSubmitting || feedback?.type === 'success'}
+                        className="field-control tabular-nums cursor-pointer"
+                        id="duplicatetaskmodal-field-5"
+                      />
+                      <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                        {[
+                          { label: 'Original', action: () => setTargetDueDate(task.dueDate || '') },
+                          { label: '+1d', action: () => handleSetQuickDeadline(1) },
+                          { label: '+3d', action: () => handleSetQuickDeadline(3) },
+                          { label: '+1w', action: () => handleSetQuickDeadline(7) },
+                          { label: 'EOM', action: handleSetEndOfMonth },
+                        ].map(preset => (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            onClick={preset.action}
+                            disabled={isSubmitting || feedback?.type === 'success'}
+                            className="rounded-[5px] border border-[var(--border)] px-1.5 py-0.5 text-[11px] font-medium tabular-nums bg-[var(--surface-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+                            style={{ minHeight: '24px' }}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Feedback Message */}
-            {feedback && (
-              <div
-                className={`rounded-xl p-3 text-xs border ${feedback.type === 'success'
-                    ? 'bg-emerald-50 dark:bg-emerald-950/20 border-emerald-500/20 text-emerald-700 dark:text-emerald-300'
-                    : 'bg-red-50 dark:bg-red-950/20 border-red-500/20 text-red-700 dark:text-red-300'
-                  }`}
-              >
-                <div className="flex items-start gap-2">
-                  {feedback.type === 'success' ? (
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500 mt-0.5" />
-                  ) : (
-                    <AlertCircle className="h-4 w-4 shrink-0 text-red-500 mt-0.5" />
-                  )}
-                  <div className="flex-1 space-y-1">
-                    <p className="font-semibold">{feedback.message}</p>
-                    {feedback.warning && (
-                      <p className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
-                        Notice: {feedback.warning}
-                      </p>
+                {/* Feedback Message */}
+                {feedback && (
+                  <div
+                    role="status"
+                    className={`callout flex items-start gap-2 ${
+                      feedback.type === 'success' ? 'callout-success' : 'callout-danger'
+                    }`}
+                  >
+                    {feedback.type === 'success' ? (
+                      <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                     )}
+                    <div className="flex-1 space-y-1">
+                      <p className="font-semibold">{feedback.message}</p>
+                      {feedback.warning && (
+                        <p className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
+                          Notice: {feedback.warning}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
-            )}
 
-            {/* Actions */}
-            <div className="flex items-center justify-between gap-2 pt-3 border-t border-neutral-100 dark:border-white/5">
-              <div>
-                {feedback?.type === 'success' && feedback.targetBoardId && (
+              {/* Footer */}
+              <div className="dialog-footer !justify-between">
+                <div>
+                  {feedback?.type === 'success' && feedback.targetBoardId && (
+                    <button
+                      type="button"
+                      onClick={handleSwitchToDestinationBoard}
+                      className="button-emerald"
+                    >
+                      <span>Switch to {feedback.targetBoardName || 'Team'}</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={handleSwitchToDestinationBoard}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white px-3.5 py-2 text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                    onClick={onClose}
+                    className="button-secondary"
                   >
-                    <span>Switch to {feedback.targetBoardName || 'Team'}</span>
-                    <ArrowRight className="h-3 w-3" />
+                    {feedback?.type === 'success' ? 'Close' : 'Cancel'}
                   </button>
-                )}
-              </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-2 text-xs font-medium text-neutral-600 dark:text-white/60 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200 dark:hover:bg-white/5 transition-colors cursor-pointer"
-                >
-                  {feedback?.type === 'success' ? 'Close' : 'Cancel'}
-                </button>
-
-                {feedback?.type !== 'success' && (
-                  <button
-                    type="submit"
-                    disabled={isSubmitting || !selectedUserId || (targetStatus !== 'pipeline' && !targetDueDate.trim())}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white px-4 py-2 text-xs font-semibold shadow-xs transition-all cursor-pointer disabled:cursor-not-allowed"
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        <span>Creating...</span>
-                      </>
-                    ) : (
-                      <>
-                        <CopyPlus className="h-3.5 w-3.5" />
-                        <span>Create</span>
-                      </>
-                    )}
-                  </button>
-                )}
+                  {feedback?.type !== 'success' && (
+                    <button
+                      type="submit"
+                      disabled={isSubmitting || !selectedUserId || (targetStatus !== 'pipeline' && !targetDueDate.trim())}
+                      className="button-primary"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <span>Creating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CopyPlus className="h-3.5 w-3.5" />
+                          <span>Create Subtask</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          </form>
-        </DialogPanel>
+            </form>
+          </DialogPanel>
       </motion.div>
       )}
     </AnimatePresence>

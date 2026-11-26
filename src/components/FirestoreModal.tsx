@@ -291,625 +291,622 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
           }}
         >
           <DialogPanel aria-label="Database & Compliance" onClose={onClose} busy={isSyncing || isUploadingKey || purgeModalOpen}
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.16, ease: [0.2, 0.7, 0.2, 1] }}
             onClick={e => e.stopPropagation()}
             id="workspace-connections-modal"
-            className="w-full max-w-xl my-auto flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden"
+            className="w-full max-w-xl my-auto flex flex-col overflow-hidden"
           >
             {/* Fixed Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 dark:border-white/5 shrink-0 bg-[var(--surface)]">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                  <Layers className="h-5 w-5" />
+            <div className="dialog-header">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-400">
+                  <Layers className="h-4 w-4" />
                 </div>
-                <div>
-                  <h2 className="text-base font-semibold tracking-tight text-neutral-900 dark:text-white">
-                    Database & Compliance
-                  </h2>
-                </div>
+                <h2 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
+                  Database &amp; Compliance
+                </h2>
               </div>
               <button
+                type="button"
                 onClick={onClose}
                 disabled={isSyncing || isUploadingKey || purgeModalOpen}
                 aria-label="Close modal"
-                className="rounded-lg p-1.5 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white transition-colors cursor-pointer"
+                className="icon-button shrink-0"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            {/* Scrollable Body */}
-            <div className="px-6 py-5 overflow-y-auto flex-1 space-y-3">
-              {/* SECTION 1: Cloud Storage (Firestore) */}
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] overflow-hidden transition-all">
-                <button
-                  type="button"
-                  onClick={() => toggleSection('firestore')}
-                  aria-expanded={expandedSections.firestore}
-                  aria-controls="firestore-settings"
-                  className="w-full flex items-center justify-between p-3.5 hover:bg-neutral-100/70 dark:hover:bg-white/5 transition-colors cursor-pointer text-left"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400">
-                      <Database className="h-4 w-4" />
+            {/* Scrollable Body — Single Hairline-Partitioned Accordion Ledger */}
+            <div className="p-5 overflow-y-auto flex-1">
+              <div className="ledger-frame divide-y divide-[var(--border)]">
+                {/* SECTION 1: Cloud Storage (Firestore) */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => toggleSection('firestore')}
+                    aria-expanded={expandedSections.firestore}
+                    aria-controls="firestore-settings"
+                    className="w-full flex items-center justify-between px-4 py-3 bg-[var(--surface)] hover:bg-[var(--surface-muted)] transition-colors cursor-pointer text-left"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-400">
+                        <Database className="h-3.5 w-3.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="text-xs font-semibold text-[var(--text-primary)] truncate">
+                          Cloud Storage (Firestore)
+                        </h3>
+                        <p className="text-[11px] tabular-nums text-[var(--text-secondary)] truncate">
+                          {displayProject} · {users.length} members · {tasks.length} tasks
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <h3 className="text-xs font-semibold text-neutral-900 dark:text-white truncate">
-                        Cloud Storage (Firestore)
-                      </h3>
-                      <p className="text-[11px] text-[var(--text-secondary)] truncate">
-                        {displayProject} · {users.length} members · {tasks.length} tasks
-                      </p>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                        isConnected
-                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                          : 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
-                      }`}
-                    >
+                    <div className="flex items-center gap-2 shrink-0">
                       <span
-                        className={`h-1.5 w-1.5 rounded-full ${
-                          isConnected ? 'bg-emerald-500' : 'bg-amber-500'
-                        }`}
-                      />
-                      {isConnected ? 'Live Sync' : 'Local / Standby'}
-                    </span>
-                    {expandedSections.firestore ? (
-                      <ChevronUp className="h-4 w-4 text-neutral-400" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 text-neutral-400" />
-                    )}
-                  </div>
-                </button>
-
-                {expandedSections.firestore && (
-                  <div id="firestore-settings" className="p-4 pt-2 border-t border-neutral-200/60 dark:border-white/5 space-y-3 bg-[var(--surface)]">
-                    {/* Feedback Alert for Firestore */}
-                    {feedback && (
-                      <div
-                        className={`rounded-xl p-3 text-xs flex items-center gap-2.5 ${
-                          feedback.type === 'success'
-                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                            : 'bg-red-500/10 text-red-500 border border-red-500/20'
+                        className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${
+                          isConnected
+                            ? 'text-emerald-700 dark:text-emerald-400'
+                            : 'text-amber-700 dark:text-amber-400'
                         }`}
                       >
-                        {feedback.type === 'success' ? (
-                          <CheckCircle2 className="h-4 w-4 shrink-0" />
-                        ) : (
-                          <AlertCircle className="h-4 w-4 shrink-0" />
-                        )}
-                        <span>{feedback.message}</span>
-                      </div>
-                    )}
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            isConnected ? 'bg-emerald-600 dark:bg-emerald-400' : 'bg-amber-600 dark:bg-amber-400'
+                          }`}
+                        />
+                        <span>{isConnected ? 'Live Sync' : 'Local / Standby'}</span>
+                      </span>
+                      {expandedSections.firestore ? (
+                        <ChevronUp className="h-4 w-4 text-[var(--text-muted)]" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-[var(--text-muted)]" />
+                      )}
+                    </div>
+                  </button>
 
-                    {/* Metadata Card */}
-                    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3.5 space-y-2 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[var(--text-secondary)]">Project ID</span>
-                        <span className="font-mono text-[11px] font-semibold text-neutral-800 dark:text-white/90">
-                          {firestoreStatus?.projectId || 'Not set'}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <span className="text-[var(--text-secondary)]">Database ID</span>
-                        <span className="font-mono text-[11px] text-neutral-800 dark:text-white/90">
-                          {firestoreStatus?.databaseId || '(default)'}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <span className="text-[var(--text-secondary)]">Persistence Mode</span>
-                        <span className="font-medium text-neutral-800 dark:text-white/90">
-                          {isConnected
-                            ? 'Cloud Firestore Admin'
-                            : 'Local Storage'}
-                        </span>
-                      </div>
-
-                      {firestoreStatus?.lastSyncTime && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-[var(--text-secondary)]">Last Synchronized</span>
-                          <span className="text-neutral-600 dark:text-white/60">
-                            {new Date(firestoreStatus.lastSyncTime).toLocaleTimeString()}
-                          </span>
+                  {expandedSections.firestore && (
+                    <div id="firestore-settings" className="p-4 border-t border-[var(--border-subtle)] space-y-3 bg-[var(--surface-muted)]">
+                      {feedback && (
+                        <div
+                          role="status"
+                          className={`callout flex items-center gap-2 ${
+                            feedback.type === 'success' ? 'callout-success' : 'callout-danger'
+                          }`}
+                        >
+                          {feedback.type === 'success' ? (
+                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                          ) : (
+                            <AlertCircle className="h-4 w-4 shrink-0" />
+                          )}
+                          <span>{feedback.message}</span>
                         </div>
                       )}
 
-                      {firestoreStatus?.lastError && (
-                        <div className="pt-2 border-t border-neutral-200/50 dark:border-white/5 text-[11px] text-amber-600 dark:text-amber-400">
-                          Warning: {firestoreStatus.lastError}
+                      <dl className="rounded-[7px] border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border-subtle)] text-xs">
+                        <div className="flex items-center justify-between px-3 py-2">
+                          <dt className="text-[var(--text-secondary)]">Project ID</dt>
+                          <dd className="font-mono text-[11px] font-semibold text-[var(--text-primary)]">
+                            {firestoreStatus?.projectId || 'Not set'}
+                          </dd>
                         </div>
-                      )}
-                    </div>
 
-                    {/* Actions */}
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={handleManualSync}
-                        disabled={isSyncing}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white py-2 px-3 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50 shadow-xs"
-                      >
-                        {isSyncing ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <RefreshCw className="h-3.5 w-3.5" />
-                        )}
-                        <span>{isSyncing ? 'Syncing...' : 'Sync Workspace with Firestore'}</span>
-                      </button>
+                        <div className="flex items-center justify-between px-3 py-2">
+                          <dt className="text-[var(--text-secondary)]">Database ID</dt>
+                          <dd className="font-mono text-[11px] text-[var(--text-primary)]">
+                            {firestoreStatus?.databaseId || '(default)'}
+                          </dd>
+                        </div>
 
-                      <button
-                        type="button"
-                        onClick={handleRefreshStatus}
-                        disabled={isRefreshing}
-                        title="Refresh database status"
-                        className="flex items-center justify-center rounded-xl border border-[var(--border)] bg-white dark:bg-neutral-800/60 text-neutral-700 dark:text-white/80 hover:bg-neutral-50 dark:hover:bg-neutral-800 p-2 transition-colors cursor-pointer"
-                      >
-                        <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                      </button>
-                    </div>
+                        <div className="flex items-center justify-between px-3 py-2">
+                          <dt className="text-[var(--text-secondary)]">Persistence Mode</dt>
+                          <dd className="font-medium text-[var(--text-primary)]">
+                            {isConnected ? 'Cloud Firestore Admin' : 'Local Storage'}
+                          </dd>
+                        </div>
 
-                    {/* Superadmin: Configure Service Account Key */}
-                    {isSuperadmin && (
-                      <div className="pt-2 border-t border-neutral-200/60 dark:border-white/5 space-y-2">
-                        <label htmlFor="firestore-credentials" className="block text-xs font-semibold text-neutral-800 dark:text-white/90">
-                          Configure Firebase Admin Service Account Key
-                        </label>
-                        <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
-                          Provide Google Cloud Service Account JSON credentials to connect cloud Firestore persistence.
-                        </p>
-
-                        {keyFeedback && (
-                          <div
-                            className={`rounded-lg p-2.5 text-xs flex items-center gap-2 ${
-                              keyFeedback.type === 'success'
-                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                                : 'bg-red-500/10 text-red-500 border border-red-500/20'
-                            }`}
-                          >
-                            {keyFeedback.type === 'success' ? (
-                              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                            ) : (
-                              <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                            )}
-                            <span>{keyFeedback.message}</span>
+                        {firestoreStatus?.lastSyncTime && (
+                          <div className="flex items-center justify-between px-3 py-2">
+                            <dt className="text-[var(--text-secondary)]">Last Synchronized</dt>
+                            <dd className="tabular-nums text-[var(--text-secondary)]">
+                              {new Date(firestoreStatus.lastSyncTime).toLocaleTimeString()}
+                            </dd>
                           </div>
                         )}
 
-                        <form onSubmit={handleUploadServiceAccount} className="space-y-2">
-                          <textarea
-                            id="firestore-credentials"
-                            value={serviceAccountInput}
-                            onChange={e => setServiceAccountInput(e.target.value)}
-                            placeholder='Paste service account JSON: { "type": "service_account", "project_id": "...", ... }'
-                            rows={3}
-                            className="w-full rounded-lg border border-[var(--border)] bg-[var(--surface-muted)] p-2.5 text-[11px] font-mono text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-blue-500 focus:outline-none"
-                          />
-                          <div className="firestore-actions">
-                            <button
-                              type="submit"
-                              disabled={isUploadingKey || !serviceAccountInput.trim()}
-                              className="flex items-center gap-1.5 rounded-lg bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 px-3 py-1.5 text-xs font-semibold hover:bg-neutral-800 dark:hover:bg-neutral-100 transition-colors cursor-pointer disabled:opacity-40 shadow-xs"
-                            >
-                              {isUploadingKey ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <Key className="h-3 w-3" />
-                              )}
-                              <span>{isUploadingKey ? 'Connecting...' : 'Apply Firestore Credentials'}</span>
-                            </button>
-                            <button type="button" className="button-danger-outline" disabled={isUploadingKey || isSyncing} onClick={() => setPurgeModalOpen(true)}>Purge Database</button>
+                        {firestoreStatus?.lastError && (
+                          <div className="px-3 py-2 text-[11px] text-amber-700 dark:text-amber-400">
+                            Warning: {firestoreStatus.lastError}
                           </div>
-                        </form>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
+                        )}
+                      </dl>
 
-              {/* ========================================= */}
-              {/* SECTION 2: ClickUp API Integration        */}
-              {/* ========================================= */}
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] overflow-hidden transition-all">
-                <button
-                  type="button"
-                  onClick={() => toggleSection('clickup')}
-                  aria-expanded={expandedSections.clickup}
-                  className="w-full flex items-center justify-between p-3.5 hover:bg-neutral-100/70 dark:hover:bg-white/5 transition-colors cursor-pointer text-left"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                      <Key className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="text-xs font-semibold text-neutral-900 dark:text-white truncate">
-                        ClickUp API Integration
-                      </h3>
-                      <p className="text-[11px] text-[var(--text-secondary)] truncate">
-                        {isClickupConnected
-                          ? `Authenticated · ${clickupSpaces.length} space(s) available`
-                          : 'Connect personal token for task sync'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                        isClickupConnected
-                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                          : 'bg-neutral-500/15 text-neutral-600 dark:text-white/50'
-                      }`}
-                    >
-                      <span
-                        className={`h-1.5 w-1.5 rounded-full ${
-                          isClickupConnected ? 'bg-emerald-500' : 'bg-neutral-400'
-                        }`}
-                      />
-                      {isClickupConnected ? 'Connected' : 'Not Connected'}
-                    </span>
-                    {expandedSections.clickup ? (
-                      <ChevronUp className="h-4 w-4 text-neutral-400" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 text-neutral-400" />
-                    )}
-                  </div>
-                </button>
-
-                {expandedSections.clickup && (
-                  <div className="p-4 pt-2 border-t border-neutral-200/60 dark:border-white/5 space-y-3 bg-[var(--surface)]">
-                    {clickupError && (
-                      <div className="rounded-xl p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-xs text-red-600 dark:text-red-300 flex items-start gap-2">
-                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-500" />
-                        <span>{clickupError}</span>
-                      </div>
-                    )}
-
-                    {clickupSuccess && (
-                      <div className="rounded-xl p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs text-emerald-600 dark:text-emerald-300 flex items-start gap-2">
-                        <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-500" />
-                        <span>{clickupSuccess}</span>
-                      </div>
-                    )}
-
-                    {isClickupConnected ? (
-                      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-semibold text-xs">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                            <span>ClickUp API Authenticated</span>
-                          </div>
-                          <button
-                            onClick={handleDisconnectClickUp}
-                            type="button"
-                            disabled={isClickupLoading}
-                            className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400 hover:underline cursor-pointer"
-                          >
-                            <Unlink className="w-3.5 h-3.5" />
-                            <span>Disconnect</span>
-                          </button>
-                        </div>
-
-                        <div className="text-xs space-y-1.5 pt-1 border-t border-emerald-500/10 text-neutral-600 dark:text-white/70">
-                          <div className="flex items-center justify-between">
-                            <span>Personal API Token</span>
-                            <span className="font-mono text-[11px] text-neutral-500 dark:text-white/50">
-                              Active
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span>Available Spaces</span>
-                            <span className="font-medium text-neutral-900 dark:text-white">
-                              {clickupSpaces.length} space(s) available
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <form onSubmit={handleConnectClickUp} className="space-y-3">
-                        <p className="text-xs text-[var(--text-secondary)]">
-                          Connect your ClickUp account to synchronize spaces, lists, tasks, deadlines, and tracked time.
-                        </p>
-                        <div>
-                          <label className="block text-[11px] uppercase font-semibold text-[var(--text-secondary)] mb-1">
-                            Personal API Token
-                          </label>
-                          <input
-                            type="password"
-                            value={apiKeyInput}
-                            onChange={e => setApiKeyInput(e.target.value)}
-                            placeholder="pk_1234567_abcdef..."
-                            disabled={isClickupLoading}
-                            className="w-full px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] text-xs focus:outline-none focus:border-purple-500 transition-all font-mono text-neutral-900 dark:text-white"
-                          />
-                          <p className="mt-1.5 text-[11px] text-[var(--text-secondary)] flex items-center gap-1 flex-wrap">
-                            <span>Find this in ClickUp: Settings &rarr; Apps &rarr; API Token &rarr; Generate.</span>
-                            <a
-                              href="https://app.clickup.com"
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-purple-600 dark:text-purple-400 hover:underline inline-flex items-center gap-0.5 ml-1"
-                            >
-                              Open ClickUp <ExternalLink className="w-3 h-3" />
-                            </a>
-                          </p>
-                        </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={handleManualSync}
+                          disabled={isSyncing}
+                          className="button-primary flex-1"
+                        >
+                          {isSyncing ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <RefreshCw className="h-3.5 w-3.5" />
+                          )}
+                          <span>{isSyncing ? 'Syncing...' : 'Sync Workspace with Firestore'}</span>
+                        </button>
 
                         <button
-                          type="submit"
-                          disabled={isClickupLoading || !apiKeyInput.trim()}
-                          className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white py-2 px-3 text-xs font-semibold disabled:opacity-50 transition-colors cursor-pointer shadow-xs"
+                          type="button"
+                          onClick={handleRefreshStatus}
+                          disabled={isRefreshing}
+                          title="Refresh database status"
+                          aria-label="Refresh database status"
+                          className="button-secondary !px-2.5"
                         >
-                          {isClickupLoading ? (
-                            <>
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                              <span>Verifying Token...</span>
-                            </>
-                          ) : (
-                            <>
-                              <Key className="w-3.5 h-3.5" />
-                              <span>Connect ClickUp</span>
-                            </>
-                          )}
+                          <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
                         </button>
-                      </form>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* ========================================= */}
-              {/* SECTION 3: ClickUp Real-Time Webhook      */}
-              {/* ========================================= */}
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] overflow-hidden transition-all">
-                <button
-                  type="button"
-                  onClick={() => toggleSection('webhook')}
-                  aria-expanded={expandedSections.webhook}
-                  className="w-full flex items-center justify-between p-3.5 hover:bg-neutral-100/70 dark:hover:bg-white/5 transition-colors cursor-pointer text-left"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                      <Radio className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="text-xs font-semibold text-neutral-900 dark:text-white truncate">
-                        Real-Time ClickUp Webhook
-                      </h3>
-                      <p className="text-[11px] text-[var(--text-secondary)] truncate">
-                        {clickupWebhookStatus?.registered
-                          ? `Active · ${clickupWebhookStatus.totalEventsCount ?? 0} events received`
-                          : 'Instantaneous inbound SSE propagation'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                        clickupWebhookStatus?.listening
-                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                          : 'bg-neutral-500/15 text-neutral-600 dark:text-white/50'
-                      }`}
-                    >
-                      <span
-                        className={`h-1.5 w-1.5 rounded-full ${
-                          clickupWebhookStatus?.listening ? 'bg-emerald-500 animate-pulse' : 'bg-neutral-400'
-                        }`}
-                      />
-                      {clickupWebhookStatus?.registered
-                        ? 'Registered & Active'
-                        : clickupWebhookStatus?.listening
-                        ? 'Listener Standby'
-                        : 'Inactive'}
-                    </span>
-                    {expandedSections.webhook ? (
-                      <ChevronUp className="h-4 w-4 text-neutral-400" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 text-neutral-400" />
-                    )}
-                  </div>
-                </button>
-
-                {expandedSections.webhook && (
-                  <div className="p-4 pt-2 border-t border-neutral-200/60 dark:border-white/5 space-y-3 bg-[var(--surface)]">
-                    {webhookFeedback && (
-                      <div
-                        className={`rounded-xl p-3 text-xs flex items-center gap-2.5 ${
-                          webhookFeedback.type === 'success'
-                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                            : 'bg-red-500/10 text-red-500 border border-red-500/20'
-                        }`}
-                      >
-                        {webhookFeedback.type === 'success' ? (
-                          <CheckCircle2 className="h-4 w-4 shrink-0" />
-                        ) : (
-                          <AlertCircle className="h-4 w-4 shrink-0" />
-                        )}
-                        <span className="font-medium">{webhookFeedback.message}</span>
-                      </div>
-                    )}
-
-                    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3.5 space-y-2 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[var(--text-secondary)]">Inbound Endpoint</span>
-                        <span className="font-mono text-[11px] text-neutral-800 dark:text-white/90 truncate max-w-[260px]">
-                          {clickupWebhookStatus?.endpointUrl || '/api/clickup/webhook'}
-                        </span>
                       </div>
 
-                      <div className="flex items-center justify-between">
-                        <span className="text-[var(--text-secondary)]">Events Ingested</span>
-                        <span className="font-medium text-neutral-900 dark:text-white">
-                          {clickupWebhookStatus?.totalEventsCount ?? 0} events received
-                        </span>
-                      </div>
+                      {isSuperadmin && (
+                        <div className="pt-3 border-t border-[var(--border-subtle)] space-y-2">
+                          <label htmlFor="firestore-credentials" className="field-label !mb-0">
+                            Configure Firebase Admin Service Account Key
+                          </label>
+                          <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                            Provide Google Cloud Service Account JSON credentials to connect cloud Firestore persistence.
+                          </p>
 
-                      {clickupWebhookStatus?.lastEventAt && (
-                        <div className="flex items-center justify-between">
-                          <span className="text-[var(--text-secondary)]">Last Inbound Event</span>
-                          <span className="text-neutral-600 dark:text-white/60">
-                            {new Date(clickupWebhookStatus.lastEventAt).toLocaleTimeString()} ({clickupWebhookStatus.lastEventAction || 'event'})
-                          </span>
-                        </div>
-                      )}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleRegisterWebhook}
-                      disabled={isRegisteringWebhook || !isClickupConnected || !isSuperadmin}
-                      title={isSuperadmin ? 'Register a signed ClickUp webhook' : 'Only the Superadmin can manage workspace webhooks'}
-                      className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 py-2 px-3 text-xs font-semibold disabled:opacity-50 transition-colors cursor-pointer"
-                    >
-                      {isRegisteringWebhook ? (
-                        <>
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          <span>Registering with ClickUp Team API...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Radio className="w-3.5 h-3.5" />
-                          <span>{clickupWebhookStatus?.registered ? 'Re-sync Webhook with ClickUp' : 'Register Webhook with ClickUp'}</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* SECTION 4: SOC2 Compliance Audit Stream */}
-              <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] overflow-hidden transition-all">
-                <button
-                  type="button"
-                  onClick={() => toggleSection('audit')}
-                  aria-expanded={expandedSections.audit}
-                  className="w-full flex items-center justify-between p-3.5 hover:bg-neutral-100/70 dark:hover:bg-white/5 transition-colors cursor-pointer text-left"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                      <ShieldCheck className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="text-xs font-semibold text-neutral-900 dark:text-white truncate">
-                        SOC2 Compliance Audit Stream
-                      </h3>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold bg-purple-500/15 text-purple-700 dark:text-purple-300">
-                      <span className="h-1.5 w-1.5 rounded-full bg-purple-500" />
-                      Append-Only Active
-                    </span>
-                    {expandedSections.audit ? (
-                      <ChevronUp className="h-4 w-4 text-neutral-400" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 text-neutral-400" />
-                    )}
-                  </div>
-                </button>
-
-                {expandedSections.audit && (
-                  <div className="p-4 pt-2 border-t border-neutral-200/60 dark:border-white/5 space-y-3 bg-[var(--surface)]">
-                    <div className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3.5 space-y-2 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[var(--text-secondary)]">Persistence Storage</span>
-                        <span className="font-mono text-[11px] text-neutral-800 dark:text-white/90">
-                          Firestore /compliance_audit_logs & local audit log
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <span className="text-[var(--text-secondary)]">Audit Coverage</span>
-                        <span className="text-neutral-600 dark:text-white/60">
-                          Reassignments, hours overrides, permissions & deletions
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={downloadAuditLogs}
-                        className="flex-1 flex items-center justify-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white py-2 px-3 text-xs font-semibold transition-colors cursor-pointer shadow-xs"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        <span>Download Audit Stream (NDJSON)</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={handleToggleAuditFeed}
-                        disabled={isLoadingAudit || !canManageMembers}
-                        className="flex items-center justify-center gap-1 rounded-xl border border-[var(--border)] bg-white dark:bg-neutral-800/60 text-neutral-700 dark:text-white/80 hover:bg-neutral-50 dark:hover:bg-neutral-800 py-2 px-3 text-xs font-medium transition-colors cursor-pointer"
-                      >
-                        {isLoadingAudit ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : showAuditFeed ? (
-                          <ChevronUp className="h-3.5 w-3.5" />
-                        ) : (
-                          <ChevronDown className="h-3.5 w-3.5" />
-                        )}
-                        <span>{showAuditFeed ? 'Hide Log' : 'View Log'}</span>
-                      </button>
-                    </div>
-
-                    {/* Expandable Recent Audit Log Feed */}
-                    {showAuditFeed && (
-                      <div className="rounded-xl border border-[var(--border)] bg-neutral-900 text-neutral-100 p-3 text-[11px] font-mono space-y-2 max-h-56 overflow-y-auto">
-                        <div className="flex items-center justify-between text-[11px] text-neutral-400 border-b border-neutral-800 pb-1">
-                          <span>Recent Audit Events ({auditLogs.length})</span>
-                          <span>Immutable Stream</span>
-                        </div>
-                        {auditLogs.length === 0 ? (
-                          <div className="text-neutral-500 py-3 text-center font-sans text-xs">No audit records logged yet.</div>
-                        ) : (
-                          auditLogs.slice(0, 20).map(entry => (
-                            <div key={entry.id} className="border-b border-neutral-800/50 pb-1.5 last:border-0 last:pb-0">
-                              <div className="flex items-center justify-between text-neutral-400">
-                                <span className="text-purple-400 uppercase text-[11px] font-semibold tracking-wider">
-                                  [{entry.category}] {entry.action}
-                                </span>
-                                <span className="text-[11px] text-neutral-500">
-                                  {new Date(entry.timestamp).toLocaleTimeString()}
-                                </span>
-                              </div>
-                              <div className="text-neutral-300 text-[11px] truncate mt-0.5">
-                                {entry.details || `${entry.targetType}:${entry.targetId}`}
-                              </div>
-                              {entry.actor?.name && (
-                                <div className="text-[11px] text-neutral-500">
-                                  Actor: {entry.actor.name} ({entry.actor.email || 'system'})
-                                </div>
+                          {keyFeedback && (
+                            <div
+                              role="status"
+                              className={`callout flex items-center gap-2 ${
+                                keyFeedback.type === 'success' ? 'callout-success' : 'callout-danger'
+                              }`}
+                            >
+                              {keyFeedback.type === 'success' ? (
+                                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                              ) : (
+                                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                               )}
+                              <span>{keyFeedback.message}</span>
                             </div>
-                          ))
-                        )}
+                          )}
+
+                          <form onSubmit={handleUploadServiceAccount} className="space-y-2">
+                            <textarea
+                              id="firestore-credentials"
+                              value={serviceAccountInput}
+                              onChange={e => setServiceAccountInput(e.target.value)}
+                              placeholder='Paste service account JSON: { "type": "service_account", "project_id": "...", ... }'
+                              rows={3}
+                              className="field-control font-mono text-[11px]"
+                            />
+                            <div className="firestore-actions">
+                              <button
+                                type="submit"
+                                disabled={isUploadingKey || !serviceAccountInput.trim()}
+                                className="button-primary"
+                              >
+                                {isUploadingKey ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Key className="h-3.5 w-3.5" />
+                                )}
+                                <span>{isUploadingKey ? 'Connecting...' : 'Apply Credentials'}</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="button-danger-outline"
+                                disabled={isUploadingKey || isSyncing}
+                                onClick={() => setPurgeModalOpen(true)}
+                              >
+                                Purge Database
+                              </button>
+                            </div>
+                          </form>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* SECTION 2: ClickUp API Integration */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => toggleSection('clickup')}
+                    aria-expanded={expandedSections.clickup}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-[var(--surface)] hover:bg-[var(--surface-muted)] transition-colors cursor-pointer text-left"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] bg-[var(--surface-subtle)] border border-[var(--border)] text-[var(--text-primary)]">
+                        <Key className="h-3.5 w-3.5" />
                       </div>
-                    )}
-                  </div>
-                )}
+                      <div className="min-w-0">
+                        <h3 className="text-xs font-semibold text-[var(--text-primary)] truncate">
+                          ClickUp API Integration
+                        </h3>
+                        <p className="text-[11px] tabular-nums text-[var(--text-secondary)] truncate">
+                          {isClickupConnected
+                            ? `Authenticated · ${clickupSpaces.length} space(s) available`
+                            : 'Connect personal token for task sync'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span
+                        className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${
+                          isClickupConnected
+                            ? 'text-emerald-700 dark:text-emerald-400'
+                            : 'text-[var(--text-muted)]'
+                        }`}
+                      >
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            isClickupConnected ? 'bg-emerald-600 dark:bg-emerald-400' : 'bg-[var(--text-muted)]'
+                          }`}
+                        />
+                        <span>{isClickupConnected ? 'Connected' : 'Not Connected'}</span>
+                      </span>
+                      {expandedSections.clickup ? (
+                        <ChevronUp className="h-4 w-4 text-[var(--text-muted)]" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-[var(--text-muted)]" />
+                      )}
+                    </div>
+                  </button>
+
+                  {expandedSections.clickup && (
+                    <div className="p-4 border-t border-[var(--border-subtle)] space-y-3 bg-[var(--surface-muted)]">
+                      {clickupError && (
+                        <div role="alert" className="callout callout-danger flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                          <span>{clickupError}</span>
+                        </div>
+                      )}
+
+                      {clickupSuccess && (
+                        <div role="status" className="callout callout-success flex items-start gap-2">
+                          <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                          <span>{clickupSuccess}</span>
+                        </div>
+                      )}
+
+                      {isClickupConnected ? (
+                        <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface)] overflow-hidden">
+                          <div className="flex items-center justify-between px-3 py-2.5 border-b border-[var(--border-subtle)]">
+                            <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 font-semibold text-xs">
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>ClickUp API Authenticated</span>
+                            </div>
+                            <button
+                              onClick={handleDisconnectClickUp}
+                              type="button"
+                              disabled={isClickupLoading}
+                              className="inline-flex items-center gap-1 text-xs font-medium text-red-600 dark:text-red-400 hover:underline cursor-pointer"
+                              style={{ minHeight: 'auto' }}
+                            >
+                              <Unlink className="w-3.5 h-3.5" />
+                              <span>Disconnect</span>
+                            </button>
+                          </div>
+
+                          <dl className="divide-y divide-[var(--border-subtle)] text-xs">
+                            <div className="flex items-center justify-between px-3 py-2">
+                              <dt className="text-[var(--text-secondary)]">Personal API Token</dt>
+                              <dd className="font-mono text-[11px] text-[var(--text-primary)]">Active</dd>
+                            </div>
+                            <div className="flex items-center justify-between px-3 py-2">
+                              <dt className="text-[var(--text-secondary)]">Available Spaces</dt>
+                              <dd className="font-semibold tabular-nums text-[var(--text-primary)]">
+                                {clickupSpaces.length} space(s)
+                              </dd>
+                            </div>
+                          </dl>
+                        </div>
+                      ) : (
+                        <form onSubmit={handleConnectClickUp} className="space-y-3">
+                          <p className="text-xs text-[var(--text-secondary)]">
+                            Connect your ClickUp account to synchronize spaces, lists, tasks, deadlines, and tracked time.
+                          </p>
+                          <div>
+                            <label className="field-label" htmlFor="clickup-api-token-input">
+                              Personal API Token
+                            </label>
+                            <input
+                              id="clickup-api-token-input"
+                              type="password"
+                              value={apiKeyInput}
+                              onChange={e => setApiKeyInput(e.target.value)}
+                              placeholder="pk_1234567_abcdef..."
+                              disabled={isClickupLoading}
+                              className="field-control font-mono"
+                            />
+                            <p className="mt-1.5 text-[11px] text-[var(--text-secondary)] flex items-center gap-1 flex-wrap">
+                              <span>Find this in ClickUp: Settings &rarr; Apps &rarr; API Token &rarr; Generate.</span>
+                              <a
+                                href="https://app.clickup.com"
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-[#1d4ed8] dark:text-blue-400 hover:underline inline-flex items-center gap-0.5 ml-1 font-medium"
+                              >
+                                <span>Open ClickUp</span>
+                                <ExternalLink className="w-3 h-3" />
+                              </a>
+                            </p>
+                          </div>
+
+                          <button
+                            type="submit"
+                            disabled={isClickupLoading || !apiKeyInput.trim()}
+                            className="button-primary w-full"
+                          >
+                            {isClickupLoading ? (
+                              <>
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                <span>Verifying Token...</span>
+                              </>
+                            ) : (
+                              <>
+                                <Key className="w-3.5 h-3.5" />
+                                <span>Connect ClickUp</span>
+                              </>
+                            )}
+                          </button>
+                        </form>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* SECTION 3: ClickUp Real-Time Webhook */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => toggleSection('webhook')}
+                    aria-expanded={expandedSections.webhook}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-[var(--surface)] hover:bg-[var(--surface-muted)] transition-colors cursor-pointer text-left"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] bg-emerald-600/10 text-emerald-700 dark:text-emerald-400">
+                        <Radio className="h-3.5 w-3.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="text-xs font-semibold text-[var(--text-primary)] truncate">
+                          Real-Time ClickUp Webhook
+                        </h3>
+                        <p className="text-[11px] tabular-nums text-[var(--text-secondary)] truncate">
+                          {clickupWebhookStatus?.registered
+                            ? `Active · ${clickupWebhookStatus.totalEventsCount ?? 0} events received`
+                            : 'Instantaneous inbound SSE propagation'}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span
+                        className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${
+                          clickupWebhookStatus?.listening
+                            ? 'text-emerald-700 dark:text-emerald-400'
+                            : 'text-[var(--text-muted)]'
+                        }`}
+                      >
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            clickupWebhookStatus?.listening ? 'bg-emerald-600 dark:bg-emerald-400' : 'bg-[var(--text-muted)]'
+                          }`}
+                        />
+                        <span>
+                          {clickupWebhookStatus?.registered
+                            ? 'Active'
+                            : clickupWebhookStatus?.listening
+                            ? 'Standby'
+                            : 'Inactive'}
+                        </span>
+                      </span>
+                      {expandedSections.webhook ? (
+                        <ChevronUp className="h-4 w-4 text-[var(--text-muted)]" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-[var(--text-muted)]" />
+                      )}
+                    </div>
+                  </button>
+
+                  {expandedSections.webhook && (
+                    <div className="p-4 border-t border-[var(--border-subtle)] space-y-3 bg-[var(--surface-muted)]">
+                      {webhookFeedback && (
+                        <div
+                          role="status"
+                          className={`callout flex items-center gap-2 ${
+                            webhookFeedback.type === 'success' ? 'callout-success' : 'callout-danger'
+                          }`}
+                        >
+                          {webhookFeedback.type === 'success' ? (
+                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                          ) : (
+                            <AlertCircle className="h-4 w-4 shrink-0" />
+                          )}
+                          <span className="font-medium">{webhookFeedback.message}</span>
+                        </div>
+                      )}
+
+                      <dl className="rounded-[7px] border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border-subtle)] text-xs">
+                        <div className="flex items-center justify-between px-3 py-2 gap-2">
+                          <dt className="text-[var(--text-secondary)] shrink-0">Inbound Endpoint</dt>
+                          <dd className="font-mono text-[11px] text-[var(--text-primary)] truncate">
+                            {clickupWebhookStatus?.endpointUrl || '/api/clickup/webhook'}
+                          </dd>
+                        </div>
+
+                        <div className="flex items-center justify-between px-3 py-2">
+                          <dt className="text-[var(--text-secondary)]">Events Ingested</dt>
+                          <dd className="font-semibold tabular-nums text-[var(--text-primary)]">
+                            {clickupWebhookStatus?.totalEventsCount ?? 0} events received
+                          </dd>
+                        </div>
+
+                        {clickupWebhookStatus?.lastEventAt && (
+                          <div className="flex items-center justify-between px-3 py-2">
+                            <dt className="text-[var(--text-secondary)]">Last Inbound Event</dt>
+                            <dd className="tabular-nums text-[var(--text-secondary)]">
+                              {new Date(clickupWebhookStatus.lastEventAt).toLocaleTimeString()} ({clickupWebhookStatus.lastEventAction || 'event'})
+                            </dd>
+                          </div>
+                        )}
+                      </dl>
+
+                      <button
+                        type="button"
+                        onClick={handleRegisterWebhook}
+                        disabled={isRegisteringWebhook || !isClickupConnected || !isSuperadmin}
+                        title={isSuperadmin ? 'Register a signed ClickUp webhook' : 'Only the Superadmin can manage workspace webhooks'}
+                        className="button-secondary w-full"
+                      >
+                        {isRegisteringWebhook ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            <span>Registering with ClickUp Team API...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Radio className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-400" />
+                            <span>{clickupWebhookStatus?.registered ? 'Re-sync Webhook with ClickUp' : 'Register Webhook with ClickUp'}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* SECTION 4: SOC2 Compliance Audit Stream */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => toggleSection('audit')}
+                    aria-expanded={expandedSections.audit}
+                    className="w-full flex items-center justify-between px-4 py-3 bg-[var(--surface)] hover:bg-[var(--surface-muted)] transition-colors cursor-pointer text-left"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-400">
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="text-xs font-semibold text-[var(--text-primary)] truncate">
+                          SOC2 Compliance Audit Stream
+                        </h3>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#1d4ed8] dark:text-blue-400">
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#1d4ed8] dark:bg-blue-400" />
+                        <span>Append-Only</span>
+                      </span>
+                      {expandedSections.audit ? (
+                        <ChevronUp className="h-4 w-4 text-[var(--text-muted)]" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-[var(--text-muted)]" />
+                      )}
+                    </div>
+                  </button>
+
+                  {expandedSections.audit && (
+                    <div className="p-4 border-t border-[var(--border-subtle)] space-y-3 bg-[var(--surface-muted)]">
+                      <dl className="rounded-[7px] border border-[var(--border)] bg-[var(--surface)] divide-y divide-[var(--border-subtle)] text-xs">
+                        <div className="flex items-center justify-between gap-2 px-3 py-2">
+                          <dt className="text-[var(--text-secondary)] shrink-0">Persistence Storage</dt>
+                          <dd className="font-mono text-[11px] text-[var(--text-primary)] truncate">
+                            Firestore /compliance_audit_logs &amp; local log
+                          </dd>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-2 px-3 py-2">
+                          <dt className="text-[var(--text-secondary)] shrink-0">Audit Coverage</dt>
+                          <dd className="text-[var(--text-secondary)] text-right">
+                            Reassignments, hours overrides, permissions &amp; deletions
+                          </dd>
+                        </div>
+                      </dl>
+
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={downloadAuditLogs}
+                          className="button-primary flex-1"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          <span>Download Audit Stream (NDJSON)</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleToggleAuditFeed}
+                          disabled={isLoadingAudit || !canManageMembers}
+                          className="button-secondary shrink-0"
+                        >
+                          {isLoadingAudit ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : showAuditFeed ? (
+                            <ChevronUp className="h-3.5 w-3.5" />
+                          ) : (
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          )}
+                          <span>{showAuditFeed ? 'Hide Log' : 'View Log'}</span>
+                        </button>
+                      </div>
+
+                      {/* Expandable Recent Audit Log Feed */}
+                      {showAuditFeed && (
+                        <div className="rounded-[7px] border border-[#262b36] bg-[#11141a] text-[#f1f4f9] p-3 text-[11px] font-mono space-y-2 max-h-56 overflow-y-auto">
+                          <div className="flex items-center justify-between text-[11px] text-[#98a2b3] border-b border-[#262b36] pb-1.5 tabular-nums">
+                            <span>Recent Audit Events ({auditLogs.length})</span>
+                            <span>Immutable Stream</span>
+                          </div>
+                          {auditLogs.length === 0 ? (
+                            <div className="text-[#7f8a9d] py-3 text-center font-sans text-xs">No audit records logged yet.</div>
+                          ) : (
+                            auditLogs.slice(0, 20).map(entry => (
+                              <div key={entry.id} className="border-b border-[#1f242e] pb-1.5 last:border-0 last:pb-0">
+                                <div className="flex items-center justify-between gap-2 text-[#98a2b3]">
+                                  <span className="text-blue-400 uppercase text-[11px] font-semibold tracking-wider truncate">
+                                    [{entry.category}] {entry.action}
+                                  </span>
+                                  <span className="text-[11px] text-[#7f8a9d] tabular-nums shrink-0">
+                                    {new Date(entry.timestamp).toLocaleTimeString()}
+                                  </span>
+                                </div>
+                                <div className="text-[#f1f4f9] text-[11px] truncate mt-0.5">
+                                  {entry.details || `${entry.targetType}:${entry.targetId}`}
+                                </div>
+                                {entry.actor?.name && (
+                                  <div className="text-[11px] text-[#7f8a9d]">
+                                    Actor: {entry.actor.name} ({entry.actor.email || 'system'})
+                                  </div>
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
-
-
             </div>
 
             {/* Modal Footer */}
-            <div className="px-6 py-3.5 border-t border-neutral-100 dark:border-white/5 bg-[var(--surface-muted)] flex justify-end">
+            <div className="dialog-footer">
               <button
                 type="button"
                 onClick={onClose}
                 disabled={isSyncing || isUploadingKey || purgeModalOpen}
-                className="rounded-xl border border-[var(--border)] bg-white dark:bg-neutral-800 text-neutral-700 dark:text-white py-1.5 px-4 text-xs font-medium hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors cursor-pointer"
+                className="button-secondary"
               >
                 Close
               </button>

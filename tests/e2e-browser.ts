@@ -181,7 +181,23 @@ try {
     await page.waitForSelector('text=Database & Compliance');
     await page.keyboard.press('Escape');
 
+    const overview = page.getByRole('region', { name: 'Team overview' });
+    await overview.getByText('(10h / 6h)', { exact: true }).waitFor();
+    const ava = page.locator('#swimlane-u-content');
+    await ava.getByText('(5h / 3h)', { exact: true }).waitFor();
+    await page.locator('#task-search-input').fill('Homepage Narrative Rewrite');
+    await ava.getByText('Completed Editorial Brief').waitFor({ state: 'hidden' });
+    await ava.getByText('167%', { exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Clear workspace search' }).click();
+
     await page.getByRole('button', { name: 'View Analytics' }).click();
+    const analytics = page.getByRole('dialog', { name: 'Workspace analytics' });
+    const efficiency = analytics.getByRole('meter', { name: 'Workspace efficiency' });
+    assert.match(await efficiency.getAttribute('aria-valuetext') ?? '', /^167 percent/);
+    await analytics.getByLabel('Analytics scope').selectOption('user');
+    await analytics.getByLabel('Analytics member').selectOption('u-content');
+    await analytics.getByText('(5h / 3h)', { exact: true }).waitFor();
+    await analytics.getByLabel('Analytics scope').selectOption('all');
     await page.getByRole('button', { name: 'Calendar Tool' }).click();
     await page.getByLabel('Analytics start date').fill('2026-01-08');
     await page.getByText('No historical snapshot was saved for this period.').waitFor({ state: 'visible' });
@@ -194,7 +210,7 @@ try {
     await page.goto(`${PREVIEW_URL}?width=390`, { waitUntil: 'networkidle' });
     const iframe = page.locator('iframe[title="390px responsive preview"]');
     await iframe.waitFor({ state: 'visible' });
-    console.log('Browser UI preview: desktop tabs, compliance, historical analytics, and 390px responsive iframe passed.');
+    console.log('Browser UI preview: desktop tabs, compliance, scoped efficiency, historical analytics, and 390px responsive iframe passed.');
     await context.close();
   }
 

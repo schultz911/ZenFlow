@@ -40,6 +40,7 @@ import { useAuth, useWorkspace } from '../context/DashboardContext';
 interface SwimlaneProps {
   user: User;
   tasks: Task[];
+  metricTasks?: Task[];
   activeDragInfo?: DragTaskInfo | null;
   onDragTaskStart?: (task: Task, sourceUserId?: string) => void;
   onDragTaskEnd?: () => void;
@@ -96,7 +97,7 @@ const COLUMNS: ColumnConfig[] = [
     title: 'To Do',
     icon: <Circle className="h-3 w-3 text-[var(--text-muted)]" />,
     headerColor: 'text-[var(--text-secondary)]',
-    dotColor: 'bg-neutral-400 dark:bg-white/40',
+    dotColor: 'bg-[var(--text-muted)]',
   },
   {
     status: 'in_progress',
@@ -124,6 +125,7 @@ const COLUMNS: ColumnConfig[] = [
 const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   user,
   tasks,
+  metricTasks = tasks,
   activeDragInfo,
   onDragTaskStart,
   onDragTaskEnd,
@@ -332,8 +334,10 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     return grouped;
   }, [userTasks]);
 
-  const workload = useMemo(() => calculateUserWorkload(userTasks), [userTasks]);
-  const userEfficiency = useMemo(() => calculateTasksEfficiency(userTasks, { forUserId: user.id }), [userTasks, user.id]);
+  const workload = useMemo(() => calculateUserWorkload(metricTasks), [metricTasks]);
+  const userEfficiency = useMemo(() => calculateTasksEfficiency(metricTasks, {
+    memberIds: new Set([user.id]),
+  }), [metricTasks, user.id]);
   const archivedTasks = useMemo(() => tasksByColumn.archived, [tasksByColumn]);
 
   const isCrossUserDrag = Boolean(activeDragInfo && activeDragInfo.sourceUserId && activeDragInfo.sourceUserId !== user.id);
@@ -710,7 +714,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
 
               {workload.level === 'overloaded' && (
                 <span
-                  title="Cognitive capacity exceeded (>12 pts). Consider rebalancing tasks."
+                  title="Cognitive capacity reached (12+ pts)."
                   className="ledger-alert-badge"
                 >
                   <Activity className="h-3 w-3 shrink-0" />
@@ -755,7 +759,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
             </button>
 
             <div
-              title={`Individual Efficiency: Aggregate time taken (${userEfficiency.totalTimeTakenHours}h) vs time estimated (${userEfficiency.totalEstimatedHours}h) across all tasks`}
+              title="Estimated / billable hours on completed work"
               className="flex items-center gap-1.5 pl-3 select-none tabular-nums"
             >
               <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
@@ -763,18 +767,20 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               </span>
               <span
                 className={`text-xs font-bold ${
-                  userEfficiency.efficiencyPercent >= 75
+                  userEfficiency.efficiencyPercent === null
+                    ? 'text-[var(--text-secondary)]'
+                    : userEfficiency.efficiencyPercent >= 100
                     ? 'text-emerald-700 dark:text-emerald-400'
                     : userEfficiency.efficiencyPercent >= 50
                     ? 'text-[#1d4ed8] dark:text-blue-400'
                     : 'text-red-600 dark:text-red-400'
                 }`}
               >
-                {userEfficiency.totalEstimatedHours > 0 ? `${userEfficiency.efficiencyPercent}%` : '—'}
+                {userEfficiency.efficiencyPercent !== null ? `${Math.round(userEfficiency.efficiencyPercent)}%` : '—'}
               </span>
-              {userEfficiency.totalEstimatedHours > 0 && (
+              {userEfficiency.efficiencyPercent !== null && (
                 <span className="text-[11px] text-[var(--text-secondary)]">
-                  {formatHoursRatio(userEfficiency.totalTimeTakenHours, userEfficiency.totalEstimatedHours)}
+                  {formatHoursRatio(userEfficiency.estimatedHours, userEfficiency.billableHours)}
                 </span>
               )}
             </div>
@@ -1354,15 +1360,13 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     if (prev.canMoveUp !== next.canMoveUp) return false;
     if (prev.canMoveDown !== next.canMoveDown) return false;
 
-    const prevTasks = prev.tasks;
-    const nextTasks = next.tasks;
-    if (prevTasks === nextTasks) return true;
-    if (prevTasks.length !== nextTasks.length) return false;
-    for (let i = 0; i < prevTasks.length; i++) {
-      if (prevTasks[i] !== nextTasks[i]) return false;
-    }
-    return true;
+    return sameTasks(prev.tasks, next.tasks) &&
+      sameTasks(prev.metricTasks ?? prev.tasks, next.metricTasks ?? next.tasks);
   }
+
+function sameTasks(previous: Task[], next: Task[]) {
+  return previous === next || (previous.length === next.length && previous.every((task, index) => task === next[index]));
+}
 
 export const Swimlane = React.memo(SwimlaneComponent, areSwimlanePropsEqual);
 Swimlane.displayName = 'Swimlane';

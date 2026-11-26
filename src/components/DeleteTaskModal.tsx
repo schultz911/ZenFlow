@@ -70,108 +70,106 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
           }}
         >
           <DialogPanel aria-label="Delete task" onClose={onClose} busy={isDeleting}
-            initial={{ opacity: 0, scale: 0.95, y: 10 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 10 }}
-            transition={{ duration: 0.18, ease: 'easeOut' }}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.16, ease: [0.2, 0.7, 0.2, 1] }}
             onClick={e => e.stopPropagation()}
             id="delete-task-modal"
-            className="w-full max-w-md rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 "
+            className="w-full max-w-md my-auto overflow-hidden"
           >
-        {/* Header */}
-        <div className="flex items-start justify-between pb-4 border-b border-neutral-100 dark:border-white/5">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10 text-red-500 dark:text-red-400 border border-red-500/20 shrink-0">
-              <AlertTriangle className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="text-base font-semibold tracking-tight text-neutral-900 dark:text-white">
-                {isSharedRemoval ? 'Remove Assignee from Task' : 'Delete Task'}
-              </h2>
-            </div>
-          </div>
-          <button aria-label="Close dialog"
-            onClick={onClose}
-            disabled={isDeleting}
-            className="rounded-lg p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700 dark:text-white/40 dark:hover:bg-white/5 dark:hover:text-white transition-colors disabled:opacity-50 cursor-pointer"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-
-        {/* Task Details Card */}
-        <div className="py-4 space-y-3">
-          <div className="rounded-xl border border-neutral-200/80 dark:border-white/10 bg-[var(--surface-muted)] p-3.5 space-y-2">
-            <div>
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
-                Task Name
-              </span>
-              <h4 className="text-xs font-semibold text-neutral-900 dark:text-white mt-0.5 line-clamp-2">
-                {task.title}
-              </h4>
-            </div>
-
-            {task.isSubtask && (
-              <div className="flex items-center gap-1.5 text-[11px] text-blue-600 dark:text-blue-400 font-medium">
-                <CornerDownRight className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">Subtask of: {task.parentTaskTitle || 'Parent Task'}</span>
+            {/* Header */}
+            <div className="dialog-header">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex h-8 w-8 items-center justify-center rounded-[7px] bg-red-600/10 text-red-600 dark:text-red-400 border border-red-600/20 shrink-0">
+                  <AlertTriangle className="h-4 w-4" />
+                </div>
+                <h2 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
+                  {isSharedRemoval ? 'Remove Assignee from Task' : 'Delete Task'}
+                </h2>
               </div>
-            )}
-
-            <div className="flex items-center justify-between text-xs pt-1.5 border-t border-neutral-200/60 dark:border-white/5">
-              <span className="text-[var(--text-secondary)]">Owner</span>
-              <span className="font-semibold text-neutral-800 dark:text-neutral-200">
-                {owner?.name || 'Unassigned'}
-              </span>
+              <button
+                type="button"
+                aria-label="Close dialog"
+                onClick={onClose}
+                disabled={isDeleting}
+                className="icon-button shrink-0"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
 
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-[var(--text-secondary)]">Status</span>
-              <span className="font-medium capitalize text-neutral-700 dark:text-neutral-300">
-                {task.status === 'done' ? 'Sent' : task.status === 'archived' ? 'Completed' : task.status.replace('_', ' ')}
-              </span>
+            {/* Task Details Ledger */}
+            <div className="p-5 space-y-3.5">
+              <dl className="rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] divide-y divide-[var(--border-subtle)] text-xs">
+                <div className="px-3 py-2.5">
+                  <dt className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
+                    Task Name
+                  </dt>
+                  <dd className="text-xs font-semibold text-[var(--text-primary)] mt-0.5 line-clamp-2">
+                    {task.title}
+                  </dd>
+                  {task.isSubtask && (
+                    <div className="flex items-center gap-1.5 text-[11px] text-[#1d4ed8] dark:text-blue-400 font-medium mt-1">
+                      <CornerDownRight className="h-3 w-3 shrink-0" />
+                      <span className="truncate">Subtask of: {task.parentTaskTitle || 'Parent Task'}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between px-3 py-2">
+                  <dt className="text-[var(--text-secondary)]">Owner</dt>
+                  <dd className="font-semibold text-[var(--text-primary)]">
+                    {owner?.name || 'Unassigned'}
+                  </dd>
+                </div>
+
+                <div className="flex items-center justify-between px-3 py-2">
+                  <dt className="text-[var(--text-secondary)]">Status</dt>
+                  <dd className="font-medium capitalize text-[var(--text-primary)]">
+                    {task.status === 'done' ? 'Sent' : task.status === 'archived' ? 'Completed' : task.status.replace('_', ' ')}
+                  </dd>
+                </div>
+              </dl>
+
+              <div className="callout callout-danger">
+                {isSharedRemoval
+                  ? `Remove ${owner?.name || 'this member'} from this shared task? It will remain active on the other ${assigneeIds.length - 1} assignee(s)' board(s).`
+                  : 'Are you sure you want to delete this task? This action cannot be undone.'}
+              </div>
+              {deleteError && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{deleteError}</p>}
             </div>
 
-          </div>
-
-          <div className="rounded-xl bg-red-50/80 dark:bg-red-950/20 border border-red-200 dark:border-red-900/30 p-3 text-xs text-red-600 dark:text-red-400">
-            {isSharedRemoval
-              ? `Remove ${owner?.name || 'this member'} from this shared task? It will remain active on the other ${assigneeIds.length - 1} assignee(s)' board(s).`
-              : 'Are you sure you want to delete this task? This action cannot be undone.'}
-          </div>
-          {deleteError && <p role="alert" className="text-xs text-red-600 dark:text-red-400">{deleteError}</p>}
-        </div>
-
-        {/* Footer Actions */}
-        <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-neutral-100 dark:border-white/5">
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={isDeleting}
-            className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-2 text-xs font-medium text-neutral-600 dark:text-white/60 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200 dark:hover:bg-white/5 transition-colors disabled:opacity-50 cursor-pointer"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={isDeleting}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white px-4 py-2 text-xs font-semibold shadow-md shadow-red-900/20 transition-all cursor-pointer"
-          >
-            {isDeleting ? (
-              <>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                <span>{isSharedRemoval ? 'Removing...' : 'Deleting Task...'}</span>
-              </>
-            ) : (
-              <>
-                <Trash2 className="h-3.5 w-3.5" />
-                <span>{isSharedRemoval ? 'Remove Assignee' : 'Delete Task'}</span>
-              </>
-            )}
-          </button>
-        </div>
-      </DialogPanel>
+            {/* Footer Actions */}
+            <div className="dialog-footer">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={isDeleting}
+                className="button-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="button-danger"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    <span>{isSharedRemoval ? 'Removing...' : 'Deleting Task...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>{isSharedRemoval ? 'Remove Assignee' : 'Delete Task'}</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </DialogPanel>
     </motion.div>
   )}
 </AnimatePresence>

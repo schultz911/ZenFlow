@@ -586,57 +586,62 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               ref={flyoutMenuRef}
               style={{ top: `${flyoutPosition.top}px`, left: `${flyoutPosition.left}px` }}
               onClick={e => e.stopPropagation()}
-              className="fixed z-[9999] w-52 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-1.5 shadow-2xl text-neutral-900 dark:text-white animate-in fade-in zoom-in-95 duration-150"
+              className="menu-surface fixed z-[9999] w-56 rounded-[9px] border border-[var(--border)] p-1.5 text-[var(--text-primary)]"
             >
-              <div className="px-2 py-1 border-b border-neutral-100 dark:border-white/5 text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider flex items-center justify-between">
+              <div className="px-2 py-1 border-b border-[var(--border-subtle)] text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider flex items-center justify-between">
                 <span>Quick Reschedule</span>
-                <Clock className="h-3 w-3 text-blue-500" />
+                <Clock className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
               </div>
               <div className="mt-1 space-y-0.5">
                 <button
                   type="button"
                   onClick={() => handleSnooze(1)}
-                  className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-[11px] text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/10 cursor-pointer transition-colors"
+                  className="flex w-full items-center justify-between rounded-[6px] px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
+                  style={{ minHeight: '28px' }}
                 >
                   <span>Tomorrow</span>
-                  <span className="text-[11px] text-[var(--text-secondary)]">+1d</span>
+                  <span className="text-[11px] tabular-nums text-[var(--text-muted)]">+1d</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleSnooze(2)}
-                  className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-[11px] text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/10 cursor-pointer transition-colors"
+                  className="flex w-full items-center justify-between rounded-[6px] px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
+                  style={{ minHeight: '28px' }}
                 >
                   <span>In 2 days</span>
-                  <span className="text-[11px] text-[var(--text-secondary)]">+2d</span>
+                  <span className="text-[11px] tabular-nums text-[var(--text-muted)]">+2d</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleSnooze(3)}
-                  className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-[11px] text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/10 cursor-pointer transition-colors"
+                  className="flex w-full items-center justify-between rounded-[6px] px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
+                  style={{ minHeight: '28px' }}
                 >
                   <span>In 3 days</span>
-                  <span className="text-[11px] text-[var(--text-secondary)]">+3d</span>
+                  <span className="text-[11px] tabular-nums text-[var(--text-muted)]">+3d</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => handleSnooze(7)}
-                  className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-[11px] text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/10 cursor-pointer transition-colors"
+                  className="flex w-full items-center justify-between rounded-[6px] px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
+                  style={{ minHeight: '28px' }}
                 >
                   <span>Next week</span>
-                  <span className="text-[11px] text-[var(--text-secondary)]">+7d</span>
+                  <span className="text-[11px] tabular-nums text-[var(--text-muted)]">+7d</span>
                 </button>
                 <button
                   type="button"
                   onClick={handleEndOfMonth}
-                  className="flex w-full items-center justify-between rounded-lg px-2 py-1 text-[11px] text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/10 cursor-pointer transition-colors"
+                  className="flex w-full items-center justify-between rounded-[6px] px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
+                  style={{ minHeight: '28px' }}
                 >
                   <span>Last day of month</span>
-                  <span className="text-[11px] text-[var(--text-secondary)]">EOM</span>
+                  <span className="text-[11px] tabular-nums text-[var(--text-muted)]">EOM</span>
                 </button>
 
                 {/* Custom date picker input */}
-                <div className="pt-1.5 mt-1 border-t border-neutral-100 dark:border-white/5 px-2 pb-0.5">
-                  <label className="block text-[11px] uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1">
+                <div className="pt-1.5 mt-1 border-t border-[var(--border-subtle)] px-1.5 pb-1">
+                  <label className="block text-[10.5px] uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1">
                     Pick Date
                   </label>
                   <div className="flex items-center gap-1">
@@ -653,14 +658,16 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                           setShowSnoozeFlyout(false);
                         }
                       }}
-                      className="flex-1 min-w-0 rounded-md border border-[var(--border)] bg-neutral-50 dark:bg-white/5 px-1.5 py-1 text-[11px] text-neutral-800 dark:text-white/90 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      className="flex-1 min-w-0 rounded-[5px] border border-[var(--border)] bg-[var(--surface)] px-1.5 py-1 text-[11px] tabular-nums text-[var(--text-primary)] cursor-pointer focus:border-[var(--accent)] focus:outline-none"
+                      style={{ minHeight: '28px' }}
                     />
                     <button
                       type="button"
                       disabled={!customDateDraft}
                       onClick={() => handleCustomDateSelect(customDateDraft)}
                       title="Set deadline"
-                      className="shrink-0 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer disabled:cursor-not-allowed shadow-2xs"
+                      className="shrink-0 rounded-[5px] bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 text-white px-2.5 py-1 text-[11px] font-semibold transition-colors cursor-pointer disabled:cursor-not-allowed"
+                      style={{ minHeight: '28px' }}
                     >
                       Set
                     </button>

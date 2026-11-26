@@ -22,7 +22,7 @@ import { DisciplineTaskModal } from './components/modals/DisciplineTaskModal';
 import { TaskAssignmentModal } from './components/TaskAssignmentModal';
 import { OnboardingChecklist } from './components/OnboardingChecklist';
 import { User, Task, TaskStatus } from './types';
-import { getTaskAssigneeIds } from './utils/workload';
+import { getTaskAssigneeIds, groupTasksByAssignee } from './utils/workload';
 import { UserPlus, FileText, Palette, Search, Trash2, AlertTriangle, X, Loader2 } from 'lucide-react';
 
 const EMPTY_TASKS: Task[] = [];
@@ -253,23 +253,11 @@ function DashboardContent() {
 
   const prevTasksByUserIdRef = useRef<Map<string, Task[]>>(new Map());
 
-  // Partition tasks across every assigned userId with stable array references
-  const tasksByUserId = useMemo(() => {
-    const partitioned = new Map<string, Task[]>();
-    for (const u of users) {
-      partitioned.set(u.id, []);
-    }
-    for (const task of filteredTasks) {
-      for (const uid of getTaskAssigneeIds(task)) {
-        const userList = partitioned.get(uid);
-        if (userList) {
-          userList.push(task);
-        } else {
-          partitioned.set(uid, [task]);
-        }
-      }
-    }
+  const allTasksByUserId = useMemo(() => groupTasksByAssignee(tasks), [tasks]);
 
+  // Preserve member task array identities when search or a different lane changes.
+  const tasksByUserId = useMemo(() => {
+    const partitioned = filteredTasks === tasks ? allTasksByUserId : groupTasksByAssignee(filteredTasks);
     const prevMap = prevTasksByUserIdRef.current;
     const stablePartitioned = new Map<string, Task[]>();
 
@@ -288,7 +276,7 @@ function DashboardContent() {
 
     prevTasksByUserIdRef.current = stablePartitioned;
     return stablePartitioned;
-  }, [users, filteredTasks]);
+  }, [allTasksByUserId, filteredTasks, tasks]);
 
   // Global keyboard shortcut listeners
   useEffect(() => {
@@ -513,11 +501,11 @@ function DashboardContent() {
         <div className="flex flex-col items-center gap-3.5 text-center">
           <div
             id="zenflow-loading-logo"
-            className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-900 dark:bg-[#1A1A1A] border border-neutral-800 dark:border-white/10 text-blue-500 shadow-xl shadow-blue-500/10 shrink-0"
+            className="flex h-11 w-11 items-center justify-center rounded-[9px] bg-[#121418] dark:bg-[#1e2430] border border-[#262b36] dark:border-white/10 text-blue-500 shrink-0"
           >
             <svg
               viewBox="0 0 24 24"
-              className="h-7 w-7"
+              className="h-6 w-6"
               fill="none"
               stroke="currentColor"
               strokeWidth="2.2"
@@ -527,21 +515,16 @@ function DashboardContent() {
               <path d="M 4.5 7.2 C 8.5 4.8, 14 9.6, 19.5 7 L 4.5 17 C 10 14.4, 15.5 19.2, 19.5 16.8" />
             </svg>
           </div>
-          <div>
-            <div className="flex items-baseline justify-center leading-none">
-              <span className="text-2xl font-semibold tracking-tight text-neutral-900 dark:text-white">
-                zen
-              </span>
-              <span className="font-flowy text-3xl font-semibold text-blue-600 dark:text-blue-400 ml-0.5 select-none">
-                Flow
-              </span>
-            </div>
-            <p className="text-[11px] font-medium text-[var(--text-secondary)] tracking-normal mt-1">
-              Workflow Management System
-            </p>
+          <div className="flex items-baseline justify-center leading-none">
+            <span className="text-2xl font-bold tracking-tight text-[var(--text-primary)]">
+              zen
+            </span>
+            <span className="font-flowy text-3xl font-bold text-[#1d4ed8] dark:text-blue-400 ml-0.5 select-none">
+              Flow
+            </span>
           </div>
-          <div className="flex items-center gap-2 mt-2 text-xs text-[var(--text-secondary)]">
-            <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />
+          <div className="flex items-center gap-2 text-xs text-[var(--text-secondary)]">
+            <Loader2 className="w-3.5 h-3.5 text-[#1d4ed8] dark:text-blue-400 animate-spin" />
             <span>Verifying session...</span>
           </div>
         </div>
@@ -604,19 +587,20 @@ function DashboardContent() {
 
           {/* Search Results Summary & Cross-Tab Navigation Ribbon */}
           {searchQuery.trim() && (
-            <div className="mb-4 rounded-xl border border-blue-500/20 bg-blue-50/60 dark:bg-blue-950/20 p-3 flex flex-wrap items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-2">
-                <Search className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                <span>
-                  Showing results for &ldquo;<span className="font-semibold text-neutral-900 dark:text-white">{searchQuery.trim()}</span>&rdquo;:
-                  {' '}<span className="font-semibold text-blue-600 dark:text-blue-400">{filteredTasks.length} task{filteredTasks.length === 1 ? '' : 's'}</span> across <span className="font-semibold text-blue-600 dark:text-blue-400">{roleFilteredUsers.length} member{roleFilteredUsers.length === 1 ? '' : 's'}</span> in current view.
+            <div className="mb-4 rounded-[10px] border border-[var(--border)] bg-[var(--surface)] px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2 text-[var(--text-secondary)]">
+                <Search className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
+                <span className="tabular-nums">
+                  Results for &ldquo;<span className="font-semibold text-[var(--text-primary)]">{searchQuery.trim()}</span>&rdquo;:{' '}
+                  <span className="font-semibold text-[#1d4ed8] dark:text-blue-400">{filteredTasks.length} task{filteredTasks.length === 1 ? '' : 's'}</span> across{' '}
+                  <span className="font-semibold text-[#1d4ed8] dark:text-blue-400">{roleFilteredUsers.length} member{roleFilteredUsers.length === 1 ? '' : 's'}</span>.
                 </span>
               </div>
 
               {/* Cross-role matches links */}
               {searchRoleMatches && (
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[11px] text-[var(--text-secondary)]">Matches in teams:</span>
+                  <span className="text-[11px] text-[var(--text-secondary)]">Teams:</span>
                   {(['all', 'content', 'design'] as const).map(role => {
                     const count =
                       role === 'all'
@@ -629,11 +613,12 @@ function DashboardContent() {
                         key={role}
                         type="button"
                         onClick={() => setActiveRoleTab(role)}
-                        className={`px-2 py-0.5 rounded-full text-[11px] font-semibold transition-all cursor-pointer ${
+                        className={`px-2 py-0.5 rounded-[5px] text-[11px] font-semibold tabular-nums transition-colors cursor-pointer ${
                           role === activeRoleTab
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-white dark:bg-white/10 text-neutral-700 dark:text-white/80 hover:bg-neutral-100 dark:hover:bg-white/20 border border-[var(--border)]'
+                            ? 'bg-[#1d4ed8] dark:bg-[#3b82f6] text-white'
+                            : 'bg-[var(--surface-subtle)] text-[var(--text-primary)] hover:bg-[var(--border)] border border-[var(--border)]'
                         }`}
+                        style={{ minHeight: 'auto' }}
                       >
                         {roleLabel} ({count})
                       </button>
@@ -645,15 +630,17 @@ function DashboardContent() {
           )}
 
           {workspaceNotice && (
-            <div className="mb-4 flex items-center justify-between gap-2 rounded-xl border border-amber-300 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-950/30 px-4 py-2.5 text-xs text-amber-800 dark:text-amber-300 shadow-xs">
+            <div className="callout callout-warning mb-4 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                <AlertTriangle className="h-4 w-4 shrink-0" />
                 <span className="font-medium">{workspaceNotice}</span>
               </div>
               <button
                 type="button"
+                aria-label="Dismiss notice"
                 onClick={() => setWorkspaceNotice(null)}
-                className="rounded p-0.5 hover:bg-amber-200/50 dark:hover:bg-white/10"
+                className="rounded-[5px] p-1 hover:bg-amber-500/15 transition-colors cursor-pointer"
+                style={{ minHeight: 'auto' }}
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -675,17 +662,17 @@ function DashboardContent() {
 
           {/* User Swimlanes List */}
           {roleFilteredUsers.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-12 text-center shadow-sm">
-              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-neutral-100 dark:bg-[#141414] border border-[var(--border)] text-neutral-500 dark:text-white/50 mb-3">
+            <div className="ledger-frame flex flex-col items-center justify-center p-12 text-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-[7px] bg-[var(--surface-subtle)] border border-[var(--border)] text-[var(--text-secondary)] mb-3">
                 {searchQuery.trim() ? (
-                  <Search className="h-6 w-6 text-blue-500" />
+                  <Search className="h-5 w-5 text-[#1d4ed8] dark:text-blue-400" />
                 ) : activeRoleTab === 'design' ? (
-                  <Palette className="h-6 w-6 text-indigo-500" />
+                  <Palette className="h-5 w-5 text-[#1d4ed8] dark:text-blue-400" />
                 ) : (
-                  <FileText className="h-6 w-6 text-blue-500" />
+                  <FileText className="h-5 w-5 text-[#1d4ed8] dark:text-blue-400" />
                 )}
               </div>
-              <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">
+              <h3 className="text-sm font-semibold text-[var(--text-primary)]">
                 {searchQuery.trim()
                   ? `No matching tasks, clients, projects, or members found in ${activeRoleTab === 'all' ? 'All Teams' : activeRoleTab.charAt(0).toUpperCase() + activeRoleTab.slice(1)}`
                   : activeRoleTab === 'all'
@@ -703,14 +690,15 @@ function DashboardContent() {
                 <button
                   type="button"
                   onClick={() => setSearchQuery('')}
-                  className="mt-4 px-3.5 py-1.5 rounded-xl border border-neutral-300 dark:border-white/10 text-xs font-semibold hover:bg-neutral-100 dark:hover:bg-white/5 cursor-pointer"
+                  className="button-secondary mt-4"
                 >
                   Clear Search
                 </button>
               ) : canManageMembers && (
                 <button
+                  type="button"
                   onClick={() => handleOpenNewUser()}
-                  className="mt-4 flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-500 transition-colors shadow-xs cursor-pointer"
+                  className="button-primary mt-4"
                 >
                   <UserPlus className="h-3.5 w-3.5" />
                   <span>Add {activeRoleTab === 'design' ? 'Design' : activeRoleTab === 'content' ? 'Content' : 'Team'} Member</span>
@@ -730,6 +718,7 @@ function DashboardContent() {
                     key={user.id}
                     user={user}
                     tasks={tasksByUserId.get(user.id) || EMPTY_TASKS}
+                    metricTasks={allTasksByUserId.get(user.id) || EMPTY_TASKS}
                     activeDragInfo={activeDragInfo}
                     onDragTaskStart={handleDragTaskStart}
                     onDragTaskEnd={handleDragTaskEnd}
@@ -863,12 +852,12 @@ function DashboardContent() {
                 setActiveDragInfo(null);
               }
             }}
-            className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-6 py-3 rounded-2xl border shadow-2xl transition-all cursor-pointer select-none ${isHoveringDeleteZone
-                ? 'bg-red-600 text-white border-red-500 scale-105 shadow-red-900/40 ring-4 ring-red-500/30'
-                : 'bg-red-50/95 dark:bg-[#1f1212]/95 text-red-600 dark:text-red-400 border-red-300 dark:border-red-900/50 backdrop-blur-md hover:bg-red-100 dark:hover:bg-[#281515]'
+            className={`free-pool-panel fixed bottom-4 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 px-4 py-2 rounded-[9px] border transition-colors cursor-pointer select-none ${isHoveringDeleteZone
+                ? 'bg-[var(--danger)] text-white border-[var(--danger)]'
+                : 'bg-[var(--surface-raised)]/96 backdrop-blur-md text-red-700 dark:text-red-400 border-red-300 dark:border-red-500/40 hover:bg-red-50 dark:hover:bg-red-950/40'
               }`}
           >
-            <Trash2 className={`h-4 w-4 transition-transform ${isHoveringDeleteZone ? 'scale-110' : ''}`} />
+            <Trash2 className="h-3.5 w-3.5 shrink-0" />
             <span className="text-xs font-semibold">Drop here to delete task</span>
           </div>
         )}

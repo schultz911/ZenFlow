@@ -62,36 +62,38 @@ export const SuperadminPurgeModal: React.FC<SuperadminPurgeModalProps> = ({ isOp
             onClose={close}
             busy={isPurging}
             initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 6 }}
-            transition={{ duration: 0.16 }}
-            className="w-full max-w-md overflow-y-auto p-5 sm:p-6"
+            transition={{ duration: 0.16, ease: [0.2, 0.7, 0.2, 1] }}
+            className="w-full max-w-md overflow-hidden"
           >
-            <div className="flex items-center justify-between gap-4 mb-4">
-              <h2 id="purge-title" className="text-base font-semibold tracking-tight">Purge Database</h2>
+            <div className="dialog-header">
+              <h2 id="purge-title" className="text-sm font-bold tracking-tight text-[var(--text-primary)]">Purge Database</h2>
               <button type="button" className="icon-button" aria-label="Close purge confirmation" disabled={isPurging} onClick={close}>
                 <X className="h-4 w-4" />
               </button>
             </div>
-            {result ? (
-              <div role="status" className="space-y-4">
-                <p id="purge-description" className="text-sm text-emerald-700 dark:text-emerald-300">Database purged successfully.</p>
-                <p className="text-sm text-[var(--text-secondary)]">{result.deletedTaskCount ?? 0} tasks and {result.deletedUserCount ?? 0} accounts removed. The root superadmin account is preserved.</p>
-                <button type="button" className="button-secondary w-full" autoFocus onClick={close}>Done</button>
-              </div>
-            ) : (
-              <>
-                <p id="purge-description" className="text-sm leading-relaxed text-[var(--text-secondary)]">
-                  Permanently delete all workspace tasks and team accounts. This action cannot be undone.
-                </p>
-                <dl className="my-4 divide-y divide-[var(--border)] text-sm">
-                  <div className="flex items-center justify-between py-2.5"><dt className="text-[var(--text-secondary)]">Tasks to delete</dt><dd className="font-medium tabular-nums">{tasks.length}</dd></div>
-                  <div className="flex items-center justify-between py-2.5"><dt className="text-[var(--text-secondary)]">Accounts to remove</dt><dd className="font-medium tabular-nums">{accountCount}</dd></div>
-                  <div className="py-2.5"><dt className="text-[var(--text-secondary)]">Protected account</dt><dd className="mt-1 break-all">{superEmail}</dd></div>
-                </dl>
-                {error && <p role="alert" className="mb-3 rounded-lg bg-red-50 dark:bg-red-950/40 p-3 text-sm text-red-700 dark:text-red-300">{error}</p>}
-                <HoldToPurgeButton onPurgeConfirm={execute} isLoading={isPurging} />
-                <button type="button" className="button-secondary mt-3 w-full" disabled={isPurging} onClick={close}>Cancel</button>
-              </>
-            )}
+            <div className="p-5">
+              {result ? (
+                <div role="status" className="space-y-4">
+                  <p id="purge-description" className="callout callout-success font-medium">Database purged successfully.</p>
+                  <p className="text-xs text-[var(--text-secondary)] tabular-nums">{result.deletedTaskCount ?? 0} tasks and {result.deletedUserCount ?? 0} accounts removed. The root superadmin account is preserved.</p>
+                  <button type="button" className="button-secondary w-full" autoFocus onClick={close}>Done</button>
+                </div>
+              ) : (
+                <>
+                  <p id="purge-description" className="text-xs leading-relaxed text-[var(--text-secondary)]">
+                    Permanently delete all workspace tasks and team accounts. This action cannot be undone.
+                  </p>
+                  <dl className="my-4 rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] divide-y divide-[var(--border-subtle)] text-xs">
+                    <div className="flex items-center justify-between px-3 py-2.5"><dt className="text-[var(--text-secondary)]">Tasks to delete</dt><dd className="font-semibold tabular-nums text-[var(--text-primary)]">{tasks.length}</dd></div>
+                    <div className="flex items-center justify-between px-3 py-2.5"><dt className="text-[var(--text-secondary)]">Accounts to remove</dt><dd className="font-semibold tabular-nums text-[var(--text-primary)]">{accountCount}</dd></div>
+                    <div className="px-3 py-2.5"><dt className="text-[var(--text-secondary)]">Protected account</dt><dd className="mt-1 font-mono text-[11px] text-[var(--text-primary)] break-all">{superEmail}</dd></div>
+                  </dl>
+                  {error && <p role="alert" className="callout callout-danger mb-3">{error}</p>}
+                  <HoldToPurgeButton onPurgeConfirm={execute} isLoading={isPurging} />
+                  <button type="button" className="button-secondary mt-3 w-full" disabled={isPurging} onClick={close}>Cancel</button>
+                </>
+              )}
+            </div>
           </DialogPanel>
         </div>
       )}

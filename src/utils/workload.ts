@@ -1,5 +1,6 @@
 import { Task, User, WorkloadBreakdown, TaskScoreItem, CognitiveLoad, Role } from '../types';
 import { getTaskAssigneeIds, formatBillableHours } from '../domain/taskTransitions';
+import { getAnalyticsClock } from '../domain/analyticsDate';
 
 export { getTaskAssigneeIds, formatBillableHours };
 
@@ -21,6 +22,18 @@ export function getTaskAssigneeCount(task: Pick<Task, 'userId' | 'assigneeIds'>)
 
 export function isTaskAssignedToUser(task: Pick<Task, 'userId' | 'assigneeIds'>, userId: string): boolean {
   return getTaskAssigneeIds(task).includes(userId);
+}
+
+export function groupTasksByAssignee(tasks: Task[]): Map<string, Task[]> {
+  const groups = new Map<string, Task[]>();
+  for (const task of tasks) {
+    for (const id of getTaskAssigneeIds(task)) {
+      const assigned = groups.get(id) ?? [];
+      assigned.push(task);
+      groups.set(id, assigned);
+    }
+  }
+  return groups;
 }
 
 /**
@@ -97,7 +110,7 @@ export function getUserTag(user?: {
   if (!user) {
     return {
       label: 'Member',
-      badgeClass: 'bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border-neutral-200 dark:border-white/10',
+      badgeClass: 'bg-[var(--surface-subtle)] text-[var(--text-secondary)] border-[var(--border)]',
     };
   }
   if (user.isBusinessLead || user.designation === 'business_lead' || user.designation === 'Business Lead') {
@@ -169,18 +182,18 @@ export function getUserTag(user?: {
   if (user.role === 'design') {
     return {
       label: 'Design',
-      badgeClass: 'bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border-neutral-200 dark:border-white/10',
+      badgeClass: 'bg-[var(--surface-subtle)] text-[var(--text-secondary)] border-[var(--border)]',
     };
   }
   if (user.role === 'content') {
     return {
       label: 'Content',
-      badgeClass: 'bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border-neutral-200 dark:border-white/10',
+      badgeClass: 'bg-[var(--surface-subtle)] text-[var(--text-secondary)] border-[var(--border)]',
     };
   }
   return {
     label: 'Member',
-    badgeClass: 'bg-neutral-100 dark:bg-white/5 text-neutral-500 dark:text-white/40 border-neutral-200 dark:border-white/10',
+    badgeClass: 'bg-[var(--surface-subtle)] text-[var(--text-secondary)] border-[var(--border)]',
   };
 }
 
@@ -209,6 +222,7 @@ export function getLastDayOfMonth(fromDate: Date = new Date()): string {
  * 100% mathematically aligned with calculateUserWorkload.
  */
 export function quickWorkloadScore(userTasks: Task[]): number {
+  const referenceDate = getWorkspaceToday();
   let score = 0;
   for (const t of userTasks) {
     if (t.status === 'pipeline' || t.status === 'retainer' || t.status === 'done' || t.status === 'archived') continue;
@@ -221,7 +235,7 @@ export function quickWorkloadScore(userTasks: Task[]): number {
       const cw = COGNITIVE_LOAD_WEIGHTS[t.cognitiveLoad] ?? 1.0;
       const hasDeadline = Boolean(t.dueDate && t.dueDate.trim() !== '');
       const sw = t.status === 'in_progress' ? 1.0 : (hasDeadline ? 0.75 : 0.50);
-      const days = getDaysRemaining(t.dueDate);
+      const days = getDaysRemaining(t.dueDate, referenceDate);
       const prox = hasDeadline ? getProximityMultiplier(days) : 1.0;
       score += (sw * cw * prox) / divisor;
     }
@@ -514,12 +528,12 @@ export function formatBillableDetailed(ms: number): string {
  * Status weights:
  * - pipeline: 0.0 (does not contribute to score)
  * - in progress: 1.0 (multiplied by cognitive load weight and deadline proximity)
- * - in review: rate per billable hour (high: 0.25, medium: 0.20, low: 0.15 pts/hr, deadline proximity bypassed)
- * - to do with deadline: 1.0
+ * - in review: rate per billable hour (high: 0.20, medium: 0.15, low: 0.10 pts/hr, deadline proximity bypassed)
+ * - to do with deadline: 0.75
  * - to do with no deadline: 0.5
  * - done / archived: 0.0
  */
-export function calculateUserWorkload(userTasks: Task[], referenceDate = new Date(), nowMs = Date.now()): WorkloadBreakdown {
+export function calculateUserWorkload(userTasks: Task[], referenceDate = getWorkspaceToday(), nowMs = Date.now()): WorkloadBreakdown {
   let totalScore = 0;
   let pipelineCount = 0;
   let inProgressCount = 0;
@@ -601,7 +615,7 @@ export function calculateUserWorkload(userTasks: Task[], referenceDate = new Dat
       statusWeight,
       cognitiveWeight: task.status === 'in_review' ? (IN_REVIEW_HOURLY_RATES[task.cognitiveLoad] ?? 0.15) : cognitiveWeight,
       proximityMultiplier,
-      calculatedScore: Math.round(taskScore * 100) / 100,
+      calculatedScore: taskScore,
       billableHours: task.status === 'in_review' ? Math.round(billableHours! * 100) / 100 : undefined,
     });
   }
@@ -973,187 +987,192 @@ export function isWorkingDay(d: Date): boolean {
   return day !== 0 && day !== 6;
 }
 
-/**
- * Returns estimated daily hours allocated to a task split equally across its working days
- * (using startDate if recorded, falling back to createdAt), divided by assignee count when perAssignee is true.
- */
-function getTaskAllocation(task: Task) {
-  if (!task.estimatedHours || task.estimatedHours <= 0) return null;
-  const start = parseLocalDate(task.startDate || task.createdAt) || parseLocalDate(formatLocalDateKey(new Date()))!;
-  const end = parseLocalDate(task.dueDate) || start;
-  const workingDays = getWorkingDaysCount(formatLocalDateKey(start), formatLocalDateKey(end));
-  return { start, end, estimatedHours: task.estimatedHours, workingDays };
+function getWorkspaceToday() {
+  return parseLocalDate(getAnalyticsClock().date)!;
 }
 
-export function getTaskDailyEstimatedHours(task: Task, onDate?: Date, perAssignee: boolean = true): number {
+function parseAllocationDate(value?: string): Date | null {
+  const date = value?.trim();
+  if (!date) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return parseLocalDate(date);
+  const instant = new Date(date);
+  return Number.isFinite(instant.getTime()) ? parseLocalDate(getAnalyticsClock(instant).date) : null;
+}
+
+function getTaskAllocation(task: Task) {
+  if (!task.estimatedHours || !Number.isFinite(task.estimatedHours) || task.estimatedHours <= 0) return null;
+  const start = parseAllocationDate(task.startDate) ?? parseAllocationDate(task.createdAt);
+  if (!start) return null;
+  const dueDate = parseAllocationDate(task.dueDate);
+  if (dueDate && dueDate < start) return null;
+  const workingDays = dueDate ? getWorkingDaysCount(formatLocalDateKey(start), formatLocalDateKey(dueDate)) : 1;
+  return {
+    start,
+    dueDate,
+    dailyHours: task.estimatedHours / workingDays,
+  };
+}
+
+export function getTaskDailyEstimatedHours(task: Task, onDate?: Date, perAssignee = true): number {
   const allocation = getTaskAllocation(task);
   if (!allocation) return 0;
-  const { start, end } = allocation;
-  const divisor = perAssignee ? getTaskAssigneeCount(task) : 1;
-  const dailyHours = allocation.estimatedHours / divisor / allocation.workingDays;
-
-  if (!onDate) return Math.round(dailyHours * 10) / 10;
-
-  const dStart = start.getTime();
-  const dEnd = end.getTime();
-  const target = new Date(onDate.getFullYear(), onDate.getMonth(), onDate.getDate()).getTime();
-
-  if (isWorkingDay(onDate) && target >= dStart && target <= dEnd) {
-    return Math.round(dailyHours * 10) / 10;
+  const day = onDate ? parseLocalDate(getAnalyticsClock(onDate).date) : null;
+  if (day && (!isWorkingDay(day) || day < allocation.start || day > (allocation.dueDate ?? allocation.start))) {
+    return 0;
   }
-  return 0;
+  return allocation.dailyHours / (perAssignee ? getTaskAssigneeCount(task) : 1);
 }
 
-/**
- * Computes a user's total assigned hours per day across tasks on a given date.
- */
-export function getUserDailyAssignedHours(user: User, tasks: Task[], onDate: Date = new Date()): number {
-  let totalDailyHours = 0;
-  const targetDateStr = formatLocalDateKey(onDate);
-  const isTargetToday = targetDateStr === formatLocalDateKey(new Date());
-
-  for (const t of tasks) {
-    if (!t || !isTaskAssignedToUser(t, user.id)) continue;
-    if (!t.estimatedHours || t.estimatedHours <= 0) continue;
-
-    if (isTargetToday) {
-      // For today: include active assigned tasks (including assigned pipeline deliverables)
-      if (t.status === 'pipeline' || t.status === 'todo' || t.status === 'in_progress' || t.status === 'in_review') {
-        const allocation = getTaskAllocation(t);
-        if (allocation) totalDailyHours += allocation.estimatedHours / getTaskAssigneeCount(t) / allocation.workingDays;
-      }
-    } else {
-      const daily = getTaskDailyEstimatedHours(t, onDate, true);
-      totalDailyHours += daily;
-    }
-  }
-
-  return Math.round(totalDailyHours * 10) / 10;
-}
-
-export function getAssignedHoursByMemberAndDate(tasks: Task[], dates: string[], today = formatLocalDateKey(new Date())) {
+function getAssignedHoursByDate(
+  tasks: Task[],
+  dates: string[],
+  reportDate: string,
+  memberIds?: ReadonlySet<string>,
+) {
   const days = dates.flatMap(key => {
     const date = parseLocalDate(key);
-    return date ? [{ key, time: date.getTime(), working: isWorkingDay(date) }] : [];
+    return date && isWorkingDay(date) ? [{ key, date }] : [];
   });
   const totals = new Map<string, Map<string, number>>();
+  const seen = new Set<string>();
   for (const task of tasks) {
+    if (seen.has(task.id)) continue;
+    seen.add(task.id);
+    if (task.status !== 'pipeline' && task.status !== 'todo' &&
+        task.status !== 'in_progress' && task.status !== 'in_review') continue;
     const assignees = getTaskAssigneeIds(task);
-    if (assignees.length === 0) continue;
+    if (!assignees.length || (memberIds && !assignees.some(id => memberIds.has(id)))) continue;
     const allocation = getTaskAllocation(task);
     if (!allocation) continue;
-    const start = allocation.start.getTime();
-    const end = allocation.end.getTime();
-    const dailyHours = allocation.estimatedHours / assignees.length / allocation.workingDays;
-    const roundedHours = Math.round(dailyHours * 10) / 10;
-    const active = task.status === 'pipeline' || task.status === 'todo' ||
-      task.status === 'in_progress' || task.status === 'in_review';
-    for (const day of days) {
-      const hours = day.key === today
-        ? (active ? dailyHours : 0)
-        : (day.working && day.time >= start && day.time <= end ? roundedHours : 0);
-      if (hours === 0) continue;
+    const hours = allocation.dailyHours / assignees.length;
+
+    for (const { key, date } of days) {
+      if (date < allocation.start) continue;
+      // An active assignment without a deadline counts on the report day only.
+      if (allocation.dueDate ? date > allocation.dueDate : key !== reportDate) continue;
       for (const id of assignees) {
+        if (memberIds && !memberIds.has(id)) continue;
         let byDate = totals.get(id);
         if (!byDate) {
           byDate = new Map();
           totals.set(id, byDate);
         }
-        byDate.set(day.key, (byDate.get(day.key) || 0) + hours);
+        byDate.set(key, (byDate.get(key) ?? 0) + hours);
       }
     }
   }
   return totals;
 }
 
-/**
- * Checks whether a user is utilized (> 3 hours estimated / day).
- */
-export function isUserUtilized(user: User, tasks: Task[], onDate: Date = new Date()): boolean {
-  return getUserDailyAssignedHours(user, tasks, onDate) > 3;
+export function getAssignedHoursByMemberAndDate(tasks: Task[], dates: string[], reportDate = getAnalyticsClock().date) {
+  return getAssignedHoursByDate(tasks, dates, reportDate);
 }
 
-/**
- * Computes teamwise utilization percentage.
- */
-export function calculateTeamUtilization(teamUsers: User[], tasks: Task[], onDate: Date = new Date()) {
-  if (teamUsers.length === 0) {
-    return { utilizationPercent: 0, utilizedCount: 0, totalCount: 0, underutilizedUsers: [] };
-  }
+export function getUserDailyAssignedHours(user: User, tasks: Task[], onDate = new Date()): number {
+  const date = getAnalyticsClock(onDate).date;
+  return getAssignedHoursByDate(tasks, [date], date, new Set([user.id])).get(user.id)?.get(date) ?? 0;
+}
 
-  const underutilizedUsers: Array<{ user: User; assignedHours: number }> = [];
-  let utilizedCount = 0;
+export function meetsDailyUtilizationTarget(assignedHours: number): boolean {
+  // Absorb floating-point noise from splitting and adding shared hours.
+  return assignedHours >= 3 - 1e-9;
+}
 
-  for (const u of teamUsers) {
-    const assignedHours = getUserDailyAssignedHours(u, tasks, onDate);
-    if (assignedHours > 3) {
-      utilizedCount++;
-    } else {
-      underutilizedUsers.push({ user: u, assignedHours });
-    }
-  }
+export function isUserUtilized(user: User, tasks: Task[], onDate = new Date()): boolean {
+  return meetsDailyUtilizationTarget(getUserDailyAssignedHours(user, tasks, onDate));
+}
 
-  const utilizationPercent = Math.round((utilizedCount / teamUsers.length) * 100);
+export function calculateTeamUtilization(teamUsers: User[], tasks: Task[], onDate = new Date()) {
+  const date = getAnalyticsClock(onDate).date;
+  const hoursByMember = getAssignedHoursByDate(tasks, [date], date, new Set(teamUsers.map(user => user.id)));
+  const underutilizedUsers = teamUsers.flatMap(user => {
+    const assignedHours = hoursByMember.get(user.id)?.get(date) ?? 0;
+    return meetsDailyUtilizationTarget(assignedHours) ? [] : [{ user, assignedHours }];
+  });
+  const totalCount = teamUsers.length;
+  const utilizedCount = totalCount - underutilizedUsers.length;
   return {
-    utilizationPercent,
+    utilizationPercent: totalCount ? Math.round((utilizedCount / totalCount) * 100) : 0,
     utilizedCount,
-    totalCount: teamUsers.length,
+    totalCount,
     underutilizedUsers,
   };
 }
 
-/**
- * Calculates efficiency across a collection of tasks (Aggregate time taken / time estimated).
- * Deduplicates by task id; when forUserId is passed, divides each task's estimate & billable time by assignee count.
- */
-export function calculateTasksEfficiency(
-  taskList: Task[],
-  options?: { forUserId?: string; nowMs?: number }
-): {
-  efficiencyPercent: number;
-  totalTimeTakenHours: number;
-  totalEstimatedHours: number;
-} {
-  let totalTimeTakenMs = 0;
-  let totalEstimatedHours = 0;
-  const seen = new Set<string>();
+interface TaskHoursOptions {
+  nowMs?: number;
+  memberIds?: ReadonlySet<string>;
+}
 
-  for (const t of taskList) {
-    if (!t || (t.id && seen.has(t.id))) continue;
-    if (t.id) seen.add(t.id);
-    if (options?.forUserId && !isTaskAssignedToUser(t, options.forUserId)) continue;
-    const divisor = options?.forUserId ? getTaskAssigneeCount(t) : 1;
-    const billableMs = getTaskBillableMs(t, options?.nowMs) / divisor;
-    totalTimeTakenMs += billableMs;
-    if (t.estimatedHours && t.estimatedHours > 0) {
-      totalEstimatedHours += t.estimatedHours / divisor;
-    }
+function getTaskHours(task: Task, nowMs: number, memberIds?: ReadonlySet<string>) {
+  let share = 1;
+  if (memberIds) {
+    const assignees = getTaskAssigneeIds(task);
+    const includedCount = assignees.filter(id => memberIds.has(id)).length;
+    share = includedCount ? includedCount / assignees.length : 0;
   }
-
-  const totalTimeTakenHours = Math.round((totalTimeTakenMs / (1000 * 60 * 60)) * 10) / 10;
-  totalEstimatedHours = Math.round(totalEstimatedHours * 10) / 10;
-
-  let efficiencyPercent = 0;
-  if (totalEstimatedHours > 0) {
-    efficiencyPercent = Math.round((totalTimeTakenHours / totalEstimatedHours) * 100);
-  } else if (totalTimeTakenHours > 0) {
-    efficiencyPercent = 100;
-  }
-
+  const estimate = task.estimatedHours ?? 0;
+  const billableMs = share ? getTaskBillableMs(task, nowMs) : 0;
   return {
-    efficiencyPercent,
-    totalTimeTakenHours,
-    totalEstimatedHours,
+    billableHours: Number.isFinite(billableMs) && billableMs > 0 ? billableMs / 3_600_000 * share : 0,
+    estimatedHours: Number.isFinite(estimate) && estimate > 0 ? estimate * share : 0,
   };
 }
 
-/**
- * Formats ratio annotation as (Billable hours / Time estimated) eg "2h / 6h"
- */
-export function formatHoursRatio(billableHours: number, estimatedHours: number): string {
-  const b = Math.round(billableHours * 10) / 10;
-  const e = Math.round(estimatedHours * 10) / 10;
-  return `(${b}h / ${e}h)`;
+/** Measures completed work that has both an estimate and a recorded duration. */
+export function calculateTasksEfficiency(
+  tasks: Task[],
+  { nowMs = Date.now(), memberIds }: TaskHoursOptions = {},
+) {
+  let billableHours = 0;
+  let estimatedHours = 0;
+  const seen = new Set<string>();
+
+  for (const task of tasks) {
+    if (seen.has(task.id) || (task.status !== 'done' && task.status !== 'archived')) continue;
+    seen.add(task.id);
+    const hours = getTaskHours(task, nowMs, memberIds);
+    if (hours.estimatedHours <= 0 || hours.billableHours <= 0) continue;
+    billableHours += hours.billableHours;
+    estimatedHours += hours.estimatedHours;
+  }
+
+  const percent = (estimatedHours / billableHours) * 100;
+  return {
+    efficiencyPercent: Number.isFinite(percent) ? percent : null,
+    billableHours,
+    estimatedHours,
+  };
+}
+
+export function rankTaskHours(
+  tasks: Task[],
+  groupBy: (task: Task) => string,
+  { nowMs = Date.now(), memberIds }: TaskHoursOptions = {},
+) {
+  const groups = new Map<string, { key: string; billableHours: number; estimatedHours: number }>();
+  const seen = new Set<string>();
+  for (const task of tasks) {
+    if (seen.has(task.id)) continue;
+    seen.add(task.id);
+    const hours = getTaskHours(task, nowMs, memberIds);
+    if (!hours.billableHours && !hours.estimatedHours && memberIds) continue;
+    const key = groupBy(task);
+    const group = groups.get(key) ?? { key, billableHours: 0, estimatedHours: 0 };
+    group.billableHours += hours.billableHours;
+    group.estimatedHours += hours.estimatedHours;
+    groups.set(key, group);
+  }
+  return [...groups.values()].sort((a, b) => b.billableHours - a.billableHours);
+}
+
+export function formatHoursRatio(firstHours: number, secondHours: number): string {
+  return `(${formatHours(firstHours)} / ${formatHours(secondHours)})`;
+}
+
+export function formatHours(hours: number): string {
+  if (hours > 0 && hours < 0.05) return '<0.1h';
+  return `${Math.round(hours * 10) / 10}h`;
 }
 
 export interface DeliveryUnitInfo {

@@ -7,15 +7,17 @@ import { User, Task, AnalyticsScope, AnalyticsTimeframe, AnalyticsSnapshot } fro
 import { getAnalyticsClock } from '../domain/analyticsDate';
 import {
   calculateTasksEfficiency,
+  formatHours,
   formatHoursRatio,
+  meetsDailyUtilizationTarget,
+  rankTaskHours,
   getDeliveryUnits,
-  getUserDeliveryUnit,
-  getTaskBillableMs,
   calculateUserWorkload,
   getUserTag,
   getAssignedHoursByMemberAndDate,
   isWorkingDay,
   getTaskAssigneeIds,
+  groupTasksByAssignee,
   isTaskAssignedToUser,
   formatLocalDateKey,
   parseLocalDate,
@@ -43,6 +45,8 @@ interface AnalyticsModalProps {
 
 const EMPTY_USERS: User[] = [];
 const EMPTY_TASKS: Task[] = [];
+const clientName = (task: Task) => task.client?.trim() || 'Internal / Unassigned';
+const projectName = (task: Task) => task.project?.trim() || 'General / Unnamed';
 
 export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
   const workspace = useWorkspace();
@@ -181,54 +185,29 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
     return { scopedUsers: uList, scopedTasks: tList };
   }, [users, tasks, filterScope, selectedClientId, selectedDeliveryUnitId, selectedProjectId, selectedUserId, deliveryUnits]);
 
-  // SECTION 1: Total Employees, Total Utilization, Total Efficiency, Top Accounts (Graphically at Top)
+  const scopedMemberIds = useMemo(() => filterScope === 'user' || filterScope === 'delivery_unit'
+    ? new Set(scopedUsers.map(user => user.id))
+    : undefined, [filterScope, scopedUsers]);
+
   const topMetrics = useMemo(() => {
     const totalEmployees = scopedUsers.length;
-
-    // Total utilization across dateRange
-    let totalUtilizedCount = 0;
     const assignedHours = getAssignedHoursByMemberAndDate(scopedTasks, [reportDate], reportDate);
-    for (const u of scopedUsers) {
-      const assigned = Math.round((assignedHours.get(u.id)?.get(reportDate) || 0) * 10) / 10;
-      if (assigned > 3) {
-        totalUtilizedCount++;
-      }
-    }
-    const totalUtilization = totalEmployees > 0 ? Math.round((totalUtilizedCount / totalEmployees) * 100) : 0;
-
-    // Total efficiency
-    const { efficiencyPercent, totalTimeTakenHours, totalEstimatedHours } = calculateTasksEfficiency(scopedTasks, { nowMs: capturedMs });
-
-    // Top accounts (ranked by higher of billable or estimated)
-    const clientMap = new Map<string, { billableMs: number; estimatedHours: number }>();
-    for (const t of scopedTasks) {
-      const clientName = t.client?.trim() || 'Internal / Unassigned';
-      const existing = clientMap.get(clientName) || { billableMs: 0, estimatedHours: 0 };
-      existing.billableMs += getTaskBillableMs(t, capturedMs);
-      if (t.estimatedHours) existing.estimatedHours += t.estimatedHours;
-      clientMap.set(clientName, existing);
-    }
-
-    const topAccountsList = Array.from(clientMap.entries()).map(([client, data]) => {
-      const billableH = Math.round((data.billableMs / 3600000) * 10) / 10;
-      const estH = Math.round(data.estimatedHours * 10) / 10;
-      const keyH = Math.max(billableH, estH);
-      return { client, billableHours: billableH, estimatedHours: estH, keyHours: keyH };
-    }).sort((a, b) => b.keyHours - a.keyHours);
-
-    const maxAccountHours = topAccountsList.length > 0 ? Math.max(...topAccountsList.map(a => a.keyHours), 1) : 1;
+    const totalUtilizedCount = scopedUsers.filter(user =>
+      meetsDailyUtilizationTarget(assignedHours.get(user.id)?.get(reportDate) ?? 0)
+    ).length;
+    const totalUtilization = totalEmployees ? Math.round((totalUtilizedCount / totalEmployees) * 100) : 0;
+    const options = { nowMs: capturedMs, memberIds: scopedMemberIds };
+    const efficiency = calculateTasksEfficiency(scopedTasks, options);
+    const topAccountsList = rankTaskHours(scopedTasks, clientName, options).filter(account => account.billableHours > 0);
 
     return {
       totalEmployees,
       totalUtilizedCount,
       totalUtilization,
-      efficiencyPercent,
-      totalTimeTakenHours,
-      totalEstimatedHours,
+      efficiency,
       topAccountsList,
-      maxAccountHours,
     };
-  }, [scopedUsers, scopedTasks, capturedMs, reportDate]);
+  }, [scopedUsers, scopedTasks, scopedMemberIds, capturedMs, reportDate]);
 
   // SECTION 1: Underutilized Employees (< 3 hours per day assigned) with dates
   const underutilizedEmployees = useMemo(() => {
@@ -248,9 +227,9 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
       let totalAssigned = 0;
 
       for (const dateStr of evaluatedDates) {
-        const dailyAssigned = Math.round((assignedHours.get(u.id)?.get(dateStr) || 0) * 10) / 10;
+        const dailyAssigned = assignedHours.get(u.id)?.get(dateStr) ?? 0;
         totalAssigned += dailyAssigned;
-        if (dailyAssigned < 3) {
+        if (!meetsDailyUtilizationTarget(dailyAssigned)) {
           underutilizedDates.push(dateStr);
         }
       }
@@ -278,16 +257,19 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
       dates: string[];
     }> = [];
 
+    const tasksByUser = groupTasksByAssignee(scopedTasks);
     for (const u of scopedUsers) {
-      const uTasks = scopedTasks.filter(t => isTaskAssignedToUser(t, u.id));
-      const { efficiencyPercent, totalTimeTakenHours, totalEstimatedHours } = calculateTasksEfficiency(uTasks, { forUserId: u.id, nowMs: capturedMs });
+      const { efficiencyPercent, billableHours, estimatedHours } = calculateTasksEfficiency(tasksByUser.get(u.id) ?? [], {
+        memberIds: new Set([u.id]),
+        nowMs: capturedMs,
+      });
 
-      if (efficiencyPercent < 50 && (totalEstimatedHours > 0 || totalTimeTakenHours > 0)) {
+      if (efficiencyPercent !== null && efficiencyPercent < 50) {
         result.push({
           user: u,
           efficiencyPercent,
-          timeTaken: totalTimeTakenHours,
-          timeEstimated: totalEstimatedHours,
+          timeTaken: billableHours,
+          timeEstimated: estimatedHours,
           dates: [reportDate],
         });
       }
@@ -298,81 +280,47 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
 
   // SECTIONS 3 & 4: Key Accounts & Key Delivery Units (Contextually Adjusted by Filter)
   const sections3And4Data = useMemo(() => {
-    // Helper to calculate key metric and projects for a task list
-    const computeProjectsForTasks = (taskList: Task[]) => {
-      const map = new Map<string, { billableMs: number; estimatedHours: number }>();
-      for (const t of taskList) {
-        const pName = t.project?.trim() || 'General / Unnamed';
-        const existing = map.get(pName) || { billableMs: 0, estimatedHours: 0 };
-        existing.billableMs += getTaskBillableMs(t, capturedMs);
-        if (t.estimatedHours) existing.estimatedHours += t.estimatedHours;
-        map.set(pName, existing);
-      }
-      return Array.from(map.entries()).map(([project, d]) => {
-        const b = Math.round((d.billableMs / 3600000) * 10) / 10;
-        const e = Math.round(d.estimatedHours * 10) / 10;
-        return { project, billableHours: b, estimatedHours: e, keyHours: Math.max(b, e) };
-      }).sort((a, b) => b.keyHours - a.keyHours);
-    };
+    const options = { nowMs: capturedMs, memberIds: scopedMemberIds };
+    const computeProjectsForTasks = (taskList: Task[], memberIds = scopedMemberIds) =>
+      rankTaskHours(taskList, projectName, { ...options, memberIds }).map(hours => ({ ...hours, project: hours.key }));
+    const computeClientsForTasks = (taskList: Task[], memberIds = scopedMemberIds) =>
+      rankTaskHours(taskList, clientName, { ...options, memberIds }).map(hours => ({ ...hours, client: hours.key }));
 
-    // Helper to calculate clients for a task list
-    const computeClientsForTasks = (taskList: Task[]) => {
-      const map = new Map<string, { billableMs: number; estimatedHours: number }>();
-      for (const t of taskList) {
-        const cName = t.client?.trim() || 'Internal / Unassigned';
-        const existing = map.get(cName) || { billableMs: 0, estimatedHours: 0 };
-        existing.billableMs += getTaskBillableMs(t, capturedMs);
-        if (t.estimatedHours) existing.estimatedHours += t.estimatedHours;
-        map.set(cName, existing);
+    const unitsById = new Map(deliveryUnits.map(unit => [unit.id, unit]));
+    const userToUnit = new Map<string, string>();
+    const generalUnit: DeliveryUnitInfo = { id: 'unit-general', name: 'General Team', type: 'general', userIds: [] };
+    for (const unit of deliveryUnits) {
+      for (const id of unit.userIds) {
+        if (!userToUnit.has(id)) userToUnit.set(id, unit.id);
       }
-      return Array.from(map.entries()).map(([client, d]) => {
-        const b = Math.round((d.billableMs / 3600000) * 10) / 10;
-        const e = Math.round(d.estimatedHours * 10) / 10;
-        return { client, billableHours: b, estimatedHours: e, keyHours: Math.max(b, e) };
-      }).sort((a, b) => b.keyHours - a.keyHours);
-    };
+    }
+    for (const user of users) {
+      if (userToUnit.has(user.id)) continue;
+      userToUnit.set(user.id, generalUnit.id);
+      generalUnit.userIds.push(user.id);
+    }
+    unitsById.set(generalUnit.id, generalUnit);
 
-    // Helper to calculate delivery units for a task list (split multi-assignee shares cleanly)
-    const computeDeliveryUnitsForTasks = (taskList: Task[]) => {
-      const map = new Map<string, { du: DeliveryUnitInfo; billableMs: number; estimatedHours: number }>();
-      for (const t of taskList) {
-        const assignees = getTaskAssigneeIds(t);
-        if (assignees.length === 0) continue;
-        const share = assignees.length;
-        for (const uid of assignees) {
-          const user = users.find(u => u.id === uid);
-          if (!user) continue;
-          const du = getUserDeliveryUnit(user, deliveryUnits) || {
-            id: 'unit-general',
-            name: 'General Team',
-            type: 'general' as const,
-            userIds: [user.id],
-          };
-          const existing = map.get(du.id) || { du, billableMs: 0, estimatedHours: 0 };
-          existing.billableMs += getTaskBillableMs(t, capturedMs) / share;
-          if (t.estimatedHours) existing.estimatedHours += t.estimatedHours / share;
-          map.set(du.id, existing);
-        }
+    const tasksByUnit = new Map<string, Task[]>();
+    for (const task of scopedTasks) {
+      const unitIds = new Set(getTaskAssigneeIds(task).map(id => userToUnit.get(id)));
+      for (const id of unitIds) {
+        if (!id) continue;
+        const unitTasks = tasksByUnit.get(id) ?? [];
+        unitTasks.push(task);
+        tasksByUnit.set(id, unitTasks);
       }
-      return Array.from(map.values()).map(d => {
-        const b = Math.round((d.billableMs / 3600000) * 10) / 10;
-        const e = Math.round(d.estimatedHours * 10) / 10;
-        return { du: d.du, billableHours: b, estimatedHours: e, keyHours: Math.max(b, e) };
-      }).sort((a, b) => b.keyHours - a.keyHours);
-    };
-
-    // Helper to compute tasks
-    const computeKeyTasks = (taskList: Task[]) => {
-      return taskList.map(t => {
-        const b = Math.round((getTaskBillableMs(t, capturedMs) / 3600000) * 10) / 10;
-        const e = Math.round((t.estimatedHours || 0) * 10) / 10;
-        return { task: t, billableHours: b, estimatedHours: e, keyHours: Math.max(b, e) };
-      }).sort((a, b) => b.keyHours - a.keyHours);
-    };
+    }
+    const computeDeliveryUnits = () => [...tasksByUnit].flatMap(([id, unitTasks]) => {
+      const du = unitsById.get(id)!;
+      const memberIds = new Set(du.userIds.filter(userId => userToUnit.get(userId) === id));
+      const [hours] = rankTaskHours(unitTasks, () => id, { ...options, memberIds });
+      return hours ? [{ ...hours, du, memberIds, unitTasks }] : [];
+    }).sort((a, b) => b.billableHours - a.billableHours);
 
     if (filterScope === 'client') {
       // In per client view: Section 3 = Key Delivery Units, Section 4 = Key Projects
-      const keyDeliveryUnits = computeDeliveryUnitsForTasks(scopedTasks);
+      const keyDeliveryUnits = computeDeliveryUnits();
       const keyProjects = computeProjectsForTasks(scopedTasks);
       return {
         section3Title: 'Key Delivery Units (for this Client)',
@@ -401,7 +349,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
     if (filterScope === 'project') {
       // In per project view: Section 3 = Key Clients, Section 4 = Key Delivery Units
       const keyClients = computeClientsForTasks(scopedTasks);
-      const keyDeliveryUnits = computeDeliveryUnitsForTasks(scopedTasks);
+      const keyDeliveryUnits = computeDeliveryUnits();
       return {
         section3Title: 'Key Clients (for this Project)',
         section3Type: 'clients',
@@ -416,7 +364,9 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
       // In per user view: Section 3 = Key Clients, Section 4 = Key Projects & Tasks
       const keyClients = computeClientsForTasks(scopedTasks);
       const keyProjects = computeProjectsForTasks(scopedTasks);
-      const keyTasks = computeKeyTasks(scopedTasks);
+      const tasksById = new Map(scopedTasks.map(task => [task.id, task]));
+      const keyTasks = rankTaskHours(scopedTasks, task => task.id, options)
+        .map(hours => ({ ...hours, task: tasksById.get(hours.key)! }));
       return {
         section3Title: 'Key Clients (worked on by this User)',
         section3Type: 'clients',
@@ -427,44 +377,22 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
       };
     }
 
-    // Default 'all' view: pre-group tasks once to avoid O(n^2) re-scans
     const tasksByClient = new Map<string, Task[]>();
-    const userToDuId = new Map<string, string>();
-    for (const du of deliveryUnits) {
-      for (const uid of du.userIds) userToDuId.set(uid, du.id);
-    }
-    const tasksByDuId = new Map<string, Task[]>();
-    for (const t of tasks) {
-      const cName = t.client?.trim() || 'Internal / Unassigned';
-      const cList = tasksByClient.get(cName) || [];
-      cList.push(t);
-      tasksByClient.set(cName, cList);
-
-      const seenDus = new Set<string>();
-      for (const uid of getTaskAssigneeIds(t)) {
-        const duId = userToDuId.get(uid) || 'unit-general';
-        if (!seenDus.has(duId)) {
-          seenDus.add(duId);
-          const dList = tasksByDuId.get(duId) || [];
-          dList.push(t);
-          tasksByDuId.set(duId, dList);
-        }
-      }
+    for (const task of scopedTasks) {
+      const name = clientName(task);
+      const clientTasks = tasksByClient.get(name) ?? [];
+      clientTasks.push(task);
+      tasksByClient.set(name, clientTasks);
     }
 
-    const keyAccounts = computeClientsForTasks(tasks).map(c => ({
-      ...c,
-      topProjects: computeProjectsForTasks(tasksByClient.get(c.client) || []),
+    const keyAccounts = computeClientsForTasks(scopedTasks).map(account => ({
+      ...account,
+      topProjects: computeProjectsForTasks(tasksByClient.get(account.client) ?? []),
     }));
-
-    const keyUnits = computeDeliveryUnitsForTasks(tasks).map(u => {
-      const unitTasks = tasksByDuId.get(u.du.id) || [];
-      return {
-        ...u,
-        topClients: computeClientsForTasks(unitTasks),
-        topProjects: computeProjectsForTasks(unitTasks),
-      };
-    });
+    const keyUnits = computeDeliveryUnits().map(({ memberIds, unitTasks, ...unit }) => ({
+      ...unit,
+      topClients: computeClientsForTasks(unitTasks, memberIds),
+    }));
 
     return {
       section3Title: 'Key Accounts (Clients & Top Projects)',
@@ -474,20 +402,13 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
       section4Type: 'all_key_units',
       section4Items: keyUnits,
     };
-  }, [filterScope, scopedTasks, tasks, users, deliveryUnits, capturedMs]);
+  }, [filterScope, scopedTasks, scopedMemberIds, users, deliveryUnits, capturedMs]);
 
   // SECTION 5: Pressure Metrics (Teams with highest average workload score across members)
   const pressureMetrics = useMemo(() => {
     const taskById = new Map<string, Task>(tasks.map(t => [t.id, t]));
     const userById = new Map<string, User>(users.map(u => [u.id, u]));
-    const tasksByUserId = new Map<string, Task[]>();
-    for (const t of tasks) {
-      for (const uid of getTaskAssigneeIds(t)) {
-        const list = tasksByUserId.get(uid) || [];
-        list.push(t);
-        tasksByUserId.set(uid, list);
-      }
-    }
+    const tasksByUserId = groupTasksByAssignee(scopedTasks);
 
     // Compute workload score for every user once
     const referenceDate = parseLocalDate(reportDate)!;
@@ -535,41 +456,25 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
         memberCount: membersInUnit.length,
         members: membersInUnit.sort((a, b) => b.score - a.score),
       };
-    }).sort((a, b) => b.avgScore - a.avgScore);
+    }).filter(unit => unit.memberCount > 0).sort((a, b) => b.avgScore - a.avgScore);
 
     // Contextual rankings:
     if (filterScope === 'project') {
       // Per project view: tasks contributing highest workload scores (reusing per-user breakdowns)
-      const taskScoreByUserAndTask = new Map<string, number>();
-      const getBreakdownForUser = (uid: string) => {
-        let b = workloadByUserId.get(uid);
-        if (!b) {
-          b = calculateUserWorkload(tasksByUserId.get(uid) || [], referenceDate, capturedMs);
-          workloadByUserId.set(uid, b);
+      const scoresByTask = new Map<string, number>();
+      for (const breakdown of workloadByUserId.values()) {
+        for (const item of breakdown.items) {
+          scoresByTask.set(item.taskId, (scoresByTask.get(item.taskId) ?? 0) + item.calculatedScore);
         }
-        return b;
-      };
-      const projectTasks = scopedTasks.map(t => {
-        const firstUid = getTaskAssigneeIds(t)[0];
-        const u = firstUid ? userById.get(firstUid) : undefined;
-        let score = 1.5;
-        if (firstUid) {
-          const cacheKey = `${firstUid}:${t.id}`;
-          if (taskScoreByUserAndTask.has(cacheKey)) {
-            score = taskScoreByUserAndTask.get(cacheKey)!;
-          } else {
-            const breakdown = getBreakdownForUser(firstUid);
-            for (const item of breakdown.items) {
-              taskScoreByUserAndTask.set(`${firstUid}:${item.taskId}`, item.calculatedScore);
-            }
-            score = taskScoreByUserAndTask.get(cacheKey) ?? 1.5;
-          }
-        }
-        return {
-          task: t,
-          user: u,
-          calculatedScore: score,
-        };
+      }
+      const projectTasks = scopedTasks.flatMap(task => {
+        const score = scoresByTask.get(task.id) ?? 0;
+        if (score <= 0) return [];
+        const assignees = getTaskAssigneeIds(task).flatMap(id => {
+          const user = userById.get(id);
+          return user ? [user.name] : [];
+        });
+        return [{ task, assignees, calculatedScore: score }];
       }).sort((a, b) => b.calculatedScore - a.calculatedScore);
 
       return {
@@ -607,6 +512,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
   }, [scopedUsers, scopedTasks, tasks, users, deliveryUnits, filterScope, reportDate, capturedMs]);
 
   if (!isOpen) return null;
+  const { efficiencyPercent, billableHours, estimatedHours } = topMetrics.efficiency;
 
   return (
     <AnimatePresence>
@@ -617,37 +523,39 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
         }}
       >
         <DialogPanel aria-label="Workspace analytics" onClose={onClose} busy={false}
-          initial={{ opacity: 0, scale: 0.96, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.96, y: 10 }}
-          transition={{ duration: 0.18, ease: 'easeOut' }}
-          className="relative w-full max-w-6xl flex flex-col rounded-2xl border border-[var(--border)] bg-[var(--surface)] overflow-hidden "
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 6 }}
+          transition={{ duration: 0.16, ease: [0.2, 0.7, 0.2, 1] }}
+          onClick={e => e.stopPropagation()}
+          className="relative w-full max-w-6xl my-auto flex flex-col overflow-hidden"
         >
-          <div className="flex items-start justify-between gap-3 px-4 sm:px-6 py-4 border-b border-[var(--border)]">
-            <div className="min-w-0">
-              <h2 className="text-base font-semibold tracking-tight">Workspace analytics</h2>
-              <p className="mt-1 flex items-center gap-1.5 text-xs text-[var(--text-secondary)]">
+          {/* Ruled Dialog Header */}
+          <div className="dialog-header">
+            <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
+              <h2 className="text-[15px] font-bold tracking-tight text-[var(--text-primary)]">
+                Workspace Analytics
+              </h2>
+              <span className="ledger-badge">
                 {isLocked ? <Lock aria-hidden="true" className="h-3 w-3 shrink-0" /> : <Unlock aria-hidden="true" className="h-3 w-3 shrink-0" />}
-                {lockLabel}
-              </p>
+                <span>{lockLabel}</span>
+              </span>
             </div>
-            <button type="button" aria-label="Close analytics" onClick={onClose} className="icon-button shrink-0"><X className="h-4 w-4" /></button>
+            <button type="button" aria-label="Close analytics" onClick={onClose} className="icon-button shrink-0">
+              <X className="h-4 w-4" />
+            </button>
           </div>
 
           {/* Timeframe Bar & Contextual Filters */}
-          <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-3 border-b border-[var(--border)] bg-[var(--surface-muted)]">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-2.5 border-b border-[var(--border)] bg-[var(--surface)] shrink-0">
             {/* Timeframe Presets & Calendar Picker */}
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="inline-flex rounded-xl bg-[var(--surface-raised)] p-1 border border-[var(--border)] text-xs shadow-xs">
+              <div className="segmented-track">
                 <button
                   type="button"
                   aria-pressed={timeframe === 'today'}
                   onClick={() => setTimeframe('today')}
-                  className={`rounded-lg px-3 py-1 font-semibold transition-all cursor-pointer ${
-                    timeframe === 'today'
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'text-neutral-600 dark:text-white/60 hover:text-neutral-900 dark:hover:text-white'
-                  }`}
+                  className={`segmented-item cursor-pointer ${timeframe === 'today' ? 'segmented-item-active' : ''}`}
                 >
                   Today
                 </button>
@@ -655,54 +563,49 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                   type="button"
                   aria-pressed={timeframe === 'week'}
                   onClick={() => setTimeframe('week')}
-                  className={`rounded-lg px-3 py-1 font-semibold transition-all cursor-pointer ${
-                    timeframe === 'week'
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'text-neutral-600 dark:text-white/60 hover:text-neutral-900 dark:hover:text-white'
-                  }`}
+                  className={`segmented-item cursor-pointer ${timeframe === 'week' ? 'segmented-item-active' : ''}`}
                 >
                   This Week
                 </button>
                 <button
                   type="button"
+                  aria-pressed={timeframe === 'custom'}
                   onClick={() => setTimeframe('custom')}
-                  className={`rounded-lg px-3 py-1 font-semibold transition-all cursor-pointer ${
-                    timeframe === 'custom'
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'text-neutral-600 dark:text-white/60 hover:text-neutral-900 dark:hover:text-white'
-                  }`}
+                  className={`segmented-item cursor-pointer ${timeframe === 'custom' ? 'segmented-item-active' : ''}`}
                 >
                   Calendar Tool
                 </button>
               </div>
 
-              {/* Calendar Date Picker Tool */}
               {timeframe === 'custom' && (
-                <div className="flex items-center gap-2 bg-[var(--surface-raised)] px-2.5 py-1 rounded-xl border border-[var(--border)] shadow-xs text-xs">
-                  <Calendar className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                <div className="flex items-center gap-2 bg-[var(--surface)] px-2.5 py-1 rounded-[7px] border border-[var(--border)] text-xs tabular-nums">
+                  <Calendar className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
                   <input
                     type="date"
                     aria-label="Analytics start date"
                     value={customDate}
                     onChange={e => setCustomDate(e.target.value)}
-                    className="bg-transparent text-xs text-neutral-800 dark:text-white focus:outline-none cursor-pointer"
+                    className="bg-transparent text-xs text-[var(--text-primary)] focus:outline-none cursor-pointer"
+                    style={{ minHeight: '26px' }}
                   />
                   {isRangeMode ? (
                     <>
-                      <span className="text-neutral-400">to</span>
+                      <span className="text-[var(--text-muted)]">to</span>
                       <input
                         type="date"
                         aria-label="Analytics end date"
                         value={customEndDate}
                         onChange={e => setCustomEndDate(e.target.value)}
-                        className="bg-transparent text-xs text-neutral-800 dark:text-white focus:outline-none cursor-pointer"
+                        className="bg-transparent text-xs text-[var(--text-primary)] focus:outline-none cursor-pointer"
+                        style={{ minHeight: '26px' }}
                       />
                     </>
                   ) : null}
                   <button
                     type="button"
                     onClick={() => setIsRangeMode(prev => !prev)}
-                    className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline cursor-pointer pl-1"
+                    className="text-[11px] font-semibold text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer pl-1"
+                    style={{ minHeight: 'auto' }}
                   >
                     {isRangeMode ? 'Single day' : '+ Range'}
                   </button>
@@ -710,17 +613,17 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
               )}
             </div>
 
-            {/* Scope Filter Dropdown: All | Per Client | Per Delivery Unit | Per Project | Per User */}
+            {/* Scope Filter Dropdown */}
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-[var(--text-secondary)] uppercase tracking-wider font-semibold">
-                Filter:
+              <span className="text-[11px] text-[var(--text-secondary)] uppercase tracking-wider font-semibold">
+                Scope:
               </span>
               <div className="relative">
                 <select
                   aria-label="Analytics scope"
                   value={filterScope}
                   onChange={e => setFilterScope(e.target.value as AnalyticsScope)}
-                  className="appearance-none rounded-xl border border-[var(--border)] bg-[var(--surface-raised)] py-1.5 pl-3 pr-8 text-xs font-semibold text-neutral-800 dark:text-white focus:border-blue-500 focus:outline-none cursor-pointer shadow-xs"
+                  className="field-control !w-auto pr-8 font-semibold cursor-pointer"
                 >
                   <option value="all">All Workspace</option>
                   <option value="client">Per Client</option>
@@ -728,235 +631,283 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                   <option value="project">Per Project</option>
                   <option value="user">Per User</option>
                 </select>
-                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-neutral-400" />
+                <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
               </div>
 
-              {/* Secondary selector for chosen scope */}
               {filterScope === 'client' && (
                 <div className="relative">
                   <select
+                    aria-label="Analytics client"
                     value={selectedClientId}
                     onChange={e => setSelectedClientId(e.target.value)}
-                    className="appearance-none rounded-xl border border-blue-500/40 bg-[var(--surface-raised)] py-1.5 pl-3 pr-8 text-xs font-medium focus:outline-none cursor-pointer shadow-xs max-w-[160px] truncate"
+                    className="field-control !w-auto !border-[var(--accent)]/50 pr-8 max-w-[180px] truncate cursor-pointer"
                   >
                     {uniqueClients.map(c => (
                       <option key={c} value={c}>{c}</option>
                     ))}
                   </select>
-                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-neutral-400" />
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-[var(--text-muted)]" />
                 </div>
               )}
 
               {filterScope === 'delivery_unit' && (
                 <div className="relative">
                   <select
+                    aria-label="Analytics delivery unit"
                     value={selectedDeliveryUnitId}
                     onChange={e => setSelectedDeliveryUnitId(e.target.value)}
-                    className="appearance-none rounded-xl border border-blue-500/40 bg-[var(--surface-raised)] py-1.5 pl-3 pr-8 text-xs font-medium focus:outline-none cursor-pointer shadow-xs max-w-[180px] truncate"
+                    className="field-control !w-auto !border-[var(--accent)]/50 pr-8 max-w-[180px] truncate cursor-pointer"
                   >
                     {deliveryUnits.map(du => (
                       <option key={du.id} value={du.id}>{du.name}</option>
                     ))}
                   </select>
-                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-neutral-400" />
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-[var(--text-muted)]" />
                 </div>
               )}
 
               {filterScope === 'project' && (
                 <div className="relative">
                   <select
+                    aria-label="Analytics project"
                     value={selectedProjectId}
                     onChange={e => setSelectedProjectId(e.target.value)}
-                    className="appearance-none rounded-xl border border-blue-500/40 bg-[var(--surface-raised)] py-1.5 pl-3 pr-8 text-xs font-medium focus:outline-none cursor-pointer shadow-xs max-w-[180px] truncate"
+                    className="field-control !w-auto !border-[var(--accent)]/50 pr-8 max-w-[180px] truncate cursor-pointer"
                   >
                     {uniqueProjects.map(p => (
                       <option key={p} value={p}>{p}</option>
                     ))}
                   </select>
-                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-neutral-400" />
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-[var(--text-muted)]" />
                 </div>
               )}
 
               {filterScope === 'user' && (
                 <div className="relative">
                   <select
+                    aria-label="Analytics member"
                     value={selectedUserId}
                     onChange={e => setSelectedUserId(e.target.value)}
-                    className="appearance-none rounded-xl border border-blue-500/40 bg-[var(--surface-raised)] py-1.5 pl-3 pr-8 text-xs font-medium focus:outline-none cursor-pointer shadow-xs max-w-[160px] truncate"
+                    className="field-control !w-auto !border-[var(--accent)]/50 pr-8 max-w-[180px] truncate cursor-pointer"
                   >
                     {users.map(u => (
                       <option key={u.id} value={u.id}>{u.name}</option>
                     ))}
                   </select>
-                  <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-neutral-400" />
+                  <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-[var(--text-muted)]" />
                 </div>
               )}
             </div>
           </div>
 
           {/* Modal Scrollable Content */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
-            {unavailable ? <p role="status" className="text-sm text-[var(--text-secondary)]">{unavailable}</p> : <>
-            {snapshot && <p className="text-xs text-[var(--text-secondary)]">
-              Cumulative metrics as of {snapshot.date}.
-              {snapshot.date !== end ? ' No snapshot was saved for the end of the selected period.' : ''}
-            </p>}
-
-            {/* TOP GRAPHICAL SECTION: 4 Key Metric Cards & Visual Top Accounts */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Total Employees */}
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4 flex flex-col justify-between shadow-xs">
-                <div className="flex items-center justify-between text-[var(--text-secondary)] mb-2">
-                  <span className="text-xs font-medium">Total Employees</span>
-                  <Users className="h-4 w-4 text-blue-500" />
-                </div>
-                <div>
-                  <span className="text-2xl tabular-nums font-semibold tracking-tight text-neutral-900 dark:text-white">
-                    {topMetrics.totalEmployees}
-                  </span>
-                  <p className="text-[11px] text-[var(--text-secondary)] mt-1">
-                    Active team members in scope
-                  </p>
-                </div>
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5 bg-[var(--canvas)] space-y-4">
+            {unavailable ? (
+              <div className="ledger-frame p-8 text-center">
+                <p role="status" className="text-xs font-medium text-[var(--text-secondary)]">{unavailable}</p>
               </div>
+            ) : <>
+            {snapshot && (
+              <p className="text-xs text-[var(--text-secondary)] tabular-nums">
+                Cumulative metrics as of {snapshot.date}.
+                {snapshot.date !== end ? ' No snapshot was saved for the end of the selected period.' : ''}
+              </p>
+            )}
+            {!snapshot && requestedDates.length > 1 && (
+              <p className="text-xs text-[var(--text-secondary)] tabular-nums">
+                Time totals and efficiency as of {reportDate}.
+              </p>
+            )}
 
-              {/* Total Utilization */}
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4 flex flex-col justify-between shadow-xs">
-                <div className="flex items-center justify-between text-[var(--text-secondary)] mb-2">
-                  <span className="text-xs font-medium">Total Utilization</span>
-                  <Activity className="h-4 w-4 text-emerald-500" />
-                </div>
-                <div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-2xl tabular-nums font-semibold tracking-tight text-emerald-600 dark:text-emerald-400">
-                      {topMetrics.totalUtilization}%
-                    </span>
-                    <span className="text-xs text-neutral-400">
-                      ({topMetrics.totalUtilizedCount}/{topMetrics.totalEmployees})
-                    </span>
+            {/* TOP LEDGER FRAME: 4 Hairline-Divided KPI Columns (Zero Nested Shadow Cards) */}
+            <section className="ledger-frame" aria-label="Key metrics">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-[var(--border-subtle)]">
+                {/* Total Employees */}
+                <div className="metric-card flex flex-col justify-between">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="metric-label">Total Employees</span>
+                    <Users className="h-3.5 w-3.5 text-[var(--text-muted)] shrink-0" />
                   </div>
-                  <MetricBar label="Workspace utilization" value={topMetrics.totalUtilization} tone="green" detail={`${topMetrics.totalUtilizedCount} of ${topMetrics.totalEmployees} members assigned over 3 hours per day`} />
-                  <p className="text-[11px] text-[var(--text-secondary)] mt-1">
-                    Assigned &gt; 3 hours estimated per day
-                  </p>
-                </div>
-              </div>
-
-              {/* Total Efficiency */}
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4 flex flex-col justify-between shadow-xs">
-                <div className="flex items-center justify-between text-[var(--text-secondary)] mb-2">
-                  <span className="text-xs font-medium">Total Efficiency</span>
-                  <Zap className="h-4 w-4 text-amber-500" />
-                </div>
-                <div>
-                  <div className="flex items-baseline gap-2">
-                    <span className={`text-2xl tabular-nums font-semibold tracking-tight ${
-                      topMetrics.efficiencyPercent >= 75
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : topMetrics.efficiencyPercent >= 50
-                        ? 'text-blue-600 dark:text-blue-400'
-                        : 'text-rose-600 dark:text-red-400'
-                    }`}>
-                      {topMetrics.efficiencyPercent}%
+                  <div className="mt-2">
+                    <span className="metric-value text-[var(--text-primary)]">
+                      {topMetrics.totalEmployees}
                     </span>
-                    <span className="text-xs text-neutral-400">
-                      {formatHoursRatio(topMetrics.totalTimeTakenHours, topMetrics.totalEstimatedHours)}
-                    </span>
+                    <p className="metric-detail">Active team members in scope</p>
                   </div>
-                  <MetricBar label="Workspace efficiency" value={topMetrics.efficiencyPercent} tone={topMetrics.efficiencyPercent >= 50 ? 'blue' : 'red'} detail={`${topMetrics.efficiencyPercent} percent; billable hours divided by estimated hours`} />
-                  <p className="text-[11px] text-[var(--text-secondary)] mt-1">
-                    Billable / estimated hours
-                  </p>
                 </div>
-              </div>
 
-              {/* Top Accounts Graphic Bar */}
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface-muted)] p-4 flex flex-col justify-between shadow-xs">
-                <div className="flex items-center justify-between text-[var(--text-secondary)] mb-2">
-                  <span className="text-xs font-medium">Top Accounts (Hours)</span>
-                  <Briefcase className="h-4 w-4 text-purple-500" />
-                </div>
-                <div className="space-y-1.5">
-                  {topMetrics.topAccountsList.slice(0, 3).map(acct => (
-                    <div key={acct.client} className="text-xs">
-                      <div className="flex flex-wrap justify-between items-center gap-1 text-[11px] mb-0.5">
-                        <span className="font-semibold text-neutral-800 /90 truncate max-w-[120px]">
-                          {acct.client}
-                        </span>
-                        <span className="text-[11px] text-neutral-500 dark:text-white/50">
-                          {formatHoursRatio(acct.billableHours, acct.estimatedHours)}
-                        </span>
-                      </div>
-                      <div className="w-full bg-neutral-200 dark:bg-white/10 h-1.5 rounded-full overflow-hidden">
-                        <div
-                          className="bg-purple-500 h-full rounded-full"
-                          style={{ width: `${Math.min(100, (acct.keyHours / topMetrics.maxAccountHours) * 100)}%` }}
-                        />
-                      </div>
+                {/* Total Utilization */}
+                <div className="metric-card flex flex-col justify-between sm:border-b lg:border-b-0 border-[var(--border-subtle)]">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="metric-label">Total Utilization</span>
+                    <Activity className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
+                  </div>
+                  <div className="mt-2">
+                    <div className="flex items-baseline gap-2">
+                      <span className="metric-value text-emerald-700 dark:text-emerald-400">
+                        {topMetrics.totalUtilization}
+                        <span className="text-sm font-semibold tracking-normal">%</span>
+                      </span>
+                      <span className="text-xs tabular-nums text-[var(--text-muted)]">
+                        ({topMetrics.totalUtilizedCount}/{topMetrics.totalEmployees})
+                      </span>
                     </div>
-                  ))}
-                  {topMetrics.topAccountsList.length === 0 && (
-                    <p className="text-xs text-neutral-400 py-2">No account hours recorded</p>
-                  )}
+                    <MetricBar label="Workspace utilization" value={topMetrics.totalUtilization} tone="green" detail={`${topMetrics.totalUtilizedCount} of ${topMetrics.totalEmployees} members assigned at least 3 hours per day`} />
+                    <p className="metric-detail">Assigned at least 3h/day</p>
+                  </div>
+                </div>
+
+                {/* Total Efficiency */}
+                <div className="metric-card flex flex-col justify-between sm:border-t lg:border-t-0 border-[var(--border-subtle)]">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="metric-label">Total Efficiency</span>
+                    <Zap className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
+                  </div>
+                  <div className="mt-2">
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <span className={`metric-value ${
+                        efficiencyPercent === null
+                          ? 'text-[var(--text-secondary)]'
+                          : efficiencyPercent >= 100
+                          ? 'text-emerald-700 dark:text-emerald-400'
+                          : efficiencyPercent >= 50
+                          ? 'text-[#1d4ed8] dark:text-blue-400'
+                          : 'text-red-600 dark:text-red-400'
+                      }`}>
+                        {efficiencyPercent === null ? '—' : (
+                          <>
+                            {Math.round(efficiencyPercent)}
+                            <span className="text-sm font-semibold tracking-normal">%</span>
+                          </>
+                        )}
+                      </span>
+                      {efficiencyPercent !== null && (
+                        <span className="text-xs tabular-nums text-[var(--text-muted)]">
+                          {formatHoursRatio(estimatedHours, billableHours)}
+                        </span>
+                      )}
+                    </div>
+                    {efficiencyPercent !== null && (
+                      <MetricBar label="Workspace efficiency" value={efficiencyPercent}
+                        tone={efficiencyPercent >= 100 ? 'green' : efficiencyPercent >= 50 ? 'blue' : 'red'}
+                        detail={`${Math.round(efficiencyPercent)} percent, with 100 percent on estimate`} />
+                    )}
+                    <p className="metric-detail">Estimated / billable hours</p>
+                  </div>
+                </div>
+
+                {/* Top Accounts Graphic Bar */}
+                <div className="metric-card flex flex-col justify-between sm:border-t lg:border-t-0 border-[var(--border-subtle)]">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="metric-label">Top Accounts</span>
+                    <Briefcase className="h-3.5 w-3.5 text-[var(--text-muted)] shrink-0" />
+                  </div>
+                  <div className="space-y-2">
+                    {topMetrics.topAccountsList.slice(0, 3).map(acct => (
+                      <div key={acct.key} className="text-xs">
+                        <div className="flex justify-between items-center gap-1.5 text-[11px] mb-1">
+                          <span className="font-semibold text-[var(--text-primary)] truncate max-w-[120px]">
+                            {acct.key}
+                          </span>
+                          <span className="text-[11px] tabular-nums text-[var(--text-secondary)] shrink-0">
+                            {formatHoursRatio(acct.billableHours, acct.estimatedHours)}
+                          </span>
+                        </div>
+                        <div className="metric-track !mt-0">
+                          <div
+                            className="metric-fill"
+                            style={{ width: `${Math.min(100, (acct.billableHours / topMetrics.topAccountsList[0].billableHours) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                    {topMetrics.topAccountsList.length === 0 && (
+                      <p className="text-xs text-[var(--text-muted)] py-2">No account hours recorded</p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+            </section>
 
             {/* SECTION 1: UTILIZATION (< 3h/day assigned with dates) */}
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xs">
-              <div className="flex items-center justify-between mb-4">
+            <section className="ledger-frame">
+              <div className="ledger-band flex items-center justify-between gap-2 px-4 py-2.5">
                 <div className="flex items-center gap-2">
-                  <div className="h-2.5 w-2.5 rounded-full bg-amber-500" />
-                  <h3 className="text-sm font-semibold tracking-tight text-neutral-900 dark:text-white">
+                  <span className="h-2 w-2 rounded-full bg-amber-600 dark:bg-amber-400 shrink-0" />
+                  <h3 className="text-[13px] font-bold tracking-tight text-[var(--text-primary)]">
                     Underutilized Employees (&lt; 3h/day)
                   </h3>
                 </div>
-                <span className="text-xs text-neutral-400">
+                <span className="text-[11px] font-semibold tabular-nums text-[var(--text-secondary)]">
                   {underutilizedEmployees.length} member{underutilizedEmployees.length === 1 ? '' : 's'} flagged
                 </span>
               </div>
 
               {underutilizedEmployees.length === 0 ? (
-                <div className="py-6 text-center text-xs text-[var(--text-secondary)] flex items-center justify-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span>All employees in this scope are fully utilized (&gt; 3 hours/day assigned).</span>
+                <div className="py-6 px-4 text-center text-xs text-[var(--text-secondary)] flex items-center justify-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>All employees in this scope are assigned at least 3 hours per day.</span>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {underutilizedEmployees.map(item => (
+                <div
+                  className={`grid grid-cols-1 ${
+                    underutilizedEmployees.length === 1
+                      ? ''
+                      : underutilizedEmployees.length === 2
+                      ? 'md:grid-cols-2'
+                      : 'md:grid-cols-2 lg:grid-cols-3'
+                  }`}
+                >
+                  {underutilizedEmployees.map((item, idx) => (
                     <div
                       key={item.user.id}
-                      className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3 flex flex-col justify-between"
+                      className={`p-3.5 flex flex-col justify-between gap-2.5 bg-[var(--surface)] border-[var(--border-subtle)] ${
+                        idx > 0 ? 'border-t' : ''
+                      } ${
+                        underutilizedEmployees.length >= 2 && idx < 2 ? 'md:border-t-0' : ''
+                      } ${
+                        underutilizedEmployees.length >= 3 && idx < 3 ? 'lg:border-t-0' : ''
+                      } ${
+                        underutilizedEmployees.length >= 2 && idx % 2 === 0 && idx < underutilizedEmployees.length - 1
+                          ? 'md:border-r'
+                          : ''
+                      } ${
+                        underutilizedEmployees.length >= 3
+                          ? idx % 3 !== 2
+                            ? 'lg:border-r'
+                            : 'lg:border-r-0'
+                          : ''
+                      }`}
                     >
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-semibold text-white bg-gradient-to-tr ${item.user.avatarColor || 'from-blue-600 to-indigo-600'}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={`h-7 w-7 shrink-0 rounded-[6px] flex items-center justify-center text-xs font-semibold text-white bg-gradient-to-tr ${item.user.avatarColor || 'from-blue-600 to-indigo-600'}`}>
                             {item.user.name.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <p className="text-xs font-semibold text-neutral-900 dark:text-white truncate">
+                            <p className="text-xs font-semibold text-[var(--text-primary)] truncate">
                               {item.user.name}
                             </p>
-                            <span className={`text-[11px] px-1.5 py-0.2 rounded border ${getUserTag(item.user).badgeClass}`}>
+                            <p className="text-[11px] text-[var(--text-secondary)] truncate">
                               {getUserTag(item.user).label}
-                            </span>
+                            </p>
                           </div>
                         </div>
-                        <span className="text-xs font-semibold text-amber-600 dark:text-yellow-400 shrink-0">
-                          {item.avgAssigned}h / day
+                        <span className="text-xs font-bold tabular-nums text-amber-700 dark:text-amber-400 shrink-0">
+                          {formatHours(item.avgAssigned)}/d
                         </span>
                       </div>
 
-                      <div className="text-[11px] text-[var(--text-secondary)] pt-2 border-t border-neutral-200/50 dark:border-white/5">
-                        <span className="font-semibold text-neutral-700 dark:text-white/70 block mb-0.5">Underutilized Dates:</span>
-                        <div className="flex flex-wrap gap-1">
+                      <div className="text-[11px] text-[var(--text-secondary)] pt-2 border-t border-[var(--border-subtle)]">
+                        <span className="font-semibold text-[var(--text-secondary)] block mb-1">Underutilized Dates</span>
+                        <div className="flex flex-wrap gap-1 tabular-nums">
                           {item.dates.slice(0, 4).map(d => (
-                            <span key={d} className="px-1.5 py-0.5 rounded bg-neutral-200/60 dark:bg-white/10 text-neutral-700 dark:text-white/70">
+                            <span key={d} className="ledger-badge !font-medium">
                               {d}
                             </span>
                           ))}
                           {item.dates.length > 4 && (
-                            <span className="px-1.5 py-0.5 rounded bg-neutral-200/60 dark:bg-white/10 text-neutral-500">
+                            <span className="ledger-badge !font-medium">
                               +{item.dates.length - 4} more
                             </span>
                           )}
@@ -966,68 +917,92 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                   ))}
                 </div>
               )}
-            </div>
+            </section>
 
             {/* SECTION 2: EFFICIENCY (< 50% with dates) */}
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xs">
-              <div className="flex items-center justify-between mb-4">
+            <section className="ledger-frame">
+              <div className="ledger-band flex items-center justify-between gap-2 px-4 py-2.5">
                 <div className="flex items-center gap-2">
-                  <div className="h-2.5 w-2.5 rounded-full bg-rose-500" />
-                  <h3 className="text-sm font-semibold tracking-tight text-neutral-900 dark:text-white">
+                  <span className="h-2 w-2 rounded-full bg-red-600 dark:bg-red-400 shrink-0" />
+                  <h3 className="text-[13px] font-bold tracking-tight text-[var(--text-primary)]">
                     Low Efficiency Threshold (&lt; 50%)
                   </h3>
                 </div>
-                <span className="text-xs text-neutral-400">
+                <span className="text-[11px] font-semibold tabular-nums text-[var(--text-secondary)]">
                   {lowEfficiencyEmployees.length} member{lowEfficiencyEmployees.length === 1 ? '' : 's'} flagged
                 </span>
               </div>
 
               {lowEfficiencyEmployees.length === 0 ? (
-                <div className="py-6 text-center text-xs text-[var(--text-secondary)] flex items-center justify-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  <span>All employees meet or exceed the 50% efficiency threshold.</span>
+                <div className="py-6 px-4 text-center text-xs text-[var(--text-secondary)] flex items-center justify-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>No measured efficiency scores below 50%.</span>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {lowEfficiencyEmployees.map(item => (
+                <div
+                  className={`grid grid-cols-1 ${
+                    lowEfficiencyEmployees.length === 1
+                      ? ''
+                      : lowEfficiencyEmployees.length === 2
+                      ? 'md:grid-cols-2'
+                      : 'md:grid-cols-2 lg:grid-cols-3'
+                  }`}
+                >
+                  {lowEfficiencyEmployees.map((item, idx) => (
                     <div
                       key={item.user.id}
-                      className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3 flex flex-col justify-between"
+                      className={`p-3.5 flex flex-col justify-between gap-2.5 bg-[var(--surface)] border-[var(--border-subtle)] ${
+                        idx > 0 ? 'border-t' : ''
+                      } ${
+                        lowEfficiencyEmployees.length >= 2 && idx < 2 ? 'md:border-t-0' : ''
+                      } ${
+                        lowEfficiencyEmployees.length >= 3 && idx < 3 ? 'lg:border-t-0' : ''
+                      } ${
+                        lowEfficiencyEmployees.length >= 2 && idx % 2 === 0 && idx < lowEfficiencyEmployees.length - 1
+                          ? 'md:border-r'
+                          : ''
+                      } ${
+                        lowEfficiencyEmployees.length >= 3
+                          ? idx % 3 !== 2
+                            ? 'lg:border-r'
+                            : 'lg:border-r-0'
+                          : ''
+                      }`}
                     >
-                      <div className="flex items-center justify-between gap-2 mb-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className={`h-7 w-7 rounded-full flex items-center justify-center text-xs font-semibold text-white bg-gradient-to-tr ${item.user.avatarColor || 'from-blue-600 to-indigo-600'}`}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={`h-7 w-7 shrink-0 rounded-[6px] flex items-center justify-center text-xs font-semibold text-white bg-gradient-to-tr ${item.user.avatarColor || 'from-blue-600 to-indigo-600'}`}>
                             {item.user.name.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <p className="text-xs font-semibold text-neutral-900 dark:text-white truncate">
+                            <p className="text-xs font-semibold text-[var(--text-primary)] truncate">
                               {item.user.name}
                             </p>
-                            <span className={`text-[11px] px-1.5 py-0.2 rounded border ${getUserTag(item.user).badgeClass}`}>
+                            <p className="text-[11px] text-[var(--text-secondary)] truncate">
                               {getUserTag(item.user).label}
-                            </span>
+                            </p>
                           </div>
                         </div>
-                        <div className="text-right shrink-0">
-                          <span className="text-xs font-semibold text-rose-600 dark:text-red-400 block">
-                            {item.efficiencyPercent}%
+                        <div className="text-right shrink-0 tabular-nums">
+                          <span className="text-xs font-bold text-red-600 dark:text-red-400 block">
+                            {Math.round(item.efficiencyPercent)}%
                           </span>
-                          <span className="text-[11px] text-neutral-400">
-                            {formatHoursRatio(item.timeTaken, item.timeEstimated)}
+                          <span className="text-[11px] text-[var(--text-muted)]">
+                            {formatHoursRatio(item.timeEstimated, item.timeTaken)}
                           </span>
                         </div>
                       </div>
 
-                      <div className="text-[11px] text-[var(--text-secondary)] pt-2 border-t border-neutral-200/50 dark:border-white/5">
-                        <span className="font-semibold text-neutral-700 dark:text-white/70 block mb-0.5">Low Efficiency Dates:</span>
-                        <div className="flex flex-wrap gap-1">
+                      <div className="text-[11px] text-[var(--text-secondary)] pt-2 border-t border-[var(--border-subtle)]">
+                        <span className="font-semibold text-[var(--text-secondary)] block mb-1">Efficiency as of</span>
+                        <div className="flex flex-wrap gap-1 tabular-nums">
                           {item.dates.slice(0, 4).map(d => (
-                            <span key={d} className="px-1.5 py-0.5 rounded bg-neutral-200/60 dark:bg-white/10 text-neutral-700 dark:text-white/70">
+                            <span key={d} className="ledger-badge !font-medium">
                               {d}
                             </span>
                           ))}
                           {item.dates.length > 4 && (
-                            <span className="px-1.5 py-0.5 rounded bg-neutral-200/60 dark:bg-white/10 text-neutral-500">
+                            <span className="ledger-badge !font-medium">
                               +{item.dates.length - 4} more
                             </span>
                           )}
@@ -1037,37 +1012,37 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                   ))}
                 </div>
               )}
-            </div>
+            </section>
 
             {/* SECTIONS 3 & 4: CONTEXTUAL KEY ACCOUNTS & KEY DELIVERY UNITS */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Left Column: Section 3 */}
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xs">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold tracking-tight text-neutral-900 dark:text-white flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-blue-500" />
-                    <span>{sections3And4Data.section3Title}</span>
+              <section className="ledger-frame flex flex-col">
+                <div className="ledger-band flex items-center gap-2 px-4 py-2.5">
+                  <Building2 className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
+                  <h3 className="text-[13px] font-bold tracking-tight text-[var(--text-primary)] truncate">
+                    {sections3And4Data.section3Title}
                   </h3>
                 </div>
 
-                <div className="space-y-2.5 max-h-72 overflow-y-auto">
-                  {/* If all view */}
+                <div className="divide-y divide-[var(--border-subtle)] max-h-72 overflow-y-auto bg-[var(--surface)]">
                   {sections3And4Data.section3Type === 'all_key_accounts' && (
                     (sections3And4Data.section3Items as any[]).map(item => (
-                      <div key={item.client} className="rounded-xl border border-neutral-200/60 dark:border-white/5 bg-[var(--surface-muted)] p-3 text-xs">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="font-semibold text-neutral-900 dark:text-white">
+                      <div key={item.client} className="px-4 py-2.5 text-xs hover:bg-[var(--surface-muted)] transition-colors">
+                        <div className="flex justify-between items-center gap-2">
+                          <span className="font-semibold text-[var(--text-primary)] truncate">
                             {item.client}
                           </span>
-                          <span className="font-semibold text-blue-600 dark:text-blue-400">
+                          <span className="font-semibold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">
                             {formatHoursRatio(item.billableHours, item.estimatedHours)}
                           </span>
                         </div>
                         {item.topProjects && item.topProjects.length > 0 && (
-                          <div className="mt-1.5 pt-1.5 border-t border-neutral-200/40 dark:border-white/5 text-[11px] text-neutral-500 dark:text-white/50">
-                            <span className="font-medium text-neutral-600 dark:text-white/70">Top Projects: </span>
-                            {item.topProjects.slice(0, 3).map((p: any) => (
-                              <span key={p.project} className="mr-2 inline-block">
+                          <div className="mt-1 text-[11px] text-[var(--text-secondary)] tabular-nums">
+                            <span className="font-medium text-[var(--text-muted)]">Projects: </span>
+                            {item.topProjects.slice(0, 3).map((p: any, idx: number) => (
+                              <span key={p.project}>
+                                {idx > 0 && <span className="text-[var(--text-muted)] mx-1">·</span>}
                                 {p.project} {formatHoursRatio(p.billableHours, p.estimatedHours)}
                               </span>
                             ))}
@@ -1077,28 +1052,26 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                     ))
                   )}
 
-                  {/* If delivery units */}
                   {sections3And4Data.section3Type === 'delivery_units' && (
                     (sections3And4Data.section3Items as any[]).map(item => (
-                      <div key={item.du.id} className="rounded-xl border border-neutral-200/60 dark:border-white/5 bg-[var(--surface-muted)] p-3 text-xs flex justify-between items-center">
-                        <span className="font-semibold text-neutral-900 dark:text-white">
+                      <div key={item.du.id} className="px-4 py-2.5 text-xs flex justify-between items-center gap-2 hover:bg-[var(--surface-muted)] transition-colors">
+                        <span className="font-semibold text-[var(--text-primary)] truncate">
                           {item.du.name}
                         </span>
-                        <span className="font-semibold text-blue-600 dark:text-blue-400">
+                        <span className="font-semibold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">
                           {formatHoursRatio(item.billableHours, item.estimatedHours)}
                         </span>
                       </div>
                     ))
                   )}
 
-                  {/* If clients */}
                   {sections3And4Data.section3Type === 'clients' && (
                     (sections3And4Data.section3Items as any[]).map(item => (
-                      <div key={item.client} className="rounded-xl border border-neutral-200/60 dark:border-white/5 bg-[var(--surface-muted)] p-3 text-xs flex justify-between items-center">
-                        <span className="font-semibold text-neutral-900 dark:text-white">
+                      <div key={item.client} className="px-4 py-2.5 text-xs flex justify-between items-center gap-2 hover:bg-[var(--surface-muted)] transition-colors">
+                        <span className="font-semibold text-[var(--text-primary)] truncate">
                           {item.client}
                         </span>
-                        <span className="font-semibold text-blue-600 dark:text-blue-400">
+                        <span className="font-semibold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">
                           {formatHoursRatio(item.billableHours, item.estimatedHours)}
                         </span>
                       </div>
@@ -1106,38 +1079,38 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                   )}
 
                   {sections3And4Data.section3Items.length === 0 && (
-                    <p className="text-xs text-neutral-400 py-3 text-center">No matching entities found in scope.</p>
+                    <p className="text-xs text-[var(--text-muted)] py-6 text-center">No matching entities found in scope.</p>
                   )}
                 </div>
-              </div>
+              </section>
 
               {/* Right Column: Section 4 */}
-              <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xs">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold tracking-tight text-neutral-900 dark:text-white flex items-center gap-2">
-                    <FolderGit2 className="h-4 w-4 text-purple-500" />
-                    <span>{sections3And4Data.section4Title}</span>
+              <section className="ledger-frame flex flex-col">
+                <div className="ledger-band flex items-center gap-2 px-4 py-2.5">
+                  <FolderGit2 className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
+                  <h3 className="text-[13px] font-bold tracking-tight text-[var(--text-primary)] truncate">
+                    {sections3And4Data.section4Title}
                   </h3>
                 </div>
 
-                <div className="space-y-2.5 max-h-72 overflow-y-auto">
-                  {/* If all delivery units */}
+                <div className="divide-y divide-[var(--border-subtle)] max-h-72 overflow-y-auto bg-[var(--surface)]">
                   {sections3And4Data.section4Type === 'all_key_units' && (
                     (sections3And4Data.section4Items as any[]).map(item => (
-                      <div key={item.du.id} className="rounded-xl border border-neutral-200/60 dark:border-white/5 bg-[var(--surface-muted)] p-3 text-xs">
-                        <div className="flex justify-between items-center mb-1">
-                          <span className="font-semibold text-neutral-900 dark:text-white">
+                      <div key={item.du.id} className="px-4 py-2.5 text-xs hover:bg-[var(--surface-muted)] transition-colors">
+                        <div className="flex justify-between items-center gap-2">
+                          <span className="font-semibold text-[var(--text-primary)] truncate">
                             {item.du.name}
                           </span>
-                          <span className="font-semibold text-purple-600 dark:text-purple-400">
+                          <span className="font-semibold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">
                             {formatHoursRatio(item.billableHours, item.estimatedHours)}
                           </span>
                         </div>
                         {item.topClients && item.topClients.length > 0 && (
-                          <div className="mt-1 pt-1 border-t border-neutral-200/40 dark:border-white/5 text-[11px] text-neutral-500 dark:text-white/50">
-                            <span className="font-medium text-neutral-600 dark:text-white/70">Top Clients: </span>
-                            {item.topClients.slice(0, 2).map((c: any) => (
-                              <span key={c.client} className="mr-2 inline-block">
+                          <div className="mt-1 text-[11px] text-[var(--text-secondary)] tabular-nums">
+                            <span className="font-medium text-[var(--text-muted)]">Clients: </span>
+                            {item.topClients.slice(0, 2).map((c: any, idx: number) => (
+                              <span key={c.client}>
+                                {idx > 0 && <span className="text-[var(--text-muted)] mx-1">·</span>}
                                 {c.client} {formatHoursRatio(c.billableHours, c.estimatedHours)}
                               </span>
                             ))}
@@ -1147,56 +1120,49 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                     ))
                   )}
 
-                  {/* If projects */}
                   {sections3And4TypeMatchesProjects(sections3And4Data.section4Type) && (
                     (sections3And4Data.section4Items as any[]).map(item => (
-                      <div key={item.project} className="rounded-xl border border-neutral-200/60 dark:border-white/5 bg-[var(--surface-muted)] p-3 text-xs flex justify-between items-center">
-                        <span className="font-semibold text-neutral-900 dark:text-white">
+                      <div key={item.project} className="px-4 py-2.5 text-xs flex justify-between items-center gap-2 hover:bg-[var(--surface-muted)] transition-colors">
+                        <span className="font-semibold text-[var(--text-primary)] truncate">
                           {item.project}
                         </span>
-                        <span className="font-semibold text-purple-600 dark:text-purple-400">
+                        <span className="font-semibold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">
                           {formatHoursRatio(item.billableHours, item.estimatedHours)}
                         </span>
                       </div>
                     ))
                   )}
 
-                  {/* If delivery units */}
                   {sections3And4Data.section4Type === 'delivery_units' && (
                     (sections3And4Data.section4Items as any[]).map(item => (
-                      <div key={item.du.id} className="rounded-xl border border-neutral-200/60 dark:border-white/5 bg-[var(--surface-muted)] p-3 text-xs flex justify-between items-center">
-                        <span className="font-semibold text-neutral-900 dark:text-white">
+                      <div key={item.du.id} className="px-4 py-2.5 text-xs flex justify-between items-center gap-2 hover:bg-[var(--surface-muted)] transition-colors">
+                        <span className="font-semibold text-[var(--text-primary)] truncate">
                           {item.du.name}
                         </span>
-                        <span className="font-semibold text-purple-600 dark:text-purple-400">
+                        <span className="font-semibold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">
                           {formatHoursRatio(item.billableHours, item.estimatedHours)}
                         </span>
                       </div>
                     ))
                   )}
 
-                  {/* If projects and tasks */}
                   {sections3And4Data.section4Type === 'projects_and_tasks' && (
-                    <div className="space-y-3">
-                      <div>
-                        <span className="text-xs font-medium text-neutral-400 block mb-1">
-                          Key Projects
-                        </span>
+                    <div className="divide-y divide-[var(--border-subtle)]">
+                      <div className="px-4 py-2.5 space-y-1">
+                        <span className="metric-label block mb-1.5">Key Projects</span>
                         {(sections3And4Data.section4Items as any).projects.slice(0, 3).map((p: any) => (
-                          <div key={p.project} className="flex justify-between items-center py-1 text-xs">
-                            <span className="truncate">{p.project}</span>
-                            <span className="font-semibold text-purple-500">{formatHoursRatio(p.billableHours, p.estimatedHours)}</span>
+                          <div key={p.project} className="flex justify-between items-center py-0.5 text-xs gap-2">
+                            <span className="truncate text-[var(--text-primary)]">{p.project}</span>
+                            <span className="font-semibold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">{formatHoursRatio(p.billableHours, p.estimatedHours)}</span>
                           </div>
                         ))}
                       </div>
-                      <div className="pt-2 border-t border-neutral-200/40 dark:border-white/5">
-                        <span className="text-xs font-medium text-neutral-400 block mb-1">
-                          Key Tasks
-                        </span>
+                      <div className="px-4 py-2.5 space-y-1">
+                        <span className="metric-label block mb-1.5">Key Tasks</span>
                         {(sections3And4Data.section4Items as any).tasks.slice(0, 4).map((t: any) => (
-                          <div key={t.task.id} className="flex justify-between items-center py-1 text-xs">
-                            <span className="truncate max-w-[200px]">{t.task.title}</span>
-                            <span className="font-semibold text-blue-500">{formatHoursRatio(t.billableHours, t.estimatedHours)}</span>
+                          <div key={t.task.id} className="flex justify-between items-center py-0.5 text-xs gap-2">
+                            <span className="truncate max-w-[240px] text-[var(--text-primary)]">{t.task.title}</span>
+                            <span className="font-semibold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">{formatHoursRatio(t.billableHours, t.estimatedHours)}</span>
                           </div>
                         ))}
                       </div>
@@ -1204,146 +1170,196 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                   )}
 
                   {(Array.isArray(sections3And4Data.section4Items) ? sections3And4Data.section4Items.length === 0 : ((sections3And4Data.section4Items as any).projects.length === 0 && (sections3And4Data.section4Items as any).tasks.length === 0)) && (
-                    <p className="text-xs text-neutral-400 py-3 text-center">No matching entities found in scope.</p>
+                    <p className="text-xs text-[var(--text-muted)] py-6 text-center">No matching entities found in scope.</p>
                   )}
                 </div>
-              </div>
+              </section>
             </div>
 
-            {/* SECTION 5: PRESSURE METRICS (Highest Average Workload Scores & Top Contributors) */}
-            <div className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xs">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="h-2.5 w-2.5 rounded-full bg-indigo-500" />
-                  <h3 className="text-sm font-semibold tracking-tight text-neutral-900 dark:text-white">
-                    Pressure Metrics & Workload Rankings
-                  </h3>
-                </div>
+            {/* SECTION 5: PRESSURE METRICS */}
+            <section className="ledger-frame">
+              <div className="ledger-band flex items-center gap-2 px-4 py-2.5">
+                <span className="h-2 w-2 rounded-full bg-[#1d4ed8] dark:bg-blue-400 shrink-0" />
+                <h3 className="text-[13px] font-bold tracking-tight text-[var(--text-primary)]">
+                  Pressure Metrics &amp; Workload Rankings
+                </h3>
               </div>
 
-              {/* Mode: Members with Projects (General, Delivery Unit, Client views) */}
+              {/* Mode: Members with Projects */}
               {pressureMetrics.mode === 'members_with_projects' && (
-                <div className="space-y-4">
-                  {/* Team Averages Bar */}
-                  <div>
-                    <span className="text-xs font-semibold text-neutral-700 dark:text-white/70 block mb-2 uppercase tracking-wider text-[11px]">
-                      Team Workload Averages:
-                    </span>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {pressureMetrics.rankedUnits?.slice(0, 4).map(item => (
-                        <div key={item.unit.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-xs">
-                          <p className="font-semibold text-neutral-800 dark:text-white truncate">{item.unit.name}</p>
-                          <div className="flex items-baseline gap-1.5 mt-1">
-                            <span className={`text-base font-semibold ${item.avgScore >= 12 ? 'text-rose-500' : item.avgScore >= 8 ? 'text-amber-500' : 'text-blue-500'}`}>
-                              {item.avgScore} pts
-                            </span>
-                            <span className="text-[11px] text-neutral-400">avg</span>
+                <div className="divide-y divide-[var(--border-subtle)] bg-[var(--surface)]">
+                  {/* Team Averages Hairline Strip */}
+                  {pressureMetrics.rankedUnits && pressureMetrics.rankedUnits.length > 0 && (
+                    <div>
+                      <div className="px-4 pt-3 pb-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                        Team Workload Averages
+                      </div>
+                      {(() => {
+                        const topUnits = pressureMetrics.rankedUnits.slice(0, 4);
+                        return (
+                          <div
+                            className={`grid border-t border-[var(--border-subtle)] ${
+                              topUnits.length === 1
+                                ? 'grid-cols-1'
+                                : topUnits.length === 2
+                                ? 'grid-cols-2'
+                                : topUnits.length === 3
+                                ? 'grid-cols-1 sm:grid-cols-3'
+                                : 'grid-cols-2 sm:grid-cols-4'
+                            }`}
+                          >
+                            {topUnits.map((item, idx) => (
+                              <div
+                                key={item.unit.id}
+                                className={`px-4 py-3 text-xs border-[var(--border-subtle)] ${
+                                  topUnits.length === 3 && idx > 0 ? 'border-t sm:border-t-0' : ''
+                                } ${
+                                  topUnits.length === 4 && idx >= 2 ? 'border-t sm:border-t-0' : ''
+                                } ${
+                                  (topUnits.length === 2 || topUnits.length === 4) && idx % 2 === 0 ? 'border-r' : ''
+                                } ${
+                                  idx < topUnits.length - 1 ? 'sm:border-r' : 'sm:border-r-0'
+                                }`}
+                              >
+                                <p className="font-semibold text-[var(--text-primary)] truncate">{item.unit.name}</p>
+                                <div className="flex items-baseline gap-1.5 mt-1 tabular-nums">
+                                  <span className={`text-base font-bold ${item.avgScore >= 12 ? 'text-red-600 dark:text-red-400' : item.avgScore >= 8 ? 'text-amber-700 dark:text-amber-400' : 'text-[var(--text-primary)]'}`}>
+                                    {item.avgScore} pts
+                                  </span>
+                                  <span className="text-[11px] text-[var(--text-muted)]">avg</span>
+                                </div>
+                              </div>
+                            ))}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })()}
                     </div>
-                  </div>
+                  )}
 
-                  {/* Members with highest workload scores */}
+                  {/* Highest Workload Members */}
                   <div>
-                    <span className="text-xs font-semibold text-neutral-700 dark:text-white/70 block mb-2 uppercase tracking-wider text-[11px]">
-                      Members with Highest Workload Scores & Top Contributing Projects:
-                    </span>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {pressureMetrics.topMembers?.slice(0, 6).map(item => (
-                        <div key={item.user.id} className="rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] p-3.5 text-xs">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                              <div className={`h-6 w-6 rounded-full flex items-center justify-center text-[11px] font-semibold text-white bg-gradient-to-tr ${item.user.avatarColor || 'from-blue-600 to-indigo-600'}`}>
+                    <div className="px-4 pt-3 pb-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                      Members with Highest Workload Scores &amp; Top Projects
+                    </div>
+                    {(() => {
+                      const topMembers = pressureMetrics.topMembers?.slice(0, 6) || [];
+                      return (
+                        <div
+                          className={`grid grid-cols-1 border-t border-[var(--border-subtle)] ${
+                            topMembers.length === 1
+                              ? ''
+                              : topMembers.length === 2
+                              ? 'md:grid-cols-2'
+                              : 'md:grid-cols-2 lg:grid-cols-3'
+                          }`}
+                        >
+                          {topMembers.map((item, idx) => (
+                            <div
+                              key={item.user.id}
+                              className={`p-3.5 text-xs border-[var(--border-subtle)] ${
+                                idx > 0 ? 'border-t' : ''
+                              } ${
+                                topMembers.length >= 2 && idx < 2 ? 'md:border-t-0' : ''
+                              } ${
+                                topMembers.length >= 3 && idx < 3 ? 'lg:border-t-0' : ''
+                              } ${
+                                topMembers.length >= 2 && idx % 2 === 0 && idx < topMembers.length - 1
+                                  ? 'md:border-r'
+                                  : ''
+                              } ${
+                                topMembers.length >= 3
+                                  ? idx % 3 !== 2
+                                    ? 'lg:border-r'
+                                    : 'lg:border-r-0'
+                                  : ''
+                              }`}
+                            >
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className={`h-6 w-6 shrink-0 rounded-[5px] flex items-center justify-center text-[11px] font-semibold text-white bg-gradient-to-tr ${item.user.avatarColor || 'from-blue-600 to-indigo-600'}`}>
                                 {item.user.name.charAt(0).toUpperCase()}
                               </div>
-                              <span className="font-semibold truncate max-w-[130px]">
+                              <span className="font-semibold text-[var(--text-primary)] truncate">
                                 {item.user.name}
                               </span>
                             </div>
-                            <span className={`font-semibold px-2 py-0.5 rounded-full text-xs ${
-                              item.score >= 12
-                                ? 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
-                                : item.score >= 8
-                                ? 'bg-amber-500/15 text-amber-600 dark:text-yellow-400'
-                                : 'bg-blue-500/15 text-blue-600 dark:text-blue-400'
-                            }`}>
-                              {item.score} pts
-                            </span>
+                            {item.score >= 12 ? (
+                              <span className="ledger-alert-badge shrink-0">
+                                {item.score} pts
+                              </span>
+                            ) : (
+                              <span className={`font-bold tabular-nums text-xs shrink-0 ${
+                                item.score >= 8
+                                  ? 'text-amber-700 dark:text-amber-400'
+                                  : 'text-[#1d4ed8] dark:text-blue-400'
+                              }`}>
+                                {item.score} pts
+                              </span>
+                            )}
                           </div>
                           {item.topProjects.length > 0 && (
-                            <div className="pt-2 border-t border-neutral-200/50 dark:border-white/5 text-[11px] text-[var(--text-secondary)]">
-                              <span className="font-medium text-neutral-700 dark:text-white/70 block mb-0.5">Top Contributing Projects:</span>
+                            <div className="pt-2 border-t border-[var(--border-subtle)] text-[11px] text-[var(--text-secondary)] space-y-0.5 tabular-nums">
                               {item.topProjects.slice(0, 2).map(p => (
-                                <div key={p.project} className="flex justify-between items-center py-0.5">
+                                <div key={p.project} className="flex justify-between items-center gap-2">
                                   <span className="truncate">{p.project}</span>
-                                  <span className="font-medium text-neutral-700 dark:text-white/80">{p.score} pts</span>
+                                  <span className="font-semibold text-[var(--text-primary)] shrink-0">{p.score} pts</span>
                                 </div>
                               ))}
                             </div>
                           )}
                         </div>
-                      ))}
-                    </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
               )}
 
-              {/* Mode: Project Tasks (Per project view) */}
+              {/* Mode: Project Tasks */}
               {pressureMetrics.mode === 'project_tasks' && (
-                <div>
-                  <span className="text-xs font-semibold text-neutral-700 dark:text-white/70 block mb-2 uppercase tracking-wider text-[11px]">
-                    Tasks Contributing Highest Workload Scores to this Project:
-                  </span>
-                  <div className="space-y-2 max-h-72 overflow-y-auto">
-                    {pressureMetrics.projectTasks?.map(pt => (
-                      <div key={pt.task.id} className="flex items-center justify-between p-3 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] text-xs">
-                        <div className="min-w-0 pr-3">
-                          <p className="font-semibold text-neutral-900 dark:text-white truncate">{pt.task.title}</p>
-                          <p className="text-[11px] text-neutral-400 mt-0.5">
-                            Assignee: {pt.user?.name || 'Unassigned'} · Status: {pt.task.status.replace('_', ' ')}
-                          </p>
-                        </div>
-                        <span className="font-semibold px-2 py-0.5 rounded-full text-xs bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 shrink-0">
-                          {pt.calculatedScore} pts
-                        </span>
+                <div className="divide-y divide-[var(--border-subtle)] max-h-72 overflow-y-auto bg-[var(--surface)]">
+                  {pressureMetrics.projectTasks?.map(pt => (
+                    <div key={pt.task.id} className="flex items-center justify-between px-4 py-2.5 text-xs hover:bg-[var(--surface-muted)] transition-colors">
+                      <div className="min-w-0 pr-3">
+                        <p className="font-semibold text-[var(--text-primary)] truncate">{pt.task.title}</p>
+                        <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
+                          {pt.assignees.join(', ')} · {pt.task.status.replace('_', ' ')}
+                        </p>
                       </div>
-                    ))}
-                    {pressureMetrics.projectTasks?.length === 0 && (
-                      <p className="text-xs text-neutral-400 py-3 text-center">No tasks in this project.</p>
-                    )}
-                  </div>
+                      <span className="font-bold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">
+                        {Math.round(pt.calculatedScore * 100) / 100} pts
+                      </span>
+                    </div>
+                  ))}
+                  {pressureMetrics.projectTasks?.length === 0 && (
+                    <p className="text-xs text-[var(--text-muted)] py-6 text-center">No active workload points in this project.</p>
+                  )}
                 </div>
               )}
 
-              {/* Mode: User Tasks (Per user view) */}
+              {/* Mode: User Tasks */}
               {pressureMetrics.mode === 'user_tasks' && (
-                <div>
-                  <span className="text-xs font-semibold text-neutral-700 dark:text-white/70 block mb-2 uppercase tracking-wider text-[11px]">
-                    Tasks Contributing Highest Workload Scores for this User:
-                  </span>
-                  <div className="space-y-2 max-h-72 overflow-y-auto">
-                    {pressureMetrics.userRankedTasks?.map(ut => (
-                      <div key={ut.item.taskId} className="flex items-center justify-between p-3 rounded-xl border border-[var(--border)] bg-[var(--surface-muted)] text-xs">
-                        <div className="min-w-0 pr-3">
-                          <p className="font-semibold text-neutral-900 dark:text-white truncate">{ut.item.title}</p>
-                          <p className="text-[11px] text-neutral-400 mt-0.5">
-                            Status: {ut.item.status.replace('_', ' ')} · Load: {ut.item.cognitiveLoad} · Due: {ut.item.dueDate || 'None'}
-                          </p>
-                        </div>
-                        <span className="font-semibold px-2 py-0.5 rounded-full text-xs bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 shrink-0">
-                          {ut.calculatedScore} pts
-                        </span>
+                <div className="divide-y divide-[var(--border-subtle)] max-h-72 overflow-y-auto bg-[var(--surface)]">
+                  {pressureMetrics.userRankedTasks?.map(ut => (
+                    <div key={ut.item.taskId} className="flex items-center justify-between px-4 py-2.5 text-xs hover:bg-[var(--surface-muted)] transition-colors">
+                      <div className="min-w-0 pr-3">
+                        <p className="font-semibold text-[var(--text-primary)] truncate">{ut.item.title}</p>
+                        <p className="text-[11px] text-[var(--text-secondary)] tabular-nums mt-0.5">
+                          {ut.item.status.replace('_', ' ')} · {ut.item.cognitiveLoad} load · Due {ut.item.dueDate || 'None'}
+                        </p>
                       </div>
-                    ))}
-                    {pressureMetrics.userRankedTasks?.length === 0 && (
-                      <p className="text-xs text-neutral-400 py-3 text-center">No active tasks contributing to workload.</p>
-                    )}
-                  </div>
+                      <span className="font-bold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">
+                        {Math.round(ut.calculatedScore * 100) / 100} pts
+                      </span>
+                    </div>
+                  ))}
+                  {pressureMetrics.userRankedTasks?.length === 0 && (
+                    <p className="text-xs text-[var(--text-muted)] py-6 text-center">No active tasks contributing to workload.</p>
+                  )}
                 </div>
               )}
-
-            </div>
+            </section>
 
             </>}
           </div>

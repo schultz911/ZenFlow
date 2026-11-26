@@ -7,6 +7,8 @@ import {
   calculateTeamUtilization,
   calculateTasksEfficiency,
   formatHoursRatio,
+  getAssignedHoursByMemberAndDate,
+  rankTaskHours,
   getDeliveryUnits,
   calculateUserWorkload,
   getUserDailyAssignedHours,
@@ -49,13 +51,17 @@ test('task estimated hours are split equally across working days between creatio
   assert.equal(getTaskDailyEstimatedHours(task, new Date('2026-10-27T12:00:00Z')), 3);
   // On Thursday (outside range)
   assert.equal(getTaskDailyEstimatedHours(task, new Date('2026-10-29T12:00:00Z')), 0);
+  const sameWorkspaceDay = { ...task, createdAt: '2026-10-25T20:00:00Z', dueDate: '2026-10-26' };
+  assert.equal(getTaskDailyEstimatedHours(sameWorkspaceDay, new Date('2026-10-26T16:00:00Z')), 9);
+  assert.equal(getTaskDailyEstimatedHours(sameWorkspaceDay, new Date('2026-10-25T18:00:00Z')), 0);
 });
 
-test('utilization considers members with > 3h/day utilized and < 3h/day underutilized', () => {
+test('utilization includes exactly 3h and classifies before rounding', () => {
   const user1: User = { id: 'u1', name: 'Alice', email: 'alice@example.invalid', role: 'content', createdAt: '2026-10-01' };
   const user2: User = { id: 'u2', name: 'Bob', email: 'bob@example.invalid', role: 'content', createdAt: '2026-10-01' };
 
-  // Alice has 8h estimated over 2 working days = 4h/day (> 3h)
+  const date = new Date('2026-10-26T12:00:00Z');
+  // Alice has 6h over two working days. Bob has slightly less than 3h.
   const taskAlice: Task = {
     id: 't-a',
     userId: 'u1',
@@ -63,13 +69,12 @@ test('utilization considers members with > 3h/day utilized and < 3h/day underuti
     status: 'in_progress',
     cognitiveLoad: 'high',
     order: 0,
-    estimatedHours: 8,
-    createdAt: new Date().toISOString(),
-    dueDate: new Date().toISOString().slice(0, 10),
-    updatedAt: new Date().toISOString(),
+    estimatedHours: 6,
+    createdAt: '2026-10-26T09:00:00Z',
+    dueDate: '2026-10-27',
+    updatedAt: '2026-10-26T09:00:00Z',
   };
 
-  // Bob has 2h estimated over 2 working days = 1h/day (< 3h)
   const taskBob: Task = {
     id: 't-b',
     userId: 'u2',
@@ -77,19 +82,29 @@ test('utilization considers members with > 3h/day utilized and < 3h/day underuti
     status: 'todo',
     cognitiveLoad: 'low',
     order: 0,
-    estimatedHours: 2,
-    createdAt: new Date().toISOString(),
-    dueDate: new Date().toISOString().slice(0, 10),
-    updatedAt: new Date().toISOString(),
+    estimatedHours: 2.99,
+    createdAt: '2026-10-26T09:00:00Z',
+    dueDate: '2026-10-26',
+    updatedAt: '2026-10-26T09:00:00Z',
   };
 
-  const tasks = [taskAlice, taskBob];
+  const tasks: Task[] = [
+    taskAlice,
+    taskBob,
+    { ...taskBob, id: 'future', startDate: '2026-10-27', dueDate: '2026-10-27', estimatedHours: 4 },
+    { ...taskBob, id: 'done', status: 'done', estimatedHours: 4 },
+    { ...taskBob, id: 'overdue', startDate: '2026-10-21', dueDate: '2026-10-23', estimatedHours: 30 },
+  ];
 
-  assert.equal(isUserUtilized(user1, tasks), true);
-  assert.equal(isUserUtilized(user2, tasks), false);
+  assert.equal(isUserUtilized(user1, tasks, date), true);
+  assert.equal(isUserUtilized(user2, tasks, date), false);
+  const byDate = getAssignedHoursByMemberAndDate(tasks, ['2026-10-26', '2026-10-27'], '2026-10-26');
+  assert.equal(byDate.get('u1')?.get('2026-10-26'), 3);
+  assert.equal(byDate.get('u2')?.get('2026-10-26'), 2.99);
+  assert.equal(byDate.get('u2')?.get('2026-10-27'), 4);
 
   const team = [user1, user2];
-  const teamUtil = calculateTeamUtilization(team, tasks);
+  const teamUtil = calculateTeamUtilization(team, tasks, date);
   assert.equal(teamUtil.utilizationPercent, 50);
   assert.equal(teamUtil.utilizedCount, 1);
   assert.equal(teamUtil.totalCount, 2);
@@ -97,39 +112,37 @@ test('utilization considers members with > 3h/day utilized and < 3h/day underuti
   assert.equal(teamUtil.underutilizedUsers[0].user.id, 'u2');
 });
 
-test('efficiency calculates aggregate time taken / time estimated across tasks', () => {
-  const task1: Task = {
-    id: 't1',
+test('efficiency divides paired completed estimates by billable hours before rounding', () => {
+  const measured: Task = {
+    id: 'measured',
     userId: 'u1',
-    title: 'Task 1',
+    title: 'Measured',
     status: 'done',
     cognitiveLoad: 'medium',
     order: 0,
     estimatedHours: 10,
-    inProgressDurationMs: 8 * 3600000, // 8 hours taken
+    inProgressDurationMs: 6 * 3_600_000,
     createdAt: '2026-10-01',
     updatedAt: '2026-10-01',
   };
 
-  const task2: Task = {
-    id: 't2',
-    userId: 'u1',
-    title: 'Task 2',
-    status: 'done',
-    cognitiveLoad: 'medium',
-    order: 1,
-    estimatedHours: 10,
-    inProgressDurationMs: 6 * 3600000, // 6 hours taken
-    createdAt: '2026-10-01',
-    updatedAt: '2026-10-01',
-  };
+  const excluded: Task[] = [
+    { ...measured, id: 'missing-estimate', estimatedHours: undefined },
+    { ...measured, id: 'missing-time', inProgressDurationMs: 0 },
+    { ...measured, id: 'in-review', status: 'in_review' },
+  ];
+  assert.equal(calculateTasksEfficiency(excluded).efficiencyPercent, null);
+  const result = calculateTasksEfficiency([measured, measured, ...excluded]);
+  assert.equal(result.billableHours, 6);
+  assert.equal(result.estimatedHours, 10);
+  assert.equal(Math.round(result.efficiencyPercent!), 167);
+  assert.equal(formatHoursRatio(result.estimatedHours, result.billableHours), '(10h / 6h)');
 
-  // Total taken = 14h, Total estimated = 20h -> Efficiency = 70%
-  const result = calculateTasksEfficiency([task1, task2]);
-  assert.equal(result.totalTimeTakenHours, 14);
-  assert.equal(result.totalEstimatedHours, 20);
-  assert.equal(result.efficiencyPercent, 70);
-  assert.equal(formatHoursRatio(result.totalTimeTakenHours, result.totalEstimatedHours), '(14h / 20h)');
+  const archived: Task = {
+    ...measured, id: 'archived', status: 'archived', estimatedHours: 0.04, inProgressDurationMs: 108_000,
+  };
+  assert.equal(Math.round(calculateTasksEfficiency([archived]).efficiencyPercent!), 133);
+  assert.equal(Math.round(calculateTasksEfficiency([measured, archived]).efficiencyPercent!), 167);
 });
 
 test('delivery units group CD teams (Content & Design only)', () => {
@@ -181,13 +194,24 @@ test('multi-assignee shared task divides workload score, daily hours, and effici
   assert.ok(sharedWl.totalScore < singleWl.totalScore);
   assert.ok(Math.abs(sharedWl.totalScore - singleWl.totalScore / 2) <= 0.1);
 
-  const userEff = calculateTasksEfficiency([sharedTask], { forUserId: 'u1' });
-  assert.equal(userEff.totalTimeTakenHours, 2); // 4h / 2
-  assert.equal(userEff.totalEstimatedHours, 4); // 8h / 2
-  assert.equal(userEff.efficiencyPercent, 50);
+  const sharedCompleted: Task = { ...sharedTask, status: 'done' };
+  const userEff = calculateTasksEfficiency([sharedCompleted], { memberIds: new Set(['u1']) });
+  assert.equal(userEff.billableHours, 2);
+  assert.equal(userEff.estimatedHours, 4);
+  assert.equal(userEff.efficiencyPercent, 200);
 
-  const teamEff = calculateTasksEfficiency([sharedTask, sharedTask]);
-  assert.equal(teamEff.totalEstimatedHours, 8); // deduplicated by task ID
+  const teamEff = calculateTasksEfficiency([sharedCompleted, sharedCompleted], { memberIds: new Set(['u1', 'u2']) });
+  assert.equal(teamEff.billableHours, 4);
+  assert.equal(teamEff.estimatedHours, 8);
+  assert.equal(calculateTasksEfficiency([sharedCompleted], { memberIds: new Set(['u3']) }).efficiencyPercent, null);
+
+  const overrun: Task = { ...sharedCompleted, id: 'overrun', inProgressDurationMs: 16 * 3_600_000, client: 'Time spent' };
+  const budget: Task = { ...sharedCompleted, id: 'budget', estimatedHours: 40, client: 'Big estimate' };
+  const ranked = rankTaskHours([budget, overrun, overrun], task => task.client!, { memberIds: new Set(['u1']) });
+  assert.deepEqual(ranked, [
+    { key: 'Time spent', billableHours: 8, estimatedHours: 4 },
+    { key: 'Big estimate', billableHours: 2, estimatedHours: 20 },
+  ]);
 });
 
 test('parseLocalDate and formatLocalDateKey avoid UTC day-shift and reject invalid dates', () => {
