@@ -1,0 +1,750 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-26T10:03:00Z",
+  "title": "Design System: zenFlow",
+  "extensions": {
+    "colorMeta": {
+      "cobalt-accent": {
+        "role": "primary",
+        "displayName": "Cobalt Accent",
+        "canonical": "oklch(48.8% 0.217 264.4)",
+        "tonalRamp": [
+          "oklch(18% 0.065 264.4)",
+          "oklch(28% 0.125 264.4)",
+          "oklch(38% 0.185 264.4)",
+          "oklch(48.8% 0.217 264.4)",
+          "oklch(60% 0.195 264.4)",
+          "oklch(72% 0.140 264.4)",
+          "oklch(85% 0.075 264.4)",
+          "oklch(95% 0.025 264.4)"
+        ]
+      },
+      "cobalt-deep": {
+        "role": "primary",
+        "displayName": "Cobalt Deep",
+        "canonical": "oklch(42.4% 0.199 265.6)",
+        "tonalRamp": [
+          "oklch(16% 0.060 265.6)",
+          "oklch(26% 0.120 265.6)",
+          "oklch(35% 0.175 265.6)",
+          "oklch(42.4% 0.199 265.6)",
+          "oklch(56% 0.185 265.6)",
+          "oklch(70% 0.135 265.6)",
+          "oklch(84% 0.070 265.6)",
+          "oklch(95% 0.022 265.6)"
+        ]
+      },
+      "cobalt-wash": {
+        "role": "primary",
+        "displayName": "Cobalt Wash",
+        "canonical": "oklch(96.5% 0.018 260.0)",
+        "tonalRamp": [
+          "oklch(18% 0.030 260.0)",
+          "oklch(30% 0.055 260.0)",
+          "oklch(42% 0.080 260.0)",
+          "oklch(55% 0.095 260.0)",
+          "oklch(68% 0.080 260.0)",
+          "oklch(80% 0.055 260.0)",
+          "oklch(90% 0.032 260.0)",
+          "oklch(96.5% 0.018 260.0)"
+        ]
+      },
+      "emerald-capacity": {
+        "role": "secondary",
+        "displayName": "Emerald Capacity",
+        "canonical": "oklch(59.6% 0.145 163.2)",
+        "tonalRamp": [
+          "oklch(18% 0.045 163.2)",
+          "oklch(29% 0.085 163.2)",
+          "oklch(42% 0.120 163.2)",
+          "oklch(54% 0.140 163.2)",
+          "oklch(59.6% 0.145 163.2)",
+          "oklch(74% 0.125 163.2)",
+          "oklch(86% 0.070 163.2)",
+          "oklch(95% 0.024 163.2)"
+        ]
+      },
+      "amber-caution": {
+        "role": "secondary",
+        "displayName": "Amber Caution",
+        "canonical": "oklch(55.5% 0.163 49.0)",
+        "tonalRamp": [
+          "oklch(18% 0.048 49.0)",
+          "oklch(29% 0.095 49.0)",
+          "oklch(42% 0.138 49.0)",
+          "oklch(55.5% 0.163 49.0)",
+          "oklch(68% 0.165 49.0)",
+          "oklch(79% 0.135 49.0)",
+          "oklch(89% 0.075 49.0)",
+          "oklch(96% 0.025 49.0)"
+        ]
+      },
+      "vermilion-alert": {
+        "role": "secondary",
+        "displayName": "Vermilion Alert",
+        "canonical": "oklch(57.7% 0.245 27.3)",
+        "tonalRamp": [
+          "oklch(18% 0.070 27.3)",
+          "oklch(28% 0.130 27.3)",
+          "oklch(42% 0.195 27.3)",
+          "oklch(57.7% 0.245 27.3)",
+          "oklch(66% 0.215 27.3)",
+          "oklch(76% 0.155 27.3)",
+          "oklch(87% 0.080 27.3)",
+          "oklch(96% 0.024 27.3)"
+        ]
+      },
+      "crimson-hold": {
+        "role": "secondary",
+        "displayName": "Crimson Hold",
+        "canonical": "oklch(50.5% 0.213 27.5)",
+        "tonalRamp": [
+          "oklch(16% 0.065 27.5)",
+          "oklch(26% 0.125 27.5)",
+          "oklch(38% 0.180 27.5)",
+          "oklch(50.5% 0.213 27.5)",
+          "oklch(62% 0.190 27.5)",
+          "oklch(74% 0.135 27.5)",
+          "oklch(86% 0.070 27.5)",
+          "oklch(95% 0.022 27.5)"
+        ]
+      },
+      "alabaster-canvas": {
+        "role": "neutral",
+        "displayName": "Alabaster Canvas",
+        "canonical": "oklch(98.2% 0.004 258.0)",
+        "tonalRamp": [
+          "oklch(16% 0.008 258.0)",
+          "oklch(28% 0.010 258.0)",
+          "oklch(42% 0.012 258.0)",
+          "oklch(56% 0.012 258.0)",
+          "oklch(70% 0.010 258.0)",
+          "oklch(83% 0.008 258.0)",
+          "oklch(92% 0.006 258.0)",
+          "oklch(98.2% 0.004 258.0)"
+        ]
+      },
+      "paper-white": {
+        "role": "neutral",
+        "displayName": "Paper White",
+        "canonical": "oklch(100% 0 0)",
+        "tonalRamp": [
+          "oklch(16% 0 0)",
+          "oklch(28% 0 0)",
+          "oklch(42% 0 0)",
+          "oklch(56% 0 0)",
+          "oklch(70% 0 0)",
+          "oklch(84% 0 0)",
+          "oklch(93% 0 0)",
+          "oklch(100% 0 0)"
+        ]
+      },
+      "ledger-band": {
+        "role": "neutral",
+        "displayName": "Ledger Band",
+        "canonical": "oklch(99.1% 0.003 247.9)",
+        "tonalRamp": [
+          "oklch(16% 0.006 247.9)",
+          "oklch(28% 0.008 247.9)",
+          "oklch(42% 0.010 247.9)",
+          "oklch(56% 0.010 247.9)",
+          "oklch(70% 0.008 247.9)",
+          "oklch(84% 0.006 247.9)",
+          "oklch(93% 0.004 247.9)",
+          "oklch(99.1% 0.003 247.9)"
+        ]
+      },
+      "slate-mist": {
+        "role": "neutral",
+        "displayName": "Slate Mist",
+        "canonical": "oklch(96.4% 0.007 264.5)",
+        "tonalRamp": [
+          "oklch(16% 0.010 264.5)",
+          "oklch(28% 0.013 264.5)",
+          "oklch(42% 0.015 264.5)",
+          "oklch(56% 0.015 264.5)",
+          "oklch(70% 0.012 264.5)",
+          "oklch(83% 0.010 264.5)",
+          "oklch(91% 0.008 264.5)",
+          "oklch(96.4% 0.007 264.5)"
+        ]
+      },
+      "ink-obsidian": {
+        "role": "neutral",
+        "displayName": "Ink Obsidian",
+        "canonical": "oklch(18.8% 0.009 258.3)",
+        "tonalRamp": [
+          "oklch(14% 0.008 258.3)",
+          "oklch(18.8% 0.009 258.3)",
+          "oklch(32% 0.012 258.3)",
+          "oklch(46% 0.014 258.3)",
+          "oklch(60% 0.012 258.3)",
+          "oklch(74% 0.010 258.3)",
+          "oklch(86% 0.007 258.3)",
+          "oklch(95% 0.004 258.3)"
+        ]
+      },
+      "slate-body": {
+        "role": "neutral",
+        "displayName": "Slate Body",
+        "canonical": "oklch(47.8% 0.028 256.8)",
+        "tonalRamp": [
+          "oklch(16% 0.014 256.8)",
+          "oklch(27% 0.022 256.8)",
+          "oklch(38% 0.026 256.8)",
+          "oklch(47.8% 0.028 256.8)",
+          "oklch(60% 0.026 256.8)",
+          "oklch(73% 0.020 256.8)",
+          "oklch(85% 0.012 256.8)",
+          "oklch(95% 0.006 256.8)"
+        ]
+      },
+      "slate-muted": {
+        "role": "neutral",
+        "displayName": "Slate Muted",
+        "canonical": "oklch(55.4% 0.041 257.4)",
+        "tonalRamp": [
+          "oklch(17% 0.018 257.4)",
+          "oklch(28% 0.028 257.4)",
+          "oklch(41% 0.036 257.4)",
+          "oklch(55.4% 0.041 257.4)",
+          "oklch(67% 0.035 257.4)",
+          "oklch(78% 0.025 257.4)",
+          "oklch(88% 0.014 257.4)",
+          "oklch(96% 0.006 257.4)"
+        ]
+      },
+      "hairline-rule": {
+        "role": "neutral",
+        "displayName": "Hairline Rule",
+        "canonical": "oklch(91.3% 0.011 261.3)",
+        "tonalRamp": [
+          "oklch(16% 0.010 261.3)",
+          "oklch(28% 0.013 261.3)",
+          "oklch(42% 0.016 261.3)",
+          "oklch(56% 0.016 261.3)",
+          "oklch(70% 0.014 261.3)",
+          "oklch(82% 0.012 261.3)",
+          "oklch(91.3% 0.011 261.3)",
+          "oklch(96% 0.006 261.3)"
+        ]
+      },
+      "hairline-subtle": {
+        "role": "neutral",
+        "displayName": "Hairline Subtle",
+        "canonical": "oklch(95.1% 0.008 260.7)",
+        "tonalRamp": [
+          "oklch(16% 0.008 260.7)",
+          "oklch(28% 0.011 260.7)",
+          "oklch(42% 0.013 260.7)",
+          "oklch(56% 0.013 260.7)",
+          "oklch(70% 0.011 260.7)",
+          "oklch(83% 0.009 260.7)",
+          "oklch(91% 0.008 260.7)",
+          "oklch(95.1% 0.008 260.7)"
+        ]
+      },
+      "rule-hover": {
+        "role": "neutral",
+        "displayName": "Rule Hover",
+        "canonical": "oklch(84.4% 0.018 262.1)",
+        "tonalRamp": [
+          "oklch(16% 0.012 262.1)",
+          "oklch(28% 0.016 262.1)",
+          "oklch(42% 0.020 262.1)",
+          "oklch(56% 0.021 262.1)",
+          "oklch(70% 0.020 262.1)",
+          "oklch(84.4% 0.018 262.1)",
+          "oklch(91% 0.011 262.1)",
+          "oklch(96% 0.006 262.1)"
+        ]
+      },
+      "dark-cobalt-accent": {
+        "role": "primary",
+        "displayName": "Dark Cobalt Accent",
+        "canonical": "oklch(62.3% 0.214 259.8)",
+        "tonalRamp": [
+          "oklch(18% 0.065 259.8)",
+          "oklch(29% 0.125 259.8)",
+          "oklch(42% 0.180 259.8)",
+          "oklch(53% 0.210 259.8)",
+          "oklch(62.3% 0.214 259.8)",
+          "oklch(74% 0.155 259.8)",
+          "oklch(86% 0.085 259.8)",
+          "oklch(95% 0.028 259.8)"
+        ]
+      },
+      "dark-cobalt-hover": {
+        "role": "primary",
+        "displayName": "Dark Cobalt Hover",
+        "canonical": "oklch(54.6% 0.245 262.9)",
+        "tonalRamp": [
+          "oklch(18% 0.070 262.9)",
+          "oklch(29% 0.135 262.9)",
+          "oklch(42% 0.195 262.9)",
+          "oklch(54.6% 0.245 262.9)",
+          "oklch(64% 0.210 262.9)",
+          "oklch(75% 0.145 262.9)",
+          "oklch(86% 0.080 262.9)",
+          "oklch(95% 0.025 262.9)"
+        ]
+      },
+      "dark-cobalt-focus": {
+        "role": "primary",
+        "displayName": "Dark Cobalt Focus",
+        "canonical": "oklch(70.7% 0.165 254.6)",
+        "tonalRamp": [
+          "oklch(18% 0.055 254.6)",
+          "oklch(30% 0.105 254.6)",
+          "oklch(44% 0.150 254.6)",
+          "oklch(58% 0.175 254.6)",
+          "oklch(70.7% 0.165 254.6)",
+          "oklch(80% 0.115 254.6)",
+          "oklch(89% 0.060 254.6)",
+          "oklch(96% 0.022 254.6)"
+        ]
+      },
+      "dark-emerald-capacity": {
+        "role": "secondary",
+        "displayName": "Dark Emerald Capacity",
+        "canonical": "oklch(76.5% 0.177 163.2)",
+        "tonalRamp": [
+          "oklch(18% 0.050 163.2)",
+          "oklch(30% 0.095 163.2)",
+          "oklch(44% 0.135 163.2)",
+          "oklch(58% 0.165 163.2)",
+          "oklch(68% 0.180 163.2)",
+          "oklch(76.5% 0.177 163.2)",
+          "oklch(87% 0.095 163.2)",
+          "oklch(95% 0.030 163.2)"
+        ]
+      },
+      "dark-amber-caution": {
+        "role": "secondary",
+        "displayName": "Dark Amber Caution",
+        "canonical": "oklch(82.8% 0.189 84.4)",
+        "tonalRamp": [
+          "oklch(18% 0.045 84.4)",
+          "oklch(30% 0.085 84.4)",
+          "oklch(44% 0.125 84.4)",
+          "oklch(58% 0.158 84.4)",
+          "oklch(71% 0.180 84.4)",
+          "oklch(82.8% 0.189 84.4)",
+          "oklch(90% 0.110 84.4)",
+          "oklch(96% 0.035 84.4)"
+        ]
+      },
+      "dark-vermilion-alert": {
+        "role": "secondary",
+        "displayName": "Dark Vermilion Alert",
+        "canonical": "oklch(63.7% 0.237 25.3)",
+        "tonalRamp": [
+          "oklch(18% 0.068 25.3)",
+          "oklch(29% 0.128 25.3)",
+          "oklch(42% 0.185 25.3)",
+          "oklch(54% 0.225 25.3)",
+          "oklch(63.7% 0.237 25.3)",
+          "oklch(75% 0.160 25.3)",
+          "oklch(87% 0.082 25.3)",
+          "oklch(96% 0.025 25.3)"
+        ]
+      },
+      "dark-ink-canvas": {
+        "role": "neutral",
+        "displayName": "Dark Ink Canvas",
+        "canonical": "oklch(17.5% 0.011 264.1)",
+        "tonalRamp": [
+          "oklch(13% 0.008 264.1)",
+          "oklch(17.5% 0.011 264.1)",
+          "oklch(29% 0.014 264.1)",
+          "oklch(43% 0.016 264.1)",
+          "oklch(57% 0.015 264.1)",
+          "oklch(71% 0.012 264.1)",
+          "oklch(84% 0.008 264.1)",
+          "oklch(95% 0.004 264.1)"
+        ]
+      },
+      "dark-ledger-surface": {
+        "role": "neutral",
+        "displayName": "Dark Ledger Surface",
+        "canonical": "oklch(20.6% 0.015 264.3)",
+        "tonalRamp": [
+          "oklch(14% 0.010 264.3)",
+          "oklch(20.6% 0.015 264.3)",
+          "oklch(32% 0.018 264.3)",
+          "oklch(46% 0.019 264.3)",
+          "oklch(60% 0.017 264.3)",
+          "oklch(74% 0.013 264.3)",
+          "oklch(86% 0.008 264.3)",
+          "oklch(95% 0.004 264.3)"
+        ]
+      },
+      "dark-ledger-band": {
+        "role": "neutral",
+        "displayName": "Dark Ledger Band",
+        "canonical": "oklch(23.1% 0.019 264.2)",
+        "tonalRamp": [
+          "oklch(15% 0.012 264.2)",
+          "oklch(23.1% 0.019 264.2)",
+          "oklch(35% 0.022 264.2)",
+          "oklch(49% 0.023 264.2)",
+          "oklch(63% 0.020 264.2)",
+          "oklch(76% 0.015 264.2)",
+          "oklch(87% 0.009 264.2)",
+          "oklch(95% 0.005 264.2)"
+        ]
+      },
+      "dark-inset-subtle": {
+        "role": "neutral",
+        "displayName": "Dark Inset Subtle",
+        "canonical": "oklch(18.6% 0.013 264.0)",
+        "tonalRamp": [
+          "oklch(13% 0.009 264.0)",
+          "oklch(18.6% 0.013 264.0)",
+          "oklch(30% 0.016 264.0)",
+          "oklch(44% 0.017 264.0)",
+          "oklch(58% 0.015 264.0)",
+          "oklch(72% 0.012 264.0)",
+          "oklch(85% 0.008 264.0)",
+          "oklch(95% 0.004 264.0)"
+        ]
+      },
+      "dark-raised-menu": {
+        "role": "neutral",
+        "displayName": "Dark Raised Menu",
+        "canonical": "oklch(24.5% 0.021 264.4)",
+        "tonalRamp": [
+          "oklch(15% 0.013 264.4)",
+          "oklch(24.5% 0.021 264.4)",
+          "oklch(36% 0.024 264.4)",
+          "oklch(50% 0.025 264.4)",
+          "oklch(64% 0.021 264.4)",
+          "oklch(77% 0.016 264.4)",
+          "oklch(88% 0.010 264.4)",
+          "oklch(95% 0.005 264.4)"
+        ]
+      },
+      "dark-ink-primary": {
+        "role": "neutral",
+        "displayName": "Dark Ink Primary",
+        "canonical": "oklch(96.6% 0.007 260.7)",
+        "tonalRamp": [
+          "oklch(16% 0.009 260.7)",
+          "oklch(28% 0.012 260.7)",
+          "oklch(42% 0.014 260.7)",
+          "oklch(56% 0.014 260.7)",
+          "oklch(70% 0.012 260.7)",
+          "oklch(83% 0.010 260.7)",
+          "oklch(91% 0.008 260.7)",
+          "oklch(96.6% 0.007 260.7)"
+        ]
+      },
+      "dark-slate-secondary": {
+        "role": "neutral",
+        "displayName": "Dark Slate Secondary",
+        "canonical": "oklch(71.1% 0.025 261.3)",
+        "tonalRamp": [
+          "oklch(17% 0.013 261.3)",
+          "oklch(29% 0.018 261.3)",
+          "oklch(43% 0.023 261.3)",
+          "oklch(57% 0.026 261.3)",
+          "oklch(71.1% 0.025 261.3)",
+          "oklch(81% 0.018 261.3)",
+          "oklch(90% 0.011 261.3)",
+          "oklch(96% 0.005 261.3)"
+        ]
+      },
+      "dark-slate-muted": {
+        "role": "neutral",
+        "displayName": "Dark Slate Muted",
+        "canonical": "oklch(63.2% 0.029 261.7)",
+        "tonalRamp": [
+          "oklch(17% 0.015 261.7)",
+          "oklch(29% 0.021 261.7)",
+          "oklch(42% 0.027 261.7)",
+          "oklch(53% 0.030 261.7)",
+          "oklch(63.2% 0.029 261.7)",
+          "oklch(76% 0.022 261.7)",
+          "oklch(87% 0.013 261.7)",
+          "oklch(96% 0.006 261.7)"
+        ]
+      },
+      "dark-hairline-rule": {
+        "role": "neutral",
+        "displayName": "Dark Hairline Rule",
+        "canonical": "oklch(28.8% 0.021 264.1)",
+        "tonalRamp": [
+          "oklch(16% 0.013 264.1)",
+          "oklch(28.8% 0.021 264.1)",
+          "oklch(40% 0.024 264.1)",
+          "oklch(53% 0.024 264.1)",
+          "oklch(66% 0.020 264.1)",
+          "oklch(78% 0.015 264.1)",
+          "oklch(88% 0.009 264.1)",
+          "oklch(95% 0.005 264.1)"
+        ]
+      },
+      "dark-hairline-subtle": {
+        "role": "neutral",
+        "displayName": "Dark Hairline Subtle",
+        "canonical": "oklch(25.9% 0.019 264.2)",
+        "tonalRamp": [
+          "oklch(15% 0.012 264.2)",
+          "oklch(25.9% 0.019 264.2)",
+          "oklch(38% 0.022 264.2)",
+          "oklch(51% 0.022 264.2)",
+          "oklch(64% 0.019 264.2)",
+          "oklch(77% 0.014 264.2)",
+          "oklch(88% 0.009 264.2)",
+          "oklch(95% 0.005 264.2)"
+        ]
+      },
+      "dark-rule-hover": {
+        "role": "neutral",
+        "displayName": "Dark Rule Hover",
+        "canonical": "oklch(38.1% 0.030 264.3)",
+        "tonalRamp": [
+          "oklch(17% 0.016 264.3)",
+          "oklch(28% 0.024 264.3)",
+          "oklch(38.1% 0.030 264.3)",
+          "oklch(51% 0.031 264.3)",
+          "oklch(64% 0.026 264.3)",
+          "oklch(77% 0.019 264.3)",
+          "oklch(88% 0.011 264.3)",
+          "oklch(95% 0.005 264.3)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "wordmark": {
+        "displayName": "Wordmark",
+        "purpose": "Preserved calligraphic accent strictly for 'Flow' in the zenFlow header and loading brand lockup."
+      },
+      "kpi-display": {
+        "displayName": "KPI Display",
+        "purpose": "Tabular 24px numerals inside the single-frame OverviewBar KPI ledger."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Active team board title inside the top ledger band (All Teams, Content, Design)."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Member swimlane header names and centralized TeamPipeline band headings."
+      },
+      "card-title": {
+        "displayName": "Card Title",
+        "purpose": "Task card titles, pipeline deliverable headings, and desktop bottom-ruled navigation tabs."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Buttons, search fields, dropdown menu items, telemetry values, and dense operational copy."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Uppercase KPI headers, swimlane column titles, vermilion alert badges, and single-line tabular metadata."
+      }
+    },
+    "shadows": [
+      {
+        "name": "surface-flat",
+        "value": "none",
+        "purpose": "Default for all resting workspace surfaces: ledger frames, KPI cells, pipeline strips, swimlanes, and task cards."
+      },
+      {
+        "name": "floating-light",
+        "value": "0 12px 32px rgba(18, 20, 24, 0.12), 0 2px 6px rgba(18, 20, 24, 0.06)",
+        "purpose": "Dropdown menus (.menu-surface) and floating Free Pool dock (.free-pool-panel) in light mode."
+      },
+      {
+        "name": "floating-dark",
+        "value": "0 14px 36px rgba(0, 0, 0, 0.45), 0 2px 8px rgba(0, 0, 0, 0.3)",
+        "purpose": "Dropdown menus (.menu-surface) and floating Free Pool dock (.free-pool-panel) in dark mode."
+      },
+      {
+        "name": "dialog-light",
+        "value": "0 24px 64px rgba(18, 20, 24, 0.18), 0 4px 12px rgba(18, 20, 24, 0.08)",
+        "purpose": "Modal dialogs (.dialog-panel) over blurred backdrop scrim in light mode."
+      },
+      {
+        "name": "dialog-dark",
+        "value": "0 24px 72px rgba(0, 0, 0, 0.65), 0 4px 16px rgba(0, 0, 0, 0.4)",
+        "purpose": "Modal dialogs (.dialog-panel) over blurred backdrop scrim in dark mode."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.2, 0.7, 0.2, 1)",
+        "purpose": "Snappy Swiss-engineered deceleration curve for transitions, tab rules, and collapsible swimlanes."
+      },
+      {
+        "name": "duration-drag",
+        "value": "140ms",
+        "purpose": "Task card drag opacity and micro-scale transition."
+      },
+      {
+        "name": "duration-control",
+        "value": "150ms",
+        "purpose": "Default button, border, hover, and column drag-over state transitions."
+      },
+      {
+        "name": "duration-layout",
+        "value": "180ms",
+        "purpose": "Animated 2px cobalt active tab rule glide, swimlane collapse/expand, and Free Pool dock toggle."
+      },
+      {
+        "name": "duration-progress",
+        "value": "200ms",
+        "purpose": "Metric bar width fill and root theme color transitions."
+      },
+      {
+        "name": "marquee-scroll",
+        "value": "35s linear infinite",
+        "purpose": "Continuous urgent deadline marquee ticker (pauses on hover; converts to horizontal scroll under reduced motion)."
+      },
+      {
+        "name": "reduced-motion",
+        "value": "0.01ms !important",
+        "purpose": "Global prefers-reduced-motion collapse plus clip-path fallback on the 5s hold-to-purge safety bar."
+      }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" },
+      { "name": "max-container", "value": "1400px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Action Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "High-contrast cobalt primary action for View Analytics, Add Task, and Sign In.",
+      "html": "<button type=\"button\" class=\"ds-btn-primary\"><svg class=\"ds-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M5 12h14\"/><path d=\"M12 5v14\"/></svg><span>Add Task</span></button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: var(--control-height, 34px); padding: 6px 12px; border: 1px solid var(--accent, #1d4ed8); border-radius: var(--radius-control, 7px); background: var(--accent, #1d4ed8); color: #ffffff; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; line-height: 1.45; font-weight: 600; cursor: pointer; transition: background-color 150ms cubic-bezier(0.2, 0.7, 0.2, 1), border-color 150ms cubic-bezier(0.2, 0.7, 0.2, 1); } .ds-btn-primary:hover { background: var(--accent-hover, #1e40af); border-color: var(--accent-hover, #1e40af); } .ds-btn-primary:active { transform: translateY(0.5px); } .ds-btn-primary:focus-visible { outline: 2px solid var(--focus, #1d4ed8); outline-offset: 2px; } .ds-btn-primary .ds-icon { width: 14px; height: 14px; flex-shrink: 0; }"
+    },
+    {
+      "name": "Secondary & Danger Outline Buttons",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Hairline-bordered neutral secondary control paired with crimson outline for destructive confirmation.",
+      "html": "<div class=\"ds-btn-row\"><button type=\"button\" class=\"ds-btn-secondary\"><svg class=\"ds-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4\"/><polyline points=\"7 10 12 15 17 10\"/><line x1=\"12\" x2=\"12\" y1=\"15\" y2=\"3\"/></svg><span>Export Report</span></button><button type=\"button\" class=\"ds-btn-danger\"><svg class=\"ds-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M3 6h18\"/><path d=\"M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6\"/><path d=\"M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2\"/></svg><span>Remove</span></button></div>",
+      "css": ".ds-btn-row { display: inline-flex; align-items: center; gap: 8px; } .ds-btn-secondary, .ds-btn-danger { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: var(--control-height, 34px); padding: 6px 12px; border-radius: var(--radius-control, 7px); font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; line-height: 1.45; font-weight: 600; cursor: pointer; transition: background-color 150ms cubic-bezier(0.2, 0.7, 0.2, 1), border-color 150ms cubic-bezier(0.2, 0.7, 0.2, 1), color 150ms cubic-bezier(0.2, 0.7, 0.2, 1); } .ds-btn-secondary { background: var(--surface, #ffffff); border: 1px solid var(--border, #dfe3ea); color: var(--text-primary, #121418); } .ds-btn-secondary:hover { background: var(--surface-subtle, #f2f4f8); } .ds-btn-danger { background: transparent; border: 1px solid rgba(220, 38, 38, 0.35); color: #b91c1c; } .ds-btn-danger:hover { background: rgba(220, 38, 38, 0.08); } .ds-btn-secondary:focus-visible, .ds-btn-danger:focus-visible { outline: 2px solid var(--focus, #1d4ed8); outline-offset: 2px; } .ds-btn-secondary .ds-icon, .ds-btn-danger .ds-icon { width: 14px; height: 14px; flex-shrink: 0; }"
+    },
+    {
+      "name": "Workspace Search Input",
+      "kind": "input",
+      "refersTo": "input-search",
+      "description": "Compact 7px-radius toolbar search field filtering tasks, clients, projects, and members.",
+      "html": "<div class=\"ds-search-wrap\"><svg class=\"ds-search-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"11\" cy=\"11\" r=\"8\"/><path d=\"m21 21-4.3-4.3\"/></svg><input type=\"text\" class=\"ds-search-input\" placeholder=\"Search tasks, members, clients (Ctrl+F)...\" aria-label=\"Search tasks, members, clients, and projects\" /></div>",
+      "css": ".ds-search-wrap { position: relative; width: 320px; max-width: 100%; } .ds-search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--text-muted, #64748b); pointer-events: none; } .ds-search-input { width: 100%; min-height: var(--control-height, 34px); padding: 6px 32px 6px 36px; border: 1px solid var(--border, #dfe3ea); border-radius: var(--radius-control, 7px); background: var(--surface, #ffffff); color: var(--text-primary, #121418); font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; line-height: 1.5; caret-color: var(--accent, #1d4ed8); transition: border-color 150ms cubic-bezier(0.2, 0.7, 0.2, 1); } .ds-search-input::placeholder { color: var(--text-muted, #64748b); } .ds-search-input:hover { border-color: #c5ccd8; } .ds-search-input:focus { border-color: var(--accent, #1d4ed8); outline: 2px solid var(--focus, #1d4ed8); outline-offset: 2px; }"
+    },
+    {
+      "name": "Flush Bottom-Ruled Team Navigation",
+      "kind": "nav",
+      "refersTo": "nav-tab-active",
+      "description": "54px Swiss header navigation bar with tabular member counts and a flush 2px cobalt active rule.",
+      "html": "<nav class=\"ds-nav-bar\" aria-label=\"Team disciplines\"><button type=\"button\" class=\"ds-nav-tab ds-nav-tab-active\" aria-pressed=\"true\"><span>All</span><span class=\"ds-nav-count\">14</span></button><button type=\"button\" class=\"ds-nav-tab\" aria-pressed=\"false\"><span>Content</span><span class=\"ds-nav-count\">8</span></button><button type=\"button\" class=\"ds-nav-tab\" aria-pressed=\"false\"><span>Design</span><span class=\"ds-nav-count\">6</span></button></nav>",
+      "css": ".ds-nav-bar { display: inline-flex; align-items: stretch; height: 54px; gap: 24px; padding: 0 20px; background: var(--surface, #ffffff); border-bottom: 1px solid var(--border, #dfe3ea); font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; } .ds-nav-tab { position: relative; display: inline-flex; align-items: center; gap: 8px; height: 100%; padding: 0 4px; background: transparent; border: none; color: var(--text-secondary, #525d6e); font-size: 13px; font-weight: 600; cursor: pointer; transition: color 150ms cubic-bezier(0.2, 0.7, 0.2, 1); } .ds-nav-tab:hover { color: var(--text-primary, #121418); } .ds-nav-tab:focus-visible { outline: 2px solid var(--focus, #1d4ed8); outline-offset: -2px; } .ds-nav-count { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-muted, #64748b); } .ds-nav-tab-active { color: var(--text-primary, #121418); } .ds-nav-tab-active .ds-nav-count { color: var(--accent, #1d4ed8); } .ds-nav-tab-active::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--accent, #1d4ed8); }"
+    },
+    {
+      "name": "Vermilion Alert Badge & Status Chips",
+      "kind": "chip",
+      "refersTo": "ledger-alert-badge",
+      "description": "Solid vermilion WIP overload badge paired with quiet cognitive-load dot and cobalt billable timer chip.",
+      "html": "<div class=\"ds-chip-strip\"><span class=\"ds-alert-badge\"><svg class=\"ds-alert-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\"/><path d=\"M12 9v4\"/><path d=\"M12 17h.01\"/></svg><span>2 members over 12 pts WIP cap</span></span><span class=\"ds-load-indicator\"><span class=\"ds-load-dot\"></span><span>High</span></span><button type=\"button\" class=\"ds-timer-chip\"><svg class=\"ds-timer-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><line x1=\"10\" x2=\"14\" y1=\"2\" y2=\"2\"/><line x1=\"12\" x2=\"15\" y1=\"14\" y2=\"11\"/><circle cx=\"12\" cy=\"14\" r=\"8\"/></svg><span>1.5h</span></button></div>",
+      "css": ".ds-chip-strip { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 12px; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; } .ds-alert-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 6px; background: var(--danger, #dc2626); color: #ffffff; font-size: 11px; line-height: 1.4; font-weight: 600; font-variant-numeric: tabular-nums; } .ds-alert-icon { width: 12px; height: 12px; flex-shrink: 0; } .ds-load-indicator { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: #b91c1c; } .ds-load-dot { width: 6px; height: 6px; border-radius: 9999px; background: var(--danger, #dc2626); } .ds-timer-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 6px; border: none; border-radius: 5px; background: var(--accent-soft, #eff4ff); color: var(--accent, #1d4ed8); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; transition: background-color 150ms cubic-bezier(0.2, 0.7, 0.2, 1); } .ds-timer-chip:hover { background: #dbeafe; } .ds-timer-chip:focus-visible { outline: 2px solid var(--focus, #1d4ed8); outline-offset: 2px; } .ds-timer-icon { width: 10px; height: 10px; flex-shrink: 0; }"
+    },
+    {
+      "name": "Ruled Task Card",
+      "kind": "card",
+      "refersTo": "task-card",
+      "description": "Flat 1px-bordered deliverable card with quiet cognitive load dot, tabular hours, and bottom ruled stepper.",
+      "html": "<article class=\"ds-task-card\"><div class=\"ds-card-top\"><div class=\"ds-card-meta\"><svg class=\"ds-grip\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"9\" cy=\"12\" r=\"1\"/><circle cx=\"9\" cy=\"5\" r=\"1\"/><circle cx=\"9\" cy=\"19\" r=\"1\"/><circle cx=\"15\" cy=\"12\" r=\"1\"/><circle cx=\"15\" cy=\"5\" r=\"1\"/><circle cx=\"15\" cy=\"19\" r=\"1\"/></svg><span class=\"ds-card-dot\"></span><span class=\"ds-card-load\">High</span></div><div class=\"ds-card-hours\"><span class=\"ds-card-est\">4h</span><span class=\"ds-card-timer\">1.5h</span></div></div><div class=\"ds-card-client\"><strong>Acme Health</strong><span>·</span><span>Q4 Brand Launch</span></div><h4 class=\"ds-card-title\">Homepage Hero Narrative &amp; Wireframe Copy</h4><div class=\"ds-card-footer\"><span class=\"ds-card-due\"><svg class=\"ds-due-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><polyline points=\"12 6 12 12 16 14\"/></svg><span>Oct 28</span></span><button type=\"button\" class=\"ds-card-step\"><span>In Review</span><svg class=\"ds-step-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m9 18 6-6-6-6\"/></svg></button></div></article>",
+      "css": ".ds-task-card { width: 248px; padding: 10px; background: var(--surface, #ffffff); border: 1px solid var(--border, #dfe3ea); border-radius: var(--radius-card, 7px); font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; transition: border-color 150ms cubic-bezier(0.2, 0.7, 0.2, 1); } .ds-task-card:hover { border-color: #c5ccd8; } .ds-task-card:focus-within { border-color: var(--focus, #1d4ed8); } .ds-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-size: 11px; } .ds-card-meta, .ds-card-hours { display: inline-flex; align-items: center; gap: 5px; } .ds-grip { width: 13px; height: 13px; color: var(--text-muted, #64748b); margin-left: -3px; } .ds-card-dot { width: 6px; height: 6px; border-radius: 9999px; background: var(--danger, #dc2626); } .ds-card-load { font-weight: 600; color: #b91c1c; } .ds-card-est { color: var(--text-muted, #64748b); font-variant-numeric: tabular-nums; font-weight: 500; } .ds-card-timer { padding: 2px 6px; border-radius: 5px; background: var(--accent-soft, #eff4ff); color: var(--accent, #1d4ed8); font-weight: 600; font-variant-numeric: tabular-nums; } .ds-card-client { display: flex; align-items: center; gap: 4px; margin-bottom: 2px; font-size: 11px; color: var(--text-secondary, #525d6e); } .ds-card-client strong { color: var(--text-primary, #121418); font-weight: 600; } .ds-card-title { margin: 0; font-size: 13px; line-height: 1.375; font-weight: 600; color: var(--text-primary, #121418); } .ds-card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--border-subtle, #eceff4); font-size: 11px; } .ds-card-due { display: inline-flex; align-items: center; gap: 4px; color: var(--danger, #dc2626); font-weight: 700; font-variant-numeric: tabular-nums; } .ds-due-icon { width: 12px; height: 12px; } .ds-card-step { display: inline-flex; align-items: center; gap: 2px; padding: 2px 6px; border: none; border-radius: 5px; background: var(--surface-subtle, #f2f4f8); color: var(--text-secondary, #525d6e); font-size: 11px; font-weight: 600; cursor: pointer; transition: background-color 150ms, color 150ms; } .ds-card-step:hover { background: var(--border, #dfe3ea); color: var(--text-primary, #121418); } .ds-card-step:focus-visible { outline: 2px solid var(--focus, #1d4ed8); outline-offset: 2px; } .ds-step-icon { width: 10px; height: 10px; }"
+    },
+    {
+      "name": "Single-Frame KPI Ledger Band",
+      "kind": "custom",
+      "refersTo": "ledger-frame",
+      "description": "Flat 10px-radius Swiss ledger frame with muted header band, vermilion overload alert, and hairline-divided tabular KPIs.",
+      "html": "<section class=\"ds-ledger-frame\" aria-label=\"Team overview\"><div class=\"ds-ledger-band\"><div class=\"ds-ledger-title-group\"><h2 class=\"ds-ledger-h1\">All Teams</h2><span class=\"ds-ledger-sub\">14 members</span></div><span class=\"ds-ledger-alert\"><svg class=\"ds-ledger-alert-icon\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3\"/><path d=\"M12 9v4\"/><path d=\"M12 17h.01\"/></svg><span>1 member over 12 pts WIP cap</span></span></div><div class=\"ds-kpi-grid\"><div class=\"ds-kpi-cell\"><div class=\"ds-kpi-label\">Utilization</div><div class=\"ds-kpi-val ds-kpi-emerald\">79<span class=\"ds-kpi-unit\">%</span></div><div class=\"ds-kpi-detail\">11 of 14 above 3h/day</div></div><div class=\"ds-kpi-cell\"><div class=\"ds-kpi-label\">Efficiency</div><div class=\"ds-kpi-val ds-kpi-cobalt\">92<span class=\"ds-kpi-unit\">%</span></div><div class=\"ds-kpi-detail\">46.0h / 50.0h</div></div><div class=\"ds-kpi-cell\"><div class=\"ds-kpi-label\">Avg load</div><div class=\"ds-kpi-val ds-kpi-amber\">9.4<span class=\"ds-kpi-pts\"> pts</span></div><div class=\"ds-kpi-detail\">Cap 12 pts</div></div></div></section>",
+      "css": ".ds-ledger-frame { width: 560px; max-width: 100%; background: var(--surface, #ffffff); border: 1px solid var(--border, #dfe3ea); border-radius: var(--radius-panel, 10px); overflow: hidden; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; } .ds-ledger-band { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 18px; background: var(--surface-muted, #fbfcfd); border-bottom: 1px solid var(--border, #dfe3ea); } .ds-ledger-title-group { display: flex; align-items: baseline; gap: 10px; } .ds-ledger-h1 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary, #121418); } .ds-ledger-sub { font-size: 12px; font-weight: 500; color: var(--text-secondary, #525d6e); font-variant-numeric: tabular-nums; } .ds-ledger-alert { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 6px; background: var(--danger, #dc2626); color: #ffffff; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; } .ds-ledger-alert-icon { width: 12px; height: 12px; } .ds-kpi-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); } .ds-kpi-cell { padding: 12px 16px; border-right: 1px solid var(--border-subtle, #eceff4); } .ds-kpi-cell:last-child { border-right: none; } .ds-kpi-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary, #525d6e); } .ds-kpi-val { margin-top: 4px; font-size: 24px; line-height: 1.2; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; } .ds-kpi-emerald { color: var(--success, #059669); } .ds-kpi-cobalt { color: var(--accent, #1d4ed8); } .ds-kpi-amber { color: var(--warning, #b45309); } .ds-kpi-unit { font-size: 14px; font-weight: 600; letter-spacing: 0; } .ds-kpi-pts { font-size: 12px; font-weight: 500; letter-spacing: 0; color: var(--text-secondary, #525d6e); } .ds-kpi-detail { margin-top: 5px; font-size: 11px; color: var(--text-secondary, #525d6e); font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Floating Free Pool Dock",
+      "kind": "custom",
+      "refersTo": "free-pool-dock",
+      "description": "High-contrast obsidian bottom-right capacity trigger surfacing teammates under 3h/day assigned.",
+      "html": "<button type=\"button\" class=\"ds-freepool-dock\"><span class=\"ds-freepool-dot\"></span><span class=\"ds-freepool-label\">Free Pool</span><span class=\"ds-freepool-count\">4 under 3h/d</span><svg class=\"ds-freepool-chev\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m18 15-6-6-6 6\"/></svg></button>",
+      "css": ".ds-freepool-dock { display: inline-flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 9px; background: #121418; border: 1px solid #2a303c; color: #ffffff; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; box-shadow: var(--shadow-floating, 0 12px 32px rgba(18, 20, 24, 0.12), 0 2px 6px rgba(18, 20, 24, 0.06)); cursor: pointer; transition: background-color 150ms cubic-bezier(0.2, 0.7, 0.2, 1); } .ds-freepool-dock:hover { background: #1b1f27; } .ds-freepool-dock:focus-visible { outline: 2px solid var(--focus, #1d4ed8); outline-offset: 2px; } .ds-freepool-dot { width: 8px; height: 8px; border-radius: 9999px; background: #34d399; flex-shrink: 0; } .ds-freepool-label { font-size: 12px; font-weight: 600; letter-spacing: -0.01em; } .ds-freepool-count { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; color: #6ee7b7; } .ds-freepool-chev { width: 14px; height: 14px; color: #a3a3a3; transition: color 150ms; } .ds-freepool-dock:hover .ds-freepool-chev { color: #ffffff; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Swiss Agency Traffic Ledger",
+    "overview": "zenFlow is built in Operate mode for daily ZenSciences standups, cognitive-load rebalancing, and real-time creative traffic control across Content, Design, and Accounts. Rather than behaving like a decorative kanban board with floating drop-shadow cards and competing pastel pill tags, the interface operates like a ruled Swiss agency production schedule: cool alabaster paper in light mode and deep ink-slate in dark mode, partitioned by crisp 1px structural rules and anchored by tabular numerals.\n\nThe system strips visual noise down to operational signal so a Creative Director or Lead can diagnose overloaded teammates (>12 pts WIP cap), overdue deliverables, and available Free Pool capacity (<3h/day) in under two seconds. Hierarchy comes from sharp 1px ledger frames, hairline column dividers, weight contrast, and strict color discipline—not nested cards, ambient card elevation, or thick colored side-stripes bolted onto rounded boxes.\n\nEvery surface respects full light/dark mode parity through semantic CSS custom properties while preserving the signature `zenFlow` brand mark (`Inter` bold paired with `Dancing Script` for `Flow`). Frosted translucency and elevation shadows are withheld from the core workspace and reserved strictly for transient overlays: the sticky 54px header, dropdown menus, modal dialogs, and the floating obsidian Free Pool dock.",
+    "keyCharacteristics": [
+      "High-density ruled ledger layout built on 1px hairlines (`--border` / `--border-subtle`) with zero ghost-card shadows on resting workspace surfaces.",
+      "Strict semantic color economy: cobalt-blue drives active navigation and primary actions, emerald signals healthy utilization and Free Pool readiness, amber marks review/caution states, and solid vermilion (`#dc2626`) is reserved exclusively for WIP overload and overdue alarms.",
+      "Universal `tabular-nums` alignment across KPI metrics, billable hour ratios, member counts, cognitive-load scores, and deadlines.",
+      "Complete light alabaster and dark ink-slate parity backed by CSS custom properties and accessible 2px focus outlines.",
+      "Preserved `zenFlow` wordmark (`Inter` + `Dancing Script`) paired with crisp `Inter` operational typography (`cv02`, `cv03`, `cv04`, `cv11`)."
+    ],
+    "rules": [
+      {
+        "name": "The Vermilion Reserve Rule",
+        "body": "Solid vermilion (`#dc2626` / `#ef4444`) is strictly reserved for WIP overload (`>=12 pts`), overdue alarms, high-load dots, and destructive actions—never for decorative tags, neutral banners, or standard CTAs.",
+        "section": "colors"
+      },
+      {
+        "name": "The Dual-Mode Parity Rule",
+        "body": "Every background, hairline border, and text token resolves through semantic CSS custom properties (`--canvas`, `--surface`, `--border`, `--text-primary`) so light alabaster and dark ink-slate preserve identical scan hierarchy and contrast.",
+        "section": "colors"
+      },
+      {
+        "name": "The Tabular Ledger Rule",
+        "body": "Every metric, count, percentage, hour ratio, cognitive-load score, and date must carry `font-variant-numeric: tabular-nums` so numbers align cleanly across KPI cells, swimlane telemetry, and card rows without horizontal jitter.",
+        "section": "typography"
+      },
+      {
+        "name": "The Single-Line Metadata Rule",
+        "body": "Compact metadata inside `TeamPipeline` rows and `TaskCard` headers separates items with quiet muted interpuncts (`·`) rather than stacking wrapped bordered pill chips.",
+        "section": "typography"
+      },
+      {
+        "name": "The Hairline Partition Rule",
+        "body": "Separate adjacent KPI cells, pipeline entries, and swimlane status columns with 1px structural rules (`--border` / `--border-subtle`) inside a shared `.ledger-frame` rather than wrapping every sub-region in nested rounded cards.",
+        "section": "layout"
+      },
+      {
+        "name": "The Zero Ghost-Card Rule",
+        "body": "Resting workspace panels and task cards must never carry ambient drop shadows (`--shadow-surface: none`). Reserve elevation shadows strictly for transient overlays: menus, dialogs, and the floating Free Pool dock.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Clean Perimeter Rule",
+        "body": "Cards and ledger containers use uniform 1px perimeter borders with zero colored left/top side-stripes bolted onto rounded boxes; status is communicated via compact dots, ink weight, and solid vermilion alert badges.",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "Do partition KPI groups, pipeline rows, and swimlane columns with 1px structural rules (`--border` and `--border-subtle`) inside a shared `.ledger-frame` (**The Hairline Partition Rule**).",
+      "Do apply `font-variant-numeric: tabular-nums` to every KPI figure, efficiency percentage, billable hour ratio, cognitive-load score, member count, and deadline (**The Tabular Ledger Rule**).",
+      "Do reserve solid vermilion (`#dc2626` / `#ef4444`) strictly for WIP overload (`>=12 pts`), overdue alarms, high-load dots, and destructive safety actions (**The Vermilion Reserve Rule**).",
+      "Do use semantic CSS custom properties (`--canvas`, `--surface`, `--surface-muted`, `--border`, `--text-primary`, `--accent`) so every new view maintains instant light/dark parity (**The Dual-Mode Parity Rule**).",
+      "Do preserve the `zenFlow` wordmark (`Inter` bold `zen` + `Dancing Script` bold `Flow`) and keep all operational typography strictly in `Inter`.",
+      "Do limit elevation shadows (`--shadow-floating`, `--shadow-dialog`) and frosted `backdrop-blur` strictly to sticky headers, dropdown menus, dialogs, and the floating `Free Pool` dock."
+    ],
+    "donts": [
+      "Don't add ambient drop shadows (`shadow-sm`, `shadow-md`) to resting workspace surfaces, KPI frames, swimlanes, or task cards (**The Zero Ghost-Card Rule**).",
+      "Don't add thick colored left or top side-stripes (`border-l-4`) onto rounded cards or ledger panels (**The Clean Perimeter Rule**).",
+      "Don't wrap every piece of card metadata (client, project, cognitive load, brand link, deadline) in competing pastel pill badges; use quiet inline typography separated by muted interpuncts (`·`).",
+      "Don't nest rounded bordered cards inside KPI cells, `TeamPipeline` rows, or swimlane column containers when a 1px hairline rule establishes the boundary.",
+      "Don't use `Dancing Script` anywhere outside the `Flow` portion of the `zenFlow` brand wordmark.",
+      "Don't ship hardcoded hex surfaces without matching `:root.dark` tokens or bypass the global `2px solid var(--focus)` keyboard focus ring."
+    ]
+  }
+}

@@ -14,13 +14,14 @@ import {
   Trash2,
   GripVertical,
   Shield,
-  Tag,
-  Briefcase,
   FileText,
   Palette,
   CornerDownRight,
   Link2,
   ExternalLink,
+  ChevronDown,
+  ChevronUp,
+  X,
 } from 'lucide-react';
 
 interface TeamPipelineProps {
@@ -73,7 +74,6 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
     return map;
   }, [users]);
 
-  // Unified pipeline tasks filtered by roleFilter ('all' | 'content' | 'design')
   const pipelineTasks = useMemo(() => {
     const map = new Map<string, Task>();
     for (const task of tasks) {
@@ -174,43 +174,48 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
     : `${roleFilter === 'content' ? 'Content' : 'Design'} Pipeline`;
 
   return (
-    <div
+    <section
+      aria-label={pipelineHeading}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`surface mb-5 rounded-2xl border transition-all ${
+      className={`ledger-frame mb-4 transition-colors ${
         isDragOver
-          ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20 ring-2 ring-indigo-500/30'
-          : 'border-[var(--border)] bg-[var(--surface)] shadow-sm'
+          ? 'border-[#1d4ed8] dark:border-blue-400 bg-blue-50/40 dark:bg-blue-950/20'
+          : ''
       }`}
     >
-      {/* Top Banner */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-6 border-b border-[var(--border)] bg-neutral-50/50 dark:bg-white/[0.01]">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 shrink-0">
-            <DisciplineIcon className="h-4 w-4" />
-          </div>
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">
-              {pipelineHeading}
-            </h3>
-            <span className="rounded-full bg-neutral-200 dark:bg-white/10 px-2 py-0.5 text-[11px] font-semibold text-neutral-700 dark:text-white/60">
-              {totalCount} total
-            </span>
-          </div>
+      {/* Top Ruled Ledger Band */}
+      <div className={`ledger-band flex flex-wrap items-center justify-between gap-2.5 px-4 py-2.5 sm:px-5 ${isCollapsed ? 'border-b-0' : ''}`}>
+        <div className="flex items-center gap-2.5">
+          <DisciplineIcon className="h-4 w-4 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
+          <h2 className="text-[13px] font-bold tracking-tight text-[var(--text-primary)]">
+            {pipelineHeading}
+          </h2>
+          <span className="text-xs font-medium text-[var(--text-secondary)] tabular-nums">
+            {totalCount} total
+          </span>
+          {unassignedCount > 0 && (
+            <>
+              <span className="text-[var(--text-muted)] text-xs">·</span>
+              <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 tabular-nums">
+                {unassignedCount} unassigned
+              </span>
+            </>
+          )}
         </div>
 
-        {/* Filter Pills, Search & Create Task Button */}
+        {/* Hairline Filter Switch, Search & Create Task */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center rounded-xl bg-neutral-100 dark:bg-white/5 p-1 border border-[var(--border)] text-[11px] font-medium">
+          <div className="flex items-center rounded-[7px] bg-[var(--surface-subtle)] p-0.5 border border-[var(--border)] text-[11px] font-semibold">
             <button
               type="button"
               aria-pressed={filterMode === 'all'}
               onClick={() => setFilterMode('all')}
-              className={`px-2.5 py-0.5 rounded-lg transition-colors cursor-pointer ${
+              className={`px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
                 filterMode === 'all'
-                  ? 'bg-[var(--surface-raised)] text-neutral-900 dark:text-white font-semibold shadow-xs'
-                  : 'text-neutral-500 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white'
+                  ? 'bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border)]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
               }`}
             >
               All ({totalCount})
@@ -219,10 +224,10 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
               type="button"
               aria-pressed={filterMode === 'unassigned'}
               onClick={() => setFilterMode('unassigned')}
-              className={`px-2.5 py-0.5 rounded-lg transition-colors cursor-pointer ${
+              className={`px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
                 filterMode === 'unassigned'
-                  ? 'bg-[var(--surface-raised)] text-amber-600 dark:text-amber-400 font-semibold shadow-xs'
-                  : 'text-neutral-500 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white'
+                  ? 'bg-[var(--surface)] text-amber-700 dark:text-amber-400 border border-[var(--border)]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
               }`}
             >
               Unassigned ({unassignedCount})
@@ -231,10 +236,10 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
               type="button"
               aria-pressed={filterMode === 'assigned'}
               onClick={() => setFilterMode('assigned')}
-              className={`px-2.5 py-0.5 rounded-lg transition-colors cursor-pointer ${
+              className={`px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
                 filterMode === 'assigned'
-                  ? 'bg-[var(--surface-raised)] text-indigo-600 dark:text-indigo-400 font-semibold shadow-xs'
-                  : 'text-neutral-500 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white'
+                  ? 'bg-[var(--surface)] text-[#1d4ed8] dark:text-blue-400 border border-[var(--border)]'
+                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
               }`}
             >
               Assigned ({assignedCount})
@@ -248,17 +253,17 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
               onChange={e => setPipelineSearch(e.target.value)}
               aria-label="Search pipeline"
               placeholder="Search pipeline..."
-              className="w-32 sm:w-40 rounded-xl border border-[var(--border)] bg-[var(--surface)] pl-7 pr-2.5 py-1 text-xs text-neutral-900 dark:text-white placeholder:text-neutral-400 dark:placeholder:text-white/30 focus:border-indigo-500 focus:outline-none"
+              className="w-40 sm:w-44 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] pl-7 pr-6 py-1 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
             />
-            <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-neutral-400" />
+            <Search className="absolute left-2 top-2.5 h-3.5 w-3.5 text-[var(--text-muted)]" />
             {pipelineSearch && (
               <button
                 type="button"
                 aria-label="Clear pipeline search"
                 onClick={() => setPipelineSearch('')}
-                className="absolute right-2 top-1 text-xs text-neutral-400 hover:text-neutral-700 dark:hover:text-white"
+                className="absolute right-1.5 top-1.5 p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
               >
-                ✕
+                <X className="h-3 w-3" />
               </button>
             )}
           </div>
@@ -267,7 +272,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
             <button
               type="button"
               onClick={onOpenCreateModal}
-              className="flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 px-3 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors cursor-pointer"
+              className="button-primary"
             >
               <Plus className="h-3.5 w-3.5" />
               <span>Add Task</span>
@@ -275,10 +280,10 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
           ) : (
             <div
               title="Task creation is restricted to Accounts team members and authorized leadership"
-              className="flex items-center gap-1.5 rounded-xl border border-[var(--border)] px-2.5 py-1 text-[11px] text-[var(--text-secondary)] bg-neutral-100/50 dark:bg-white/[0.02]"
+              className="flex items-center gap-1.5 rounded-[7px] border border-[var(--border)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--text-secondary)] bg-[var(--surface)]"
             >
               <Shield className="h-3 w-3" />
-              <span>View-Only Pipeline</span>
+              <span>View-Only</span>
             </div>
           )}
 
@@ -286,22 +291,21 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
             type="button"
             onClick={() => setIsCollapsed(prev => !prev)}
             title={isCollapsed ? 'Expand pipeline' : 'Collapse pipeline'}
-            className="rounded-lg p-1 text-neutral-400 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/5 transition-colors cursor-pointer text-xs"
+            aria-label={isCollapsed ? 'Expand pipeline' : 'Collapse pipeline'}
+            className="icon-button border border-[var(--border)] bg-[var(--surface)]"
           >
-            {isCollapsed ? '▼' : '▲'}
+            {isCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
           </button>
         </div>
       </div>
 
-      {/* Pipeline Cards Ribbon */}
+      {/* Compact Ruled Ledger Triage Strip (no nested cards) */}
       {!isCollapsed && (
-        <div className="p-3 sm:p-4 overflow-x-auto">
+        <div className="bg-[var(--surface)]">
           {displayedTasks.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-neutral-300 dark:border-white/10 py-8 px-4 text-center">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-neutral-100 dark:bg-white/5 text-neutral-400 mb-2">
-                <Inbox className="h-5 w-5" />
-              </div>
-              <p className="text-xs font-semibold text-neutral-700 dark:text-white/80">
+            <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
+              <Inbox className="h-4 w-4 text-[var(--text-muted)] mb-1.5" />
+              <p className="text-xs font-semibold text-[var(--text-primary)]">
                 {pipelineSearch || filterMode !== 'all'
                   ? 'No matching tasks in pipeline'
                   : `${pipelineHeading} is currently empty`}
@@ -310,14 +314,14 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                 {pipelineSearch || filterMode !== 'all'
                   ? 'Try clearing the search query or changing the filter mode.'
                   : canCreatePipelineTask
-                  ? 'Create tasks using the button above. Select Content, Design, or both to generate pipeline subtasks.'
+                  ? 'Create tasks using Add Task to generate Content or Design pipeline deliverables.'
                   : 'Unscheduled deliverables created by Accounts will appear here.'}
               </p>
               {canCreatePipelineTask && !pipelineSearch && filterMode === 'all' && (
                 <button
                   type="button"
                   onClick={onOpenCreateModal}
-                  className="mt-3 flex items-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs transition-colors cursor-pointer"
+                  className="button-primary mt-2.5"
                 >
                   <Plus className="h-3.5 w-3.5" />
                   <span>Add Task</span>
@@ -325,8 +329,16 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
               )}
             </div>
           ) : (
-            <div className="flex items-start gap-3 py-1 px-0.5 scroll-smooth min-h-[92px]">
-              {displayedTasks.map(task => {
+            <div
+              className={`grid grid-cols-1 ${
+                displayedTasks.length === 1
+                  ? 'md:grid-cols-1'
+                  : displayedTasks.length === 2
+                  ? 'md:grid-cols-2'
+                  : 'md:grid-cols-2 lg:grid-cols-3'
+              } divide-y md:divide-y-0 md:divide-x divide-[var(--border-subtle)]`}
+            >
+              {displayedTasks.map((task, idx) => {
                 const isEditingThis = editingTaskId === task.id;
                 const taskDiscipline = task.team === 'design' ? 'design' : 'content';
                 const assigneeIds = getTaskAssigneeIds(task);
@@ -338,9 +350,8 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                   <motion.div
                     key={task.id}
                     layout="position"
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
+                    initial={false}
+                    animate={{ opacity: 1 }}
                     transition={{ duration: 0.15 }}
                     draggable={!isEditingThis}
                     onDragStartCapture={(e: React.DragEvent) => {
@@ -363,228 +374,232 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                       onDragTaskStart?.(task);
                     }}
                     onDragEndCapture={() => onDragTaskEnd?.()}
-                    className="group relative flex flex-col justify-between shrink-0 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3 shadow-2xs hover:shadow-sm hover:border-indigo-400/50 dark:hover:border-indigo-500/30 transition-all select-none cursor-grab active:cursor-grabbing w-64 sm:w-72 min-h-[110px]"
+                    className={`group relative flex flex-col justify-between px-4 py-2.5 hover:bg-[var(--surface-muted)] transition-colors select-none cursor-grab active:cursor-grabbing ${
+                      idx >= 3 ? 'lg:border-t lg:border-[var(--border-subtle)]' : ''
+                    } ${idx >= 2 && displayedTasks.length > 2 ? 'md:border-t md:border-[var(--border-subtle)] lg:border-t-0' : ''}`}
                   >
-                    <div>
-                      {/* Top Row: Discipline Badge, Priority, Drag Handle & Actions */}
-                      <div className="flex items-center justify-between gap-1.5 mb-1.5">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <div className="text-neutral-400 dark:text-white/20 group-hover:text-neutral-700 dark:group-hover:text-white/60 shrink-0">
-                            <GripVertical className="h-3.5 w-3.5" />
-                          </div>
-                          <span className={`px-1.5 py-0.2 rounded text-[11px] font-semibold uppercase tracking-wider ${
+                    {/* Top Line: Discipline · Priority · Due + Quick Actions */}
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-1.5 min-w-0 text-[11px]">
+                        <GripVertical className="h-3 w-3 text-[var(--text-muted)] group-hover:text-[var(--text-primary)] shrink-0 -ml-1" />
+                        <span
+                          className={`font-semibold uppercase tracking-wider ${
                             taskDiscipline === 'design'
-                              ? 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300'
-                              : 'bg-blue-500/15 text-blue-600 dark:text-blue-300'
-                          }`}>
-                            {taskDiscipline}
-                          </span>
-                          {task.priority && (
-                            <span className={`px-1.5 py-0.2 rounded text-[11px] font-semibold uppercase tracking-wider ${
-                              task.priority === 'high'
-                                ? 'bg-red-500/15 text-red-600 dark:text-red-400'
-                                : task.priority === 'medium'
-                                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400'
-                                : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
-                            }`}>
-                              {task.priority}
+                              ? 'text-indigo-700 dark:text-indigo-400'
+                              : 'text-[#1d4ed8] dark:text-blue-400'
+                          }`}
+                        >
+                          {taskDiscipline}
+                        </span>
+                        {task.priority && (
+                          <>
+                            <span className="text-[var(--text-muted)]">·</span>
+                            <span
+                              className={`font-semibold capitalize ${
+                                task.priority === 'high'
+                                  ? 'text-red-600 dark:text-red-400'
+                                  : task.priority === 'medium'
+                                  ? 'text-amber-700 dark:text-amber-400'
+                                  : 'text-[var(--text-secondary)]'
+                              }`}
+                            >
+                              {task.priority} priority
                             </span>
-                          )}
-                          {task.dueDate && (
-                            <span className="text-[11px] text-[var(--text-secondary)] truncate">
-                              Due: {task.dueDate}
+                          </>
+                        )}
+                        {task.dueDate && (
+                          <>
+                            <span className="text-[var(--text-muted)]">·</span>
+                            <span className="text-[var(--text-secondary)] tabular-nums truncate">
+                              {task.dueDate}
                             </span>
-                          )}
-                        </div>
-
-                        <div className="flex items-center card-actions opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={e => {
-                              e.stopPropagation();
-                              onEditTask(task);
-                            }}
-                            title="Edit task details"
-                            className="rounded p-1 text-neutral-400 hover:text-neutral-900 dark:text-white/40 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-white/10 transition-colors cursor-pointer"
-                          >
-                            <Edit2 className="h-3 w-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={e => {
-                              e.stopPropagation();
-                              onDeleteTask(task);
-                            }}
-                            title="Delete pipeline task"
-                            className="rounded p-1 text-neutral-400 hover:text-red-500 dark:text-white/40 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
-                        </div>
+                          </>
+                        )}
                       </div>
 
-                      {task.isSubtask && task.parentTaskTitle && (
-                        <div className="mb-1 flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 font-medium truncate">
-                          <CornerDownRight className="h-2.5 w-2.5 shrink-0" />
-                          <span className="truncate">{task.parentTaskTitle}</span>
-                        </div>
-                      )}
+                      <div className="flex items-center card-actions opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation();
+                            onEditTask(task);
+                          }}
+                          title="Edit task details"
+                          className="rounded p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                          style={{ minHeight: 'auto' }}
+                        >
+                          <Edit2 className="h-3 w-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation();
+                            onDeleteTask(task);
+                          }}
+                          title="Delete pipeline task"
+                          className="rounded p-1 text-[var(--text-secondary)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
+                          style={{ minHeight: 'auto' }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
 
-                      {isEditingThis ? (
-                        <div className="mb-2" onClick={e => e.stopPropagation()}>
-                          <input
-                            type="text"
-                            autoFocus
-                            value={editingTitle}
-                            onChange={e => setEditingTitle(e.target.value)}
-                            onKeyDown={async e => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
+                    {/* Title + Inline Assign Row */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        {task.isSubtask && task.parentTaskTitle && (
+                          <div className="flex items-center gap-1 text-[10.5px] text-[#1d4ed8] dark:text-blue-400 font-medium truncate">
+                            <CornerDownRight className="h-2.5 w-2.5 shrink-0" />
+                            <span className="truncate">{task.parentTaskTitle}</span>
+                          </div>
+                        )}
+
+                        {isEditingThis ? (
+                          <div className="my-0.5" onClick={e => e.stopPropagation()}>
+                            <input
+                              type="text"
+                              autoFocus
+                              value={editingTitle}
+                              onChange={e => setEditingTitle(e.target.value)}
+                              onKeyDown={async e => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  const trimmed = editingTitle.trim();
+                                  if (trimmed && trimmed !== task.title) {
+                                    await updateTask(task.id, { title: trimmed });
+                                  }
+                                  setEditingTaskId(null);
+                                } else if (e.key === 'Escape') {
+                                  setEditingTaskId(null);
+                                }
+                              }}
+                              onBlur={async () => {
                                 const trimmed = editingTitle.trim();
                                 if (trimmed && trimmed !== task.title) {
                                   await updateTask(task.id, { title: trimmed });
                                 }
                                 setEditingTaskId(null);
-                              } else if (e.key === 'Escape') {
-                                setEditingTaskId(null);
-                              }
+                              }}
+                              className="w-full rounded-[5px] border border-[var(--accent)] bg-[var(--surface)] px-1.5 py-0.5 text-xs text-[var(--text-primary)] focus:outline-none"
+                            />
+                          </div>
+                        ) : (
+                          <h4
+                            onClick={e => {
+                              e.stopPropagation();
+                              setEditingTaskId(task.id);
+                              setEditingTitle(task.title);
                             }}
-                            onBlur={async () => {
-                              const trimmed = editingTitle.trim();
-                              if (trimmed && trimmed !== task.title) {
-                                await updateTask(task.id, { title: trimmed });
-                              }
-                              setEditingTaskId(null);
-                            }}
-                            className="w-full rounded border border-indigo-500 bg-[var(--surface)] px-1.5 py-0.5 text-xs text-neutral-900 dark:text-white focus:outline-none"
-                          />
-                        </div>
-                      ) : (
-                        <h4
-                          onClick={e => {
-                            e.stopPropagation();
-                            setEditingTaskId(task.id);
-                            setEditingTitle(task.title);
-                          }}
-                          title="Click to rename"
-                          className="text-xs font-semibold text-neutral-900 dark:text-white break-words line-clamp-2 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-text leading-snug mb-1.5"
-                        >
-                          {task.title}
-                        </h4>
-                      )}
+                            title="Click to rename"
+                            className="text-[13px] font-semibold text-[var(--text-primary)] truncate hover:text-[#1d4ed8] dark:hover:text-blue-400 cursor-text leading-snug"
+                          >
+                            {task.title}
+                          </h4>
+                        )}
 
-                      {(task.client || task.project) && (
-                        <div className="flex items-center gap-1.5 flex-wrap text-[11px] text-[var(--text-secondary)] mb-2">
-                          {task.client && (
-                            <span className="flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-neutral-100 dark:bg-white/5 border border-[var(--border)] truncate max-w-[130px]">
-                              <Briefcase className="h-2.5 w-2.5 text-neutral-400" />
-                              <span className="truncate">{task.client}</span>
-                            </span>
+                        {/* Compact Single-Line Meta: Client · Project · Type · Brief + Load · Est (wrap-safe, no dangling middot) */}
+                        <div className="mt-1 flex items-center gap-x-3 gap-y-1 flex-wrap text-[11px] text-[var(--text-secondary)]">
+                          {(task.client || task.project || metadata?.contentType || metadata?.assetType || (task.brandGuidelines && isValidHttpUrl(task.brandGuidelines))) && (
+                            <div className="inline-flex items-center gap-1.5 flex-wrap min-w-0">
+                              {task.client && (
+                                <span className="font-medium text-[var(--text-primary)] truncate max-w-[100px]">
+                                  {task.client}
+                                </span>
+                              )}
+                              {task.client && task.project && <span className="text-[var(--text-muted)]">·</span>}
+                              {task.project && <span className="truncate max-w-[110px]">{task.project}</span>}
+                              {(metadata?.contentType || metadata?.assetType) && (
+                                <>
+                                  {(task.client || task.project) && <span className="text-[var(--text-muted)]">·</span>}
+                                  <span className="truncate">{metadata?.contentType || metadata?.assetType}</span>
+                                </>
+                              )}
+                              {task.brandGuidelines && isValidHttpUrl(task.brandGuidelines) && (
+                                <>
+                                  {(task.client || task.project || metadata?.contentType || metadata?.assetType) && (
+                                    <span className="text-[var(--text-muted)]">·</span>
+                                  )}
+                                  <a
+                                    href={task.brandGuidelines}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    onClick={e => e.stopPropagation()}
+                                    title={`Brand Guidelines: ${task.brandGuidelines}`}
+                                    className="inline-flex items-center gap-0.5 font-medium text-[#1d4ed8] dark:text-blue-400 hover:underline"
+                                  >
+                                    <Link2 className="h-2.5 w-2.5 shrink-0" />
+                                    <span>Brief</span>
+                                    <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+                                  </a>
+                                </>
+                              )}
+                            </div>
                           )}
-                          {task.project && (
-                            <span className="flex items-center gap-0.5 px-1.5 py-0.2 rounded bg-neutral-100 dark:bg-white/5 border border-[var(--border)] truncate max-w-[130px]">
-                              <Tag className="h-2.5 w-2.5 text-neutral-400" />
-                              <span className="truncate">{task.project}</span>
-                            </span>
-                          )}
-                        </div>
-                      )}
 
-                      {(metadata?.contentType || metadata?.assetType || (task.brandGuidelines && isValidHttpUrl(task.brandGuidelines))) && (
-                        <div className="flex items-center gap-1 flex-wrap text-[11px] text-neutral-600 dark:text-white/50 mb-2">
-                          {metadata?.contentType && (
-                            <span className="px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-600 dark:text-blue-300 font-medium">
-                              {metadata.contentType}
-                            </span>
-                          )}
-                          {metadata?.assetType && (
-                            <span className="px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-300 font-medium">
-                              {metadata.assetType}
-                            </span>
-                          )}
-                          {task.brandGuidelines && isValidHttpUrl(task.brandGuidelines) && (
-                            <a
-                              href={task.brandGuidelines}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={e => e.stopPropagation()}
-                              title={`Brand Guidelines: ${task.brandGuidelines}`}
-                              className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-600 dark:text-blue-300 font-medium hover:underline"
+                          <div className="inline-flex items-center gap-2 shrink-0">
+                            <span
+                              title={`Cognitive Load: ${cognitiveLabel}`}
+                              className="inline-flex items-center gap-1 capitalize"
                             >
-                              <Link2 className="h-2.5 w-2.5 shrink-0" />
-                              <span>Brand Guidelines</span>
-                              <ExternalLink className="h-2.5 w-2.5 shrink-0" />
-                            </a>
-                          )}
+                              <span
+                                className={`h-1.5 w-1.5 rounded-full ${
+                                  task.cognitiveLoad === 'high'
+                                    ? 'bg-red-600 dark:bg-red-400'
+                                    : task.cognitiveLoad === 'medium'
+                                    ? 'bg-amber-600 dark:bg-amber-400'
+                                    : 'bg-emerald-600 dark:bg-emerald-400'
+                                }`}
+                              />
+                              <span>{task.cognitiveLoad} load</span>
+                            </span>
+                            {task.estimatedHours !== undefined && task.estimatedHours > 0 && (
+                              <span
+                                title={`Estimated Effort: ${task.estimatedHours} hours`}
+                                className="inline-flex items-center gap-0.5 tabular-nums font-semibold text-[var(--text-primary)]"
+                              >
+                                <Clock className="h-2.5 w-2.5 text-[var(--text-muted)]" />
+                                <span>{task.estimatedHours}h</span>
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      )}
-                    </div>
+                      </div>
 
-                    <div className="pt-2 border-t border-neutral-100 dark:border-white/5 flex items-center justify-between gap-1.5">
-                      <div>
+                      {/* Right-aligned Inline Assign Action */}
+                      <div className="shrink-0 pt-0.5">
                         {assignee ? (
-                          <div
+                          <button
+                            type="button"
                             onClick={() => canAssignTask && onOpenAssignmentModal(task)}
                             title={canAssignTask ? 'Click to reassign or adjust estimates' : `Assigned to ${assignee.name}`}
-                            className={`flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-[11px] font-medium transition-colors ${
+                            className={`flex items-center gap-1 text-[11px] font-semibold transition-colors ${
                               canAssignTask
-                                ? 'bg-indigo-50 dark:bg-indigo-950/30 border-indigo-500/30 text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-950/50 cursor-pointer'
-                                : 'bg-neutral-100 dark:bg-white/5 border-[var(--border)] text-neutral-700 dark:text-white/80'
+                                ? 'text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer'
+                                : 'text-[var(--text-primary)] cursor-default'
                             }`}
+                            style={{ minHeight: 'auto' }}
                           >
-                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
-                            <span className="truncate max-w-[85px]">
+                            <span className="h-1.5 w-1.5 rounded-full bg-[#1d4ed8] dark:bg-blue-400 shrink-0" />
+                            <span className="truncate max-w-[95px]">
                               {assigneeIds.length > 1 ? `${assignee.name} +${assigneeIds.length - 1}` : assignee.name}
                             </span>
-                          </div>
+                          </button>
                         ) : (
                           <button
                             type="button"
                             onClick={() => onOpenAssignmentModal(task)}
                             title={canAssignTask ? 'Assign task to matching discipline member' : 'Unassigned in pipeline'}
-                            className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[11px] font-semibold transition-colors cursor-pointer ${
+                            className={`inline-flex items-center gap-1 rounded-[5px] px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
                               canAssignTask
-                                ? 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20'
-                                : 'bg-neutral-100 dark:bg-white/5 border-[var(--border)] text-[var(--text-secondary)]'
+                                ? 'bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25'
+                                : 'text-[var(--text-secondary)]'
                             }`}
+                            style={{ minHeight: 'auto' }}
                           >
                             <UserX className="h-3 w-3" />
                             <span>{canAssignTask ? 'Assign' : 'Unassigned'}</span>
                           </button>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-1 shrink-0">
-                        <span
-                          title={`Cognitive Load: ${cognitiveLabel}`}
-                          className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-medium capitalize ${
-                            task.cognitiveLoad === 'high'
-                              ? 'bg-red-500/15 text-red-600 dark:text-red-400'
-                              : task.cognitiveLoad === 'medium'
-                              ? 'bg-yellow-500/15 text-yellow-600 dark:text-yellow-400'
-                              : 'bg-green-500/15 text-green-600 dark:text-green-400'
-                          }`}
-                        >
-                          <span
-                            className={`h-1.5 w-1.5 rounded-full ${
-                              task.cognitiveLoad === 'high'
-                                ? 'bg-red-500'
-                                : task.cognitiveLoad === 'medium'
-                                ? 'bg-yellow-500'
-                                : 'bg-green-500'
-                            }`}
-                          />
-                          <span>{task.cognitiveLoad}</span>
-                        </span>
-
-                        {task.estimatedHours !== undefined && task.estimatedHours > 0 && (
-                          <span
-                            title={`Estimated Effort: ${task.estimatedHours} hours`}
-                            className="flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-neutral-100 dark:bg-white/5 text-[11px] font-semibold text-neutral-700 dark:text-white/80"
-                          >
-                            <Clock className="h-2.5 w-2.5 text-neutral-400" />
-                            <span>{task.estimatedHours}h</span>
-                          </span>
                         )}
                       </div>
                     </div>
@@ -595,6 +610,6 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
           )}
         </div>
       )}
-    </div>
+    </section>
   );
 };

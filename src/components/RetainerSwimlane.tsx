@@ -92,22 +92,20 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
 
   return (
     <div
-      className="relative rounded-xl border border-neutral-200/80 dark:border-white/5 bg-neutral-100/60 dark:bg-[#111111] p-2.5 sm:p-3 transition-all h-full flex flex-col"
+      className="relative flex flex-col transition-colors h-full"
     >
       {/* Ongoing Header */}
-      <div className="flex items-center justify-between gap-2 mb-2 px-1">
-        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-          <div className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
-            <Repeat className="h-3 w-3" />
-          </div>
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-700 dark:text-white/70 shrink-0">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <div className="flex items-center gap-2 min-w-0">
+          <Repeat className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
+          <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-secondary)] shrink-0">
             Ongoing
           </span>
-          <span className="rounded-full bg-neutral-200/80 dark:bg-white/10 px-2 py-0.2 text-[11px] font-semibold text-neutral-600 dark:text-white/50 shrink-0">
+          <span className="text-[11px] font-semibold tabular-nums text-[var(--text-muted)] shrink-0">
             {tasks.length}
           </span>
-          <span className="hidden sm:inline-block text-[11px] text-[var(--text-secondary)] truncate">
-            No deadline · Zero workload
+          <span className="hidden sm:inline-block text-[11px] text-[var(--text-muted)] truncate">
+            · No deadline · Zero workload
           </span>
         </div>
 
@@ -204,20 +202,10 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
         </motion.div>
       )}
 
-      {/* Horizontally Scrollable Retainer Cards Container */}
-      <div className="flex items-center gap-2.5 overflow-x-auto py-1 px-0.5 scroll-smooth min-h-[58px]">
-        {tasks.length === 0 && !isAdding ? (
-          <div
-            onClick={() => setIsAdding(true)}
-            className="flex h-12 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-dashed border-neutral-300/80 dark:border-white/10 text-[var(--text-secondary)] hover:border-emerald-400 dark:hover:border-emerald-500/40 hover:text-emerald-600 dark:hover:text-emerald-400 transition-colors px-4 py-2"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span className="text-[11px] font-medium">
-              No ongoing tasks · Click to add ongoing client work
-            </span>
-          </div>
-        ) : (
-          tasks.map(task => {
+      {/* Horizontally Scrollable Retainer Cards Container (only rendered when tasks exist or adding) */}
+      {(tasks.length > 0 || isAdding) && (
+        <div className="flex items-center gap-2.5 overflow-x-auto py-1 px-0.5 scroll-smooth">
+          {tasks.map(task => {
             const isEditingThis = editingTaskId === task.id;
             const cognitiveLabel = getCognitiveLoadLabel(task.cognitiveLoad, user.role);
 
@@ -344,9 +332,9 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                 </div>
               </motion.div>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
     </div>
   );
 };

@@ -262,100 +262,110 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       initial={false}
       animate={{
         opacity: isDragging ? 0.35 : 1,
-        scale: isDragging ? 0.98 : 1,
-        rotate: isDragging ? 1.5 : 0,
+        scale: isDragging ? 0.985 : 1,
       }}
-      transition={{ duration: 0.15, ease: 'easeOut' }}
-      whileTap={effectivelyDraggable && !isEditingTitle ? { scale: 0.985 } : undefined}
+      transition={{ duration: 0.14, ease: [0.2, 0.7, 0.2, 1] }}
       draggable={effectivelyDraggable && !isEditingTitle}
       onDragStartCapture={handleDragStart}
       onDragEndCapture={handleDragEnd}
-      className={`task-card group relative rounded-xl border p-3 select-none transform-gpu transition-all duration-150 shadow-xs hover:shadow-sm ${showSnoozeFlyout ? 'z-40' : 'z-0'
+      className={`task-card group relative p-2.5 select-none transform-gpu ${showSnoozeFlyout ? 'z-40' : 'z-0'
         } ${isDragging
-          ? 'border-blue-500/60 bg-blue-50/50 dark:bg-blue-950/20 shadow-lg ring-2 ring-blue-500/20'
+          ? 'border-[#1d4ed8] dark:border-blue-400 bg-blue-50/50 dark:bg-blue-950/20 ring-2 ring-blue-500/20'
           : task.status === 'done'
-            ? 'bg-neutral-50/80 dark:bg-[#141414] opacity-80 border-[var(--border)] hover:border-neutral-300 dark:hover:border-white/10'
-            : 'bg-[var(--surface-raised)] border-[var(--border)] hover:border-neutral-300 dark:hover:border-white/15 hover:bg-neutral-50/50 dark:hover:bg-[#202020]'
+            ? 'bg-[var(--surface-muted)] opacity-70'
+            : ''
         }`}
     >
-      {/* Top row: Drag grip, Due Clock icon badge & Cognitive load badge on same line, and Quick actions */}
-      <div className="flex items-center justify-between gap-1.5 mb-2">
-        <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+      {/* Top row: Drag grip, quiet cognitive-load dot & label, shared ratio, and right-aligned tabular hours + hover actions */}
+      <div className="flex items-center justify-between gap-1.5 mb-1.5">
+        <div className="flex items-center gap-1.5 min-w-0 flex-wrap text-[11px]">
           {canEdit && (
             <div
               title="Drag to move, reorder, or assign to another team member"
-              className="cursor-grab active:cursor-grabbing text-neutral-400 dark:text-white/20 group-hover:text-neutral-700 dark:group-hover:text-white/60 transition-colors shrink-0 p-0.5 -ml-1 rounded hover:bg-neutral-100 dark:hover:bg-white/5"
+              className="cursor-grab active:cursor-grabbing text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-colors shrink-0 -ml-1"
             >
               <GripVertical className="h-3.5 w-3.5" />
             </div>
           )}
 
-          {/* Cognitive Load Dot Badge (compact micro size) */}
+          {/* Quiet Cognitive Load Indicator (no noisy pill box) */}
           <span
             title={`Cognitive Load: ${cognitiveLabel}`}
-            className="inline-flex items-center gap-1 rounded-full bg-neutral-100 dark:bg-white/5 px-1.5 py-0.5 text-[11px] font-medium text-neutral-600 dark:text-white/60 border border-[var(--border)]"
+            className="inline-flex items-center gap-1 font-semibold text-[var(--text-secondary)] capitalize"
           >
             <span
-              className={`h-1.5 w-1.5 rounded-full ${task.cognitiveLoad === 'high'
-                ? 'bg-red-500'
+              className={`h-1.5 w-1.5 rounded-full shrink-0 ${task.cognitiveLoad === 'high'
+                ? 'bg-red-600 dark:bg-red-400'
                 : task.cognitiveLoad === 'medium'
-                  ? 'bg-yellow-500'
-                  : 'bg-green-500'
+                  ? 'bg-amber-600 dark:bg-amber-400'
+                  : 'bg-emerald-600 dark:bg-emerald-400'
                 }`}
             />
-            <span className="capitalize">{task.cognitiveLoad}</span>
+            <span
+              className={
+                task.cognitiveLoad === 'high'
+                  ? 'text-red-700 dark:text-red-400'
+                  : task.cognitiveLoad === 'medium'
+                  ? 'text-amber-700 dark:text-amber-400'
+                  : 'text-[var(--text-secondary)]'
+              }
+            >
+              {task.cognitiveLoad}
+            </span>
           </span>
 
           {assigneeCount > 1 && (
             <span
               title={`Shared task across ${assigneeCount} assignees (workload & time divided evenly)`}
-              className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-500/25"
+              className="inline-flex items-center gap-0.5 tabular-nums font-semibold text-emerald-700 dark:text-emerald-400"
             >
+              <span className="text-[var(--text-muted)] mr-0.5">·</span>
               <Users className="h-2.5 w-2.5" />
               <span>1/{assigneeCount}</span>
             </span>
           )}
         </div>
 
-        {/* Top Right: Actions & Billable Hours Badge */}
+        {/* Top Right: Quick Hover Actions & Tabular Estimate / Billable Duration */}
         <div className="flex items-center gap-1.5 shrink-0">
-          {/* Quick Edit (Modal), Duplicate & Delete icons */}
           <div className="flex items-center card-actions opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
             {canDuplicateToBoard && onDuplicateToBoard && (
               <button
+                type="button"
                 onClick={e => {
                   e.stopPropagation();
                   onDuplicateToBoard(task);
                 }}
                 title="Create and assign subtask"
-                className="rounded p-1 text-[var(--text-secondary)] hover:bg-blue-50 dark:hover:bg-blue-500/20 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                className="rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[#1d4ed8] dark:hover:text-blue-400 transition-colors cursor-pointer"
               >
                 <CopyPlus className="h-3 w-3" />
               </button>
             )}
             <button
+              type="button"
               onClick={e => {
                 e.stopPropagation();
                 onEdit(task);
               }}
               title="Edit task details"
-              className="rounded p-1 text-[var(--text-secondary)] hover:bg-neutral-100 dark:hover:bg-white/10 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+              className="rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             >
               <Edit2 className="h-3 w-3" />
             </button>
             <button
+              type="button"
               onClick={e => {
                 e.stopPropagation();
                 onDelete(task.id);
               }}
               title="Delete task"
-              className="rounded p-1 text-[var(--text-secondary)] hover:bg-red-50 dark:hover:bg-red-500/20 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer"
+              className="rounded p-1 text-[var(--text-secondary)] hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer"
             >
               <Trash2 className="h-3 w-3" />
             </button>
           </div>
 
-          {/* Estimated Hours & Billable Hours badges */}
           {sharedEstimatedHours !== undefined && (
             <span
               title={
@@ -363,9 +373,9 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   ? `Your share: ${sharedEstimatedHours}h (${task.estimatedHours}h total split across ${assigneeCount} assignees)`
                   : `Estimated: ${task.estimatedHours}h`
               }
-              className="inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-medium bg-neutral-100 dark:bg-white/5 text-[var(--text-secondary)] border border-neutral-200/50 dark:border-white/5 shrink-0"
+              className="text-[11px] font-medium text-[var(--text-muted)] tabular-nums shrink-0"
             >
-              Est: {sharedEstimatedHours}h
+              {sharedEstimatedHours}h
             </span>
           )}
           {billableMs > 0 || task.status === 'in_progress' ? (
@@ -376,12 +386,12 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 onAdjustBillableHours?.(task);
               }}
               title={`Billable Duration: ${formatBillableDetailed(billableMs)} · Click to correct hours`}
-              className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium border select-none transition-all cursor-pointer shrink-0 group/timer ${task.status === 'in_progress'
-                ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-500/30 shadow-2xs hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:border-blue-400'
-                : 'bg-neutral-100 dark:bg-white/5 text-[var(--text-secondary)] border-neutral-200/60 dark:border-white/5 hover:bg-neutral-200/80 dark:hover:bg-white/10 hover:text-neutral-800 dark:hover:text-white hover:border-neutral-300 dark:hover:border-white/20'
+              className={`inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums select-none transition-colors cursor-pointer shrink-0 group/timer ${task.status === 'in_progress'
+                ? 'bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25'
+                : 'text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)]'
                 }`}
             >
-              <Timer className={`h-2.5 w-2.5 ${task.status === 'in_progress' ? 'text-blue-500' : 'text-[var(--text-secondary)] group-hover/timer:text-blue-500'}`} />
+              <Timer className={`h-2.5 w-2.5 ${task.status === 'in_progress' ? 'text-[#1d4ed8] dark:text-blue-400' : 'text-[var(--text-muted)] group-hover/timer:text-[#1d4ed8]'}`} />
               <span>{formatBillableHours(billableMs)}</span>
             </button>
           ) : (
@@ -392,9 +402,9 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 onAdjustBillableHours?.(task);
               }}
               title="Click to log billable hours"
-              className="card-actions opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium border border-dashed border-neutral-300 dark:border-white/15 bg-neutral-50 dark:bg-white/5 text-[var(--text-secondary)] hover:bg-neutral-100 dark:hover:bg-white/10 hover:text-neutral-700 dark:hover:text-white hover:border-neutral-400 transition-all cursor-pointer shrink-0"
+              className="card-actions opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[11px] font-medium tabular-nums border border-dashed border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer shrink-0"
             >
-              <Timer className="h-2.5 w-2.5 text-[var(--text-secondary)]" />
+              <Timer className="h-2.5 w-2.5" />
               <span>0h</span>
             </button>
           )}
@@ -404,25 +414,25 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       {/* Subtask Hierarchy Indicator */}
       {task.isSubtask && (
         <div
-          className="mb-1 flex items-center gap-1 text-[11px] text-blue-600 dark:text-blue-400 font-medium truncate"
+          className="mb-1 flex items-center gap-1 text-[11px] text-[#1d4ed8] dark:text-blue-400 font-medium truncate"
           title={`Subtask of: ${task.parentTaskTitle || 'Parent Task'}`}
         >
           <CornerDownRight className="h-2.5 w-2.5 shrink-0" />
-          <span className="truncate">Subtask of: {task.parentTaskTitle || 'Parent Task'}</span>
+          <span className="truncate">{task.parentTaskTitle || 'Parent Task'}</span>
         </div>
       )}
 
-      {/* Client & Project Badge */}
+      {/* Client & Project Single Line */}
       {(task.client || task.project) && (
-        <div className="mb-1 flex items-center gap-1.5 text-[11px] text-neutral-500 dark:text-neutral-400 font-medium truncate">
+        <div className="mb-0.5 flex items-center gap-1 text-[11px] text-[var(--text-secondary)] truncate">
           {task.client && (
-            <span className="font-semibold text-neutral-700 dark:text-neutral-300 truncate">
+            <span className="font-semibold text-[var(--text-primary)] truncate">
               {task.client}
             </span>
           )}
-          {task.client && task.project && <span className="opacity-40">·</span>}
+          {task.client && task.project && <span className="text-[var(--text-muted)]">·</span>}
           {task.project && (
-            <span className="truncate opacity-80">
+            <span className="truncate">
               {task.project}
             </span>
           )}
@@ -447,7 +457,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               }
             }}
             onBlur={handleCommitTitle}
-            className="w-full text-xs font-medium leading-snug rounded-md border border-blue-500 bg-[var(--surface)] px-2 py-1 text-neutral-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-xs"
+            className="w-full text-[13px] font-semibold leading-snug rounded-[5px] border border-[var(--accent)] bg-[var(--surface)] px-2 py-1 text-[var(--text-primary)] focus:outline-none"
           />
           <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)] mt-1 px-0.5 select-none">
             <span>Enter to save</span>
@@ -461,9 +471,9 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             setIsEditingTitle(true);
           }}
           title="Click to edit task title directly"
-          className={`text-xs font-medium leading-snug cursor-text rounded px-1 -mx-1 py-0.5 hover:bg-neutral-100/80 dark:hover:bg-white/5 transition-colors group/title flex items-center justify-between gap-1.5 ${task.status === 'done'
-            ? 'line-through text-[var(--text-secondary)]'
-            : 'text-neutral-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400'
+          className={`text-[13px] font-semibold leading-snug cursor-text rounded px-1 -mx-1 py-0.5 hover:bg-[var(--surface-subtle)] transition-colors group/title flex items-center justify-between gap-1.5 ${task.status === 'done'
+            ? 'line-through text-[var(--text-secondary)] font-medium'
+            : 'text-[var(--text-primary)] hover:text-[#1d4ed8] dark:hover:text-blue-400'
             }`}
         >
           <span className="break-words">{task.title}</span>
@@ -473,26 +483,26 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 
       {/* Optional Context snippet */}
       {task.description && (
-        <p className="mt-1 text-[11px] text-[var(--text-secondary)] line-clamp-2 leading-relaxed">
+        <p className="mt-0.5 text-[11px] text-[var(--text-secondary)] line-clamp-2 leading-relaxed">
           {task.description}
         </p>
       )}
 
-      {/* Brand Guidelines, Content Doc Link & ClickUp Link Badges */}
+      {/* Quiet External Links Row (replaces competing colored pill badges) */}
       {((task.brandGuidelines && isValidHttpUrl(task.brandGuidelines)) ||
         (task.contentDocLink && isValidHttpUrl(task.contentDocLink)) ||
         (task.clickupUrl && isValidHttpUrl(task.clickupUrl))) && (
-        <div className="mt-1.5 flex items-center gap-1.5 flex-wrap" onClick={e => e.stopPropagation()}>
+        <div className="mt-1.5 flex items-center gap-2.5 flex-wrap text-[11px]" onClick={e => e.stopPropagation()}>
           {task.brandGuidelines && isValidHttpUrl(task.brandGuidelines) && (
             <a
               href={task.brandGuidelines}
               target="_blank"
               rel="noopener noreferrer"
               title={`Brand Guidelines: ${task.brandGuidelines}`}
-              className="inline-flex items-center gap-1 rounded-md bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/25 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 dark:text-blue-300 hover:underline"
+              className="inline-flex items-center gap-1 font-medium text-[#1d4ed8] dark:text-blue-400 hover:underline"
             >
               <Link2 className="h-2.5 w-2.5 shrink-0" />
-              <span>Brand Guidelines</span>
+              <span>Brand</span>
               <ExternalLink className="h-2.5 w-2.5 shrink-0" />
             </a>
           )}
@@ -502,10 +512,10 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               target="_blank"
               rel="noopener noreferrer"
               title={`Content Doc: ${task.contentDocLink}`}
-              className="inline-flex items-center gap-1 rounded-md bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/25 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 hover:underline"
+              className="inline-flex items-center gap-1 font-medium text-emerald-700 dark:text-emerald-400 hover:underline"
             >
               <Link2 className="h-2.5 w-2.5 shrink-0" />
-              <span>Content Doc</span>
+              <span>Doc</span>
               <ExternalLink className="h-2.5 w-2.5 shrink-0" />
             </a>
           )}
@@ -515,7 +525,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               target="_blank"
               rel="noopener noreferrer"
               title="Open in ClickUp"
-              className="inline-flex items-center gap-1 rounded-md bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/25 px-1.5 py-0.5 text-[10px] font-semibold text-purple-700 dark:text-purple-300 hover:underline"
+              className="inline-flex items-center gap-1 font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:underline"
             >
               <span>ClickUp</span>
               <ExternalLink className="h-2.5 w-2.5 shrink-0" />
@@ -524,8 +534,8 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         </div>
       )}
 
-      {/* Bottom Row: Date display (deadline for active, completedAt for done/archived) & quick status stepper */}
-      <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-neutral-100 dark:border-white/5 pt-2">
+      {/* Bottom Ruled Metadata Row: Deadline & Quick Status Stepper */}
+      <div className="mt-2 flex items-center justify-between gap-2 border-t border-[var(--border-subtle)] pt-1.5">
         <div className="relative" ref={snoozeRef}>
           {isDoneOrArchived ? (
             <div
@@ -538,9 +548,9 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   })}`
                   : 'Completed'
               }
-              className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-secondary)] py-0.5 select-none"
+              className="inline-flex items-center gap-1 text-[11px] font-medium tabular-nums text-[var(--text-secondary)] select-none"
             >
-              <CheckCircle2 className="h-3 w-3 text-green-600/70 dark:text-green-400/70 shrink-0" />
+              <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span>{formatCompletedDate(task.completedAt || task.updatedAt)}</span>
             </div>
           ) : (
@@ -557,14 +567,15 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 });
               }}
               title={`${pillInfo.label} — Click to adjust deadline`}
-              className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[var(--text-secondary)] hover:text-neutral-800 dark:hover:text-white/90 transition-colors cursor-pointer py-0.5"
+              className={`inline-flex items-center gap-1 text-[11px] tabular-nums transition-colors cursor-pointer ${
+                pillInfo.iconClass.includes('red')
+                  ? 'font-bold text-red-600 dark:text-red-400'
+                  : pillInfo.iconClass.includes('orange') || pillInfo.iconClass.includes('amber') || pillInfo.iconClass.includes('yellow')
+                  ? 'font-semibold text-amber-700 dark:text-amber-400'
+                  : 'font-medium text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+              }`}
             >
-              <span
-                className={`inline-flex items-center justify-center rounded-full p-0.5 border shrink-0 ${pillInfo.badgeClass}`}
-                title={pillInfo.label}
-              >
-                <Clock className={`h-2.5 w-2.5 ${pillInfo.iconClass} shrink-0`} />
-              </span>
+              <Clock className="h-3 w-3 shrink-0" />
               <span>{formatDateOnly(task.dueDate)}</span>
             </button>
           )}
@@ -665,12 +676,15 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         <div className="flex items-center gap-1">
           {prevStatus && (
             <button
+              type="button"
               onClick={e => {
                 e.stopPropagation();
                 onMoveStatus(task.id, prevStatus);
               }}
               title={`Move back to ${prevStatus.replace('_', ' ')}`}
-              className="rounded p-1 text-[var(--text-secondary)] hover:bg-neutral-100 dark:hover:bg-white/10 hover:text-neutral-800 dark:hover:text-white transition-colors cursor-pointer"
+              aria-label={`Move back to ${prevStatus.replace('_', ' ')}`}
+              className="rounded-[5px] p-1 text-[var(--text-muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+              style={{ minHeight: 'auto' }}
             >
               <ChevronLeft className="h-3 w-3" />
             </button>
@@ -678,24 +692,28 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 
           {nextStatus ? (
             <button
+              type="button"
               onClick={e => {
                 e.stopPropagation();
                 onMoveStatus(task.id, nextStatus);
               }}
               title={`Advance to ${nextStatus === 'done' ? 'Sent' : nextStatus.replace('_', ' ')}`}
-              className="inline-flex items-center gap-1 rounded-md bg-neutral-100 dark:bg-white/5 hover:bg-neutral-200 dark:hover:bg-white/10 border border-[var(--border)] px-1.5 py-0.5 text-[11px] font-medium text-neutral-700 dark:text-white/70 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+              className="inline-flex items-center gap-0.5 rounded-[5px] bg-[var(--surface-subtle)] hover:bg-[var(--border)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+              style={{ minHeight: 'auto' }}
             >
               <span className="capitalize">{nextStatus === 'done' ? 'Sent' : nextStatus.replace('_', ' ')}</span>
               <ChevronRight className="h-2.5 w-2.5" />
             </button>
           ) : task.status === 'done' ? (
             <button
+              type="button"
               onClick={e => {
                 e.stopPropagation();
                 onMoveStatus(task.id, 'archived');
               }}
               title="Mark as complete"
-              className="inline-flex items-center gap-1 rounded-md bg-neutral-100 dark:bg-white/5 hover:bg-neutral-200 dark:hover:bg-white/10 border border-[var(--border)] px-1.5 py-0.5 text-[11px] text-[var(--text-secondary)] hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1 rounded-[5px] bg-[var(--surface-subtle)] hover:bg-[var(--border)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+              style={{ minHeight: 'auto' }}
             >
               <Archive className="h-2.5 w-2.5" />
               <span>Complete</span>

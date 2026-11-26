@@ -19,7 +19,6 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
   const contentRef = useRef<HTMLDivElement>(null);
   const [shouldScroll, setShouldScroll] = useState(false);
 
-  // Single-pass filter: compute days once per task, derive counts inline — eliminates 2× redundant getDaysRemaining calls
   const { urgentTasks, overdueCount, dueTodayCount } = useMemo(() => {
     const filtered: Array<Task & { days: number }> = [];
     let overdue = 0;
@@ -35,14 +34,17 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
     return { urgentTasks: filtered, overdueCount: overdue, dueTodayCount: filtered.length - overdue };
   }, [tasks]);
 
-  // Dynamically detect whether unique tasks exceed the container's viewport
   useEffect(() => {
     const checkOverflow = () => {
       if (!containerRef.current || !contentRef.current) return;
+      if (window.matchMedia('(max-width: 639px)').matches) {
+        setShouldScroll(false);
+        return;
+      }
       const containerWidth = containerRef.current.clientWidth;
       const contentWidth = contentRef.current.scrollWidth;
       const uniqueWidth = shouldScroll ? contentWidth / 2 : contentWidth;
-      setShouldScroll(uniqueWidth > containerWidth + 4);
+      setShouldScroll(uniqueWidth > containerWidth + 8);
     };
 
     checkOverflow();
@@ -61,35 +63,32 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
     return null;
   }
 
-  // Duplicate tasks for continuous seamless marquee ONLY if unique tasks exceed the viewport.
-  // When they fit, render unique tasks once without repetition or animation.
   const displayList = shouldScroll ? [...urgentTasks, ...urgentTasks] : urgentTasks;
 
   return (
     <div
       id="due-tasks-marquee-ribbon"
-      className="flex items-center gap-3 rounded-2xl border border-red-500/20 bg-red-500/5 dark:bg-red-950/20 px-3 py-2 text-xs shadow-xs backdrop-blur-sm overflow-hidden"
+      className="flex items-center gap-2 sm:gap-3 rounded-[10px] border border-red-200 dark:border-red-500/30 bg-red-50/75 dark:bg-red-950/25 px-2.5 sm:px-3 py-1.5 text-xs overflow-hidden"
     >
-      {/* Fixed Alert Pill on the Left */}
-      <div className="flex items-center gap-1.5 rounded-xl bg-red-600 px-2.5 py-1 text-white shadow-xs shrink-0 z-10 select-none">
-        <AlertTriangle className="h-3.5 w-3.5" />
-        <span className="text-[11px] font-semibold uppercase tracking-wider">
+      <div className="ledger-alert-badge shrink-0 z-10 select-none">
+        <AlertTriangle className="h-3 w-3 shrink-0" />
+        <span className="uppercase tracking-wider">
           {overdueCount > 0 ? `${overdueCount} Overdue` : `${dueTodayCount} Due Today`}
         </span>
       </div>
 
-      {/* Marquee Ticker (animates only when tasks exceed viewport) */}
-      <div ref={containerRef} className="flex-1 overflow-hidden relative">
+      <div ref={containerRef} className="min-w-0 flex-1 overflow-hidden relative">
         <div
           ref={contentRef}
           className={`${
-            shouldScroll ? 'animate-marquee gap-3 py-0.5' : 'flex items-center gap-3 py-0.5 overflow-x-auto no-scrollbar'
+            shouldScroll
+              ? 'animate-marquee items-center divide-x divide-red-200/80 dark:divide-red-500/25'
+              : 'flex items-center divide-x divide-red-200/80 dark:divide-red-500/25 overflow-x-auto no-scrollbar'
           }`}
         >
           {displayList.map((task, idx) => {
             const firstUid = getTaskAssigneeIds(task)[0];
             const user = firstUid ? userMap.get(firstUid) : undefined;
-            // Use pre-computed days from useMemo — no redundant getDaysRemaining call
             const isOverdue = task.days < 0;
 
             return (
@@ -98,39 +97,25 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
                 type="button"
                 onClick={() => onTaskClick(task)}
                 title={`Click to inspect or reschedule "${task.title}" (Assigned to ${user?.name || 'Unassigned'})`}
-                className="flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:border-blue-500 dark:hover:border-blue-400 px-3 py-1 shadow-xs hover:shadow-sm transition-all cursor-pointer shrink-0 group"
+                className="flex items-center gap-1.5 px-2.5 first:pl-0.5 py-0.5 text-left transition-colors cursor-pointer shrink-0 group max-w-full"
+                style={{ minHeight: 'auto' }}
               >
-                {/* Assignee Avatar & Name */}
-                <div className="flex items-center gap-1.5">
-                  <div
-                    className={`h-4.5 w-4.5 rounded-full bg-gradient-to-tr ${
-                      user?.avatarColor || 'from-blue-600 to-indigo-600'
-                    } text-[11px] font-semibold text-white flex items-center justify-center shrink-0 border border-white/10`}
-                  >
-                    {user?.name ? user.name[0].toUpperCase() : '?'}
-                  </div>
-                  <span className="font-semibold text-neutral-800 dark:text-neutral-200 max-w-[110px] truncate text-[11px]">
-                    {user?.name || 'Unassigned'}
-                  </span>
-                </div>
-
-                <span className="text-neutral-300 dark:text-white/20 text-[11px]">•</span>
-
-                {/* Task Title */}
-                <span className="text-neutral-700 dark:text-white/80 max-w-[200px] truncate text-[11px] group-hover:text-blue-500 transition-colors">
+                <span className="font-semibold text-[var(--text-primary)] max-w-[70px] sm:max-w-[110px] truncate text-[11px]">
+                  {user?.name || 'Unassigned'}
+                </span>
+                <span className="text-[var(--text-muted)] text-[11px] shrink-0">·</span>
+                <span className="text-[var(--text-secondary)] max-w-[92px] sm:max-w-[200px] truncate text-[11px] group-hover:text-[#1d4ed8] dark:group-hover:text-blue-400 transition-colors">
                   {task.title}
                 </span>
-
-                {/* Urgency Badge */}
                 <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider border ${
+                  className={`inline-flex items-center gap-1 tabular-nums text-[11px] font-semibold shrink-0 whitespace-nowrap ${
                     isOverdue
-                      ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-500/15 dark:text-red-400 dark:border-red-500/20'
-                      : 'bg-orange-50 text-orange-600 border-orange-200 dark:bg-orange-500/15 dark:text-orange-400 dark:border-orange-500/20'
+                      ? 'text-red-700 dark:text-red-400'
+                      : 'text-amber-700 dark:text-amber-400'
                   }`}
                 >
-                  <Clock className="h-2.5 w-2.5" />
-                  <span>{isOverdue ? `${Math.abs(task.days)}d overdue` : 'Due Today'}</span>
+                  <Clock className="h-2.5 w-2.5 shrink-0" />
+                  <span>{isOverdue ? `${Math.abs(task.days)}d late` : 'Today'}</span>
                 </span>
               </button>
             );
@@ -142,4 +127,3 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
 });
 
 MarqueeRibbon.displayName = 'MarqueeRibbon';
-

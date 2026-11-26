@@ -505,7 +505,7 @@ function DashboardContent() {
 
   if (isAuthChecking) {
     return (
-      <div className="min-h-screen bg-[var(--canvas)] flex flex-col items-center justify-center p-4 selection:bg-blue-500/30 selection:text-white transition-colors">
+      <div className="min-h-screen bg-[var(--canvas)] flex flex-col items-center justify-center p-4 transition-colors">
         <div className="flex flex-col items-center gap-3.5 text-center">
           <div
             id="zenflow-loading-logo"
@@ -547,7 +547,7 @@ function DashboardContent() {
 
   return (
     <>
-      <div className={`min-h-screen bg-[var(--canvas)] text-neutral-900 dark:text-[#E5E5E5] font-sans antialiased selection:bg-blue-500/30 selection:text-white transition-colors relative ${!currentUser ? 'overflow-hidden pointer-events-none select-none filter blur-[2px]' : ''}`}>
+      <div className={`min-h-screen bg-[var(--canvas)] text-[var(--text-primary)] font-sans antialiased transition-colors relative ${!currentUser ? 'overflow-hidden pointer-events-none select-none filter blur-[2px]' : ''}`}>
         {/* Sticky Header */}
         <Header
           onOpenLoginModal={handleOpenLogin}
@@ -557,7 +557,7 @@ function DashboardContent() {
 
         {/* Pinned Ribbons — sticky just below the header */}
         <div className="sticky top-[var(--header-height)] z-20 w-full">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-2 space-y-1.5">
+          <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8 pt-2 space-y-1.5">
             <MarqueeRibbon
               tasks={tasks}
               users={users}
@@ -581,7 +581,7 @@ function DashboardContent() {
               setActiveDragInfo(null);
             }
           }}
-          className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8"
+          className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 lg:px-8 pb-20"
         >
 
           {/* Overview Bar */}
@@ -707,7 +707,7 @@ function DashboardContent() {
               )}
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-4">
               {roleFilteredUsers.map((user, index) => {
                 const isCurrent = currentUser?.id === user.id;
                 const hasPinnedTop = roleFilteredUsers[0]?.id === currentUser?.id;
@@ -857,7 +857,7 @@ function DashboardContent() {
                 : 'bg-red-50/95 dark:bg-[#1f1212]/95 text-red-600 dark:text-red-400 border-red-300 dark:border-red-900/50 backdrop-blur-md hover:bg-red-100 dark:hover:bg-[#281515]'
               }`}
           >
-            <Trash2 className={`h-4 w-4 ${isHoveringDeleteZone ? 'animate-bounce' : ''}`} />
+            <Trash2 className={`h-4 w-4 transition-transform ${isHoveringDeleteZone ? 'scale-110' : ''}`} />
             <span className="text-xs font-semibold">Drop here to delete task</span>
           </div>
         )}
