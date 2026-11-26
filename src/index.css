@@ -79,6 +79,10 @@
     :root { --header-height: 3.4375rem; }
   }
 
+  html {
+    scrollbar-gutter: stable;
+  }
+
   body {
     background: var(--canvas);
     color: var(--text-primary);

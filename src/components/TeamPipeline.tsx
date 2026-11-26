@@ -20,6 +20,7 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
+  Flag,
 } from 'lucide-react';
 
 interface TeamPipelineProps {
@@ -336,6 +337,17 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                 const cognitiveLabel = getCognitiveLoadLabel(task.cognitiveLoad, taskDiscipline);
                 const metadata = task.disciplineMetadata;
                 const dueDays = getDaysRemaining(task.dueDate);
+                const showParentBreadcrumb = Boolean(
+                  task.isSubtask &&
+                  task.parentTaskTitle &&
+                  !task.title.toLowerCase().startsWith(task.parentTaskTitle.trim().toLowerCase())
+                );
+                const disciplineLabel = taskDiscipline === 'design' ? 'Design' : 'Content';
+                const showDisciplineMeta = !task.title.toLowerCase().includes(taskDiscipline);
+                const assetDetail = metadata?.contentType || metadata?.assetType;
+                const priorityLabel = task.priority
+                  ? `${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)} priority`
+                  : undefined;
 
                 return (
                   <motion.div
@@ -364,70 +376,82 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                     className="task-card group relative shrink-0 w-[290px] sm:w-[300px] snap-start flex flex-col justify-between p-2.5 select-none cursor-grab active:cursor-grabbing"
                   >
                     <div>
-                      {/* Top Row: Grip · Discipline · Priority + Centered Card Actions */}
+                      {/* Top Row: Grip · Cognitive Load + Card Actions · Estimate */}
                       <div className="flex items-center justify-between gap-1.5 mb-1.5">
-                        <div className="flex items-center gap-1.5 min-w-0 text-[11px]">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-wrap text-[11px]">
                           <GripVertical
                             aria-hidden="true"
-                            className="h-3.5 w-3.5 text-[var(--text-muted)] group-hover:text-[var(--text-primary)] shrink-0 -ml-1"
+                            className="h-3.5 w-3.5 text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-colors shrink-0 -ml-1"
                           />
                           <span
-                            className={`font-semibold uppercase tracking-wider shrink-0 ${
-                              taskDiscipline === 'design'
-                                ? 'text-indigo-700 dark:text-indigo-400'
-                                : 'text-[#1d4ed8] dark:text-blue-400'
-                            }`}
+                            title={`Cognitive Load: ${cognitiveLabel}`}
+                            className="inline-flex items-center gap-1 font-semibold capitalize"
                           >
-                            {taskDiscipline}
+                            <span
+                              aria-hidden="true"
+                              className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                                task.cognitiveLoad === 'high'
+                                  ? 'bg-red-600 dark:bg-red-400'
+                                  : task.cognitiveLoad === 'medium'
+                                  ? 'bg-amber-600 dark:bg-amber-400'
+                                  : 'bg-emerald-600 dark:bg-emerald-400'
+                              }`}
+                            />
+                            <span
+                              className={
+                                task.cognitiveLoad === 'high'
+                                  ? 'text-red-700 dark:text-red-400'
+                                  : task.cognitiveLoad === 'medium'
+                                  ? 'text-amber-700 dark:text-amber-400'
+                                  : 'text-[var(--text-secondary)]'
+                              }
+                            >
+                              {task.cognitiveLoad} load
+                            </span>
                           </span>
-                          {task.priority && (
-                            <>
-                              <span aria-hidden="true" className="text-[var(--text-muted)]">·</span>
-                              <span
-                                title={`Priority: ${task.priority}`}
-                                className={`font-semibold capitalize truncate ${
-                                  task.priority === 'high'
-                                    ? 'text-red-600 dark:text-red-400'
-                                    : task.priority === 'medium'
-                                    ? 'text-amber-700 dark:text-amber-400'
-                                    : 'text-[var(--text-secondary)]'
-                                }`}
-                              >
-                                {task.priority}
-                              </span>
-                            </>
-                          )}
                         </div>
 
-                        <div className="flex items-center card-actions [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={e => {
-                              e.stopPropagation();
-                              onEditTask(task);
-                            }}
-                            title="Edit brief details"
-                            aria-label={`Edit ${task.title}`}
-                            className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
-                          >
-                            <Edit2 className="h-3 w-3" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={e => {
-                              e.stopPropagation();
-                              onDeleteTask(task);
-                            }}
-                            title="Delete pipeline task"
-                            aria-label={`Delete ${task.title}`}
-                            className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <div className="flex items-center card-actions [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity gap-0.5">
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.stopPropagation();
+                                onEditTask(task);
+                              }}
+                              title="Edit brief details"
+                              aria-label={`Edit ${task.title}`}
+                              className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                            >
+                              <Edit2 className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={e => {
+                                e.stopPropagation();
+                                onDeleteTask(task);
+                              }}
+                              title="Delete pipeline task"
+                              aria-label={`Delete ${task.title}`}
+                              className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+
+                          {task.estimatedHours !== undefined && task.estimatedHours > 0 && (
+                            <span
+                              title={`Estimated Effort: ${task.estimatedHours} hours`}
+                              className="inline-flex items-center gap-0.5 text-[11px] tabular-nums font-semibold text-[var(--text-secondary)]"
+                            >
+                              <Clock className="h-2.5 w-2.5 text-[var(--text-muted)]" />
+                              <span>{task.estimatedHours}h</span>
+                            </span>
+                          )}
                         </div>
                       </div>
 
-                      {task.isSubtask && task.parentTaskTitle && (
+                      {showParentBreadcrumb && (
                         <div
                           className="mb-1 flex items-center gap-1 text-[11px] text-[#1d4ed8] dark:text-blue-400 font-medium truncate"
                           title={`Parent deliverable: ${task.parentTaskTitle}`}
@@ -437,7 +461,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                         </div>
                       )}
 
-                      {(task.client || task.project) && (
+                      {(task.client || task.project || showDisciplineMeta || assetDetail) && (
                         <div className="mb-0.5 flex items-center gap-1 text-[11px] text-[var(--text-secondary)] truncate">
                           {task.client && (
                             <span className="font-semibold text-[var(--text-primary)] truncate">
@@ -446,6 +470,20 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                           )}
                           {task.client && task.project && <span aria-hidden="true" className="text-[var(--text-muted)]">·</span>}
                           {task.project && <span className="truncate">{task.project}</span>}
+                          {(task.client || task.project) && showDisciplineMeta && (
+                            <span aria-hidden="true" className="text-[var(--text-muted)]">·</span>
+                          )}
+                          {showDisciplineMeta && (
+                            <span className="shrink-0 font-medium">{disciplineLabel}</span>
+                          )}
+                          {assetDetail && assetDetail.toLowerCase() !== taskDiscipline && (
+                            <>
+                              {(task.client || task.project || showDisciplineMeta) && (
+                                <span aria-hidden="true" className="text-[var(--text-muted)]">·</span>
+                              )}
+                              <span className="truncate max-w-[95px]">{assetDetail}</span>
+                            </>
+                          )}
                         </div>
                       )}
 
@@ -461,78 +499,68 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                         </button>
                       </h3>
 
-                      {/* Load · Estimate · Brief Link */}
-                      <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-[var(--text-secondary)]">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span
-                            title={`Cognitive Load: ${cognitiveLabel}`}
-                            className="inline-flex items-center gap-1 capitalize truncate"
+                      {/* Optional External Brief Link (matches Swimlane TaskCard link row) */}
+                      {task.brandGuidelines && isValidHttpUrl(task.brandGuidelines) && (
+                        <div className="mt-1.5 flex items-center gap-2.5 text-[11px]">
+                          <a
+                            href={task.brandGuidelines}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            title={`Open Brand Guidelines: ${task.brandGuidelines}`}
+                            className="mobile-tap-control sm:min-h-0 inline-flex items-center gap-0.5 font-medium text-[#1d4ed8] dark:text-blue-400 hover:underline"
                           >
-                            <span
-                              aria-hidden="true"
-                              className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                                task.cognitiveLoad === 'high'
-                                  ? 'bg-red-600 dark:bg-red-400'
-                                  : task.cognitiveLoad === 'medium'
-                                  ? 'bg-amber-600 dark:bg-amber-400'
-                                  : 'bg-emerald-600 dark:bg-emerald-400'
-                              }`}
-                            />
-                            <span>{task.cognitiveLoad} load</span>
-                          </span>
-                          {(metadata?.contentType || metadata?.assetType) && (
-                            <>
-                              <span aria-hidden="true" className="text-[var(--text-muted)]">·</span>
-                              <span className="truncate max-w-[95px]">
-                                {metadata?.contentType || metadata?.assetType}
-                              </span>
-                            </>
-                          )}
+                            <Link2 className="h-2.5 w-2.5 shrink-0" />
+                            <span>Brief</span>
+                            <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+                          </a>
                         </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          {task.brandGuidelines && isValidHttpUrl(task.brandGuidelines) && (
-                            <a
-                              href={task.brandGuidelines}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={e => e.stopPropagation()}
-                              title={`Open Brand Guidelines: ${task.brandGuidelines}`}
-                              className="mobile-tap-control sm:min-h-0 inline-flex items-center gap-0.5 font-medium text-[#1d4ed8] dark:text-blue-400 hover:underline"
-                            >
-                              <Link2 className="h-2.5 w-2.5 shrink-0" />
-                              <span>Brief</span>
-                              <ExternalLink className="h-2.5 w-2.5 shrink-0" />
-                            </a>
-                          )}
-                          {task.estimatedHours !== undefined && task.estimatedHours > 0 && (
-                            <span
-                              title={`Estimated Effort: ${task.estimatedHours} hours`}
-                              className="inline-flex items-center gap-0.5 tabular-nums font-semibold text-[var(--text-primary)]"
-                            >
-                              <Clock className="h-2.5 w-2.5 text-[var(--text-muted)]" />
-                              <span>{task.estimatedHours}h</span>
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                      )}
                     </div>
 
-                    {/* Card Footer: Deadline & Assign CTA */}
+                    {/* Card Footer: Deadline, Priority Flag & Assign CTA */}
                     <div className="mt-2 pt-1.5 border-t border-[var(--border-subtle)] flex items-center justify-between gap-2">
-                      <span
-                        title={task.dueDate ? `Target Deadline: ${formatDateOnly(task.dueDate)}` : 'No deadline set'}
-                        className={`inline-flex items-center gap-1 text-[11px] tabular-nums ${
-                          dueDays !== null && dueDays < 0
-                            ? 'font-bold text-red-600 dark:text-red-400'
-                            : dueDays !== null && dueDays === 0
-                            ? 'font-semibold text-amber-700 dark:text-amber-400'
-                            : 'font-medium text-[var(--text-secondary)]'
-                        }`}
-                      >
-                        <Clock className="h-3 w-3 shrink-0" />
-                        <span>{task.dueDate ? formatDateOnly(task.dueDate) : 'No deadline'}</span>
-                      </span>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span
+                          title={task.dueDate ? `Target Deadline: ${formatDateOnly(task.dueDate)}` : 'No deadline set'}
+                          className={`inline-flex items-center gap-1 text-[11px] tabular-nums ${
+                            dueDays !== null && dueDays < 0
+                              ? 'font-bold text-red-600 dark:text-red-400'
+                              : dueDays !== null && dueDays === 0
+                              ? 'font-semibold text-amber-700 dark:text-amber-400'
+                              : 'font-medium text-[var(--text-secondary)]'
+                          }`}
+                        >
+                          <Clock className="h-3 w-3 shrink-0" />
+                          <span>{task.dueDate ? formatDateOnly(task.dueDate) : 'No deadline'}</span>
+                        </span>
+
+                        {task.priority && priorityLabel && (
+                          <span
+                            role="img"
+                            aria-label={priorityLabel}
+                            title={priorityLabel}
+                            className={`inline-flex items-center shrink-0 ${
+                              task.priority === 'high'
+                                ? 'text-red-600 dark:text-red-400'
+                                : task.priority === 'medium'
+                                ? 'text-amber-600 dark:text-amber-400'
+                                : 'text-[var(--text-muted)]'
+                            }`}
+                          >
+                            <Flag
+                              aria-hidden="true"
+                              className={`h-3 w-3 ${
+                                task.priority === 'high'
+                                  ? 'fill-red-500/20'
+                                  : task.priority === 'medium'
+                                  ? 'fill-amber-500/20'
+                                  : ''
+                              }`}
+                            />
+                          </span>
+                        )}
+                      </div>
 
                       {assignee ? (
                         <button

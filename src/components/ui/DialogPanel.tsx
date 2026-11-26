@@ -3,6 +3,7 @@ import { motion, type HTMLMotionProps } from 'motion/react';
 
 const panels: HTMLElement[] = [];
 let previousOverflow = '';
+let previousPaddingRight = '';
 
 type DialogPanelProps = HTMLMotionProps<'div'> & { onClose?: () => void; busy?: boolean };
 
@@ -36,7 +37,14 @@ export function DialogPanel({ children, className = '', onClose, busy = false, .
     const previousFocus = capturedOpener;
     if (panels.length === 0) {
       previousOverflow = document.body.style.overflow;
+      previousPaddingRight = document.body.style.paddingRight;
+      const clientWidthBefore = document.documentElement.clientWidth;
       document.body.style.overflow = 'hidden';
+      const scrollbarWidth = document.documentElement.clientWidth - clientWidthBefore;
+      if (scrollbarWidth > 0) {
+        const computedPaddingRight = parseFloat(window.getComputedStyle(document.body).paddingRight) || 0;
+        document.body.style.paddingRight = `${computedPaddingRight + scrollbarWidth}px`;
+      }
     }
     panels.push(panel);
     const focusable = () => Array.from(panel.querySelectorAll<HTMLElement>(
@@ -70,7 +78,10 @@ export function DialogPanel({ children, className = '', onClose, busy = false, .
       document.removeEventListener('keydown', keydown, true);
       document.removeEventListener('focusin', focusin);
       panels.splice(panels.indexOf(panel), 1);
-      if (panels.length === 0) document.body.style.overflow = previousOverflow;
+      if (panels.length === 0) {
+        document.body.style.overflow = previousOverflow;
+        document.body.style.paddingRight = previousPaddingRight;
+      }
       if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     };
   }, []);

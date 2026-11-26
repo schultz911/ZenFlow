@@ -20,6 +20,7 @@ import {
   Link2,
   Users,
   MoreHorizontal,
+  Flag,
 } from 'lucide-react';
 
 interface TaskCardProps {
@@ -344,16 +345,6 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             </span>
           </span>
 
-          {task.priority === 'high' && (
-            <span
-              title="High urgency priority"
-              className="inline-flex items-center gap-0.5 font-semibold text-red-600 dark:text-red-400"
-            >
-              <span aria-hidden="true" className="text-[var(--text-muted)] mr-0.5">·</span>
-              <span>High priority</span>
-            </span>
-          )}
-
           {assigneeCount > 1 && (
             <span
               title={`Shared task across ${assigneeCount} assignees (workload & time divided evenly)`}
@@ -650,9 +641,10 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         </div>
       )}
 
-      {/* Bottom Ruled Metadata Row: Deadline & Quick Status Stepper */}
+      {/* Bottom Ruled Metadata Row: Deadline, Priority Flag & Quick Status Stepper */}
       <div className="mt-2 flex items-center justify-between gap-2 border-t border-[var(--border-subtle)] pt-1.5">
-        <div className="relative" ref={snoozeRef}>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <div className="relative" ref={snoozeRef}>
           {isDoneOrArchived ? (
             <div
               title={
@@ -781,6 +773,33 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               </div>
             </div>,
             document.body
+          )}
+          </div>
+
+          {task.priority && (
+            <span
+              role="img"
+              aria-label={`${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)} priority`}
+              title={`${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)} priority`}
+              className={`inline-flex items-center shrink-0 ${
+                task.priority === 'high'
+                  ? 'text-red-600 dark:text-red-400'
+                  : task.priority === 'medium'
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-[var(--text-muted)]'
+              }`}
+            >
+              <Flag
+                aria-hidden="true"
+                className={`h-3 w-3 ${
+                  task.priority === 'high'
+                    ? 'fill-red-500/20'
+                    : task.priority === 'medium'
+                    ? 'fill-amber-500/20'
+                    : ''
+                }`}
+              />
+            </span>
           )}
         </div>
 
