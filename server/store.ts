@@ -438,30 +438,38 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
     return null;
   };
 
+  const FIRESTORE_APP_NAME = 'zenflow-firestore';
+
   const initFirestore = async () => {
     if (adminDb) return;
     try {
-      const adminModule: any = await import('firebase-admin');
-      const admin = adminModule.default || adminModule;
+      const { cert, getApps, initializeApp } = await import('firebase-admin/app');
+      const { getFirestore } = await import('firebase-admin/firestore');
       const sa = findServiceAccount();
       if (sa) {
-        if (!admin.apps?.length) {
-          admin.initializeApp({
-            credential: admin.credential.cert(sa),
-            projectId: sa.project_id || process.env.FIREBASE_PROJECT_ID || 'zenflow-prod',
-          });
-        }
-        adminDb = admin.firestore();
+        const app =
+          getApps().find(a => a.name === FIRESTORE_APP_NAME) ||
+          initializeApp(
+            {
+              credential: cert(sa),
+              projectId: sa.project_id || process.env.FIREBASE_PROJECT_ID || 'zenflow-prod',
+            },
+            FIRESTORE_APP_NAME
+          );
+        adminDb = getFirestore(app);
         firestoreInitialized = true;
         firestoreLastError = null;
       } else if (process.env.FIREBASE_PROJECT_ID || process.env.K_SERVICE || process.env.RAILWAY_ENVIRONMENT) {
         try {
-          if (!admin.apps?.length) {
-            admin.initializeApp({
-              projectId: process.env.FIREBASE_PROJECT_ID || 'zenflow-prod',
-            });
-          }
-          adminDb = admin.firestore();
+          const app =
+            getApps().find(a => a.name === FIRESTORE_APP_NAME) ||
+            initializeApp(
+              {
+                projectId: process.env.FIREBASE_PROJECT_ID || 'zenflow-prod',
+              },
+              FIRESTORE_APP_NAME
+            );
+          adminDb = getFirestore(app);
           firestoreInitialized = true;
           firestoreLastError = null;
         } catch {
@@ -748,6 +756,9 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
       await fs.promises.mkdir(dataDir, { recursive: true });
       const keyPath = path.join(dataDir, 'serviceAccountKey.json');
       fs.writeFileSync(keyPath, JSON.stringify(serviceAccountJson, null, 2), { encoding: 'utf-8', mode: 0o600 });
+      const { deleteApp, getApps } = await import('firebase-admin/app');
+      const existing = getApps().find(a => a.name === FIRESTORE_APP_NAME);
+      if (existing) await deleteApp(existing);
       adminDb = null;
       firestoreInitialized = false;
       await initFirestore();

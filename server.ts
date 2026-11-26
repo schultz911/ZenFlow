@@ -1,6 +1,7 @@
+import 'dotenv/config';
 import express, { type Request, type Response } from 'express';
 import path from 'node:path';
-import type { Identity } from './server/security';
+import { verifyFirebaseIdToken } from './server/firebaseAuth';
 import { createCloudDiskPersistenceAdapter, createWorkspaceRepository } from './server/store';
 import { createClickUpService } from './server/clickup';
 import { createServerApp, createSseHub, sanitizeString } from './server/app';
@@ -8,21 +9,6 @@ import { WebhookRegistry } from './server/webhooks';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const DATA_DIR = process.env.ZENFLOW_DATA_DIR || path.join(process.cwd(), 'data');
-
-async function verifyFirebaseIdToken(idToken: string): Promise<Identity> {
-  const adminModule: any = await import('firebase-admin');
-  const admin = adminModule.default || adminModule;
-  if (!admin.apps?.length) {
-    throw new Error('Firebase Admin not initialized');
-  }
-  const decoded = await admin.auth().verifyIdToken(idToken, true);
-  return {
-    email: decoded.email,
-    email_verified: decoded.email_verified,
-    exp: decoded.exp,
-    firebase: { sign_in_provider: decoded.firebase?.sign_in_provider },
-  };
-}
 
 async function startServer() {
   const adapter = createCloudDiskPersistenceAdapter(DATA_DIR);
