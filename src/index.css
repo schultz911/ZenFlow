@@ -546,3 +546,49 @@ select::-ms-expand {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* The Free Pool stays at the viewport edge while the board scrolls. */
+.free-pool-handle {
+  position: fixed;
+  z-index: 40;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid #2a303c;
+  border-right: 0;
+  border-radius: 7px 0 0 7px;
+  background: #121418;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.free-pool-handle:hover { background: #252c3b; }
+.free-pool-handle-hidden { visibility: hidden; }
+.free-pool-sidebar {
+  position: fixed;
+  z-index: 40;
+  top: var(--header-height);
+  right: 0;
+  bottom: 0;
+  width: min(360px, calc(100vw - 16px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-right: 0;
+  background: var(--surface);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.free-pool-dock-control { display: none; }
+.free-pool-row-action { min-height: 32px; min-width: 32px; }
+@media (pointer: coarse) {
+  .free-pool-row-action { min-height: 44px; min-width: 44px; }
+}
+@media (min-width: 1280px) {
+  .free-pool-dock-control { display: flex; }
+  .free-pool-workspace-docked { margin-right: 360px; }
+  .free-pool-sidebar-docked { box-shadow: none; }
+}

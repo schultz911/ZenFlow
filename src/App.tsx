@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { DashboardProvider, useAuth, useBoardUi, useWorkspace } from './context/DashboardContext';
 import { Header } from './components/Header';
 import { OverviewBar } from './components/OverviewBar';
+import { FreePoolContainer } from './components/FreePoolContainer';
 import { Swimlane } from './components/Swimlane';
 import { SignInModal } from './components/SignInModal';
 import { AddMemberModal } from './components/AddMemberModal';
@@ -75,6 +76,8 @@ function DashboardContent() {
   const [workspaceNotice, setWorkspaceNotice] = useState<string | null>(null);
   const [isHoveringDeleteZone, setIsHoveringDeleteZone] = useState(false);
   const [analyticsModalOpen, setAnalyticsModalOpen] = useState(false);
+  const [freePoolOpen, setFreePoolOpen] = useState(false);
+  const [freePoolDocked, setFreePoolDocked] = useState(false);
   const [disciplineModalOpen, setDisciplineModalOpen] = useState(false);
   const [selectedTaskForAssignment, setSelectedTaskForAssignment] = useState<Task | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -612,7 +615,7 @@ function DashboardContent() {
               setActiveDragInfo(null);
             }
           }}
-          className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 lg:px-8 pb-8"
+          className={`mx-auto max-w-[1400px] px-4 py-4 sm:px-6 lg:px-8 pb-8 ${freePoolOpen && freePoolDocked ? 'free-pool-workspace-docked' : ''}`}
         >
 
           {/* Onboarding Checklist */}
@@ -626,8 +629,6 @@ function DashboardContent() {
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             onOpenAnalytics={() => setAnalyticsModalOpen(true)}
-            onAddTask={handleOpenAddTask}
-            onSelectFreeUser={handleSelectFreeResource}
           />
 
           {/* Search Results Summary & Cross-Tab Navigation Ribbon */}
@@ -792,6 +793,17 @@ function DashboardContent() {
             </div>
           )}
         </main>
+
+        <FreePoolContainer
+          users={users}
+          tasks={tasks}
+          onAddTask={handleOpenAddTask}
+          onSelectUser={handleSelectFreeResource}
+          isExpanded={freePoolOpen}
+          onExpandedChange={setFreePoolOpen}
+          isDocked={freePoolDocked}
+          onDockedChange={setFreePoolDocked}
+        />
 
         {/* Workspace Modals */}
         <TaskModal

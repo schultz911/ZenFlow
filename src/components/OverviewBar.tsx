@@ -1,5 +1,4 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { User, TaskStatus } from '../types';
 import { useAuth, useBoardUi, useWorkspace } from '../context/DashboardContext';
 import {
   exportWorkspaceXLS,
@@ -11,7 +10,6 @@ import {
   getTaskAssigneeIds,
   groupTasksByAssignee,
 } from '../utils/workload';
-import { FreePoolContainer } from './FreePoolContainer';
 import {
   Search,
   Download,
@@ -31,16 +29,12 @@ interface OverviewBarProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onOpenAnalytics: () => void;
-  onAddTask: (userId: string, status?: TaskStatus) => void;
-  onSelectFreeUser: (user: User) => void;
 }
 
 export const OverviewBar: React.FC<OverviewBarProps> = ({
   searchQuery,
   onSearchChange,
   onOpenAnalytics,
-  onAddTask,
-  onSelectFreeUser,
 }) => {
   const { canSwitchBoards, isSuperadmin } = useAuth();
   const { activeRoleTab, activeBoardId, setActiveBoardId } = useBoardUi();
@@ -352,13 +346,6 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
               )}
             </div>
           )}
-
-          <FreePoolContainer
-            users={users}
-            tasks={tasks}
-            onAddTask={onAddTask}
-            onSelectUser={onSelectFreeUser}
-          />
 
           <button
             id="view-analytics-btn"

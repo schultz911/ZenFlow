@@ -1,11 +1,13 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { User, Task, TaskStatus, RoleFilter } from '../types';
 import { getUserTag, formatHours, getAssignedHoursByMemberAndDate, getTaskAssigneeIds, meetsDailyUtilizationTarget } from '../utils/workload';
 import { getAnalyticsClock } from '../domain/analyticsDate';
 import {
   Users,
-  ChevronDown,
+  X,
+  PanelRightClose,
+  PanelRightOpen,
   Plus,
   CheckCircle2,
   ArrowUpRight,
@@ -16,6 +18,10 @@ interface FreePoolContainerProps {
   tasks: Task[];
   onAddTask: (userId: string, status?: TaskStatus) => void;
   onSelectUser?: (user: User) => void;
+  isExpanded: boolean;
+  onExpandedChange: (expanded: boolean) => void;
+  isDocked: boolean;
+  onDockedChange: (docked: boolean) => void;
 }
 
 export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
@@ -23,24 +29,36 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
   tasks,
   onAddTask,
   onSelectUser,
+  isExpanded,
+  onExpandedChange,
+  isDocked,
+  onDockedChange,
 }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const reduceMotion = useReducedMotion();
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const restoreFocusRef = useRef(false);
+
+  useEffect(() => {
+    if (isExpanded) {
+      closeRef.current?.focus({ preventScroll: true });
+    }
+  }, [isExpanded]);
 
   useEffect(() => {
     if (!isExpanded) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        setIsExpanded(false);
-        setTimeout(() => triggerRef.current?.focus(), 0);
+        restoreFocusRef.current = true;
+        onExpandedChange(false);
       }
     };
     const onOutside = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setIsExpanded(false);
+      if ((!isDocked || !window.matchMedia('(min-width: 1280px)').matches) && containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        onExpandedChange(false);
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -49,7 +67,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
       window.removeEventListener('keydown', onKeyDown);
       document.removeEventListener('mousedown', onOutside);
     };
-  }, [isExpanded]);
+  }, [isExpanded, isDocked, onExpandedChange]);
 
   const { freeUsers, userStats } = useMemo(() => {
     const inReviewCounts = new Map<string, number>();
@@ -97,56 +115,66 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
   const designCount = useMemo(() => freeUsers.filter(u => u.role === 'design').length, [freeUsers]);
 
   return (
-    <div ref={containerRef} className="relative select-none">
+    <div ref={containerRef} className="free-pool-root">
       <button
         id="free-pool-trigger"
         ref={triggerRef}
         type="button"
         aria-expanded={isExpanded}
         aria-controls="free-pool-popover"
-        onClick={() => setIsExpanded(prev => !prev)}
-        className="mobile-tap-control flex items-center gap-2 min-h-[34px] px-3 py-1.5 rounded-[7px] bg-[#121418] dark:bg-[#1e2430] border border-[#2a303c] text-white hover:bg-[#1b1f27] dark:hover:bg-[#252c3b] text-xs font-semibold transition-colors cursor-pointer"
-        title="View team members under 3h/day capacity"
+        onClick={() => onExpandedChange(!isExpanded)}
+        className={`free-pool-handle ${isExpanded ? 'free-pool-handle-hidden' : ''}`}
       >
-        <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
-        <span>Free Pool</span>
-        <span className="tabular-nums text-[11px] font-semibold text-emerald-300">
-          {freeUsers.length} &lt;3h/d
-        </span>
-        <ChevronDown className={`h-3.5 w-3.5 text-white/60 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+        Free pool <span className="tabular-nums">({freeUsers.length})</span>
       </button>
 
-      <AnimatePresence>
+      <AnimatePresence onExitComplete={() => {
+        if (restoreFocusRef.current) {
+          restoreFocusRef.current = false;
+          requestAnimationFrame(() => triggerRef.current?.focus({ preventScroll: true }));
+          setTimeout(() => {
+            if (document.activeElement === document.body && triggerRef.current?.getAttribute('aria-expanded') === 'false') {
+              triggerRef.current.focus({ preventScroll: true });
+            }
+          }, 100);
+        }
+      }}>
         {isExpanded && (
-          <motion.div
+          <motion.aside
             id="free-pool-popover"
-            role="region"
             aria-label="Free Pool available capacity"
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 6 }}
-            transition={{ duration: 0.16, ease: [0.2, 0.7, 0.2, 1] }}
-            className="free-pool-panel fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 sm:top-full sm:mt-1.5 bottom-4 sm:bottom-auto z-40 sm:w-88 sm:max-w-[calc(100vw-2rem)] rounded-[10px] border border-[var(--border)] bg-[var(--surface)]/98 backdrop-blur-md overflow-hidden flex flex-col max-h-[440px]"
+            initial={reduceMotion ? false : { x: '100%' }}
+            animate={{ x: 0 }}
+            exit={reduceMotion ? { opacity: 0 } : { x: '100%' }}
+            transition={{ duration: reduceMotion ? 0 : 0.22, ease: [0.2, 0.7, 0.2, 1] }}
+            className={`free-pool-panel free-pool-sidebar ${isDocked ? 'free-pool-sidebar-docked' : ''}`}
           >
-            {/* Header Band */}
-            <div className="flex items-center justify-between px-3.5 py-2.5 bg-[#121418] dark:bg-[#1a1f2a] text-white border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
-                <span className="text-xs font-semibold tracking-tight">Free Pool</span>
-                <span className="text-[11px] font-medium text-emerald-300 tabular-nums">
-                  {freeUsers.length} available
-                </span>
+            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-[#121418] dark:bg-[#1a1f2a] text-white border-b border-white/10">
+              <div className="min-w-0">
+                <h2 className="text-sm font-semibold">Free Pool</h2>
+                <p className="text-xs text-emerald-300 tabular-nums">{freeUsers.length} available</p>
               </div>
-
-              <button
-                type="button"
-                onClick={() => setIsExpanded(false)}
-                aria-label="Close Free Pool"
-                className="p-1 rounded-[5px] hover:bg-white/10 text-white/70 hover:text-white transition-colors cursor-pointer"
-                title="Close Free Pool"
-              >
-                <ChevronDown className="h-4 w-4" />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => onDockedChange(!isDocked)}
+                  aria-label={isDocked ? 'Undock Free Pool' : 'Dock Free Pool'}
+                  aria-pressed={isDocked}
+                  title={isDocked ? 'Undock Free Pool' : 'Dock Free Pool'}
+                  className="free-pool-dock-control items-center justify-center h-10 w-10 rounded-[6px] text-white/80 hover:bg-white/10 hover:text-white cursor-pointer"
+                >
+                  {isDocked ? <PanelRightOpen className="h-4 w-4" /> : <PanelRightClose className="h-4 w-4" />}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { restoreFocusRef.current = true; onExpandedChange(false); }}
+                  ref={closeRef}
+                  aria-label="Close Free Pool"
+                  className="flex items-center justify-center h-10 w-10 rounded-[6px] hover:bg-white/10 text-white/80 hover:text-white cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             </div>
 
             {/* Sub-strip */}
@@ -192,7 +220,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
             </div>
 
             {/* Member List */}
-            <div className="overflow-y-auto max-h-64 divide-y divide-[var(--border-subtle)]">
+            <div className="overflow-y-auto flex-1 min-h-0 divide-y divide-[var(--border-subtle)]">
               {filteredFreeUsers.length === 0 ? (
                 <div className="py-6 px-4 text-center">
                   <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-[7px] bg-[var(--surface-subtle)] text-[var(--text-secondary)] mb-2">
@@ -207,7 +235,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                   </p>
                   <p className="mt-0.5 text-[11px] text-[var(--text-secondary)] max-w-xs mx-auto">
                     {freeUsers.length === 0
-                      ? 'Every team member across all boards has > 3 hours estimated per day assigned.'
+                      ? 'All Content and Design members have at least 3 hours per day assigned.'
                       : 'Try switching to another role tab or wait for task assignments to update.'}
                   </p>
                 </div>
@@ -224,7 +252,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                       <button
                         type="button"
                         onClick={() => {
-                          setIsExpanded(false);
+                          onExpandedChange(false);
                           onSelectUser?.(user);
                         }}
                         aria-label={`Jump to ${user.name}'s swimlane`}
@@ -272,12 +300,11 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            setIsExpanded(false);
+                            onExpandedChange(false);
                             onAddTask(user.id, 'todo');
                           }}
-                          className="flex items-center gap-1 px-2 py-1 rounded-[6px] bg-emerald-700 hover:bg-emerald-600 text-white text-[11px] font-semibold transition-colors cursor-pointer"
+                          className="free-pool-row-action flex items-center gap-1 px-2 py-1 rounded-[6px] bg-emerald-700 hover:bg-emerald-600 text-white text-[11px] font-semibold transition-colors cursor-pointer"
                           title={`Assign task to ${user.name}`}
-                          style={{ minHeight: '28px' }}
                         >
                           <Plus className="h-3 w-3" />
                           <span>Task</span>
@@ -286,13 +313,12 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                         <button
                           type="button"
                           onClick={() => {
-                            setIsExpanded(false);
+                            onExpandedChange(false);
                             onSelectUser?.(user);
                           }}
                           aria-label={`View ${user.name}'s swimlane`}
-                          className="p-1 rounded-[6px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                          className="free-pool-row-action p-1 rounded-[6px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
                           title="View board swimlane"
-                          style={{ minHeight: '28px', minWidth: '28px' }}
                         >
                           <ArrowUpRight className="h-3.5 w-3.5" />
                         </button>
@@ -302,7 +328,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                 })
               )}
             </div>
-          </motion.div>
+          </motion.aside>
         )}
       </AnimatePresence>
     </div>
