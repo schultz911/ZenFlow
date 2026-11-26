@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-26T10:03:00Z",
+  "generatedAt": "2026-11-26T17:29:26.878155Z",
   "title": "Design System: zenFlow",
   "extensions": {
     "colorMeta": {
@@ -610,11 +610,26 @@
       }
     ],
     "breakpoints": [
-      { "name": "sm", "value": "640px" },
-      { "name": "md", "value": "768px" },
-      { "name": "lg", "value": "1024px" },
-      { "name": "xl", "value": "1280px" },
-      { "name": "max-container", "value": "1400px" }
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      },
+      {
+        "name": "xl",
+        "value": "1280px"
+      },
+      {
+        "name": "max-container",
+        "value": "1400px"
+      }
     ]
   },
   "components": [
@@ -675,17 +690,17 @@
       "css": ".ds-ledger-frame { width: 560px; max-width: 100%; background: var(--surface, #ffffff); border: 1px solid var(--border, #dfe3ea); border-radius: var(--radius-panel, 10px); overflow: hidden; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; } .ds-ledger-band { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 18px; background: var(--surface-muted, #fbfcfd); border-bottom: 1px solid var(--border, #dfe3ea); } .ds-ledger-title-group { display: flex; align-items: baseline; gap: 10px; } .ds-ledger-h1 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary, #121418); } .ds-ledger-sub { font-size: 12px; font-weight: 500; color: var(--text-secondary, #525d6e); font-variant-numeric: tabular-nums; } .ds-ledger-alert { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 6px; background: var(--danger, #dc2626); color: #ffffff; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; } .ds-ledger-alert-icon { width: 12px; height: 12px; } .ds-kpi-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); } .ds-kpi-cell { padding: 12px 16px; border-right: 1px solid var(--border-subtle, #eceff4); } .ds-kpi-cell:last-child { border-right: none; } .ds-kpi-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary, #525d6e); } .ds-kpi-val { margin-top: 4px; font-size: 24px; line-height: 1.2; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; } .ds-kpi-emerald { color: var(--success, #059669); } .ds-kpi-cobalt { color: var(--accent, #1d4ed8); } .ds-kpi-amber { color: var(--warning, #b45309); } .ds-kpi-unit { font-size: 14px; font-weight: 600; letter-spacing: 0; } .ds-kpi-pts { font-size: 12px; font-weight: 500; letter-spacing: 0; color: var(--text-secondary, #525d6e); } .ds-kpi-detail { margin-top: 5px; font-size: 11px; color: var(--text-secondary, #525d6e); font-variant-numeric: tabular-nums; }"
     },
     {
-      "name": "Floating Free Pool Dock",
+      "name": "Free Pool edge handle",
       "kind": "custom",
       "refersTo": "free-pool-dock",
-      "description": "High-contrast obsidian bottom-right capacity trigger surfacing teammates under 3h/day assigned.",
-      "html": "<button type=\"button\" class=\"ds-freepool-dock\"><span class=\"ds-freepool-dot\"></span><span class=\"ds-freepool-label\">Free Pool</span><span class=\"ds-freepool-count\">4 under 3h/d</span><svg class=\"ds-freepool-chev\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m18 15-6-6-6 6\"/></svg></button>",
-      "css": ".ds-freepool-dock { display: inline-flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 9px; background: #121418; border: 1px solid #2a303c; color: #ffffff; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; box-shadow: var(--shadow-floating, 0 12px 32px rgba(18, 20, 24, 0.12), 0 2px 6px rgba(18, 20, 24, 0.06)); cursor: pointer; transition: background-color 150ms cubic-bezier(0.2, 0.7, 0.2, 1); } .ds-freepool-dock:hover { background: #1b1f27; } .ds-freepool-dock:focus-visible { outline: 2px solid var(--focus, #1d4ed8); outline-offset: 2px; } .ds-freepool-dot { width: 8px; height: 8px; border-radius: 9999px; background: #34d399; flex-shrink: 0; } .ds-freepool-label { font-size: 12px; font-weight: 600; letter-spacing: -0.01em; } .ds-freepool-count { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; color: #6ee7b7; } .ds-freepool-chev { width: 14px; height: 14px; color: #a3a3a3; transition: color 150ms; } .ds-freepool-dock:hover .ds-freepool-chev { color: #ffffff; }"
+      "description": "Right-edge handle opens the capacity sidebar and displays the available member count.",
+      "html": "<button type=\"button\" class=\"ds-freepool-handle\">Free pool <span>(4)</span></button>",
+      "css": ".ds-freepool-handle { min-height: 44px; padding: 0 14px; border: 1px solid #2a303c; border-right: 0; border-radius: 7px 0 0 7px; background: #121418; color: #fff; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 12px; font-weight: 600; cursor: pointer; } .ds-freepool-handle span { font-variant-numeric: tabular-nums; } .ds-freepool-handle:hover { background: #252c3b; } .ds-freepool-handle:focus-visible { outline: 2px solid var(--focus, #1d4ed8); outline-offset: 2px; }"
     }
   ],
   "narrative": {
     "northStar": "Swiss Agency Traffic Ledger",
-    "overview": "zenFlow is built in Operate mode for daily ZenSciences standups, cognitive-load rebalancing, and real-time creative traffic control across Content, Design, and Accounts. Rather than behaving like a decorative kanban board with floating drop-shadow cards and competing pastel pill tags, the interface operates like a ruled Swiss agency production schedule: cool alabaster paper in light mode and deep ink-slate in dark mode, partitioned by crisp 1px structural rules and anchored by tabular numerals.\n\nThe system strips visual noise down to operational signal so a Creative Director or Lead can diagnose overloaded teammates (>12 pts WIP cap), overdue deliverables, and available Free Pool capacity (<3h/day) in under two seconds. Hierarchy comes from sharp 1px ledger frames, hairline column dividers, weight contrast, and strict color discipline—not nested cards, ambient card elevation, or thick colored side-stripes bolted onto rounded boxes.\n\nEvery surface respects full light/dark mode parity through semantic CSS custom properties while preserving the signature `zenFlow` brand mark (`Inter` bold paired with `Dancing Script` for `Flow`). Frosted translucency and elevation shadows are withheld from the core workspace and reserved strictly for transient overlays: the sticky 54px header, dropdown menus, modal dialogs, and the floating obsidian Free Pool dock.",
+    "overview": "zenFlow is built in Operate mode for daily ZenSciences standups, cognitive-load rebalancing, and real-time creative traffic control across Content, Design, and Accounts. Rather than behaving like a decorative kanban board with floating drop-shadow cards and competing pastel pill tags, the interface operates like a ruled Swiss agency production schedule: cool alabaster paper in light mode and deep ink-slate in dark mode, partitioned by crisp 1px structural rules and anchored by tabular numerals.\n\nThe system strips visual noise down to operational signal so a Creative Director or Lead can diagnose overloaded teammates (>12 pts WIP cap), overdue deliverables, and available Free Pool capacity (<3h/day) in under two seconds. Hierarchy comes from sharp 1px ledger frames, hairline column dividers, weight contrast, and strict color discipline—not nested cards, ambient card elevation, or thick colored side-stripes bolted onto rounded boxes.\n\nEvery surface respects full light/dark mode parity through semantic CSS custom properties while preserving the signature `zenFlow` brand mark (`Inter` bold paired with `Dancing Script` for `Flow`). Frosted translucency and elevation shadows are withheld from the core workspace and reserved strictly for transient overlays: the sticky 54px header, dropdown menus, modal dialogs, and the Free Pool overlay.",
     "keyCharacteristics": [
       "High-density ruled ledger layout built on 1px hairlines (`--border` / `--border-subtle`) with zero ghost-card shadows on resting workspace surfaces.",
       "Strict semantic color economy: cobalt-blue drives active navigation and primary actions, emerald signals healthy utilization and Free Pool readiness, amber marks review/caution states, and solid vermilion (`#dc2626`) is reserved exclusively for WIP overload and overdue alarms.",
@@ -696,7 +711,7 @@
     "rules": [
       {
         "name": "The Vermilion Reserve Rule",
-        "body": "Solid vermilion (`#dc2626` / `#ef4444`) is strictly reserved for WIP overload (`>=12 pts`), overdue alarms, high-load dots, and destructive actions—never for decorative tags, neutral banners, or standard CTAs.",
+        "body": "Solid vermilion (`#dc2626`) is strictly reserved for WIP overload (`>=12 pts`), overdue alarms, high-load dots, and destructive actions—never for decorative tags, neutral banners, or standard CTAs.",
         "section": "colors"
       },
       {
@@ -731,20 +746,20 @@
       }
     ],
     "dos": [
-      "Do partition KPI groups, pipeline rows, and swimlane columns with 1px structural rules (`--border` and `--border-subtle`) inside a shared `.ledger-frame` (**The Hairline Partition Rule**).",
-      "Do apply `font-variant-numeric: tabular-nums` to every KPI figure, efficiency percentage, billable hour ratio, cognitive-load score, member count, and deadline (**The Tabular Ledger Rule**).",
-      "Do reserve solid vermilion (`#dc2626` / `#ef4444`) strictly for WIP overload (`>=12 pts`), overdue alarms, high-load dots, and destructive safety actions (**The Vermilion Reserve Rule**).",
-      "Do use semantic CSS custom properties (`--canvas`, `--surface`, `--surface-muted`, `--border`, `--text-primary`, `--accent`) so every new view maintains instant light/dark parity (**The Dual-Mode Parity Rule**).",
-      "Do preserve the `zenFlow` wordmark (`Inter` bold `zen` + `Dancing Script` bold `Flow`) and keep all operational typography strictly in `Inter`.",
-      "Do limit elevation shadows (`--shadow-floating`, `--shadow-dialog`) and frosted `backdrop-blur` strictly to sticky headers, dropdown menus, dialogs, and the floating `Free Pool` dock."
+      "**Do** partition KPI groups, pipeline rows, and swimlane columns with 1px structural rules (`--border` and `--border-subtle`) inside a shared `.ledger-frame` (**The Hairline Partition Rule**).",
+      "**Do** apply `font-variant-numeric: tabular-nums` to every KPI figure, efficiency percentage, billable hour ratio, cognitive-load score, member count, and deadline (**The Tabular Ledger Rule**).",
+      "**Do** reserve solid vermilion (`#dc2626`) strictly for WIP overload (`>=12 pts`), overdue alarms, high-load dots, and destructive safety actions (**The Vermilion Reserve Rule**).",
+      "**Do** use semantic CSS custom properties (`--canvas`, `--surface`, `--surface-muted`, `--border`, `--text-primary`, `--accent`) so every new view maintains instant light/dark parity (**The Dual-Mode Parity Rule**).",
+      "**Do** preserve the `zenFlow` wordmark (`Inter` bold `zen` + `Dancing Script` bold `Flow`) and keep all operational typography strictly in `Inter`.",
+      "**Do** limit elevation shadows (`--shadow-floating`, `--shadow-dialog`) and frosted `backdrop-blur` strictly to sticky headers, dropdown menus, dialogs, and the Free Pool overlay."
     ],
     "donts": [
-      "Don't add ambient drop shadows (`shadow-sm`, `shadow-md`) to resting workspace surfaces, KPI frames, swimlanes, or task cards (**The Zero Ghost-Card Rule**).",
-      "Don't add thick colored left or top side-stripes (`border-l-4`) onto rounded cards or ledger panels (**The Clean Perimeter Rule**).",
-      "Don't wrap every piece of card metadata (client, project, cognitive load, brand link, deadline) in competing pastel pill badges; use quiet inline typography separated by muted interpuncts (`·`).",
-      "Don't nest rounded bordered cards inside KPI cells, `TeamPipeline` rows, or swimlane column containers when a 1px hairline rule establishes the boundary.",
-      "Don't use `Dancing Script` anywhere outside the `Flow` portion of the `zenFlow` brand wordmark.",
-      "Don't ship hardcoded hex surfaces without matching `:root.dark` tokens or bypass the global `2px solid var(--focus)` keyboard focus ring."
+      "**Don't** add ambient drop shadows (`shadow-sm`, `shadow-md`) to resting workspace surfaces, KPI frames, swimlanes, or task cards (**The Zero Ghost-Card Rule**).",
+      "**Don't** add thick colored left or top side-stripes (`border-l-4`) onto rounded cards or ledger panels (**The Clean Perimeter Rule**).",
+      "**Don't** wrap every piece of card metadata (client, project, cognitive load, brand link, deadline) in competing pastel pill badges; use quiet inline typography separated by muted interpuncts (`·`).",
+      "**Don't** nest rounded bordered cards inside KPI cells, `TeamPipeline` rows, or swimlane column containers when a 1px hairline rule establishes the boundary.",
+      "**Don't** use `Dancing Script` anywhere outside the `Flow` portion of the `zenFlow` brand wordmark.",
+      "**Don't** ship hardcoded hex surfaces without matching `:root.dark` tokens or bypass the global `2px solid var(--focus)` keyboard focus ring."
     ]
   }
 }
