@@ -10,7 +10,14 @@ const reservation = net.createServer();
 await new Promise<void>(resolve => reservation.listen(0, '127.0.0.1', resolve));
 const port = (reservation.address() as net.AddressInfo).port;
 await new Promise<void>(resolve => reservation.close(() => resolve()));
-const env = { ...process.env, NODE_ENV: 'production', PORT: String(port), ZENFLOW_DATA_DIR: path.join(directory, 'data') };
+const env = {
+  ...process.env,
+  NODE_ENV: 'production',
+  RAILWAY_ENVIRONMENT: 'production',
+  FIREBASE_PROJECT_ID: 'zen-flow-7173d',
+  PORT: String(port),
+  ZENFLOW_DATA_DIR: path.join(directory, 'data'),
+};
 for (const name of ['FIREBASE_SERVICE_ACCOUNT_KEY', 'GOOGLE_APPLICATION_CREDENTIALS', 'FIREBASE_AUTH_EMULATOR_HOST', 'FIRESTORE_EMULATOR_HOST']) delete env[name];
 const child = spawn(process.execPath, [path.resolve('dist/server.cjs')], { cwd: directory, env, stdio: ['ignore', 'pipe', 'pipe'] });
 let output = '';

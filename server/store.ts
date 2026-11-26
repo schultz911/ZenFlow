@@ -407,11 +407,19 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
   const findServiceAccount = (): any | null => {
     const envKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY || process.env.GOOGLE_APPLICATION_CREDENTIALS;
     if (envKey) {
+      const trimmed = envKey.trim();
       try {
-        if (envKey.trim().startsWith('{')) {
-          return JSON.parse(envKey);
+        if (trimmed.startsWith('{')) {
+          return JSON.parse(trimmed);
         }
-        const resolvedEnvPath = path.resolve(envKey);
+        if (trimmed.length > 50 && !trimmed.includes('\n')) {
+          const decoded = Buffer.from(trimmed, 'base64').toString('utf-8').trim();
+          if (decoded.startsWith('{')) {
+            const parsed = JSON.parse(decoded);
+            if (parsed?.project_id) return parsed;
+          }
+        }
+        const resolvedEnvPath = path.resolve(trimmed);
         if (fs.existsSync(resolvedEnvPath)) {
           return JSON.parse(fs.readFileSync(resolvedEnvPath, 'utf-8'));
         }
@@ -459,7 +467,7 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
         adminDb = getFirestore(app);
         firestoreInitialized = true;
         firestoreLastError = null;
-      } else if (process.env.FIREBASE_PROJECT_ID || process.env.K_SERVICE || process.env.RAILWAY_ENVIRONMENT) {
+      } else if (process.env.FIRESTORE_EMULATOR_HOST || process.env.K_SERVICE) {
         try {
           const app =
             getApps().find(a => a.name === FIRESTORE_APP_NAME) ||
@@ -475,6 +483,8 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
         } catch {
           console.log('[Firestore] No explicit credentials provided; continuing with local JSON store.');
         }
+      } else {
+        console.log('[Firestore] No explicit credentials provided; continuing with local JSON store.');
       }
     } catch (err: any) {
       firestoreLastError = err.message || String(err);
