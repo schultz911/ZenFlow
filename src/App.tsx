@@ -22,7 +22,7 @@ import { DisciplineTaskModal } from './components/modals/DisciplineTaskModal';
 import { TaskAssignmentModal } from './components/TaskAssignmentModal';
 import { OnboardingChecklist } from './components/OnboardingChecklist';
 import { User, Task, TaskStatus } from './types';
-import { getTaskAssigneeIds, groupTasksByAssignee, formatTaskStatus } from './utils/workload';
+import { getTaskAssigneeIds, groupTasksByAssignee, formatTaskStatus, quickWorkloadScore } from './utils/workload';
 import { UserPlus, FileText, Palette, Search, Trash2, AlertTriangle, X, Loader2, RotateCcw, Keyboard } from 'lucide-react';
 import { DialogPanel } from './components/ui/DialogPanel';
 import { AnimatePresence } from 'motion/react';
@@ -77,6 +77,7 @@ function DashboardContent() {
   const [isHoveringDeleteZone, setIsHoveringDeleteZone] = useState(false);
   const [analyticsModalOpen, setAnalyticsModalOpen] = useState(false);
   const [freePoolOpen, setFreePoolOpen] = useState(false);
+  const [sortByPressure, setSortByPressure] = useState(false);
   const [disciplineModalOpen, setDisciplineModalOpen] = useState(false);
   const [selectedTaskForAssignment, setSelectedTaskForAssignment] = useState<Task | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -202,6 +203,8 @@ function DashboardContent() {
     return counts;
   }, [searchQuery, filteredTasks, tasks, users]);
 
+  const allTasksByUserId = useMemo(() => groupTasksByAssignee(tasks), [tasks]);
+
   // Filter users by role tab ('all' | 'content' | 'design') and active team board
   // When search is active, show only users who match the query or have matching tasks
   const roleFilteredUsers = useMemo(() => {
@@ -235,6 +238,24 @@ function DashboardContent() {
       });
     }
 
+    const getUserScore = (uId: string) => {
+      const list = allTasksByUserId.get(uId) || [];
+      return quickWorkloadScore(list);
+    };
+    const isOverloadedOrWipBreached = (uId: string) => {
+      const list = allTasksByUserId.get(uId) || [];
+      return quickWorkloadScore(list) >= 12 || list.filter(t => t.status === 'in_progress').length > 2;
+    };
+
+    if (sortByPressure) {
+      return [...filtered].sort((a, b) => {
+        const aOver = isOverloadedOrWipBreached(a.id) ? 1 : 0;
+        const bOver = isOverloadedOrWipBreached(b.id) ? 1 : 0;
+        if (aOver !== bOver) return bOver - aOver;
+        return getUserScore(b.id) - getUserScore(a.id);
+      });
+    }
+
     const pinnedUser = currentUser ? filtered.find(u => u.id === currentUser.id) : null;
     const reorderableUsers = pinnedUser ? filtered.filter(u => u.id !== currentUser.id) : filtered;
 
@@ -257,14 +278,12 @@ function DashboardContent() {
     });
 
     return pinnedUser ? [pinnedUser, ...sortedReorderable] : sortedReorderable;
-  }, [users, activeRoleTab, customUserOrder, currentUser, activeBoardId, searchQuery, filteredTasks]);
+  }, [users, activeRoleTab, customUserOrder, currentUser, activeBoardId, searchQuery, filteredTasks, sortByPressure, allTasksByUserId]);
 
   const roleFilteredUsersRef = useRef(roleFilteredUsers);
   roleFilteredUsersRef.current = roleFilteredUsers;
 
   const prevTasksByUserIdRef = useRef<Map<string, Task[]>>(new Map());
-
-  const allTasksByUserId = useMemo(() => groupTasksByAssignee(tasks), [tasks]);
 
   // Preserve member task array identities when search or a different lane changes.
   const tasksByUserId = useMemo(() => {
@@ -311,6 +330,21 @@ function DashboardContent() {
           searchInput.focus();
           searchInput.select();
         }
+      } else if (e.key === '1') {
+        e.preventDefault();
+        setActiveRoleTab('all');
+      } else if (e.key === '2') {
+        e.preventDefault();
+        setActiveRoleTab('content');
+      } else if (e.key === '3') {
+        e.preventDefault();
+        setActiveRoleTab('design');
+      } else if (e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        setFreePoolOpen(prev => !prev);
+      } else if (e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        setAnalyticsModalOpen(true);
       } else if (e.key.toLowerCase() === 'n' && canCreatePipelineRef.current) {
         e.preventDefault();
         setDisciplineModalOpen(true);
@@ -322,7 +356,7 @@ function DashboardContent() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [setActiveRoleTab]);
 
   const handleEditTask = useCallback((task: Task) => {
     setTaskToEdit(task);
@@ -475,7 +509,8 @@ function DashboardContent() {
       const prevTask = tasks.find(t => t.id === taskId);
       const prevSnapshot = prevTask
         ? {
-            userId: prevTask.userId || targetUserId,
+            userId: prevTask.userId || '',
+            assigneeIds: getTaskAssigneeIds(prevTask),
             status: prevTask.status,
             order: prevTask.order,
             dueDate: prevTask.dueDate ?? null,
@@ -486,12 +521,27 @@ function DashboardContent() {
         setUndoToast({
           message: `Moved "${prevTask.title}" to ${formatTaskStatus(newStatus)}`,
           undo: async () => {
-            await moveTask(taskId, prevSnapshot.userId, prevSnapshot.status, prevSnapshot.order, prevSnapshot.dueDate);
+            if (prevSnapshot.status === 'pipeline' && prevSnapshot.assigneeIds.length === 0) {
+              await updateTask(taskId, {
+                status: 'pipeline',
+                userId: undefined,
+                assigneeIds: [],
+                dueDate: prevSnapshot.dueDate || undefined,
+              });
+            } else {
+              await moveTask(
+                taskId,
+                prevSnapshot.userId || targetUserId,
+                prevSnapshot.status,
+                prevSnapshot.order,
+                prevSnapshot.dueDate
+              );
+            }
           },
         });
       }
     },
-    [tasks, moveTask]
+    [tasks, moveTask, updateTask]
   );
 
   const handleUpdateTaskTitle = useCallback(
@@ -602,26 +652,15 @@ function DashboardContent() {
         <MarqueeRibbon
           tasks={tasks}
           users={users}
+          activeRoleTab={activeRoleTab}
+          activeBoardId={activeBoardId}
           onTaskClick={handleEditTask}
         />
 
-        {/* Main Container with drop-outside-board deletion support */}
+        {/* Main Workspace Container */}
         <main
           id="main-workspace"
           tabIndex={-1}
-          onDragOver={e => {
-            if (activeDragInfo) {
-              e.preventDefault();
-              e.dataTransfer.dropEffect = 'move';
-            }
-          }}
-          onDrop={e => {
-            if (e.target === e.currentTarget && activeDragInfo?.task) {
-              e.preventDefault();
-              handleRequestDeleteTask(activeDragInfo.task);
-              setActiveDragInfo(null);
-            }
-          }}
           className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 lg:px-8 pb-8"
         >
 
@@ -636,10 +675,27 @@ function DashboardContent() {
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             onOpenAnalytics={() => setAnalyticsModalOpen(true)}
+            sortByPressure={sortByPressure}
+            onToggleSortByPressure={() => {
+              const next = !sortByPressure;
+              setSortByPressure(next);
+              if (next) {
+                requestAnimationFrame(() => {
+                  const firstOverloaded = roleFilteredUsersRef.current.find(u => {
+                    const list = allTasksByUserId.get(u.id) || [];
+                    return quickWorkloadScore(list) >= 12 || list.filter(t => t.status === 'in_progress').length > 2;
+                  });
+                  if (firstOverloaded) {
+                    document.getElementById(`swimlane-${firstOverloaded.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                });
+              }
+            }}
             freePool={
               <FreePoolContainer
                 users={users}
                 tasks={tasks}
+                activeRoleTab={activeRoleTab}
                 onAddTask={handleOpenAddTask}
                 onSelectUser={handleSelectFreeResource}
                 isExpanded={freePoolOpen}
@@ -974,12 +1030,24 @@ function DashboardContent() {
                     </div>
                   )}
                   <div className="flex items-center justify-between py-2.5">
+                    <dt className="text-[var(--text-secondary)]">Switch teams (All / Content / Design)</dt>
+                    <dd className="ledger-badge font-mono">1 / 2 / 3</dd>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <dt className="text-[var(--text-secondary)]">Toggle Free Pool</dt>
+                    <dd className="ledger-badge font-mono">f</dd>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <dt className="text-[var(--text-secondary)]">Open workspace analytics</dt>
+                    <dd className="ledger-badge font-mono">a</dd>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
                     <dt className="text-[var(--text-secondary)]">Close active modal or popover</dt>
                     <dd className="ledger-badge font-mono">Esc</dd>
                   </div>
                   <div className="flex items-center justify-between py-2.5">
-                    <dt className="text-[var(--text-secondary)]">Rename card title inline</dt>
-                    <dd className="ledger-badge font-mono">Double-click</dd>
+                    <dt className="text-[var(--text-secondary)]">Open card details</dt>
+                    <dd className="ledger-badge font-mono">Click title</dd>
                   </div>
                   <div className="flex items-center justify-between py-2.5">
                     <dt className="text-[var(--text-secondary)]">Toggle shortcuts reference</dt>

@@ -39,12 +39,12 @@ export const DateQuickPresets: React.FC<DateQuickPresetsProps> = ({
             type="button"
             disabled={disabled}
             onClick={() => onSelectDate(preset.date)}
-            className={`rounded-[5px] border px-1.5 py-0.5 font-medium tabular-nums transition-colors cursor-pointer disabled:opacity-50 ${
+            title={`Set deadline to ${preset.date}`}
+            className={`mobile-tap-control sm:min-h-[24px] rounded-[5px] border px-2 sm:px-1.5 py-0.5 font-medium tabular-nums transition-colors cursor-pointer disabled:opacity-50 ${
               isActive
                 ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 font-semibold'
                 : 'border-[var(--border)] bg-[var(--surface-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
             }`}
-            style={{ minHeight: '24px' }}
           >
             {preset.label}
           </button>
@@ -55,8 +55,8 @@ export const DateQuickPresets: React.FC<DateQuickPresetsProps> = ({
           type="button"
           disabled={disabled}
           onClick={() => onSelectDate('')}
-          className="rounded-[5px] px-1.5 py-0.5 font-medium text-red-600 dark:text-red-400 hover:bg-[var(--danger-soft)] transition-colors cursor-pointer disabled:opacity-50"
-          style={{ minHeight: '24px' }}
+          title="Clear deadline"
+          className="mobile-tap-control sm:min-h-[24px] rounded-[5px] px-2 sm:px-1.5 py-0.5 font-medium text-red-600 dark:text-red-400 hover:bg-[var(--danger-soft)] transition-colors cursor-pointer disabled:opacity-50"
         >
           Clear
         </button>

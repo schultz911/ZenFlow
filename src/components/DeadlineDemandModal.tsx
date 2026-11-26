@@ -1,9 +1,10 @@
 import { DialogPanel } from './ui/DialogPanel';
+import { DateQuickPresets } from './ui/DateQuickPresets';
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, X, Check, ArrowRight } from 'lucide-react';
 import { Task, TaskStatus } from '../types';
-import { formatLocalDateKey, formatTaskStatus, getLocalOffsetDateKey } from '../utils/workload';
+import { formatLocalDateKey, formatTaskStatus } from '../utils/workload';
 
 interface DeadlineDemandModalProps {
   isOpen: boolean;
@@ -25,8 +26,6 @@ export const DeadlineDemandModal: React.FC<DeadlineDemandModalProps> = ({
   const [selectedDate, setSelectedDate] = useState<string>('');
 
   const todayStr = formatLocalDateKey();
-
-  const getPresetDate = (daysAhead: number) => getLocalOffsetDateKey(daysAhead);
 
   const targetLabel = targetStatus ? formatTaskStatus(targetStatus) : '';
 
@@ -108,46 +107,18 @@ export const DeadlineDemandModal: React.FC<DeadlineDemandModalProps> = ({
                 </div>
               </div>
 
-              {/* Quick Preset Buttons */}
+              {/* Quick Preset Buttons & Date Input */}
               <div>
-                <label className="field-label">
-                  Select Due Date
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {[
-                    { label: 'Today', days: 0 },
-                    { label: 'Tomorrow', days: 1 },
-                    { label: 'In 3 Days', days: 3 },
-                    { label: 'Next Week', days: 7 },
-                  ].map(preset => {
-                    const pDate = getPresetDate(preset.days);
-                    const isSelected = selectedDate === pDate;
-                    return (
-                      <button
-                        key={preset.label}
-                        type="button"
-                        onClick={() => setSelectedDate(pDate)}
-                        className={`rounded-[7px] border px-2 py-2 text-center text-xs transition-colors cursor-pointer ${
-                          isSelected
-                            ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300'
-                            : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-primary)] hover:bg-[var(--surface-muted)]'
-                        }`}
-                      >
-                        <div className="font-semibold">{preset.label}</div>
-                        <div className="text-[11px] tabular-nums text-[var(--text-secondary)] mt-0.5">
-                          +{preset.days}d
-                        </div>
-                      </button>
-                    );
-                  })}
+                <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                  <label className="field-label !mb-0" htmlFor="deadlinedemandmodal-field-1">
+                    Select Due Date
+                  </label>
+                  <DateQuickPresets
+                    value={selectedDate}
+                    onSelectDate={setSelectedDate}
+                    includeToday
+                  />
                 </div>
-              </div>
-
-              {/* Custom Date Input */}
-              <div>
-                <label className="field-label" htmlFor="deadlinedemandmodal-field-1">
-                  Or Pick Specific Date
-                </label>
                 <input
                   type="date"
                   min={todayStr}

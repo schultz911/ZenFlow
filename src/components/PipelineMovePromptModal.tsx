@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Task, CognitiveLoad, User } from '../types';
-import { X, Calendar, Clock, Brain, ArrowRight, AlertCircle } from 'lucide-react';
-import { getCognitiveLoadLabel } from '../utils/workload';
+import { X, Calendar, Clock, ArrowRight, AlertCircle } from 'lucide-react';
 import { DialogPanel } from './ui/DialogPanel';
+import { DateQuickPresets } from './ui/DateQuickPresets';
+import { CognitiveLoadSelector } from './ui/CognitiveLoadSelector';
 
 interface PipelineMovePromptModalProps {
   isOpen: boolean;
@@ -76,8 +77,6 @@ export const PipelineMovePromptModal: React.FC<PipelineMovePromptModalProps> = (
     });
   };
 
-  const cognitiveOptions: CognitiveLoad[] = ['low', 'medium', 'high'];
-
   return (
     <AnimatePresence>
       {isOpen && task && targetUser && (
@@ -139,7 +138,7 @@ export const PipelineMovePromptModal: React.FC<PipelineMovePromptModalProps> = (
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-3">
                   <div>
                     <label className="field-label flex items-center gap-1.5" htmlFor="pipeline-move-hours">
                       <Clock className="h-3 w-3 text-[var(--text-muted)]" />
@@ -163,12 +162,22 @@ export const PipelineMovePromptModal: React.FC<PipelineMovePromptModalProps> = (
                   </div>
 
                   <div>
-                    <label className="field-label flex items-center gap-1.5" htmlFor="pipeline-move-deadline">
-                      <Calendar className="h-3 w-3 text-[var(--text-muted)]" />
-                      <span>
-                        Deadline <span className="text-red-600 dark:text-red-400">*</span>
-                      </span>
-                    </label>
+                    <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                      <label className="field-label !mb-0 flex items-center gap-1.5" htmlFor="pipeline-move-deadline">
+                        <Calendar className="h-3 w-3 text-[var(--text-muted)]" />
+                        <span>
+                          Deadline <span className="text-red-600 dark:text-red-400">*</span>
+                        </span>
+                      </label>
+                      <DateQuickPresets
+                        value={dueDate}
+                        onSelectDate={next => {
+                          setDueDate(next);
+                          setError('');
+                        }}
+                        includeToday
+                      />
+                    </div>
                     <input
                       id="pipeline-move-deadline"
                       type="date"
@@ -182,47 +191,12 @@ export const PipelineMovePromptModal: React.FC<PipelineMovePromptModalProps> = (
                   </div>
                 </div>
 
-                <div>
-                  <label className="field-label flex items-center gap-1.5">
-                    <Brain className="h-3 w-3 text-[var(--text-muted)]" />
-                    <span>
-                      Cognitive Load <span className="text-red-600 dark:text-red-400">*</span>
-                    </span>
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {cognitiveOptions.map(level => {
-                      const active = cognitiveLoad === level;
-                      return (
-                        <button
-                          key={level}
-                          type="button"
-                          onClick={() => setCognitiveLoad(level)}
-                          className={`rounded-[7px] border px-2.5 py-2 text-left transition-colors cursor-pointer ${
-                            active
-                              ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
-                              : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)]'
-                          }`}
-                        >
-                          <span className="flex items-center gap-1.5 text-xs capitalize font-semibold">
-                            <span
-                              className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                                level === 'high'
-                                  ? 'bg-red-600 dark:bg-red-400'
-                                  : level === 'medium'
-                                  ? 'bg-amber-600 dark:bg-amber-400'
-                                  : 'bg-emerald-600 dark:bg-emerald-400'
-                              }`}
-                            />
-                            <span>{level}</span>
-                          </span>
-                          <span className="block text-[10.5px] mt-0.5 truncate text-[var(--text-secondary)]">
-                            {getCognitiveLoadLabel(level, targetUser.role)}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                <CognitiveLoadSelector
+                  value={cognitiveLoad}
+                  onChange={setCognitiveLoad}
+                  role={targetUser.role}
+                  required
+                />
 
                 {error && (
                   <div role="alert" className="callout callout-danger flex items-center gap-2">

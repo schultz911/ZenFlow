@@ -137,21 +137,21 @@ export const MemberRoleFields: React.FC<MemberRoleFieldsProps> = ({
         <div className="flex items-center justify-between mb-1.5">
           <label
             className="field-label !mb-0"
-            title="Select the member's functional team (click selected team to deselect)"
+            title="Select the member's functional team or None / Leadership"
           >
             Team
           </label>
           <span className="text-[11px] text-[var(--text-muted)]">
-            {role ? 'Click selected to deselect' : 'No team selected'}
+            {role ? 'Assigned discipline' : 'None / Leadership'}
           </span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {ROLE_OPTIONS.map(opt => (
             <button
               key={opt.id}
               type="button"
               aria-pressed={role === opt.id}
-              onClick={() => onChangeRole(prev => (prev === opt.id ? undefined : opt.id))}
+              onClick={() => onChangeRole(opt.id)}
               title={opt.tooltip}
               className={`flex items-start gap-2 rounded-[7px] border p-2.5 text-left transition-colors cursor-pointer ${
                 role === opt.id
@@ -166,6 +166,25 @@ export const MemberRoleFields: React.FC<MemberRoleFieldsProps> = ({
               </div>
             </button>
           ))}
+          <button
+            type="button"
+            aria-pressed={!role}
+            onClick={() => onChangeRole(undefined)}
+            title="Leadership / Admin without a delivery discipline team"
+            className={`flex items-start gap-2 rounded-[7px] border p-2.5 text-left transition-colors cursor-pointer ${
+              !role
+                ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
+                : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]'
+            }`}
+          >
+            <div className="rounded-[5px] p-1 bg-[var(--surface-subtle)] border border-[var(--border-subtle)] shrink-0">
+              <Crown className="h-4 w-4 text-[var(--text-secondary)]" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-[var(--text-primary)] truncate">None</p>
+              <p className="text-[11px] text-[var(--text-secondary)] truncate">Leadership</p>
+            </div>
+          </button>
         </div>
       </div>
 

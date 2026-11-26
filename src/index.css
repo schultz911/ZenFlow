@@ -234,6 +234,11 @@
     color: var(--text-primary);
     border-color: var(--border);
   }
+  :root.dark .segmented-item-active {
+    background: var(--surface-raised);
+    color: var(--text-primary);
+    border-color: #3a4254;
+  }
   .callout {
     border-radius: var(--radius-card);
     border: 1px solid var(--border);
@@ -445,12 +450,22 @@
     .board-columns-scroll { scroll-snap-type: x proximity; scroll-padding-inline: 12px; }
     .board-columns { display: flex; gap: 0; }
     .board-columns > div { flex: 0 0 min(80vw, 300px); scroll-snap-align: start; }
-    .card-actions button { min-width: 36px; min-height: 36px; }
+    .card-actions button { min-width: 40px; min-height: 40px; }
+    .button-secondary, .button-danger-outline, .button-primary, .button-danger, .button-emerald { min-height: 40px; }
+    .segmented-item { min-height: 40px; }
+    .mobile-team-navigation button { min-width: 40px; min-height: 40px; }
     .icon-button { width: 40px; height: 40px; }
     .mobile-tap-control { min-height: 40px !important; }
     .mobile-tap-square { min-width: 40px !important; min-height: 40px !important; }
     .dialog-panel { max-height: calc(100dvh - 1.5rem); }
-    .dialog-panel :is(input:not([type='checkbox']):not([type='radio']), select, textarea) { font-size: 16px; }
+  }
+}
+
+@media (max-width: 639px) {
+  input:not([type='checkbox']):not([type='radio']),
+  select,
+  textarea {
+    font-size: 16px;
   }
 }
 
@@ -601,7 +616,7 @@ select::-ms-expand {
   display: block;
   width: 13px;
   height: 4px;
-  border-radius: 1px;
+  border-radius: 9999px;
   overflow: hidden;
   background: color-mix(in srgb, var(--border) 75%, var(--text-secondary));
 }

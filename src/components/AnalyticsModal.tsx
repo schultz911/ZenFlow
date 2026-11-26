@@ -693,7 +693,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                     onChange={e => setSelectedUserId(e.target.value)}
                     className="field-control !w-auto !border-[var(--accent)]/50 pr-8 max-w-[180px] truncate cursor-pointer"
                   >
-                    {users.map(u => (
+                    {users.filter(u => u.role === 'content' || u.role === 'design').map(u => (
                       <option key={u.id} value={u.id}>{u.name}</option>
                     ))}
                   </select>
@@ -706,8 +706,18 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
           {/* Modal Scrollable Content */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-5 bg-[var(--canvas)] space-y-4">
             {unavailable ? (
-              <div className="ledger-frame p-8 text-center">
+              <div className="ledger-frame p-8 text-center space-y-3">
                 <p role="status" className="text-xs font-medium text-[var(--text-secondary)]">{unavailable}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTimeframe('today');
+                    setIsRangeMode(false);
+                  }}
+                  className="button-secondary"
+                >
+                  Jump to Today
+                </button>
               </div>
             ) : <>
             {snapshot && (
@@ -777,8 +787,12 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                         )}
                       </span>
                       {efficiencyPercent !== null && (
-                        <span className="text-xs tabular-nums text-[var(--text-muted)]">
-                          {formatHoursRatio(estimatedHours, billableHours)}
+                        <span
+                          title="Estimated / billable hours on completed work"
+                          className="inline-flex items-baseline gap-1 text-xs tabular-nums text-[var(--text-muted)]"
+                        >
+                          <span>{formatHoursRatio(estimatedHours, billableHours)}</span>
+                          <span className="text-[11px]">est / bill</span>
                         </span>
                       )}
                     </div>
@@ -801,7 +815,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <span className="metric-label">Top Accounts</span>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-medium text-[var(--text-muted)]">Bill / Est</span>
+                      <span className="text-[11px] font-medium text-[var(--text-muted)]">Est / Bill</span>
                       <Briefcase className="h-3.5 w-3.5 text-[var(--text-muted)] shrink-0" />
                     </div>
                   </div>
@@ -813,7 +827,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                             {acct.key}
                           </span>
                           <span className="text-[11px] tabular-nums text-[var(--text-secondary)] shrink-0">
-                            {formatHours(acct.billableHours)} bill / {formatHours(acct.estimatedHours)} est
+                            {formatHours(acct.estimatedHours)} est / {formatHours(acct.billableHours)} bill
                           </span>
                         </div>
                         <div className="metric-track !mt-0">

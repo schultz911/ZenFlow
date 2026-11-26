@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useIsPresent } from 'motion/react';
 import { createHoldToConfirm } from '../lib/holdToConfirm';
 
@@ -19,11 +19,30 @@ export const HoldToPurgeButton: React.FC<HoldToPurgeButtonProps> = ({
   const state = useSyncExternalStore(hold.subscribe, hold.getSnapshot, hold.getSnapshot);
   const inputRef = useRef<number | string | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const [showTypeConfirm, setShowTypeConfirm] = useState(false);
+  const [typedPhrase, setTypedPhrase] = useState('');
+  const [typeSubmitting, setTypeSubmitting] = useState(false);
+  const [typeFeedback, setTypeFeedback] = useState<string | null>(null);
   const descriptionId = useId();
+  const typeInputId = useId();
   const isPresent = useIsPresent();
-  const busy = isLoading || state.phase === 'submitting';
+  const busy = isLoading || state.phase === 'submitting' || typeSubmitting;
   const blocked = !isPresent || disabled || busy || state.phase === 'success';
   const cancel = () => { inputRef.current = null; hold.cancel(); };
+
+  const handleTypedSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (blocked || typedPhrase.trim().toUpperCase() !== 'PURGE') return;
+    setTypeSubmitting(true);
+    setTypeFeedback(null);
+    try {
+      await confirmRef.current();
+    } catch (err) {
+      setTypeFeedback(err instanceof Error ? err.message : 'Purge failed. Please try again.');
+    } finally {
+      setTypeSubmitting(false);
+    }
+  };
 
   useEffect(() => {
     const stop = () => { inputRef.current = null; hold.cancel(); };
@@ -105,8 +124,49 @@ export const HoldToPurgeButton: React.FC<HoldToPurgeButtonProps> = ({
         Hold with mouse, touch, Space, or Enter. Release or leave to cancel.
       </p>
       <p role="status" aria-live="polite" aria-atomic="true" className="hold-feedback">
-        <span className={state.phase === 'holding' ? 'sr-only' : undefined}>{state.phase === 'holding' ? `${state.remaining} seconds remaining` : state.feedback}</span>
+        <span className={state.phase === 'holding' ? 'sr-only' : undefined}>{state.phase === 'holding' ? `${state.remaining} seconds remaining` : (typeFeedback || state.feedback)}</span>
       </p>
+
+      {!state.phase.includes('success') && (
+        <div className="mt-2 border-t border-[var(--border-subtle)] pt-2 text-center">
+          <button
+            type="button"
+            aria-expanded={showTypeConfirm}
+            onClick={() => {
+              setShowTypeConfirm(prev => !prev);
+              setTypedPhrase('');
+              setTypeFeedback(null);
+            }}
+            className="text-[11px] font-semibold text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer"
+          >
+            {showTypeConfirm ? 'Use 5-second hold instead' : 'Prefer typing PURGE to confirm?'}
+          </button>
+
+          {showTypeConfirm && (
+            <form onSubmit={handleTypedSubmit} className="mt-2 flex items-center gap-2 text-left">
+              <label htmlFor={typeInputId} className="sr-only">
+                Type PURGE to confirm database purge
+              </label>
+              <input
+                id={typeInputId}
+                type="text"
+                value={typedPhrase}
+                onChange={e => setTypedPhrase(e.target.value)}
+                placeholder="Type PURGE to confirm"
+                autoComplete="off"
+                className="field-control flex-1 font-mono"
+              />
+              <button
+                type="submit"
+                disabled={blocked || typedPhrase.trim().toUpperCase() !== 'PURGE'}
+                className="button-danger shrink-0"
+              >
+                {typeSubmitting ? 'Purging…' : 'Confirm Purge'}
+              </button>
+            </form>
+          )}
+        </div>
+      )}
     </div>
   );
 };

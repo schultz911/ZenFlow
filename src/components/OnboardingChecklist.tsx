@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Check, Loader2, X, KeyRound, FolderKanban, Webhook, ChevronDown } from 'lucide-react';
+import { Check, Loader2, X, KeyRound, FolderKanban, Webhook, ChevronDown, ExternalLink } from 'lucide-react';
 import { useAuth, useClickUp, useWorkspace } from '../context/DashboardContext';
 
 interface OnboardingChecklistProps {
@@ -14,7 +14,7 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
   forceOpen,
   onCloseForceOpen,
 }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, isSuperadmin } = useAuth();
   const { updateUserProfile } = useWorkspace();
   const {
     isClickupConnected,
@@ -99,7 +99,8 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
   const webhookStatusLoaded = clickupWebhookStatus !== null;
   const webhookRegistered = Boolean(clickupWebhookStatus?.registered);
   const step3Done = webhookRegistered;
-  const allComplete = step1Done && step2Done && step3Done;
+  const totalSteps = isSuperadmin ? 3 : 2;
+  const allComplete = step1Done && step2Done && (!isSuperadmin || step3Done);
   const shouldShow = Boolean(currentUser) && (forceOpen || (!dismissed && !allComplete));
 
   useEffect(() => {
@@ -108,13 +109,13 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
       membersLoadedForUserRef.current = userId;
       loadClickupMembers('').catch(() => {});
     }
-    if (!webhookStatusLoaded) {
+    if (isSuperadmin && !webhookStatusLoaded) {
       refreshClickupWebhookStatus().catch(() => {});
     }
-  }, [shouldShow, currentUser, userId, step1Done, clickupMembers.length, loadClickupMembers, webhookStatusLoaded, refreshClickupWebhookStatus]);
+  }, [shouldShow, currentUser, userId, step1Done, isSuperadmin, clickupMembers.length, loadClickupMembers, webhookStatusLoaded, refreshClickupWebhookStatus]);
 
   useEffect(() => {
-    if (!shouldShow || !userId || !step1Done || !step2Done) return;
+    if (!isSuperadmin || !shouldShow || !userId || !step1Done || !step2Done) return;
     if (!webhookStatusLoaded || webhookRegistered || webhookNonFatalDone) return;
     if (autoWebhookAttemptedRef.current === userId) return;
 
@@ -150,7 +151,7 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
     m => m.email?.toLowerCase() === currentUser.email.toLowerCase()
   );
 
-  const completedCount = [step1Done, step2Done, step3Done].filter(Boolean).length;
+  const completedCount = (isSuperadmin ? [step1Done, step2Done, step3Done] : [step1Done, step2Done]).filter(Boolean).length;
   const showCompactStrip = !forceOpen && !isExpanded && step1Done;
 
   const handleDismiss = () => {
@@ -244,7 +245,7 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
           <span className="h-2 w-2 rounded-full bg-amber-600 dark:bg-amber-400 shrink-0" />
           <span className="font-semibold text-[var(--text-primary)]">ClickUp setup:</span>
           <span className="tabular-nums text-[var(--text-secondary)]">
-            {completedCount}/3 complete
+            {completedCount}/{totalSteps} complete
           </span>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -279,7 +280,7 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
         <div className="flex items-center gap-2.5">
           <p className="text-[13px] font-bold tracking-tight text-[var(--text-primary)]">Workspace Setup</p>
           <span className="text-[11px] font-semibold tabular-nums text-[var(--text-secondary)]">
-            {completedCount}/3 complete
+            {completedCount}/{totalSteps} complete
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -322,9 +323,23 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
                 <span>Add personal ClickUp API key</span>
               </div>
               <p className="text-xs text-[var(--text-secondary)] mt-0.5">
-                {step1Done
-                  ? 'Connected and verified against ClickUp.'
-                  : 'Unlocks your ClickUp spaces, member mapping, and task sync.'}
+                {step1Done ? (
+                  'Connected and verified against ClickUp.'
+                ) : (
+                  <>
+                    Unlocks your ClickUp spaces, member mapping, and task sync. Find your token in ClickUp under{' '}
+                    <strong className="text-[var(--text-primary)] font-semibold">Settings → Apps → API Token → Generate</strong>{' '}
+                    <a
+                      href="https://app.clickup.com/settings/apps"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-0.5 font-semibold text-[#1d4ed8] dark:text-blue-400 hover:underline"
+                    >
+                      <span>Open ClickUp</span>
+                      <ExternalLink aria-hidden="true" className="h-3 w-3" />
+                    </a>
+                  </>
+                )}
               </p>
               {keyError && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{keyError}</p>}
             </div>
@@ -421,7 +436,8 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
           )}
         </div>
 
-        {/* Step 3 */}
+        {/* Step 3 (Superadmin workspace webhook) */}
+        {isSuperadmin && (
         <div className="px-4 sm:px-5 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-start gap-2.5 min-w-0">
             <span
@@ -466,6 +482,7 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
             </button>
           )}
         </div>
+        )}
       </div>
     </section>
   );

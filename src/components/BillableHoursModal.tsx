@@ -125,9 +125,9 @@ export const BillableHoursModal: React.FC<BillableHoursModalProps> = ({
                   <Timer className="h-4 w-4" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
+                  <h2 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
                     Adjust Billable Hours
-                  </h3>
+                  </h2>
                   <p className="text-[11px] text-[var(--text-secondary)] truncate" title={task.title}>
                     {task.title}
                   </p>

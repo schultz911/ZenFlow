@@ -1,21 +1,24 @@
 import { DialogPanel } from './ui/DialogPanel';
+import { CognitiveLoadSelector } from './ui/CognitiveLoadSelector';
+import { DateQuickPresets } from './ui/DateQuickPresets';
 import React, { useState, useEffect, useMemo } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { useAuth, useWorkspace } from '../context/DashboardContext';
-import { Task, CognitiveLoad } from '../types';
+import { Task, CognitiveLoad, Role } from '../types';
 import {
   getUserDailyAssignedHours,
   formatHours,
   formatLocalDateKey,
+  getLocalOffsetDateKey,
   groupTasksByAssignee,
   quickWorkloadScore,
-  COGNITIVE_LOAD_WEIGHTS,
   getUserTag,
 } from '../utils/workload';
 import {
   X,
   UserCheck,
   Clock,
+  Calendar,
   AlertCircle,
   ShieldAlert,
   ChevronDown,
@@ -43,6 +46,8 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
   const [selectedUserId, setSelectedUserId] = useState<string>('');
   const [cognitiveLoad, setCognitiveLoad] = useState<CognitiveLoad>('medium');
   const [estimatedHours, setEstimatedHours] = useState<string>('');
+  const [dueDate, setDueDate] = useState<string>('');
+  const [keepInPipeline, setKeepInPipeline] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -67,6 +72,8 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
       setSelectedUserId(task.userId || '');
       setCognitiveLoad(task.cognitiveLoad || 'medium');
       setEstimatedHours(task.estimatedHours !== undefined ? String(task.estimatedHours) : '');
+      setDueDate(task.dueDate || getLocalOffsetDateKey(1));
+      setKeepInPipeline(false);
       setSubmitError(null);
     }
   }, [task]);
@@ -95,6 +102,12 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
       }
     }
 
+    const willMoveToTodo = Boolean(selectedUserId && !keepInPipeline);
+    if (willMoveToTodo && !dueDate.trim()) {
+      setSubmitError('A deadline is required to schedule this task into the member’s To Do lane.');
+      return;
+    }
+
     setIsSubmitting(true);
     setSubmitError(null);
 
@@ -105,6 +118,8 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
       await updateTask(task.id, {
         userId: selectedUserId || undefined,
         assigneeIds: selectedUserId ? [selectedUserId] : [],
+        status: willMoveToTodo ? 'todo' : 'pipeline',
+        dueDate: willMoveToTodo ? dueDate.trim() : (dueDate.trim() || undefined),
         startDate: selectedUserId ? (task.startDate || todayIso) : undefined,
         cognitiveLoad,
         estimatedHours: parsedHours,
@@ -142,9 +157,9 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-400">
                 <UserCheck className="h-4 w-4" />
               </div>
-              <h3 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
+              <h2 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
                 Assign Task &amp; Workload Estimate
-              </h3>
+              </h2>
             </div>
             <button
               aria-label="Close dialog"
@@ -257,51 +272,52 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
               </div>
 
               {/* Cognitive Load Specification */}
-              <div>
-                <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <label className="field-label !mb-0">
-                    Cognitive Load <span className="text-red-600 dark:text-red-400">*</span>
+              <CognitiveLoadSelector
+                value={cognitiveLoad}
+                onChange={setCognitiveLoad}
+                role={(selectedUserObj?.role || taskDiscipline) as Role}
+                required
+              />
+
+              {/* Deadline & Placement */}
+              {selectedUserId && (
+                <div className="space-y-2.5">
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                      <label className="field-label !mb-0 flex items-center gap-1.5" htmlFor="taskassignmentmodal-deadline">
+                        <Calendar className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
+                        <span>
+                          Deadline {!keepInPipeline && <span className="text-red-600 dark:text-red-400">*</span>}
+                        </span>
+                      </label>
+                      <DateQuickPresets
+                        value={dueDate}
+                        onSelectDate={setDueDate}
+                        includeToday
+                        allowClear={keepInPipeline}
+                      />
+                    </div>
+                    <input
+                      id="taskassignmentmodal-deadline"
+                      type="date"
+                      required={!keepInPipeline}
+                      value={dueDate}
+                      onChange={e => setDueDate(e.target.value)}
+                      className="field-control tabular-nums cursor-pointer"
+                    />
+                  </div>
+
+                  <label className="flex items-center gap-2 rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-xs text-[var(--text-primary)] cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={keepInPipeline}
+                      onChange={e => setKeepInPipeline(e.target.checked)}
+                      className="rounded border-[var(--border)] h-3.5 w-3.5"
+                    />
+                    <span>Keep in Team Pipeline as assigned (don&rsquo;t move to To Do yet)</span>
                   </label>
-                  <span className="text-[11px] text-[var(--text-secondary)]">
-                    Capacity weight multiplier
-                  </span>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['low', 'medium', 'high'] as const).map(load => {
-                    const weight = COGNITIVE_LOAD_WEIGHTS[load];
-                    const isSelected = cognitiveLoad === load;
-                    return (
-                      <button
-                        key={load}
-                        type="button"
-                        aria-pressed={isSelected}
-                        onClick={() => setCognitiveLoad(load)}
-                        className={`flex flex-col items-center justify-center p-2.5 rounded-[7px] border text-xs font-semibold capitalize transition-colors cursor-pointer ${
-                          isSelected
-                            ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
-                            : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]'
-                        }`}
-                      >
-                        <span className="inline-flex items-center gap-1.5">
-                          <span
-                            className={`h-1.5 w-1.5 rounded-full ${
-                              load === 'high'
-                                ? 'bg-red-600 dark:bg-red-400'
-                                : load === 'medium'
-                                ? 'bg-amber-600 dark:bg-amber-400'
-                                : 'bg-emerald-600 dark:bg-emerald-400'
-                            }`}
-                          />
-                          <span>{load}</span>
-                        </span>
-                        <span className="text-[11px] font-medium tabular-nums text-[var(--text-secondary)] mt-0.5">
-                          Weight {weight}x
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+              )}
 
               {/* Time Estimate Specification */}
               <div>
@@ -335,12 +351,11 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                       key={h}
                       type="button"
                       onClick={() => setEstimatedHours(String(h))}
-                      className={`flex-1 py-1 rounded-[5px] border text-[11px] font-semibold tabular-nums transition-colors cursor-pointer ${
+                      className={`mobile-tap-control sm:min-h-[28px] flex-1 py-1 rounded-[5px] border text-[11px] font-semibold tabular-nums transition-colors cursor-pointer ${
                         estimatedHours === String(h)
                           ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300'
                           : 'border-[var(--border)] bg-[var(--surface-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
                       }`}
-                      style={{ minHeight: '28px' }}
                     >
                       {h}h
                     </button>
@@ -363,7 +378,13 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                 disabled={isSubmitting}
                 className="button-primary"
               >
-                {isSubmitting ? 'Saving...' : selectedUserId ? 'Confirm Assignment' : 'Save Estimates'}
+                {isSubmitting
+                  ? 'Saving...'
+                  : selectedUserId
+                    ? keepInPipeline
+                      ? 'Assign in Pipeline'
+                      : 'Assign & Move to To Do'
+                    : 'Save Estimates'}
               </button>
             </div>
           </form>

@@ -11,13 +11,29 @@ export function DialogPanel({ children, className = '', onClose, busy = false, .
   const ref = useRef<HTMLDivElement>(null);
   const closeRef = useRef(onClose);
   const busyRef = useRef(busy);
+  const openerRef = useRef<HTMLElement | null | undefined>(undefined);
+  if (openerRef.current === undefined && typeof document !== 'undefined') {
+    const active = document.activeElement as HTMLElement | null;
+    if (active && active !== document.body && active !== document.documentElement) {
+      openerRef.current = active;
+    } else {
+      openerRef.current = null;
+    }
+  }
   closeRef.current = onClose;
   busyRef.current = busy;
 
   useEffect(() => {
     const panel = ref.current;
     if (!panel) return;
-    const previousFocus = document.activeElement as HTMLElement | null;
+    const activeAtEffect = document.activeElement as HTMLElement | null;
+    const capturedOpener =
+      openerRef.current && !panel.contains(openerRef.current)
+        ? openerRef.current
+        : activeAtEffect && !panel.contains(activeAtEffect)
+          ? activeAtEffect
+          : null;
+    const previousFocus = capturedOpener;
     if (panels.length === 0) {
       previousOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';

@@ -129,34 +129,43 @@ const COLUMNS: ColumnConfig[] = [
 function ColumnScrollArea({
   children,
   taskCount,
+  unconstrained = false,
 }: {
   children: React.ReactNode;
   taskCount: number;
+  unconstrained?: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [hasMoreBelow, setHasMoreBelow] = useState(false);
 
   const checkOverflow = useCallback(() => {
+    if (unconstrained) {
+      setHasMoreBelow(false);
+      return;
+    }
     const el = scrollRef.current;
     if (!el) return;
     setHasMoreBelow(el.scrollHeight - el.clientHeight - el.scrollTop > 6);
-  }, []);
+  }, [unconstrained]);
 
   useEffect(() => {
     checkOverflow();
+    if (unconstrained) return;
     const el = scrollRef.current;
     if (!el || typeof ResizeObserver === 'undefined') return;
     const ro = new ResizeObserver(checkOverflow);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [checkOverflow, taskCount]);
+  }, [checkOverflow, taskCount, unconstrained]);
 
   return (
     <>
       <div
         ref={scrollRef}
         onScroll={checkOverflow}
-        className="flex-1 space-y-2 max-h-[385px] overflow-y-auto pt-0.5 pb-1 pr-0.5"
+        className={`flex-1 space-y-2 pt-0.5 pb-1 pr-0.5 ${
+          unconstrained ? '' : 'max-h-[385px] overflow-y-auto'
+        }`}
       >
         {children}
       </div>
@@ -751,12 +760,17 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
           : ''
       }`}
     >
-      {/* Swimlane Ruled Header Band: Member Identity, Capacity Telemetry & Actions */}
+      {/* Swimlane Ruled Header Band: click bar anywhere outside controls to collapse/expand */}
       <div
+        onClick={e => {
+          if ((e.target as HTMLElement).closest('button, a, input, select')) return;
+          toggleCollapse();
+        }}
+        title={isCollapsed ? `Click bar to expand ${user.name}'s workspace` : `Click bar to collapse ${user.name}'s workspace`}
         onDragOver={handleHeaderDragOver}
         onDragLeave={handleHeaderDragLeave}
         onDrop={handleHeaderDrop}
-        className={`ledger-band relative flex flex-col lg:flex-row lg:items-center justify-between gap-3 px-4 py-2 sm:px-5 transition-colors ${
+        className={`ledger-band relative flex flex-col lg:flex-row lg:items-center justify-between gap-3 px-4 py-2 sm:px-5 transition-colors cursor-pointer select-none ${
           isCollapsed ? 'border-b-0' : ''
         } ${
           dragOverHeader
@@ -851,6 +865,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 <span className="ledger-alert-badge">
                   <Activity aria-hidden="true" className="h-3 w-3 shrink-0" />
                   <span>{workload.totalScore} / 12 pts · Overload</span>
+                  <HelpCircle aria-hidden="true" className="h-3 w-3 shrink-0 ml-0.5 opacity-90" />
                 </span>
               ) : (
                 <>
@@ -879,9 +894,12 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 {userEfficiency.efficiencyPercent !== null ? `${Math.round(userEfficiency.efficiencyPercent)}%` : '—'}
               </span>
               {userEfficiency.efficiencyPercent !== null && (
-                <span className="text-[11px] text-[var(--text-secondary)]">
-                  {formatHoursRatio(userEfficiency.estimatedHours, userEfficiency.billableHours)}
-                </span>
+                <>
+                  <span className="text-[11px] text-[var(--text-secondary)]">
+                    {formatHoursRatio(userEfficiency.estimatedHours, userEfficiency.billableHours)}
+                  </span>
+                  <span className="text-[11px] text-[var(--text-muted)]">est / bill</span>
+                </>
               )}
             </div>
           </div>
@@ -927,6 +945,8 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
             <button
               id={`collapse-btn-${user.id}`}
               type="button"
+              aria-expanded={!isCollapsed}
+              aria-controls={`swimlane-body-${user.id}`}
               onClick={toggleCollapse}
               title={isCollapsed ? 'Expand workspace' : 'Collapse workspace'}
               aria-label={isCollapsed ? `Expand ${user.name}'s workspace` : `Collapse ${user.name}'s workspace`}
@@ -1022,6 +1042,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
       <AnimatePresence initial={false}>
         {!isCollapsed && (
           <motion.div
+            id={`swimlane-body-${user.id}`}
             key="workspace-body"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
@@ -1129,7 +1150,10 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                         </motion.div>
                       )}
 
-                      <ColumnScrollArea taskCount={columnTasks.length}>
+                      <ColumnScrollArea
+                        taskCount={columnTasks.length}
+                        unconstrained={col.status === 'in_progress' || col.status === 'in_review'}
+                      >
                         {quickAddStatus === col.status && canEdit && (
                           <motion.div
                             ref={quickAddCardRef}

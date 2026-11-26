@@ -32,6 +32,8 @@ interface OverviewBarProps {
   onSearchChange: (q: string) => void;
   onOpenAnalytics: () => void;
   freePool: React.ReactNode;
+  sortByPressure?: boolean;
+  onToggleSortByPressure?: () => void;
 }
 
 export const OverviewBar: React.FC<OverviewBarProps> = ({
@@ -39,6 +41,8 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
   onSearchChange,
   onOpenAnalytics,
   freePool,
+  sortByPressure = false,
+  onToggleSortByPressure,
 }) => {
   const { canSwitchBoards, isSuperadmin } = useAuth();
   const { activeRoleTab, activeBoardId, setActiveBoardId } = useBoardUi();
@@ -165,10 +169,10 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
   }), [displayedUsers, teamTasks]);
 
   return (
-    <div className="mb-3.5 space-y-3">
+    <div className="mb-3 space-y-2.5">
       {/* Pure Typographic Single-Frame Ruled Swiss KPI Ledger */}
       <section className="ledger-frame" aria-label="Team overview">
-        <div className="ledger-band flex flex-wrap items-center justify-between gap-2.5 px-4 py-2 sm:px-5">
+        <div className="ledger-band flex flex-wrap items-center justify-between gap-2 px-4 py-1.5 sm:px-5">
           <div className="flex items-baseline gap-2.5">
             <h1 className="text-lg font-bold tracking-tight text-[var(--text-primary)]">
               {activeRoleTab === 'all' ? 'All Teams' : activeRoleTab === 'content' ? 'Content' : 'Design'}
@@ -180,12 +184,25 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
 
           <div className="flex items-center gap-2 flex-wrap">
             {overloadedMembersCount > 0 && (
-              <span className="ledger-alert-badge">
+              <button
+                type="button"
+                aria-pressed={sortByPressure}
+                onClick={onToggleSortByPressure}
+                title={
+                  sortByPressure
+                    ? 'Overloaded members sorted first — click to restore default board order'
+                    : 'Click to jump to overloaded members and sort by pressure'
+                }
+                className={`ledger-alert-badge cursor-pointer transition hover:brightness-95 ${
+                  sortByPressure ? 'ring-2 ring-red-500/35 ring-offset-1 ring-offset-[var(--surface-muted)]' : ''
+                }`}
+              >
                 <AlertTriangle aria-hidden="true" className="h-3 w-3 shrink-0" />
                 <span>
                   {overloadedMembersCount} {overloadedMembersCount === 1 ? 'member over' : 'members over'} 12 pts load cap
+                  {sortByPressure ? ' · Sorted' : ''}
                 </span>
-              </span>
+              </button>
             )}
             <button
               type="button"
@@ -226,9 +243,14 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
               )}
             </p>
             <p className="metric-detail" title="Estimated / billable hours on completed work">
-              {teamEfficiency.efficiencyPercent !== null
-                ? formatHoursRatio(teamEfficiency.estimatedHours, teamEfficiency.billableHours)
-                : 'No measured work'}
+              {teamEfficiency.efficiencyPercent !== null ? (
+                <>
+                  <span className="text-[11px] font-normal text-[var(--text-muted)] mr-1">est / bill</span>
+                  <span>{formatHoursRatio(teamEfficiency.estimatedHours, teamEfficiency.billableHours)}</span>
+                </>
+              ) : (
+                'No measured work'
+              )}
             </p>
           </div>
 
@@ -304,7 +326,10 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
               <button
                 id="board-selector-btn"
                 type="button"
+                aria-haspopup="menu"
                 aria-expanded={isBoardDropdownOpen}
+                aria-controls={isBoardDropdownOpen ? 'board-selector-menu' : undefined}
+                title="Switch active Creative Director board scope"
                 onClick={() => setIsBoardDropdownOpen(prev => !prev)}
                 className="button-secondary mobile-tap-control"
               >
@@ -314,13 +339,19 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
               </button>
 
               {isBoardDropdownOpen && (
-                <div className="menu-surface absolute right-0 sm:left-0 sm:right-auto mt-1.5 w-56 rounded-[9px] border border-[var(--border)] py-1 z-30">
+                <div
+                  id="board-selector-menu"
+                  role="menu"
+                  aria-label="Select Team Board"
+                  className="menu-surface absolute left-0 mt-1.5 w-56 rounded-[9px] border border-[var(--border)] py-1 z-30"
+                >
                   <div className="px-3 py-1.5 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border-subtle)]">
                     Select Team Board
                   </div>
                   {isSuperadmin && (
                     <button
                       type="button"
+                      role="menuitem"
                       onClick={() => {
                         setActiveBoardId('all');
                         setIsBoardDropdownOpen(false);
@@ -339,6 +370,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                     <button
                       key={cd.id}
                       type="button"
+                      role="menuitem"
                       onClick={() => {
                         setActiveBoardId(cd.id);
                         setIsBoardDropdownOpen(false);
@@ -358,12 +390,15 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
             </div>
           )}
 
-          <div className="relative sm:hidden" ref={mobileActionsMenuRef}>
+          <div className="relative ml-auto sm:hidden" ref={mobileActionsMenuRef}>
             <button
               id="mobile-actions-menu-btn"
               type="button"
+              aria-haspopup="menu"
               aria-expanded={showMobileActionsMenu}
+              aria-controls={showMobileActionsMenu ? 'mobile-actions-menu' : undefined}
               aria-label="Analytics and export actions"
+              title="Analytics and export actions"
               onClick={() => setShowMobileActionsMenu(prev => !prev)}
               className="button-secondary mobile-tap-control"
             >
@@ -372,9 +407,15 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
             </button>
 
             {showMobileActionsMenu && (
-              <div aria-label="Analytics and export actions" className="menu-surface absolute right-0 mt-1.5 w-56 rounded-[9px] border border-[var(--border)] p-1 z-30">
+              <div
+                id="mobile-actions-menu"
+                role="menu"
+                aria-label="Analytics and export actions"
+                className="menu-surface absolute right-0 mt-1.5 w-56 max-w-[calc(100vw-2rem)] rounded-[9px] border border-[var(--border)] p-1 z-30"
+              >
                 <button
                   type="button"
+                  role="menuitem"
                   onClick={() => {
                     setShowMobileActionsMenu(false);
                     onOpenAnalytics();
@@ -384,9 +425,10 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                   <BarChart3 className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
                   <span>View Analytics</span>
                 </button>
-                <div className="my-1 border-t border-[var(--border-subtle)]" />
+                <div role="separator" className="my-1 border-t border-[var(--border-subtle)]" />
                 <button
                   type="button"
+                  role="menuitem"
                   onClick={() => {
                     setShowMobileActionsMenu(false);
                     exportWorkspaceXLS(tasks, users);
@@ -398,6 +440,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                 </button>
                 <button
                   type="button"
+                  role="menuitem"
                   onClick={() => {
                     setShowMobileActionsMenu(false);
                     exportWorkspaceJSON(tasks, users);
@@ -409,6 +452,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                 </button>
                 <button
                   type="button"
+                  role="menuitem"
                   onClick={() => {
                     setShowMobileActionsMenu(false);
                     downloadAuditLogs();
@@ -426,7 +470,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
             id="view-analytics-btn"
             type="button"
             onClick={onOpenAnalytics}
-            title="Open executive workspace analytics modal"
+            title="Open executive workspace analytics modal (Shortcut: a)"
             className="hidden sm:inline-flex button-secondary mobile-tap-control"
           >
             <BarChart3 className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
@@ -437,7 +481,9 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
             <button
               id="export-workspace-btn"
               type="button"
+              aria-haspopup="menu"
               aria-expanded={showExportMenu}
+              aria-controls={showExportMenu ? 'export-workspace-menu' : undefined}
               onClick={() => setShowExportMenu(prev => !prev)}
               title="Export workspace or audit reports"
               className="button-secondary mobile-tap-control"
@@ -447,9 +493,15 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
             </button>
 
             {showExportMenu && (
-              <div aria-label="Export options" className="menu-surface absolute right-0 mt-1.5 w-52 rounded-[9px] border border-[var(--border)] p-1 z-20">
+              <div
+                id="export-workspace-menu"
+                role="menu"
+                aria-label="Export options"
+                className="menu-surface absolute right-0 mt-1.5 w-52 rounded-[9px] border border-[var(--border)] p-1 z-20"
+              >
                 <button
                   type="button"
+                  role="menuitem"
                   onClick={() => {
                     setShowExportMenu(false);
                     exportWorkspaceXLS(tasks, users);
@@ -461,6 +513,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                 </button>
                 <button
                   type="button"
+                  role="menuitem"
                   onClick={() => {
                     setShowExportMenu(false);
                     exportWorkspaceJSON(tasks, users);
@@ -473,6 +526,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                 <button
                   id="export-audit-ndjson-btn"
                   type="button"
+                  role="menuitem"
                   onClick={() => {
                     setShowExportMenu(false);
                     downloadAuditLogs();

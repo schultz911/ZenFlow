@@ -19,6 +19,7 @@ import {
   ExternalLink,
   Link2,
   Users,
+  MoreHorizontal,
 } from 'lucide-react';
 
 interface TaskCardProps {
@@ -79,19 +80,33 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
     }
   }, [showSnoozeFlyout, task.dueDate]);
 
-  // Inline Title Editing state
+  // Inline Title Editing & mobile card overflow menu state
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(task.title);
+  const [showMobileCardMenu, setShowMobileCardMenu] = useState(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
-  const titleClickTimerRef = useRef<number | null>(null);
+  const mobileCardMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    return () => {
-      if (titleClickTimerRef.current !== null) {
-        window.clearTimeout(titleClickTimerRef.current);
+    if (!showMobileCardMenu) return;
+    const closeOutside = (e: MouseEvent) => {
+      if (mobileCardMenuRef.current && !mobileCardMenuRef.current.contains(e.target as Node)) {
+        setShowMobileCardMenu(false);
       }
     };
-  }, []);
+    const closeEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowMobileCardMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', closeOutside);
+    document.addEventListener('keydown', closeEsc);
+    return () => {
+      document.removeEventListener('mousedown', closeOutside);
+      document.removeEventListener('keydown', closeEsc);
+    };
+  }, [showMobileCardMenu]);
 
   // Live timer for in_progress billable hours
   const [now, setNow] = useState(() => Date.now());
@@ -272,7 +287,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 
   return (
     <motion.div
-      id={`task-card-${task.id}`}
+      id={`task-card-${effectiveUserId || 'unassigned'}-${task.id}`}
       initial={false}
       animate={{
         opacity: isDragging ? 0.35 : 1,
@@ -282,15 +297,15 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       draggable={effectivelyDraggable && !isEditingTitle}
       onDragStartCapture={handleDragStart}
       onDragEndCapture={handleDragEnd}
-      className={`task-card group relative p-2.5 select-none transform-gpu ${showSnoozeFlyout ? 'z-40' : 'z-0'
+      className={`task-card group relative p-2.5 select-none transform-gpu ${showSnoozeFlyout || showMobileCardMenu ? 'z-40' : 'z-0'
         } ${isDragging
           ? 'border-[#1d4ed8] dark:border-blue-400 bg-blue-50/50 dark:bg-blue-950/20 ring-2 ring-blue-500/20'
           : task.status === 'done'
-            ? 'bg-[var(--surface-muted)] opacity-70'
+            ? 'bg-[var(--surface-muted)]'
             : ''
         }`}
     >
-      {/* Top row: Drag grip, quiet cognitive-load dot & label, shared ratio, and right-aligned tabular hours + hover actions */}
+      {/* Top row: Drag grip, explicit load + priority, shared ratio, and right-aligned tabular hours + centered actions */}
       <div className="flex items-center justify-between gap-1.5 mb-1.5">
         <div className="flex items-center gap-1.5 min-w-0 flex-wrap text-[11px]">
           {canEdit && (
@@ -302,12 +317,13 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             </div>
           )}
 
-          {/* Quiet Cognitive Load Indicator (no noisy pill box) */}
+          {/* Explicit Cognitive Load Indicator */}
           <span
             title={`Cognitive Load: ${cognitiveLabel}`}
             className="inline-flex items-center gap-1 font-semibold text-[var(--text-secondary)] capitalize"
           >
             <span
+              aria-hidden="true"
               className={`h-1.5 w-1.5 rounded-full shrink-0 ${task.cognitiveLoad === 'high'
                 ? 'bg-red-600 dark:bg-red-400'
                 : task.cognitiveLoad === 'medium'
@@ -324,9 +340,19 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   : 'text-[var(--text-secondary)]'
               }
             >
-              {task.cognitiveLoad}
+              {task.cognitiveLoad} load
             </span>
           </span>
+
+          {task.priority === 'high' && (
+            <span
+              title="High urgency priority"
+              className="inline-flex items-center gap-0.5 font-semibold text-red-600 dark:text-red-400"
+            >
+              <span aria-hidden="true" className="text-[var(--text-muted)] mr-0.5">·</span>
+              <span>High priority</span>
+            </span>
+          )}
 
           {assigneeCount > 1 && (
             <span
@@ -340,9 +366,9 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           )}
         </div>
 
-        {/* Top Right: Quick Hover Actions & Tabular Estimate / Billable Duration */}
+        {/* Top Right: Quick Hover Actions & Mobile Overflow + Tabular Estimate / Billable Duration */}
         <div className="flex items-center gap-1.5 shrink-0">
-          <div className="flex items-center card-actions [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
+          <div className="hidden sm:flex items-center card-actions [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
             {canDuplicateToBoard && onDuplicateToBoard && (
               <button
                 type="button"
@@ -352,7 +378,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 }}
                 title="Create and assign subtask"
                 aria-label={`Create subtask from ${task.title}`}
-                className="rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[#1d4ed8] dark:hover:text-blue-400 transition-colors cursor-pointer"
+                className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[#1d4ed8] dark:hover:text-blue-400 transition-colors cursor-pointer"
               >
                 <CopyPlus className="h-3 w-3" />
               </button>
@@ -365,7 +391,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               }}
               title="Edit task details"
               aria-label={`Edit ${task.title}`}
-              className="rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+              className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             >
               <Edit2 className="h-3 w-3" />
             </button>
@@ -377,10 +403,74 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               }}
               title="Delete task"
               aria-label={`Delete ${task.title}`}
-              className="rounded p-1 text-[var(--text-secondary)] hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer"
+              className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer"
             >
               <Trash2 className="h-3 w-3" />
             </button>
+          </div>
+
+          <div className="relative sm:hidden card-actions shrink-0" ref={mobileCardMenuRef}>
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={showMobileCardMenu}
+              aria-label={`Actions for ${task.title}`}
+              title={`Task actions for ${task.title}`}
+              onClick={e => {
+                e.stopPropagation();
+                setShowMobileCardMenu(prev => !prev);
+              }}
+              className="mobile-tap-square inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+            {showMobileCardMenu && (
+              <div
+                role="menu"
+                aria-label={`Actions for ${task.title}`}
+                onClick={e => e.stopPropagation()}
+                className="menu-surface absolute right-0 top-full mt-1 w-44 rounded-[9px] border border-[var(--border)] p-1 z-40"
+              >
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setShowMobileCardMenu(false);
+                    onEdit(task);
+                  }}
+                  className="menu-item cursor-pointer"
+                >
+                  <Edit2 className="h-3.5 w-3.5" />
+                  <span>Edit Details</span>
+                </button>
+                {canDuplicateToBoard && onDuplicateToBoard && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setShowMobileCardMenu(false);
+                      onDuplicateToBoard(task);
+                    }}
+                    className="menu-item cursor-pointer text-[#1d4ed8] dark:text-blue-400"
+                  >
+                    <CopyPlus className="h-3.5 w-3.5" />
+                    <span>Create Subtask</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setShowMobileCardMenu(false);
+                    onDelete(task.id);
+                  }}
+                  className="menu-item cursor-pointer text-red-600 dark:text-red-400"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  <span>Delete Task</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {sharedEstimatedHours !== undefined && (
@@ -495,29 +585,12 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         <h5 className="text-[13px] font-semibold leading-snug">
           <button
             type="button"
-            onClick={() => {
-              if (titleClickTimerRef.current !== null) {
-                window.clearTimeout(titleClickTimerRef.current);
-              }
-              titleClickTimerRef.current = window.setTimeout(() => {
-                titleClickTimerRef.current = null;
-                onEdit(task);
-              }, 220);
-            }}
-            onDoubleClick={e => {
-              e.stopPropagation();
-              if (titleClickTimerRef.current !== null) {
-                window.clearTimeout(titleClickTimerRef.current);
-                titleClickTimerRef.current = null;
-              }
-              setIsEditingTitle(true);
-            }}
-            title="Click to open task details · Double-click to rename"
-            className={`w-full text-left cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-[var(--surface-subtle)] transition-colors group/title flex items-center justify-between gap-1.5 ${task.status === 'done'
+            onClick={() => onEdit(task)}
+            title="Click to open task details"
+            className={`mobile-tap-control sm:min-h-0 w-full text-left cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-[var(--surface-subtle)] transition-colors group/title flex items-center justify-between gap-1.5 ${task.status === 'done'
               ? 'line-through text-[var(--text-secondary)] font-medium'
               : 'text-[var(--text-primary)] hover:text-[#1d4ed8] dark:hover:text-blue-400'
               }`}
-            style={{ minHeight: 'auto' }}
           >
             <span className="break-words">{task.title}</span>
           </button>
@@ -627,6 +700,8 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           {!isDoneOrArchived && showSnoozeFlyout && flyoutPosition && createPortal(
             <div
               ref={flyoutMenuRef}
+              role="dialog"
+              aria-label="Quick reschedule deadline"
               style={{ top: `${flyoutPosition.top}px`, left: `${flyoutPosition.left}px` }}
               onClick={e => e.stopPropagation()}
               className="menu-surface fixed z-[9999] w-56 rounded-[9px] border border-[var(--border)] p-1.5 text-[var(--text-primary)]"
@@ -639,8 +714,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 <button
                   type="button"
                   onClick={() => handleSnooze(1)}
-                  className="flex w-full items-center justify-between rounded-[6px] px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
-                  style={{ minHeight: '28px' }}
+                  className="mobile-tap-control sm:min-h-[28px] flex w-full items-center justify-between rounded-[6px] px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
                 >
                   <span>Tomorrow</span>
                   <span className="text-[11px] tabular-nums text-[var(--text-muted)]">+1d</span>
@@ -648,8 +722,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 <button
                   type="button"
                   onClick={() => handleSnooze(3)}
-                  className="flex w-full items-center justify-between rounded-[6px] px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
-                  style={{ minHeight: '28px' }}
+                  className="mobile-tap-control sm:min-h-[28px] flex w-full items-center justify-between rounded-[6px] px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
                 >
                   <span>In 3 days</span>
                   <span className="text-[11px] tabular-nums text-[var(--text-muted)]">+3d</span>
@@ -657,8 +730,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 <button
                   type="button"
                   onClick={() => handleSnooze(7)}
-                  className="flex w-full items-center justify-between rounded-[6px] px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
-                  style={{ minHeight: '28px' }}
+                  className="mobile-tap-control sm:min-h-[28px] flex w-full items-center justify-between rounded-[6px] px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
                 >
                   <span>Next week</span>
                   <span className="text-[11px] tabular-nums text-[var(--text-muted)]">+1w</span>
@@ -666,8 +738,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 <button
                   type="button"
                   onClick={handleEndOfMonth}
-                  className="flex w-full items-center justify-between rounded-[6px] px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
-                  style={{ minHeight: '28px' }}
+                  className="mobile-tap-control sm:min-h-[28px] flex w-full items-center justify-between rounded-[6px] px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
                 >
                   <span>Last day of month</span>
                   <span className="text-[11px] tabular-nums text-[var(--text-muted)]">EOM</span>
@@ -675,12 +746,14 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 
                 {/* Custom date picker input */}
                 <div className="pt-1.5 mt-1 border-t border-[var(--border-subtle)] px-1.5 pb-1">
-                  <label className="block text-[11px] uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1">
+                  <label htmlFor={`snooze-date-${effectiveUserId || 'u'}-${task.id}`} className="block text-[11px] uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1">
                     Pick Date
                   </label>
                   <div className="flex items-center gap-1">
                     <input
+                      id={`snooze-date-${effectiveUserId || 'u'}-${task.id}`}
                       type="date"
+                      aria-label="Custom deadline date"
                       value={customDateDraft}
                       onChange={e => setCustomDateDraft(e.target.value)}
                       onKeyDown={e => {
@@ -692,16 +765,14 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                           setShowSnoozeFlyout(false);
                         }
                       }}
-                      className="flex-1 min-w-0 rounded-[5px] border border-[var(--border)] bg-[var(--surface)] px-1.5 py-1 text-[11px] tabular-nums text-[var(--text-primary)] cursor-pointer focus:border-[var(--accent)] focus:outline-none"
-                      style={{ minHeight: '28px' }}
+                      className="mobile-tap-control sm:min-h-[28px] flex-1 min-w-0 rounded-[5px] border border-[var(--border)] bg-[var(--surface)] px-1.5 py-1 text-[11px] tabular-nums text-[var(--text-primary)] cursor-pointer focus:border-[var(--accent)] focus:outline-none"
                     />
                     <button
                       type="button"
                       disabled={!customDateDraft}
                       onClick={() => handleCustomDateSelect(customDateDraft)}
                       title="Set deadline"
-                      className="shrink-0 rounded-[5px] bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 text-white px-2.5 py-1 text-[11px] font-semibold transition-colors cursor-pointer disabled:cursor-not-allowed"
-                      style={{ minHeight: '28px' }}
+                      className="mobile-tap-control sm:min-h-[28px] shrink-0 rounded-[5px] bg-[var(--accent)] hover:bg-[var(--accent-hover)] disabled:opacity-40 text-white px-2.5 py-1 text-[11px] font-semibold transition-colors cursor-pointer disabled:cursor-not-allowed"
                     >
                       Set
                     </button>

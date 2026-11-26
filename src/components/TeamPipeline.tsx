@@ -1,8 +1,8 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { useAuth, useWorkspace } from '../context/DashboardContext';
 import { Task, User, RoleFilter } from '../types';
-import { formatDateOnly, getCognitiveLoadLabel, getTaskAssigneeIds } from '../utils/workload';
+import { formatDateOnly, getCognitiveLoadLabel, getDaysRemaining, getTaskAssigneeIds } from '../utils/workload';
 import { isValidHttpUrl } from '../utils/taskMetadata';
 import {
   Inbox,
@@ -60,19 +60,9 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
 
   const [filterMode, setFilterMode] = useState<'all' | 'unassigned' | 'assigned'>('all');
   const [isDragOver, setIsDragOver] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
-
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState('');
-  const titleClickTimerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (titleClickTimerRef.current !== null) {
-        window.clearTimeout(titleClickTimerRef.current);
-      }
-    };
-  }, []);
+  const [isCollapsed, setIsCollapsed] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 639px)').matches : false
+  );
 
   const userMap = useMemo(() => {
     const map = new Map<string, User>();
@@ -95,7 +85,17 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
         map.set(task.id, task);
       }
     }
-    return Array.from(map.values()).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    return Array.from(map.values()).sort((a, b) => {
+      const aHasDue = Boolean(a.dueDate);
+      const bHasDue = Boolean(b.dueDate);
+      if (aHasDue && bHasDue) {
+        const cmp = a.dueDate!.localeCompare(b.dueDate!);
+        if (cmp !== 0) return cmp;
+      } else if (aHasDue !== bHasDue) {
+        return aHasDue ? -1 : 1;
+      }
+      return (a.order ?? 0) - (b.order ?? 0);
+    });
   }, [tasks, roleFilter, userMap]);
 
   const totalCount = pipelineTasks.length;
@@ -193,10 +193,17 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
           : ''
       }`}
     >
-      {/* Top Ruled Ledger Band */}
-      <div className={`ledger-band flex flex-wrap items-center justify-between gap-2.5 px-4 py-2.5 sm:px-5 ${isCollapsed ? 'border-b-0' : ''}`}>
-        <div className="flex items-center gap-2.5">
-          <DisciplineIcon className="h-4 w-4 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
+      {/* Top Ruled Ledger Band (click bar anywhere outside buttons to toggle) */}
+      <div
+        onClick={e => {
+          if ((e.target as HTMLElement).closest('button, a, input, select')) return;
+          setIsCollapsed(prev => !prev);
+        }}
+        title={isCollapsed ? `Click bar to expand ${pipelineHeading}` : `Click bar to collapse ${pipelineHeading}`}
+        className={`ledger-band flex flex-wrap items-center justify-between gap-2.5 px-4 py-2.5 sm:px-5 cursor-pointer select-none ${isCollapsed ? 'border-b-0' : ''}`}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <DisciplineIcon aria-hidden="true" className="h-4 w-4 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
           <h2 className="text-[13px] font-bold tracking-tight text-[var(--text-primary)]">
             {pipelineHeading}
           </h2>
@@ -205,7 +212,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
           </span>
           {unassignedCount > 0 && (
             <>
-              <span className="text-[var(--text-muted)] text-xs">·</span>
+              <span aria-hidden="true" className="text-[var(--text-muted)] text-xs">·</span>
               <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 tabular-nums">
                 {unassignedCount} unassigned
               </span>
@@ -219,6 +226,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
             <button
               type="button"
               aria-pressed={filterMode === 'all'}
+              title="Show all deliverables in pipeline"
               onClick={() => setFilterMode('all')}
               className={`mobile-tap-control px-2.5 py-1 sm:min-h-0 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
                 filterMode === 'all'
@@ -231,6 +239,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
             <button
               type="button"
               aria-pressed={filterMode === 'unassigned'}
+              title="Filter to unassigned deliverables"
               onClick={() => setFilterMode('unassigned')}
               className={`mobile-tap-control px-2.5 py-1 sm:min-h-0 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
                 filterMode === 'unassigned'
@@ -243,6 +252,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
             <button
               type="button"
               aria-pressed={filterMode === 'assigned'}
+              title="Filter to assigned deliverables waiting in pipeline"
               onClick={() => setFilterMode('assigned')}
               className={`mobile-tap-control px-2.5 py-1 sm:min-h-0 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
                 filterMode === 'assigned'
@@ -258,6 +268,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
             <button
               type="button"
               onClick={onOpenCreateModal}
+              title="Create a new multi-discipline Content or Design pipeline brief (Shortcut: n)"
               className="button-primary mobile-tap-control"
             >
               <Plus className="h-3.5 w-3.5" />
@@ -275,6 +286,8 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
 
           <button
             type="button"
+            aria-expanded={!isCollapsed}
+            aria-controls="team-pipeline-body"
             onClick={() => setIsCollapsed(prev => !prev)}
             title={isCollapsed ? 'Expand pipeline' : 'Collapse pipeline'}
             aria-label={isCollapsed ? 'Expand pipeline' : 'Collapse pipeline'}
@@ -285,9 +298,9 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
         </div>
       </div>
 
-      {/* Compact Ruled Ledger Triage Strip (no nested cards) */}
+      {/* Horizontal Scrollable Swimlane-Style Cards Strip */}
       {!isCollapsed && (
-        <div className="bg-[var(--surface)]">
+        <div id="team-pipeline-body" className="bg-[var(--surface)]">
           {displayedTasks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
               <Inbox className="h-4 w-4 text-[var(--text-muted)] mb-1.5" />
@@ -315,22 +328,14 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
               )}
             </div>
           ) : (
-            <div
-              className={`grid grid-cols-1 ${
-                displayedTasks.length === 1
-                  ? 'md:grid-cols-1'
-                  : displayedTasks.length === 2
-                  ? 'md:grid-cols-2'
-                  : 'md:grid-cols-2 lg:grid-cols-3'
-              } divide-y md:divide-y-0 md:divide-x divide-[var(--border-subtle)]`}
-            >
-              {displayedTasks.map((task, idx) => {
-                const isEditingThis = editingTaskId === task.id;
+            <div className="flex items-stretch gap-2.5 overflow-x-auto p-3 snap-x snap-mandatory scroll-pl-3">
+              {displayedTasks.map(task => {
                 const taskDiscipline = task.team === 'design' ? 'design' : 'content';
                 const assigneeIds = getTaskAssigneeIds(task);
                 const assignee = assigneeIds[0] ? userMap.get(assigneeIds[0]) : null;
                 const cognitiveLabel = getCognitiveLoadLabel(task.cognitiveLoad, taskDiscipline);
                 const metadata = task.disciplineMetadata;
+                const dueDays = getDaysRemaining(task.dueDate);
 
                 return (
                   <motion.div
@@ -339,12 +344,8 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                     initial={false}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.15 }}
-                    draggable={!isEditingThis}
+                    draggable
                     onDragStartCapture={(e: React.DragEvent) => {
-                      if (isEditingThis) {
-                        e.preventDefault();
-                        return;
-                      }
                       const dragPayload = {
                         taskId: task.id,
                         status: 'pipeline',
@@ -360,251 +361,210 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                       onDragTaskStart?.(task);
                     }}
                     onDragEndCapture={() => onDragTaskEnd?.()}
-                    className={`group relative flex flex-col justify-between px-4 py-2.5 hover:bg-[var(--surface-muted)] transition-colors select-none cursor-grab active:cursor-grabbing ${
-                      idx >= 2 && displayedTasks.length > 2 ? 'md:border-t md:border-[var(--border-subtle)]' : ''
-                    } ${
-                      idx === 2 ? 'lg:border-t-0' : idx >= 3 ? 'lg:border-t lg:border-[var(--border-subtle)]' : ''
-                    }`}
+                    className="task-card group relative shrink-0 w-[290px] sm:w-[300px] snap-start flex flex-col justify-between p-2.5 select-none cursor-grab active:cursor-grabbing"
                   >
-                    {/* Top Line: Discipline · Priority · Due + Quick Actions */}
-                    <div className="flex items-center justify-between gap-2 mb-1">
-                      <div className="flex items-center gap-1.5 min-w-0 text-[11px]">
-                        <GripVertical className="h-3 w-3 text-[var(--text-muted)] group-hover:text-[var(--text-primary)] shrink-0 -ml-1" />
-                        <span
-                          className={`font-semibold uppercase tracking-wider ${
-                            taskDiscipline === 'design'
-                              ? 'text-indigo-700 dark:text-indigo-400'
-                              : 'text-[#1d4ed8] dark:text-blue-400'
-                          }`}
-                        >
-                          {taskDiscipline}
-                        </span>
-                        {task.priority && (
-                          <>
-                            <span className="text-[var(--text-muted)]">·</span>
-                            <span
-                              className={`font-semibold capitalize ${
-                                task.priority === 'high'
-                                  ? 'text-red-600 dark:text-red-400'
-                                  : task.priority === 'medium'
-                                  ? 'text-amber-700 dark:text-amber-400'
-                                  : 'text-[var(--text-secondary)]'
-                              }`}
-                            >
-                              {task.priority} priority
-                            </span>
-                          </>
-                        )}
-                        {task.dueDate && (
-                          <>
-                            <span className="text-[var(--text-muted)]">·</span>
-                            <span className="text-[var(--text-secondary)] tabular-nums truncate">
-                              {formatDateOnly(task.dueDate)}
-                            </span>
-                          </>
-                        )}
-                      </div>
-
-                      <div className="flex items-center card-actions [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={e => {
-                            e.stopPropagation();
-                            onEditTask(task);
-                          }}
-                          title="Edit task details"
-                          aria-label={`Edit ${task.title}`}
-                          className="rounded p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
-                        >
-                          <Edit2 className="h-3 w-3" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={e => {
-                            e.stopPropagation();
-                            onDeleteTask(task);
-                          }}
-                          title="Delete pipeline task"
-                          aria-label={`Delete ${task.title}`}
-                          className="rounded p-1 text-[var(--text-secondary)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Title + Inline Assign Row */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        {task.isSubtask && task.parentTaskTitle && (
-                          <div className="flex items-center gap-1 text-[11px] text-[#1d4ed8] dark:text-blue-400 font-medium truncate">
-                            <CornerDownRight className="h-2.5 w-2.5 shrink-0" />
-                            <span className="truncate">{task.parentTaskTitle}</span>
-                          </div>
-                        )}
-
-                        {isEditingThis ? (
-                          <div className="my-0.5" onClick={e => e.stopPropagation()}>
-                            <input
-                              type="text"
-                              autoFocus
-                              value={editingTitle}
-                              onChange={e => setEditingTitle(e.target.value)}
-                              onKeyDown={async e => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  const trimmed = editingTitle.trim();
-                                  if (trimmed && trimmed !== task.title) {
-                                    await updateTask(task.id, { title: trimmed });
-                                  }
-                                  setEditingTaskId(null);
-                                } else if (e.key === 'Escape') {
-                                  setEditingTaskId(null);
-                                }
-                              }}
-                              onBlur={async () => {
-                                const trimmed = editingTitle.trim();
-                                if (trimmed && trimmed !== task.title) {
-                                  await updateTask(task.id, { title: trimmed });
-                                }
-                                setEditingTaskId(null);
-                              }}
-                              className="w-full rounded-[5px] border border-[var(--accent)] bg-[var(--surface)] px-1.5 py-0.5 text-xs text-[var(--text-primary)] focus:outline-none"
-                            />
-                          </div>
-                        ) : (
-                          <h3 className="text-[13px] font-semibold text-[var(--text-primary)] leading-snug">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (titleClickTimerRef.current !== null) {
-                                  window.clearTimeout(titleClickTimerRef.current);
-                                }
-                                titleClickTimerRef.current = window.setTimeout(() => {
-                                  titleClickTimerRef.current = null;
-                                  onEditTask(task);
-                                }, 220);
-                              }}
-                              onDoubleClick={e => {
-                                e.stopPropagation();
-                                if (titleClickTimerRef.current !== null) {
-                                  window.clearTimeout(titleClickTimerRef.current);
-                                  titleClickTimerRef.current = null;
-                                }
-                                setEditingTaskId(task.id);
-                                setEditingTitle(task.title);
-                              }}
-                              title="Click to inspect brief · Double-click to rename"
-                              className="w-full text-left truncate hover:text-[#1d4ed8] dark:hover:text-blue-400 cursor-pointer transition-colors"
-                              style={{ minHeight: 'auto' }}
-                            >
-                              {task.title}
-                            </button>
-                          </h3>
-                        )}
-
-                        {/* Compact Single-Line Meta: Client · Project · Type · Brief + Load · Est (wrap-safe, no dangling middot) */}
-                        <div className="mt-1 flex items-center gap-x-3 gap-y-1 flex-wrap text-[11px] text-[var(--text-secondary)]">
-                          {(task.client || task.project || metadata?.contentType || metadata?.assetType || (task.brandGuidelines && isValidHttpUrl(task.brandGuidelines))) && (
-                            <div className="inline-flex items-center gap-1.5 flex-wrap min-w-0">
-                              {task.client && (
-                                <span className="font-medium text-[var(--text-primary)] truncate max-w-[100px]">
-                                  {task.client}
-                                </span>
-                              )}
-                              {task.client && task.project && <span className="text-[var(--text-muted)]">·</span>}
-                              {task.project && <span className="truncate max-w-[110px]">{task.project}</span>}
-                              {(metadata?.contentType || metadata?.assetType) && (
-                                <>
-                                  {(task.client || task.project) && <span className="text-[var(--text-muted)]">·</span>}
-                                  <span className="truncate">{metadata?.contentType || metadata?.assetType}</span>
-                                </>
-                              )}
-                              {task.brandGuidelines && isValidHttpUrl(task.brandGuidelines) && (
-                                <>
-                                  {(task.client || task.project || metadata?.contentType || metadata?.assetType) && (
-                                    <span className="text-[var(--text-muted)]">·</span>
-                                  )}
-                                  <a
-                                    href={task.brandGuidelines}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={e => e.stopPropagation()}
-                                    title={`Brand Guidelines: ${task.brandGuidelines}`}
-                                    className="inline-flex items-center gap-0.5 font-medium text-[#1d4ed8] dark:text-blue-400 hover:underline"
-                                  >
-                                    <Link2 className="h-2.5 w-2.5 shrink-0" />
-                                    <span>Brief</span>
-                                    <ExternalLink className="h-2.5 w-2.5 shrink-0" />
-                                  </a>
-                                </>
-                              )}
-                            </div>
-                          )}
-
-                          <div className="inline-flex items-center gap-2 shrink-0">
-                            <span
-                              title={`Cognitive Load: ${cognitiveLabel}`}
-                              className="inline-flex items-center gap-1 capitalize"
-                            >
+                    <div>
+                      {/* Top Row: Grip · Discipline · Priority + Centered Card Actions */}
+                      <div className="flex items-center justify-between gap-1.5 mb-1.5">
+                        <div className="flex items-center gap-1.5 min-w-0 text-[11px]">
+                          <GripVertical
+                            aria-hidden="true"
+                            className="h-3.5 w-3.5 text-[var(--text-muted)] group-hover:text-[var(--text-primary)] shrink-0 -ml-1"
+                          />
+                          <span
+                            className={`font-semibold uppercase tracking-wider shrink-0 ${
+                              taskDiscipline === 'design'
+                                ? 'text-indigo-700 dark:text-indigo-400'
+                                : 'text-[#1d4ed8] dark:text-blue-400'
+                            }`}
+                          >
+                            {taskDiscipline}
+                          </span>
+                          {task.priority && (
+                            <>
+                              <span aria-hidden="true" className="text-[var(--text-muted)]">·</span>
                               <span
-                                className={`h-1.5 w-1.5 rounded-full ${
-                                  task.cognitiveLoad === 'high'
-                                    ? 'bg-red-600 dark:bg-red-400'
-                                    : task.cognitiveLoad === 'medium'
-                                    ? 'bg-amber-600 dark:bg-amber-400'
-                                    : 'bg-emerald-600 dark:bg-emerald-400'
+                                title={`Priority: ${task.priority}`}
+                                className={`font-semibold capitalize truncate ${
+                                  task.priority === 'high'
+                                    ? 'text-red-600 dark:text-red-400'
+                                    : task.priority === 'medium'
+                                    ? 'text-amber-700 dark:text-amber-400'
+                                    : 'text-[var(--text-secondary)]'
                                 }`}
-                              />
-                              <span>{task.cognitiveLoad} load</span>
-                            </span>
-                            {task.estimatedHours !== undefined && task.estimatedHours > 0 && (
-                              <span
-                                title={`Estimated Effort: ${task.estimatedHours} hours`}
-                                className="inline-flex items-center gap-0.5 tabular-nums font-semibold text-[var(--text-primary)]"
                               >
-                                <Clock className="h-2.5 w-2.5 text-[var(--text-muted)]" />
-                                <span>{task.estimatedHours}h</span>
+                                {task.priority}
                               </span>
-                            )}
-                          </div>
+                            </>
+                          )}
+                        </div>
+
+                        <div className="flex items-center card-actions [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation();
+                              onEditTask(task);
+                            }}
+                            title="Edit brief details"
+                            aria-label={`Edit ${task.title}`}
+                            className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={e => {
+                              e.stopPropagation();
+                              onDeleteTask(task);
+                            }}
+                            title="Delete pipeline task"
+                            aria-label={`Delete ${task.title}`}
+                            className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
                         </div>
                       </div>
 
-                      {/* Right-aligned Inline Assign Action */}
-                      <div className="shrink-0 pt-0.5">
-                        {assignee ? (
-                          <button
-                            type="button"
-                            onClick={() => canAssignTask && onOpenAssignmentModal(task)}
-                            title={canAssignTask ? 'Click to reassign or adjust estimates' : `Assigned to ${assignee.name}`}
-                            className={`mobile-tap-control sm:min-h-0 flex items-center gap-1 text-[11px] font-semibold transition-colors ${
-                              canAssignTask
-                                ? 'text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer'
-                                : 'text-[var(--text-primary)] cursor-default'
-                            }`}
-                          >
-                            <span className="h-1.5 w-1.5 rounded-full bg-[#1d4ed8] dark:bg-blue-400 shrink-0" />
-                            <span className="truncate max-w-[95px]">
-                              {assigneeIds.length > 1 ? `${assignee.name} +${assigneeIds.length - 1}` : assignee.name}
+                      {task.isSubtask && task.parentTaskTitle && (
+                        <div
+                          className="mb-1 flex items-center gap-1 text-[11px] text-[#1d4ed8] dark:text-blue-400 font-medium truncate"
+                          title={`Parent deliverable: ${task.parentTaskTitle}`}
+                        >
+                          <CornerDownRight className="h-2.5 w-2.5 shrink-0" />
+                          <span className="truncate">{task.parentTaskTitle}</span>
+                        </div>
+                      )}
+
+                      {(task.client || task.project) && (
+                        <div className="mb-0.5 flex items-center gap-1 text-[11px] text-[var(--text-secondary)] truncate">
+                          {task.client && (
+                            <span className="font-semibold text-[var(--text-primary)] truncate">
+                              {task.client}
                             </span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => onOpenAssignmentModal(task)}
-                            title={canAssignTask ? 'Assign task to matching discipline member' : 'Unassigned in pipeline'}
-                            className={`mobile-tap-control sm:min-h-0 inline-flex items-center gap-1 rounded-[5px] px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
-                              canAssignTask
-                                ? 'bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25'
-                                : 'text-[var(--text-secondary)]'
-                            }`}
+                          )}
+                          {task.client && task.project && <span aria-hidden="true" className="text-[var(--text-muted)]">·</span>}
+                          {task.project && <span className="truncate">{task.project}</span>}
+                        </div>
+                      )}
+
+                      {/* Title opens modal immediately (0ms delay) */}
+                      <h3 className="text-[13px] font-semibold leading-snug">
+                        <button
+                          type="button"
+                          onClick={() => onEditTask(task)}
+                          title="Click to inspect brief details"
+                          className="mobile-tap-control sm:min-h-0 w-full text-left cursor-pointer rounded px-1 -mx-1 py-0.5 text-[var(--text-primary)] hover:text-[#1d4ed8] dark:hover:text-blue-400 hover:bg-[var(--surface-subtle)] transition-colors line-clamp-2"
+                        >
+                          {task.title}
+                        </button>
+                      </h3>
+
+                      {/* Load · Estimate · Brief Link */}
+                      <div className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-[var(--text-secondary)]">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span
+                            title={`Cognitive Load: ${cognitiveLabel}`}
+                            className="inline-flex items-center gap-1 capitalize truncate"
                           >
-                            <UserX className="h-3 w-3" />
-                            <span>{canAssignTask ? 'Assign' : 'Unassigned'}</span>
-                          </button>
-                        )}
+                            <span
+                              aria-hidden="true"
+                              className={`h-1.5 w-1.5 rounded-full shrink-0 ${
+                                task.cognitiveLoad === 'high'
+                                  ? 'bg-red-600 dark:bg-red-400'
+                                  : task.cognitiveLoad === 'medium'
+                                  ? 'bg-amber-600 dark:bg-amber-400'
+                                  : 'bg-emerald-600 dark:bg-emerald-400'
+                              }`}
+                            />
+                            <span>{task.cognitiveLoad} load</span>
+                          </span>
+                          {(metadata?.contentType || metadata?.assetType) && (
+                            <>
+                              <span aria-hidden="true" className="text-[var(--text-muted)]">·</span>
+                              <span className="truncate max-w-[95px]">
+                                {metadata?.contentType || metadata?.assetType}
+                              </span>
+                            </>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {task.brandGuidelines && isValidHttpUrl(task.brandGuidelines) && (
+                            <a
+                              href={task.brandGuidelines}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              title={`Open Brand Guidelines: ${task.brandGuidelines}`}
+                              className="mobile-tap-control sm:min-h-0 inline-flex items-center gap-0.5 font-medium text-[#1d4ed8] dark:text-blue-400 hover:underline"
+                            >
+                              <Link2 className="h-2.5 w-2.5 shrink-0" />
+                              <span>Brief</span>
+                              <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+                            </a>
+                          )}
+                          {task.estimatedHours !== undefined && task.estimatedHours > 0 && (
+                            <span
+                              title={`Estimated Effort: ${task.estimatedHours} hours`}
+                              className="inline-flex items-center gap-0.5 tabular-nums font-semibold text-[var(--text-primary)]"
+                            >
+                              <Clock className="h-2.5 w-2.5 text-[var(--text-muted)]" />
+                              <span>{task.estimatedHours}h</span>
+                            </span>
+                          )}
+                        </div>
                       </div>
+                    </div>
+
+                    {/* Card Footer: Deadline & Assign CTA */}
+                    <div className="mt-2 pt-1.5 border-t border-[var(--border-subtle)] flex items-center justify-between gap-2">
+                      <span
+                        title={task.dueDate ? `Target Deadline: ${formatDateOnly(task.dueDate)}` : 'No deadline set'}
+                        className={`inline-flex items-center gap-1 text-[11px] tabular-nums ${
+                          dueDays !== null && dueDays < 0
+                            ? 'font-bold text-red-600 dark:text-red-400'
+                            : dueDays !== null && dueDays === 0
+                            ? 'font-semibold text-amber-700 dark:text-amber-400'
+                            : 'font-medium text-[var(--text-secondary)]'
+                        }`}
+                      >
+                        <Clock className="h-3 w-3 shrink-0" />
+                        <span>{task.dueDate ? formatDateOnly(task.dueDate) : 'No deadline'}</span>
+                      </span>
+
+                      {assignee ? (
+                        <button
+                          type="button"
+                          onClick={() => canAssignTask && onOpenAssignmentModal(task)}
+                          title={canAssignTask ? 'Click to reassign, adjust estimate, or move to To Do' : `Assigned to ${assignee.name}`}
+                          className={`mobile-tap-control sm:min-h-0 flex items-center gap-1 text-[11px] font-semibold transition-colors ${
+                            canAssignTask
+                              ? 'text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer'
+                              : 'text-[var(--text-primary)] cursor-default'
+                          }`}
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full bg-[#1d4ed8] dark:bg-blue-400 shrink-0" />
+                          <span className="truncate max-w-[100px]">
+                            {assigneeIds.length > 1 ? `${assignee.name} +${assigneeIds.length - 1}` : assignee.name}
+                          </span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => onOpenAssignmentModal(task)}
+                          title={canAssignTask ? 'Assign member and move straight into To Do' : 'Unassigned in pipeline'}
+                          className={`mobile-tap-control sm:min-h-0 inline-flex items-center gap-1 rounded-[5px] px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+                            canAssignTask
+                              ? 'bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25'
+                              : 'text-[var(--text-secondary)]'
+                          }`}
+                        >
+                          <UserX className="h-3 w-3" />
+                          <span>{canAssignTask ? 'Assign' : 'Unassigned'}</span>
+                        </button>
+                      )}
                     </div>
                   </motion.div>
                 );

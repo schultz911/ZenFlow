@@ -1,16 +1,16 @@
 import { DialogPanel } from './ui/DialogPanel';
+import { CognitiveLoadSelector } from './ui/CognitiveLoadSelector';
 import { ContentSpecFields, DesignSpecFields } from './forms/DisciplineSpecFields';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth, useWorkspace } from '../context/DashboardContext';
-import { Task, CognitiveLoad, TaskStatus, TaskDisciplineMetadata } from '../types';
-import { getTaskBillableMs, formatBillableDetailed, formatLeadDuration, formatTaskStatus, getLocalOffsetDateKey, getUserTag, getTaskAssigneeIds } from '../utils/workload';
+import { Task, CognitiveLoad, Role, TaskStatus, TaskDisciplineMetadata } from '../types';
+import { getTaskBillableMs, formatBillableDetailed, formatLeadDuration, formatTaskStatus, formatDateOnly, getLocalOffsetDateKey, getUserTag, getTaskAssigneeIds, getCognitiveLoadLabel } from '../utils/workload';
 import { isValidHttpUrl, foldLegacyDisciplineMetadata } from '../utils/taskMetadata';
 import { DateQuickPresets } from './ui/DateQuickPresets';
 import {
   X,
   Calendar,
-  Brain,
   Trash2,
   History,
   Clock,
@@ -153,56 +153,166 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   currentUserIdRef.current = currentUser?.id;
   firstUserIdRef.current = users[0]?.id;
 
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const initialSnapshotRef = useRef<string>('');
+
+  const serializeFormState = (vals: {
+    title: string;
+    description: string;
+    brandGuidelines: string;
+    userId: string;
+    assigneeIds: string[];
+    dueDate: string;
+    cognitiveLoad: CognitiveLoad;
+    status: TaskStatus;
+    client: string;
+    project: string;
+    estimatedHours: string;
+    priority: 'low' | 'medium' | 'high';
+    contentDocLink: string;
+    contentType: string;
+    contentSpecifications: string;
+    sourceContentReferences: string[];
+    assetType: string;
+    designSpecifications: string;
+    brandAssetsReferences: string[];
+  }) => JSON.stringify(vals);
+
   useEffect(() => {
     if (!isOpen) return;
     if (taskToEdit) {
-      setTitle(taskToEdit.title || '');
-      setDescription(taskToEdit.description || '');
-      setBrandGuidelines(taskToEdit.brandGuidelines || '');
       const ids = getTaskAssigneeIds(taskToEdit);
-      setAssigneeIds(ids);
-      setUserId(ids[0] || taskToEdit.userId || '');
-      setDueDate(taskToEdit.dueDate || '');
-      setCognitiveLoad(taskToEdit.cognitiveLoad || 'medium');
-      setStatus(taskToEdit.status || 'todo');
-      setClient(taskToEdit.client || '');
-      setProject(taskToEdit.project || '');
-      setEstimatedHours(taskToEdit.estimatedHours !== undefined ? String(taskToEdit.estimatedHours) : '');
-      setPriority(taskToEdit.priority || 'medium');
-      setContentDocLink(taskToEdit.contentDocLink || '');
       const folded = foldLegacyDisciplineMetadata(taskToEdit);
-      setContentType(folded.contentType || '');
-      setContentSpecifications(folded.contentSpecifications || '');
-      setSourceContentReferences(folded.sourceContentReferences || []);
-      setAssetType(folded.assetType || '');
-      setDesignSpecifications(folded.designSpecifications || '');
-      setBrandAssetsReferences(folded.brandAssetsReferences || []);
+      const init = {
+        title: taskToEdit.title || '',
+        description: taskToEdit.description || '',
+        brandGuidelines: taskToEdit.brandGuidelines || '',
+        assigneeIds: ids,
+        userId: ids[0] || taskToEdit.userId || '',
+        dueDate: taskToEdit.dueDate || '',
+        cognitiveLoad: (taskToEdit.cognitiveLoad || 'medium') as CognitiveLoad,
+        status: (taskToEdit.status || 'todo') as TaskStatus,
+        client: taskToEdit.client || '',
+        project: taskToEdit.project || '',
+        estimatedHours: taskToEdit.estimatedHours !== undefined ? String(taskToEdit.estimatedHours) : '',
+        priority: (taskToEdit.priority || 'medium') as 'low' | 'medium' | 'high',
+        contentDocLink: taskToEdit.contentDocLink || '',
+        contentType: folded.contentType || '',
+        contentSpecifications: folded.contentSpecifications || '',
+        sourceContentReferences: folded.sourceContentReferences || [],
+        assetType: folded.assetType || '',
+        designSpecifications: folded.designSpecifications || '',
+        brandAssetsReferences: folded.brandAssetsReferences || [],
+      };
+      setTitle(init.title);
+      setDescription(init.description);
+      setBrandGuidelines(init.brandGuidelines);
+      setAssigneeIds(init.assigneeIds);
+      setUserId(init.userId);
+      setDueDate(init.dueDate);
+      setCognitiveLoad(init.cognitiveLoad);
+      setStatus(init.status);
+      setClient(init.client);
+      setProject(init.project);
+      setEstimatedHours(init.estimatedHours);
+      setPriority(init.priority);
+      setContentDocLink(init.contentDocLink);
+      setContentType(init.contentType);
+      setContentSpecifications(init.contentSpecifications);
+      setSourceContentReferences(init.sourceContentReferences);
+      setAssetType(init.assetType);
+      setDesignSpecifications(init.designSpecifications);
+      setBrandAssetsReferences(init.brandAssetsReferences);
+      initialSnapshotRef.current = serializeFormState(init);
     } else {
-      setTitle('');
-      setDescription('');
-      setBrandGuidelines('');
       const defaultUser = defaultUserId || currentUserIdRef.current || firstUserIdRef.current || '';
-      setUserId(defaultUser);
-      setAssigneeIds(defaultUser ? [defaultUser] : []);
-      setDueDate(getLocalOffsetDateKey(1));
-      setCognitiveLoad('medium');
-      setStatus(defaultStatus || 'todo');
-      setClient('');
-      setProject('');
-      setEstimatedHours('');
-      setPriority('medium');
-      setContentDocLink('');
-      setContentType('');
-      setContentSpecifications('');
-      setSourceContentReferences([]);
-      setAssetType('');
-      setDesignSpecifications('');
-      setBrandAssetsReferences([]);
+      const init = {
+        title: '',
+        description: '',
+        brandGuidelines: '',
+        userId: defaultUser,
+        assigneeIds: defaultUser ? [defaultUser] : [],
+        dueDate: getLocalOffsetDateKey(1),
+        cognitiveLoad: 'medium' as CognitiveLoad,
+        status: (defaultStatus || 'todo') as TaskStatus,
+        client: '',
+        project: '',
+        estimatedHours: '',
+        priority: 'medium' as 'low' | 'medium' | 'high',
+        contentDocLink: '',
+        contentType: '',
+        contentSpecifications: '',
+        sourceContentReferences: [] as string[],
+        assetType: '',
+        designSpecifications: '',
+        brandAssetsReferences: [] as string[],
+      };
+      setTitle(init.title);
+      setDescription(init.description);
+      setBrandGuidelines(init.brandGuidelines);
+      setUserId(init.userId);
+      setAssigneeIds(init.assigneeIds);
+      setDueDate(init.dueDate);
+      setCognitiveLoad(init.cognitiveLoad);
+      setStatus(init.status);
+      setClient(init.client);
+      setProject(init.project);
+      setEstimatedHours(init.estimatedHours);
+      setPriority(init.priority);
+      setContentDocLink(init.contentDocLink);
+      setContentType(init.contentType);
+      setContentSpecifications(init.contentSpecifications);
+      setSourceContentReferences(init.sourceContentReferences);
+      setAssetType(init.assetType);
+      setDesignSpecifications(init.designSpecifications);
+      setBrandAssetsReferences(init.brandAssetsReferences);
+      initialSnapshotRef.current = serializeFormState(init);
     }
     setShowConfirmDelete(false);
+    setShowDiscardConfirm(false);
     setSubmitError(null);
     setActiveTab('details');
   }, [isOpen, taskToEdit, defaultUserId, defaultStatus]);
+
+  const isDirty = useMemo(() => {
+    if (!isOpen || !initialSnapshotRef.current) return false;
+    return serializeFormState({
+      title,
+      description,
+      brandGuidelines,
+      assigneeIds,
+      userId,
+      dueDate,
+      cognitiveLoad,
+      status,
+      client,
+      project,
+      estimatedHours,
+      priority,
+      contentDocLink,
+      contentType,
+      contentSpecifications,
+      sourceContentReferences,
+      assetType,
+      designSpecifications,
+      brandAssetsReferences,
+    }) !== initialSnapshotRef.current;
+  }, [
+    isOpen, title, description, brandGuidelines, assigneeIds, userId, dueDate,
+    cognitiveLoad, status, client, project, estimatedHours, priority, contentDocLink,
+    contentType, contentSpecifications, sourceContentReferences, assetType,
+    designSpecifications, brandAssetsReferences,
+  ]);
+
+  const requestClose = () => {
+    if (isSubmitting) return;
+    if (canEdit && isDirty && !showDiscardConfirm) {
+      setShowDiscardConfirm(true);
+      return;
+    }
+    setShowDiscardConfirm(false);
+    onClose();
+  };
 
   // Activity log calculation
   const activities = useMemo(() => {
@@ -278,14 +388,18 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     const trimmedDocLink = contentDocLink.trim();
     if (taskDiscipline === 'content' && status === 'done') {
       if (!trimmedDocLink || !isValidHttpUrl(trimmedDocLink)) {
-        setSubmitError('A valid Content document URL (http/https) is required before marking a Content task as Sent.');
+        setActiveTab('specs');
+        setSubmitError('A valid Content document URL (http/https) is required on Brief & Specs before marking a Content task as Sent.');
+        setTimeout(() => document.getElementById('task-content-doc-link')?.focus(), 50);
         return;
       }
     }
 
     const trimmedBrandGuidelines = brandGuidelines.trim();
     if (trimmedBrandGuidelines && !isValidHttpUrl(trimmedBrandGuidelines)) {
-      setSubmitError('Brand Guidelines must be a valid URL starting with http:// or https://.');
+      setActiveTab('specs');
+      setSubmitError('Brand Guidelines must be a valid URL starting with http:// or https:// on Brief & Specs.');
+      setTimeout(() => document.getElementById('task-brand-guidelines-input')?.focus(), 50);
       return;
     }
 
@@ -379,10 +493,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           transition={{ duration: 0.15 }}
           className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
           onClick={e => {
-            if (e.target === e.currentTarget) onClose();
+            if (e.target === e.currentTarget) requestClose();
           }}
         >
-          <DialogPanel aria-label="Task details" onClose={onClose} busy={isSubmitting}
+          <DialogPanel aria-label="Task details" onClose={requestClose} busy={isSubmitting}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
@@ -447,8 +561,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={requestClose}
                   aria-label="Close modal"
+                  title="Close task modal"
                   className="icon-button"
                 >
                   <X className="h-4 w-4" />
@@ -516,10 +631,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
             {/* Progressive Disclosure Tabs */}
             <div className="px-5 py-2 border-b border-[var(--border)] bg-[var(--surface)] shrink-0">
-              <div className="segmented-track w-full">
+              <div className="segmented-track w-full" role="tablist" aria-label="Task detail sections">
                 <button
+                  id="task-tab-details"
                   type="button"
-                  aria-pressed={activeTab === 'details'}
+                  role="tab"
+                  aria-selected={activeTab === 'details'}
+                  aria-controls="task-modal-tabpanel"
                   onClick={() => setActiveTab('details')}
                   className={`segmented-item flex-1 cursor-pointer gap-1.5 ${activeTab === 'details' ? 'segmented-item-active' : ''}`}
                 >
@@ -533,8 +651,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   )}
                 </button>
                 <button
+                  id="task-tab-specs"
                   type="button"
-                  aria-pressed={activeTab === 'specs'}
+                  role="tab"
+                  aria-selected={activeTab === 'specs'}
+                  aria-controls="task-modal-tabpanel"
                   onClick={() => setActiveTab('specs')}
                   className={`segmented-item flex-1 cursor-pointer ${activeTab === 'specs' ? 'segmented-item-active' : ''}`}
                 >
@@ -542,8 +663,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 </button>
                 {taskToEdit && (
                   <button
+                    id="task-tab-activity"
                     type="button"
-                    aria-pressed={activeTab === 'activity'}
+                    role="tab"
+                    aria-selected={activeTab === 'activity'}
+                    aria-controls="task-modal-tabpanel"
                     onClick={() => setActiveTab('activity')}
                     className={`segmented-item flex-1 cursor-pointer tabular-nums ${activeTab === 'activity' ? 'segmented-item-active' : ''}`}
                   >
@@ -555,10 +679,45 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
             {/* Form Body */}
             <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-              <div className="px-5 py-4 overflow-y-auto flex-1 space-y-4 min-h-[340px]">
+              <div
+                id="task-modal-tabpanel"
+                role="tabpanel"
+                aria-labelledby={`task-tab-${activeTab}`}
+                className={`px-5 py-4 overflow-y-auto flex-1 space-y-4 ${activeTab !== 'activity' ? 'min-h-[340px]' : ''}`}
+              >
+                {showDiscardConfirm && (
+                  <div role="alertdialog" aria-label="Discard unsaved changes" className="callout callout-warning space-y-2">
+                    <p className="text-xs font-semibold">
+                      Discard unsaved changes?
+                    </p>
+                    <p className="text-[11px] opacity-90">
+                      You have unsaved edits on this task that will be lost if you close now.
+                    </p>
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setShowDiscardConfirm(false)}
+                        className="button-secondary"
+                      >
+                        Keep Editing
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowDiscardConfirm(false);
+                          onClose();
+                        }}
+                        className="button-danger"
+                      >
+                        Discard Changes
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {!canEdit && (
-                  <div className="callout callout-warning">
-                    Read-only view: You only have permission to edit tasks on your assigned board or swimlane.
+                  <div className="callout callout-info text-xs">
+                    Read-only view: You can inspect briefs, links, and activity without editing specialist swimlanes.
                   </div>
                 )}
 
@@ -599,7 +758,64 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   </div>
                 )}
 
-                {activeTab === 'details' && (
+                {activeTab === 'details' && !canEdit && (
+                  <div className="rounded-[9px] border border-[var(--border)] bg-[var(--surface-muted)] overflow-hidden divide-y divide-[var(--border-subtle)] text-xs">
+                    <div className="px-4 py-3 bg-[var(--surface)]">
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Task Name</p>
+                      <p className="mt-1 text-sm font-semibold text-[var(--text-primary)]">{title || 'Untitled task'}</p>
+                    </div>
+                    <dl className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-[var(--border-subtle)]">
+                      <div className="px-4 py-2.5">
+                        <dt className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Assignee(s)</dt>
+                        <dd className="mt-0.5 font-medium text-[var(--text-primary)]">
+                          {assigneeIds.length > 0
+                            ? assigneeIds.map(id => users.find(u => u.id === id)?.name).filter(Boolean).join(', ')
+                            : 'Unassigned in Pipeline'}
+                        </dd>
+                      </div>
+                      <div className="px-4 py-2.5">
+                        <dt className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Status · Team</dt>
+                        <dd className="mt-0.5 font-medium text-[var(--text-primary)] capitalize">
+                          {formatTaskStatus(status)} · {taskDiscipline}
+                        </dd>
+                      </div>
+                    </dl>
+                    <dl className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-[var(--border-subtle)]">
+                      <div className="px-4 py-2.5">
+                        <dt className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Client · Project</dt>
+                        <dd className="mt-0.5 font-medium text-[var(--text-primary)]">
+                          {[client, project].filter(Boolean).join(' · ') || '—'}
+                        </dd>
+                      </div>
+                      <div className="px-4 py-2.5">
+                        <dt className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Deadline</dt>
+                        <dd className="mt-0.5 font-medium tabular-nums text-[var(--text-primary)]">
+                          {dueDate ? formatDateOnly(dueDate) : 'No deadline'}
+                        </dd>
+                      </div>
+                    </dl>
+                    <dl className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[var(--border-subtle)]">
+                      <div className="px-4 py-2.5">
+                        <dt className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Priority</dt>
+                        <dd className="mt-0.5 font-semibold capitalize text-[var(--text-primary)]">{priority}</dd>
+                      </div>
+                      <div className="px-4 py-2.5">
+                        <dt className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Cognitive Load</dt>
+                        <dd className="mt-0.5 font-semibold capitalize text-[var(--text-primary)]">
+                          {cognitiveLoad} ({getCognitiveLoadLabel(cognitiveLoad, taskDiscipline as Role)})
+                        </dd>
+                      </div>
+                      <div className="px-4 py-2.5">
+                        <dt className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Estimated</dt>
+                        <dd className="mt-0.5 font-semibold tabular-nums text-[var(--text-primary)]">
+                          {estimatedHours ? `${estimatedHours}h` : '—'}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                )}
+
+                {activeTab === 'details' && canEdit && (
                   <fieldset disabled={!canEdit} className="space-y-4 m-0 p-0 border-0 min-w-0">
                 {/* Task Name */}
                 <div>
@@ -671,7 +887,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                             }}
                             className="field-control sm:!py-1 sm:!text-[11px] pr-7 cursor-pointer"
                           >
-                            <option value="">+ Share / Co-assign with teammate...</option>
+                            <option value="">+ Co-assign teammate...</option>
                             {eligibleUsers
                               .filter(u => !assigneeIds.includes(u.id))
                               .map(u => (
@@ -853,46 +1069,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 </div>
 
                 {/* Cognitive Load */}
-                <div>
-                  <label className="field-label flex items-center gap-1.5">
-                    <Brain className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
-                    <span>Cognitive Load</span>
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['low', 'medium', 'high'] as const).map(level => {
-                      const isSelected = cognitiveLoad === level;
-                      return (
-                        <button
-                          key={level}
-                          type="button"
-                          aria-pressed={isSelected}
-                          onClick={() => setCognitiveLoad(level)}
-                          className={`flex flex-col items-center justify-center p-2 rounded-[7px] border text-center transition-colors cursor-pointer ${
-                            isSelected
-                              ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
-                              : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]'
-                          }`}
-                        >
-                          <span className="inline-flex items-center gap-1.5 text-xs capitalize font-semibold">
-                            <span
-                              className={`h-1.5 w-1.5 rounded-full ${
-                                level === 'high'
-                                  ? 'bg-red-600 dark:bg-red-400'
-                                  : level === 'medium'
-                                  ? 'bg-amber-600 dark:bg-amber-400'
-                                  : 'bg-emerald-600 dark:bg-emerald-400'
-                              }`}
-                            />
-                            <span>{level}</span>
-                          </span>
-                          <span className="text-[11px] text-[var(--text-secondary)]">
-                            {level === 'low' ? 'Quick win' : level === 'medium' ? 'Standard' : 'Complex'}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                <CognitiveLoadSelector
+                  value={cognitiveLoad}
+                  onChange={setCognitiveLoad}
+                  role={taskDiscipline as Role}
+                />
 
                 {/* Deadline */}
                 <div>
@@ -1199,19 +1380,21 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               <div className="dialog-footer">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={requestClose}
                   className="button-secondary"
                 >
-                  Cancel
+                  {canEdit && (activeTab !== 'activity' || isDirty) ? 'Cancel' : 'Close'}
                 </button>
-                <button
-                  id="task-submit-button"
-                  type="submit"
-                  disabled={isSubmitting || !canEdit}
-                  className="button-primary"
-                >
-                  <span>{isSubmitting ? 'Saving...' : taskToEdit ? 'Save Changes' : 'Create Task'}</span>
-                </button>
+                {canEdit && (activeTab !== 'activity' || isDirty) && (
+                  <button
+                    id="task-submit-button"
+                    type="submit"
+                    disabled={isSubmitting}
+                    className="button-primary"
+                  >
+                    <span>{isSubmitting ? 'Saving...' : taskToEdit ? 'Save Changes' : 'Create Task'}</span>
+                  </button>
+                )}
               </div>
             </form>
           </DialogPanel>

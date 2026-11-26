@@ -1,17 +1,21 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
-import { Task, User } from '../types';
+import { Task, User, RoleFilter } from '../types';
 import { getDaysRemaining, getTaskAssigneeIds } from '../utils/workload';
 import { AlertTriangle, Clock } from 'lucide-react';
 
 interface MarqueeRibbonProps {
   tasks: Task[];
   users: User[];
+  activeRoleTab?: RoleFilter;
+  activeBoardId?: string;
   onTaskClick: (task: Task) => void;
 }
 
 export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
   tasks,
   users,
+  activeRoleTab = 'all',
+  activeBoardId = 'all',
   onTaskClick,
 }) => {
   const userMap = useMemo(() => new Map(users.map(u => [u.id, u])), [users]);
@@ -24,6 +28,16 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
     let overdue = 0;
     for (const t of tasks) {
       if (!t || t.status === 'done' || t.status === 'archived' || t.status === 'pipeline' || t.status === 'in_review') continue;
+      const assignees = getTaskAssigneeIds(t);
+      const taskTeam = t.team || (assignees[0] ? userMap.get(assignees[0])?.role : undefined);
+      if (activeRoleTab !== 'all' && taskTeam && taskTeam !== activeRoleTab) continue;
+      if (activeBoardId !== 'all') {
+        const matchesBoard = assignees.some(uid => {
+          const u = userMap.get(uid);
+          return u && (u.id === activeBoardId || u.creativeDirectorId === activeBoardId);
+        });
+        if (!matchesBoard) continue;
+      }
       const days = getDaysRemaining(t.dueDate);
       if (days !== null && days <= 0) {
         filtered.push({ ...t, days });
@@ -32,7 +46,7 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
     }
     filtered.sort((a, b) => a.days - b.days);
     return { urgentTasks: filtered, overdueCount: overdue, dueTodayCount: filtered.length - overdue };
-  }, [tasks]);
+  }, [tasks, activeRoleTab, activeBoardId, userMap]);
 
   useEffect(() => {
     const checkOverflow = () => {
@@ -108,11 +122,11 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
                     title={`Click to inspect or reschedule "${task.title}" (Assigned to ${user?.name || 'Unassigned'})`}
                     className="mobile-tap-control flex items-center gap-1.5 px-2.5 first:pl-0.5 py-1.5 sm:py-0.5 sm:min-h-0 text-left transition-colors cursor-pointer shrink-0 group max-w-full"
                   >
-                    <span className="font-semibold text-[var(--text-primary)] max-w-[70px] sm:max-w-[110px] truncate text-[11px]">
+                    <span className="font-semibold text-[var(--text-primary)] max-w-[110px] truncate text-[11px]">
                       {user?.name || 'Unassigned'}
                     </span>
-                    <span className="text-[var(--text-muted)] text-[11px] shrink-0">·</span>
-                    <span className="text-[var(--text-secondary)] max-w-[92px] sm:max-w-[200px] truncate text-[11px] group-hover:text-[#1d4ed8] dark:group-hover:text-blue-400 transition-colors">
+                    <span aria-hidden="true" className="text-[var(--text-secondary)] text-[11px] shrink-0">·</span>
+                    <span className="text-[var(--text-secondary)] max-w-[150px] sm:max-w-[200px] truncate text-[11px] group-hover:text-[#1d4ed8] dark:group-hover:text-blue-400 transition-colors">
                       {task.title}
                     </span>
                     <span

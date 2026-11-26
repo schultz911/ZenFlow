@@ -301,7 +301,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                         title={`Cognitive Load: ${cognitiveLabel}`}
                         className="text-[11px] text-[var(--text-secondary)] capitalize"
                       >
-                        {task.cognitiveLoad}
+                        {task.cognitiveLoad} load
                       </span>
                     </div>
                   </div>
@@ -317,7 +317,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                     }}
                     title="Create subtask from this ongoing task"
                     aria-label={`Create subtask from ${task.title}`}
-                    className="rounded-[5px] p-1 text-[var(--text-secondary)] hover:text-[#1d4ed8] dark:hover:text-blue-400 hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                    className="inline-flex items-center justify-center rounded-[5px] p-1 text-[var(--text-secondary)] hover:text-[#1d4ed8] dark:hover:text-blue-400 hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
                   >
                     <CopyPlus className="h-3 w-3" />
                   </button>
@@ -329,7 +329,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                     }}
                     title="Open ongoing task details"
                     aria-label={`Edit ${task.title}`}
-                    className="rounded-[5px] p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                    className="inline-flex items-center justify-center rounded-[5px] p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
                   >
                     <Edit2 className="h-3 w-3" />
                   </button>
@@ -341,7 +341,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                     }}
                     title="Delete ongoing task"
                     aria-label={`Delete ${task.title}`}
-                    className="rounded-[5px] p-1 text-[var(--text-secondary)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
+                    className="inline-flex items-center justify-center rounded-[5px] p-1 text-[var(--text-secondary)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
                   >
                     <Trash2 className="h-3 w-3" />
                   </button>

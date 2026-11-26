@@ -625,7 +625,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                           key={p}
                           type="button"
                           onClick={() => setPriority(p)}
-                          className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-[7px] py-1.5 text-xs font-semibold capitalize border transition-colors cursor-pointer ${
+                          className={`mobile-tap-control flex-1 inline-flex items-center justify-center gap-1.5 rounded-[7px] py-1.5 text-xs font-semibold capitalize border transition-colors cursor-pointer ${
                             priority === p
                               ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
                               : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]'

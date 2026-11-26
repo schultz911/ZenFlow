@@ -23,6 +23,7 @@ const roleLabels: Record<RoleFilter, string> = { all: 'All', content: 'Content',
 interface FreePoolContainerProps {
   users: User[];
   tasks: Task[];
+  activeRoleTab?: RoleFilter;
   onAddTask: (userId: string, status?: TaskStatus) => void;
   onSelectUser?: (user: User) => void;
   isExpanded: boolean;
@@ -32,6 +33,7 @@ interface FreePoolContainerProps {
 export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
   users,
   tasks,
+  activeRoleTab = 'all',
   onAddTask,
   onSelectUser,
   isExpanded,
@@ -112,12 +114,18 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
         type="button"
         aria-expanded={isExpanded}
         aria-controls="free-pool-popover"
+        title="Show cross-board team capacity with under 3 hours/day assigned (Shortcut: f)"
         onClick={() => onExpandedChange(!isExpanded)}
         className="free-pool-trigger"
       >
         <UsersRound aria-hidden="true" className="size-3.5 shrink-0" />
         <span>Free Pool</span>
         <span className="free-pool-count">{freeUsers.length} available</span>
+        {activeRoleTab !== 'all' && (
+          <span className="hidden sm:inline text-[11px] font-medium text-[var(--text-secondary)]">
+            · Cross-board ({activeRoleTab === 'content' ? contentCount : designCount} {roleLabels[activeRoleTab]})
+          </span>
+        )}
         <ChevronDown aria-hidden="true" className={`ml-auto size-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
       </button>
 

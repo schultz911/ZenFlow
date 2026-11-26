@@ -1,6 +1,7 @@
 import { DialogPanel } from './ui/DialogPanel';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useWorkspace } from '../context/DashboardContext';
 import { User, Task } from '../types';
 import { getUserTag, getTaskAssigneeIds, isTaskAssignedToUser } from '../utils/workload';
 import { AlertTriangle, Trash2, X, Loader2 } from 'lucide-react';
@@ -20,27 +21,43 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({
   onClose,
   onConfirmDelete,
 }) => {
+  const { updateTask } = useWorkspace();
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [returnActiveToPipeline, setReturnActiveToPipeline] = useState(true);
 
-  const { userTasks, soleCount, sharedCount, counts } = useMemo(() => {
-    if (!user) return { userTasks: [], soleCount: 0, sharedCount: 0, counts: { pipeline: 0, todo: 0, in_progress: 0, in_review: 0, done: 0, archived: 0 } };
+  const { userTasks, soleCount, soleActiveTasks, sharedCount, counts } = useMemo(() => {
+    if (!user) return { userTasks: [], soleCount: 0, soleActiveTasks: [], sharedCount: 0, counts: { pipeline: 0, todo: 0, in_progress: 0, in_review: 0, done: 0, archived: 0 } };
     const list: Task[] = [];
+    const soleActive: Task[] = [];
     let sole = 0;
     let shared = 0;
     const c = { pipeline: 0, todo: 0, in_progress: 0, in_review: 0, done: 0, archived: 0 };
     for (const t of tasks) {
       if (isTaskAssignedToUser(t, user.id)) {
         list.push(t);
-        if (getTaskAssigneeIds(t).length > 1) shared++;
-        else sole++;
+        if (getTaskAssigneeIds(t).length > 1) {
+          shared++;
+        } else {
+          sole++;
+          if (t.status === 'todo' || t.status === 'in_progress' || t.status === 'in_review' || t.status === 'retainer') {
+            soleActive.push(t);
+          }
+        }
         if (t.status in c) {
           c[t.status as keyof typeof c]++;
         }
       }
     }
-    return { userTasks: list, soleCount: sole, sharedCount: shared, counts: c };
+    return { userTasks: list, soleCount: sole, soleActiveTasks: soleActive, sharedCount: shared, counts: c };
   }, [tasks, user]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setReturnActiveToPipeline(true);
+      setDeleteError(null);
+    }
+  }, [isOpen, user?.id]);
 
   const pipelineCount = counts.pipeline;
   const todoCount = counts.todo;
@@ -48,12 +65,25 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({
   const inReviewCount = counts.in_review;
   const doneCount = counts.done;
   const archivedCount = counts.archived;
+  const soleDeletedCount = returnActiveToPipeline ? soleCount - soleActiveTasks.length : soleCount;
 
   const handleDelete = async () => {
     if (!user) return;
     setDeleteError(null);
     try {
       setIsDeleting(true);
+      if (returnActiveToPipeline && soleActiveTasks.length > 0) {
+        await Promise.all(
+          soleActiveTasks.map(t =>
+            updateTask(t.id, {
+              status: 'pipeline',
+              userId: undefined,
+              assigneeIds: [],
+              dueDate: undefined,
+            })
+          )
+        );
+      }
       await onConfirmDelete(user.id);
       setIsDeleting(false);
       onClose();
@@ -152,7 +182,12 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({
                   </p>
                   <p>
                     Deleting <strong>{user.name}</strong> will permanently erase their profile, delete{' '}
-                    <strong className="tabular-nums">{soleCount}</strong> sole-assigned task{soleCount === 1 ? '' : 's'}
+                    <strong className="tabular-nums">{soleDeletedCount}</strong> sole-assigned task{soleDeletedCount === 1 ? '' : 's'}
+                    {returnActiveToPipeline && soleActiveTasks.length > 0 && (
+                      <>
+                        , return <strong className="tabular-nums">{soleActiveTasks.length}</strong> sole-assigned active task{soleActiveTasks.length === 1 ? '' : 's'} to Team Pipeline
+                      </>
+                    )}
                     {sharedCount > 0 && (
                       <>
                         , and unassign them from <strong className="tabular-nums">{sharedCount}</strong> shared task{sharedCount === 1 ? '' : 's'}
@@ -160,6 +195,20 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({
                     )}. This action cannot be reversed.
                   </p>
                 </div>
+
+                {soleActiveTasks.length > 0 && (
+                  <label className="flex items-start gap-2.5 rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2.5 text-xs text-[var(--text-primary)] cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={returnActiveToPipeline}
+                      onChange={e => setReturnActiveToPipeline(e.target.checked)}
+                      className="mt-0.5 rounded border-[var(--border)] h-3.5 w-3.5 shrink-0"
+                    />
+                    <span>
+                      Return <strong className="tabular-nums">{soleActiveTasks.length}</strong> sole-assigned active task{soleActiveTasks.length === 1 ? '' : 's'} to Team Pipeline instead of permanently deleting them
+                    </span>
+                  </label>
+                )}
 
                 {userTasks.length > 0 && (
                   <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2.5">

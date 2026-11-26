@@ -249,17 +249,15 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                             opacity={hasCompleted ? (isHovered ? 1 : 0.88) : 0.7}
                           />
 
-                          {hasCompleted && (
-                            <text
-                              x={barX + barWidth / 2}
-                              y={barY - 6}
-                              textAnchor="middle"
-                              fill="var(--text-primary)"
-                              className="text-[11px] font-semibold tabular-nums select-none"
-                            >
-                              {day.completedCount}
-                            </text>
-                          )}
+                          <text
+                            x={barX + barWidth / 2}
+                            y={hasCompleted ? barY - 6 : 86}
+                            textAnchor="middle"
+                            fill={hasCompleted ? 'var(--text-primary)' : 'var(--text-muted)'}
+                            className={`text-[11px] tabular-nums select-none ${hasCompleted ? 'font-semibold' : 'font-medium opacity-70'}`}
+                          >
+                            {day.completedCount}
+                          </text>
 
                           <text
                             x={slotX + colWidth / 2}
