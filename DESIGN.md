@@ -64,7 +64,7 @@ typography:
     fontFeature: "'tnum', 'cv02', 'cv03', 'cv04', 'cv11'"
   headline:
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-    fontSize: "1.0625rem"
+    fontSize: "1.125rem"
     fontWeight: 700
     lineHeight: 1.3
     letterSpacing: "-0.02em"
@@ -97,6 +97,13 @@ typography:
     lineHeight: 1.4
     letterSpacing: "0.05em"
     fontFeature: "'tnum', 'cv02', 'cv03', 'cv04', 'cv11'"
+  mobile-input:
+    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    fontSize: "1rem"
+    fontWeight: 500
+    lineHeight: 1.5
+    letterSpacing: "0em"
+    fontFeature: "'cv02', 'cv03', 'cv04', 'cv11'"
 rounded:
   chip: "5px"
   badge: "6px"
@@ -116,7 +123,7 @@ spacing:
   2xl: "24px"
   3xl: "32px"
   control-height: "34px"
-  header-height: "54px"
+  header-height: "55px"
 components:
   button-primary:
     backgroundColor: "{colors.cobalt-accent}"

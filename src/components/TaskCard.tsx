@@ -103,6 +103,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   }, [task.status]);
 
   const billableMs = getTaskBillableMs(task, now);
+  const sharedBillableMs = assigneeCount > 1 ? Math.round(billableMs / assigneeCount) : billableMs;
 
   useEffect(() => {
     if (!isEditingTitle) {
@@ -341,7 +342,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 
         {/* Top Right: Quick Hover Actions & Tabular Estimate / Billable Duration */}
         <div className="flex items-center gap-1.5 shrink-0">
-          <div className="flex items-center card-actions opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
+          <div className="flex items-center card-actions [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
             {canDuplicateToBoard && onDuplicateToBoard && (
               <button
                 type="button"
@@ -401,15 +402,23 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 e.stopPropagation();
                 onAdjustBillableHours?.(task);
               }}
-              aria-label={`Adjust billable duration for ${task.title} (${formatBillableHours(billableMs)})`}
-              title={`Billable Duration: ${formatBillableDetailed(billableMs)} · Click to correct hours`}
-              className={`inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums select-none transition-colors cursor-pointer shrink-0 group/timer ${task.status === 'in_progress'
+              aria-label={
+                assigneeCount > 1
+                  ? `Adjust billable duration for ${task.title} (${formatBillableHours(sharedBillableMs)} share of ${formatBillableHours(billableMs)} total)`
+                  : `Adjust billable duration for ${task.title} (${formatBillableHours(sharedBillableMs)})`
+              }
+              title={
+                assigneeCount > 1
+                  ? `Your billable share: ${formatBillableDetailed(sharedBillableMs)} (${formatBillableDetailed(billableMs)} total across ${assigneeCount} assignees) · Click to correct hours`
+                  : `Billable Duration: ${formatBillableDetailed(sharedBillableMs)} · Click to correct hours`
+              }
+              className={`mobile-tap-control sm:min-h-0 inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums select-none transition-colors cursor-pointer shrink-0 group/timer ${task.status === 'in_progress'
                 ? 'bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25'
                 : 'text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)]'
                 }`}
             >
               <Timer className={`h-2.5 w-2.5 ${task.status === 'in_progress' ? 'text-[#1d4ed8] dark:text-blue-400' : 'text-[var(--text-muted)] group-hover/timer:text-[#1d4ed8]'}`} />
-              <span>{formatBillableHours(billableMs)}</span>
+              <span>{formatBillableHours(sharedBillableMs)}</span>
             </button>
           ) : (
             <button
@@ -420,8 +429,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               }}
               aria-label={`Log billable hours for ${task.title}`}
               title="Click to log billable hours"
-              className="inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[11px] font-medium tabular-nums bg-[var(--surface-subtle)] border border-transparent hover:border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer shrink-0"
-              style={{ minHeight: 'auto' }}
+              className="mobile-tap-control sm:min-h-0 inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[11px] font-medium tabular-nums bg-[var(--surface-subtle)] border border-transparent hover:border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer shrink-0"
             >
               <Timer className="h-2.5 w-2.5" />
               <span>0h</span>
@@ -484,7 +492,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           </div>
         </div>
       ) : (
-        <h4 className="text-[13px] font-semibold leading-snug">
+        <h5 className="text-[13px] font-semibold leading-snug">
           <button
             type="button"
             onClick={() => {
@@ -513,7 +521,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           >
             <span className="break-words">{task.title}</span>
           </button>
-        </h4>
+        </h5>
       )}
 
       {/* Optional Context snippet */}
@@ -602,7 +610,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 });
               }}
               title={`${pillInfo.label} — Click to adjust deadline`}
-              className={`inline-flex items-center gap-1 text-[11px] tabular-nums transition-colors cursor-pointer ${
+              className={`mobile-tap-control sm:min-h-0 inline-flex items-center gap-1 text-[11px] tabular-nums transition-colors cursor-pointer ${
                 pillInfo.iconClass.includes('red')
                   ? 'font-bold text-red-600 dark:text-red-400'
                   : pillInfo.iconClass.includes('orange') || pillInfo.iconClass.includes('amber') || pillInfo.iconClass.includes('yellow')

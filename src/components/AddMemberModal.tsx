@@ -235,10 +235,11 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose,
 
                 {isClickupConnected && clickupMembers.length > 0 && (
                   <div>
-                    <label className="field-label">
+                    <label htmlFor="addmembermodal-clickup-search" className="field-label">
                       Link ClickUp User (Optional)
                     </label>
                     <ClickupMemberPicker
+                      inputId="addmembermodal-clickup-search"
                       members={clickupMembers}
                       selectedMemberId={selectedClickupUserId || undefined}
                       onSelect={member => setSelectedClickupUserId(member ? member.id : '')}

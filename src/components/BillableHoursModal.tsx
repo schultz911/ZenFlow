@@ -184,7 +184,7 @@ export const BillableHoursModal: React.FC<BillableHoursModalProps> = ({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium text-[var(--text-secondary)]">Hours</span>
+                        <label htmlFor="billablehoursmodal-field-1" className="text-xs font-medium text-[var(--text-secondary)]">Hours</label>
                         <span className="text-[11px] text-[var(--text-muted)]">hrs</span>
                       </div>
                       <input
@@ -201,10 +201,11 @@ export const BillableHoursModal: React.FC<BillableHoursModalProps> = ({
                     </div>
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium text-[var(--text-secondary)]">Minutes</span>
+                        <label htmlFor="billablehoursmodal-minutes" className="text-xs font-medium text-[var(--text-secondary)]">Minutes</label>
                         <span className="text-[11px] text-[var(--text-muted)]">0 – 59 min</span>
                       </div>
                       <input
+                        id="billablehoursmodal-minutes"
                         type="number"
                         min="0"
                         max="59"

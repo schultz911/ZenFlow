@@ -77,7 +77,6 @@ function DashboardContent() {
   const [isHoveringDeleteZone, setIsHoveringDeleteZone] = useState(false);
   const [analyticsModalOpen, setAnalyticsModalOpen] = useState(false);
   const [freePoolOpen, setFreePoolOpen] = useState(false);
-  const [freePoolDocked, setFreePoolDocked] = useState(false);
   const [disciplineModalOpen, setDisciplineModalOpen] = useState(false);
   const [selectedTaskForAssignment, setSelectedTaskForAssignment] = useState<Task | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -584,6 +583,12 @@ function DashboardContent() {
   return (
     <>
       <div className={`min-h-screen bg-[var(--canvas)] text-[var(--text-primary)] font-sans antialiased transition-colors relative ${!currentUser ? 'overflow-hidden pointer-events-none select-none filter blur-[2px]' : ''}`}>
+        <a
+          href="#main-workspace"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-1.5 focus:rounded-[6px] focus:bg-[var(--accent)] focus:text-white focus:text-xs focus:font-medium focus:shadow-lg"
+        >
+          Skip to workspace
+        </a>
         {/* Sticky Header */}
         <Header
           onOpenLoginModal={handleOpenLogin}
@@ -602,6 +607,8 @@ function DashboardContent() {
 
         {/* Main Container with drop-outside-board deletion support */}
         <main
+          id="main-workspace"
+          tabIndex={-1}
           onDragOver={e => {
             if (activeDragInfo) {
               e.preventDefault();
@@ -615,7 +622,7 @@ function DashboardContent() {
               setActiveDragInfo(null);
             }
           }}
-          className={`mx-auto max-w-[1400px] px-4 py-4 sm:px-6 lg:px-8 pb-8 ${freePoolOpen && freePoolDocked ? 'free-pool-workspace-docked' : ''}`}
+          className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 lg:px-8 pb-8"
         >
 
           {/* Onboarding Checklist */}
@@ -629,6 +636,16 @@ function DashboardContent() {
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             onOpenAnalytics={() => setAnalyticsModalOpen(true)}
+            freePool={
+              <FreePoolContainer
+                users={users}
+                tasks={tasks}
+                onAddTask={handleOpenAddTask}
+                onSelectUser={handleSelectFreeResource}
+                isExpanded={freePoolOpen}
+                onExpandedChange={setFreePoolOpen}
+              />
+            }
           />
 
           {/* Search Results Summary & Cross-Tab Navigation Ribbon */}
@@ -754,6 +771,7 @@ function DashboardContent() {
             </div>
           ) : (
             <div className="space-y-4">
+              <h2 className="sr-only">Team Swimlanes</h2>
               {roleFilteredUsers.map((user, index) => {
                 const isCurrent = currentUser?.id === user.id;
                 const hasPinnedTop = roleFilteredUsers[0]?.id === currentUser?.id;
@@ -794,16 +812,7 @@ function DashboardContent() {
           )}
         </main>
 
-        <FreePoolContainer
-          users={users}
-          tasks={tasks}
-          onAddTask={handleOpenAddTask}
-          onSelectUser={handleSelectFreeResource}
-          isExpanded={freePoolOpen}
-          onExpandedChange={setFreePoolOpen}
-          isDocked={freePoolDocked}
-          onDockedChange={setFreePoolDocked}
-        />
+
 
         {/* Workspace Modals */}
         <TaskModal

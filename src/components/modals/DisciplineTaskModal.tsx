@@ -163,6 +163,8 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
     setBrandGuidelines('');
     setClient('');
     setProject('');
+    lastAutoClientRef.current = '';
+    lastAutoProjectRef.current = '';
     setPriority('medium');
     setDueDate('');
 
@@ -208,6 +210,9 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
     }).catch(() => {});
   }, [isOpen, isClickupConnected, selectedListId, selectedSpaceId, selectedFolderId, fetchClickupCustomFields]);
 
+  const lastAutoClientRef = useRef('');
+  const lastAutoProjectRef = useRef('');
+
   const handleSpaceChange = (spaceId: string) => {
     setSelectedSpaceId(spaceId);
     setSelectedFolderId('');
@@ -215,8 +220,14 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
     setClickupActionError(null);
     const sp = clickupSpaces.find(s => s.id === spaceId);
     if (sp) {
-      setClient(sp.name);
-      setProject('');
+      if (!client.trim() || client === lastAutoClientRef.current) {
+        setClient(sp.name);
+        lastAutoClientRef.current = sp.name;
+      }
+      if (!project.trim() || project === lastAutoProjectRef.current) {
+        setProject('');
+        lastAutoProjectRef.current = '';
+      }
     }
   };
 
@@ -225,12 +236,15 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
     setSelectedListId('');
     setClickupActionError(null);
     const folder = availableFolders.find(f => f.id === folderId);
-    if (folder) {
-      setClient(folder.name);
-    } else if (selectedSpace) {
-      setClient(selectedSpace.name);
+    const nextClient = folder ? folder.name : (selectedSpace?.name || '');
+    if (nextClient && (!client.trim() || client === lastAutoClientRef.current)) {
+      setClient(nextClient);
+      lastAutoClientRef.current = nextClient;
     }
-    setProject('');
+    if (!project.trim() || project === lastAutoProjectRef.current) {
+      setProject('');
+      lastAutoProjectRef.current = '';
+    }
   };
 
   const handleListChange = (listId: string) => {
@@ -238,9 +252,14 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
     setClickupActionError(null);
     const list = availableLists.find(l => l.id === listId);
     if (list) {
-      setProject(list.name);
-      if (!client.trim()) {
-        setClient(selectedFolder?.name || selectedSpace?.name || '');
+      if (!project.trim() || project === lastAutoProjectRef.current) {
+        setProject(list.name);
+        lastAutoProjectRef.current = list.name;
+      }
+      if (!client.trim() || client === lastAutoClientRef.current) {
+        const nextClient = selectedFolder?.name || selectedSpace?.name || '';
+        setClient(nextClient);
+        lastAutoClientRef.current = nextClient;
       }
     }
   };
@@ -414,9 +433,9 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                 <FilePlus2 className="h-4 w-4" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
+                <h2 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
                   New Pipeline Brief
-                </h3>
+                </h2>
                 <p className="text-[11px] text-[var(--text-secondary)] truncate">
                   Creates a parent deliverable and unassigned discipline subtasks.
                 </p>
@@ -708,7 +727,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                         {/* Space Selector + Inline Creator */}
                         <div>
                           <div className="flex items-center justify-between mb-1.5">
-                            <label className="field-label !mb-0">
+                            <label htmlFor="disciplinetaskmodal-clickup-space" className="field-label !mb-0">
                               ClickUp Space
                             </label>
                             {!isCreatingSpace && (
@@ -759,6 +778,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                           ) : (
                             <div className="relative">
                               <select
+                                id="disciplinetaskmodal-clickup-space"
                                 value={selectedSpaceId}
                                 onChange={e => handleSpaceChange(e.target.value)}
                                 className="field-control pr-8 cursor-pointer"
@@ -779,11 +799,12 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                         {selectedSpaceId && (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                              <label className="field-label">
+                              <label htmlFor="disciplinetaskmodal-clickup-folder" className="field-label">
                                 Folder (Optional)
                               </label>
                               <div className="relative">
                                 <select
+                                  id="disciplinetaskmodal-clickup-folder"
                                   value={selectedFolderId}
                                   onChange={e => handleFolderChange(e.target.value)}
                                   disabled={isLoadingLists}
@@ -802,7 +823,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
 
                             <div>
                               <div className="flex items-center justify-between mb-1.5">
-                                <label className="field-label !mb-0 flex items-center gap-1.5">
+                                <label htmlFor="disciplinetaskmodal-clickup-list" className="field-label !mb-0 flex items-center gap-1.5">
                                   <span>ClickUp List</span>
                                   {isLoadingLists && <Loader2 className="h-3 w-3 animate-spin text-[#1d4ed8] dark:text-blue-400" />}
                                 </label>
@@ -855,6 +876,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                               ) : (
                                 <div className="relative">
                                   <select
+                                    id="disciplinetaskmodal-clickup-list"
                                     value={selectedListId}
                                     onChange={e => handleListChange(e.target.value)}
                                     disabled={isLoadingLists}
@@ -877,12 +899,13 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                         {/* ClickUp Custom Task Type Field */}
                         {selectedListId && (clickupCustomFieldOptions.length > 0 || isLoadingTaskTypes) && (
                           <div>
-                            <label className="field-label flex items-center gap-1.5">
+                            <label htmlFor="disciplinetaskmodal-clickup-type" className="field-label flex items-center gap-1.5">
                               <span>ClickUp Type Custom Field</span>
                               {isLoadingTaskTypes && <Loader2 className="h-3 w-3 animate-spin text-[#1d4ed8] dark:text-blue-400" />}
                             </label>
                             <div className="relative">
                               <select
+                                id="disciplinetaskmodal-clickup-type"
                                 value={selectedTaskTypeId}
                                 onChange={e => setSelectedTaskTypeId(e.target.value)}
                                 disabled={isLoadingTaskTypes}

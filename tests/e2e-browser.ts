@@ -214,6 +214,12 @@ try {
     await freePool.waitFor();
     assert.equal(await freePoolToggle.getAttribute('aria-expanded'), 'true');
     assert.equal(await freePoolToggle.evaluate(el => document.activeElement === el), true);
+    assert.equal(await freePoolToggle.evaluate(el => Boolean(el.closest('[aria-label="Team overview"]'))), true);
+    await freePool.getByRole('button', { name: 'Content (0)' }).click();
+    await freePool.getByText('No Content members available today.').waitFor();
+    await freePool.getByRole('button', { name: 'All (1)' }).click();
+    await page.locator('#task-search-input').click();
+    assert.equal(await freePoolToggle.getAttribute('aria-expanded'), 'true');
     await freePool.getByRole('button', { name: /^All / }).focus();
     await page.keyboard.press('Escape');
     await freePool.waitFor({ state: 'hidden' });

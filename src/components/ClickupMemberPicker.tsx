@@ -1,8 +1,9 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useLayoutEffect, useId } from 'react';
 import { ClickupMember } from '../types';
 import { Search, X, Check, Loader2, RefreshCw } from 'lucide-react';
 
 interface ClickupMemberPickerProps {
+  inputId?: string;
   members: ClickupMember[];
   selectedMemberId?: string;
   onSelect: (member: ClickupMember | null) => void;
@@ -12,6 +13,7 @@ interface ClickupMemberPickerProps {
 }
 
 export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
+  inputId,
   members,
   selectedMemberId,
   onSelect,
@@ -21,8 +23,12 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({});
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputWrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listboxId = useId();
 
   const selectedMember = useMemo(() => {
     if (!selectedMemberId) return null;
@@ -50,6 +56,67 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
     document.addEventListener('mousedown', handleOutside);
     return () => document.removeEventListener('mousedown', handleOutside);
   }, []);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [searchQuery, isOpen]);
+
+  useLayoutEffect(() => {
+    if (!isOpen) return;
+    const updatePosition = () => {
+      const rect = inputWrapperRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const spaceBelow = window.innerHeight - rect.bottom - 12;
+      const spaceAbove = rect.top - 12;
+      const openUpward = spaceBelow < 200 && spaceAbove > spaceBelow;
+      const maxHeight = Math.max(120, Math.min(224, openUpward ? spaceAbove : spaceBelow));
+      setDropdownStyle({
+        position: 'fixed',
+        left: rect.left,
+        width: rect.width,
+        maxHeight,
+        zIndex: 70,
+        ...(openUpward
+          ? { bottom: window.innerHeight - rect.top + 6 }
+          : { top: rect.bottom + 6 }),
+      });
+    };
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [isOpen, filteredMembers.length]);
+
+  const totalOptions = 1 + (isLoading ? 0 : filteredMembers.length);
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setIsOpen(true);
+      setActiveIndex(prev => (prev + 1) % Math.max(1, totalOptions));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setIsOpen(true);
+      setActiveIndex(prev => (prev - 1 + Math.max(1, totalOptions)) % Math.max(1, totalOptions));
+    } else if (e.key === 'Enter' && isOpen) {
+      e.preventDefault();
+      if (activeIndex === 0) {
+        onSelect(null);
+      } else {
+        const picked = filteredMembers[activeIndex - 1];
+        if (picked) onSelect(picked);
+      }
+      setIsOpen(false);
+      setSearchQuery('');
+    } else if (e.key === 'Escape' && isOpen) {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsOpen(false);
+    }
+  };
 
   return (
     <div className="space-y-2" ref={containerRef}>
@@ -111,17 +178,24 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
         </div>
       ) : (
         /* In-Line Search Input and Results */
-        <div className="relative">
+        <div className="relative" ref={inputWrapperRef}>
           <div className="relative">
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--text-muted)]">
               <Search className="h-3.5 w-3.5" />
             </div>
             <input
+              id={inputId}
               ref={inputRef}
               type="text"
+              role="combobox"
+              aria-expanded={isOpen}
+              aria-controls={isOpen ? listboxId : undefined}
+              aria-autocomplete="list"
+              aria-activedescendant={isOpen ? `${listboxId}-opt-${activeIndex}` : undefined}
               disabled={disabled}
               value={searchQuery}
               onFocus={() => setIsOpen(true)}
+              onKeyDown={handleInputKeyDown}
               onChange={e => {
                 setSearchQuery(e.target.value);
                 setIsOpen(true);
@@ -134,17 +208,26 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
                 type="button"
                 aria-label="Clear ClickUp search"
                 onClick={() => setSearchQuery('')}
-                className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+                className="mobile-tap-square sm:min-w-0 sm:min-h-0 absolute inset-y-0 right-0 flex items-center pr-2.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
 
-          {/* Dropdown Options (floats cleanly without shifting modal layout) */}
+          {/* Dropdown Options (viewport-positioned inside DialogPanel subtree to escape overflow clipping) */}
           {isOpen && (
-            <div className="menu-surface absolute left-0 right-0 top-full mt-1.5 w-full rounded-[9px] border border-[var(--border)] p-1.5 z-40 max-h-56 overflow-y-auto space-y-0.5">
+            <div
+              id={listboxId}
+              role="listbox"
+              aria-label="ClickUp workspace members"
+              style={dropdownStyle}
+              className="menu-surface rounded-[9px] border border-[var(--border)] p-1.5 overflow-y-auto space-y-0.5 shadow-xl"
+            >
               <button
+                id={`${listboxId}-opt-0`}
+                role="option"
+                aria-selected={!selectedMemberId}
                 type="button"
                 onClick={() => {
                   onSelect(null);
@@ -154,7 +237,9 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
                 className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-[6px] text-xs transition-colors cursor-pointer ${
                   !selectedMemberId
                     ? 'bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 font-semibold'
-                    : 'text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)]'
+                    : activeIndex === 0
+                      ? 'bg-[var(--surface-subtle)] text-[var(--text-primary)]'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)]'
                 }`}
               >
                 <div className="flex items-center gap-2">
@@ -176,11 +261,15 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
                   No ClickUp members match &ldquo;{searchQuery}&rdquo;
                 </div>
               ) : (
-                filteredMembers.map(m => {
+                filteredMembers.map((m, idx) => {
                   const isCurrent = m.id === selectedMemberId;
+                  const optionIndex = idx + 1;
                   return (
                     <button
                       key={m.id}
+                      id={`${listboxId}-opt-${optionIndex}`}
+                      role="option"
+                      aria-selected={isCurrent}
                       type="button"
                       onClick={() => {
                         onSelect(m);
@@ -190,7 +279,9 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
                       className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-[6px] text-xs transition-colors cursor-pointer ${
                         isCurrent
                           ? 'bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 font-semibold'
-                          : 'text-[var(--text-primary)] hover:bg-[var(--surface-subtle)]'
+                          : activeIndex === optionIndex
+                            ? 'bg-[var(--surface-subtle)] text-[var(--text-primary)]'
+                            : 'text-[var(--text-primary)] hover:bg-[var(--surface-subtle)]'
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">

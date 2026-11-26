@@ -22,6 +22,8 @@ import {
   isTaskAssignedToUser,
   formatLocalDateKey,
   parseLocalDate,
+  formatDateOnly,
+  getEfficiencyToneClass,
   DeliveryUnitInfo,
 } from '../utils/workload';
 import {
@@ -766,15 +768,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                   </div>
                   <div className="mt-2">
                     <div className="flex items-baseline gap-2 flex-wrap">
-                      <span className={`metric-value ${
-                        efficiencyPercent === null
-                          ? 'text-[var(--text-secondary)]'
-                          : efficiencyPercent >= 100
-                          ? 'text-emerald-700 dark:text-emerald-400'
-                          : efficiencyPercent >= 50
-                          ? 'text-[#1d4ed8] dark:text-blue-400'
-                          : 'text-red-600 dark:text-red-400'
-                      }`}>
+                      <span className={`metric-value ${getEfficiencyToneClass(efficiencyPercent)}`}>
                         {efficiencyPercent === null ? '—' : (
                           <>
                             {Math.round(efficiencyPercent)}
@@ -912,7 +906,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                         <div className="flex flex-wrap gap-1 tabular-nums">
                           {item.dates.slice(0, 4).map(d => (
                             <span key={d} className="ledger-badge !font-medium">
-                              {d}
+                              {formatDateOnly(d)}
                             </span>
                           ))}
                           {item.dates.length > 4 && (
@@ -1007,7 +1001,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                         <div className="flex flex-wrap gap-1 tabular-nums">
                           {item.dates.slice(0, 4).map(d => (
                             <span key={d} className="ledger-badge !font-medium">
-                              {d}
+                              {formatDateOnly(d)}
                             </span>
                           ))}
                           {item.dates.length > 4 && (

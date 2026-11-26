@@ -2,7 +2,7 @@ import { DialogPanel } from './ui/DialogPanel';
 import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task } from '../types';
-import { calculateUserWorkload, formatDueDate, formatTaskStatus, getCognitiveLoadLabel, calculateWeeklyVelocity, getUserTag, isTaskAssignedToUser } from '../utils/workload';
+import { calculateUserWorkload, formatDueDate, formatTaskStatus, getCognitiveLoadLabel, calculateWeeklyVelocity, getUserTag, isTaskAssignedToUser, COGNITIVE_LOAD_WEIGHTS } from '../utils/workload';
 import { X, TrendingUp, Clock, CheckCircle2 } from 'lucide-react';
 
 interface WorkloadModalProps {
@@ -304,7 +304,7 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                       </p>
                     ) : (
                       <p className="text-[11px] text-[var(--text-muted)]">
-                        Hover over bars to inspect daily completions and points.
+                        Hover or focus bars to inspect daily completions and points.
                       </p>
                     )}
                   </div>
@@ -354,8 +354,11 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                                 </span>
                               </td>
                               <td className="py-2 px-3">
-                                <span className="capitalize text-[11px] text-[var(--text-primary)] font-medium">
+                                <span className="text-[11px] text-[var(--text-primary)] font-medium">
                                   {loadLabel}
+                                </span>
+                                <span className="ml-1.5 text-[11px] text-[var(--text-muted)] capitalize tabular-nums">
+                                  · {item.cognitiveLoad} ({COGNITIVE_LOAD_WEIGHTS[item.cognitiveLoad]}x)
                                 </span>
                               </td>
                               <td className="py-2 px-3 whitespace-nowrap tabular-nums font-bold text-[var(--text-primary)]">

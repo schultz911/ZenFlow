@@ -307,8 +307,8 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                   </div>
                 </div>
 
-                {/* Quick actions on hover */}
-                <div className="flex items-center card-actions opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
+                {/* Quick actions on hover (always visible on touch devices) */}
+                <div className="flex items-center card-actions [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
                   <button
                     type="button"
                     onClick={e => {

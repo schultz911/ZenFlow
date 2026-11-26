@@ -383,10 +383,11 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
                 {/* ClickUp Workspace Member Mapping */}
                 {isClickupConnected && (
                   <div>
-                    <label className="field-label">
+                    <label htmlFor="editusermodal-clickup-search" className="field-label">
                       ClickUp Member Mapping
                     </label>
                     <ClickupMemberPicker
+                      inputId="editusermodal-clickup-search"
                       members={clickupMembers}
                       selectedMemberId={clickupUserId || undefined}
                       onRefresh={loadClickupMembers}

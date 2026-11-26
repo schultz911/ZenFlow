@@ -64,7 +64,7 @@ typography:
     fontFeature: "'tnum', 'cv02', 'cv03', 'cv04', 'cv11'"
   headline:
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
-    fontSize: "1.0625rem"
+    fontSize: "1.125rem"
     fontWeight: 700
     lineHeight: 1.3
     letterSpacing: "-0.02em"
@@ -220,8 +220,8 @@ Every surface respects full light/dark mode parity through semantic CSS custom p
 A disciplined cool-neutral ledger palette in both light and dark modes, punctuated by cobalt for agency control and high-contrast semantic inks for capacity, caution, and overload.
 
 ### Primary
-- **Cobalt Accent** (`#1d4ed8` light / `#3b82f6` dark): Primary action buttons (`View Analytics`, `Add Task`, `Sign In`), active bottom-ruled navigation indicator, team efficiency metric, and active billable timer text.
-- **Cobalt Deep** (`#1e40af` light / `#2563eb` dark): Primary button hover fill.
+- **Cobalt Accent** (`#1d4ed8` light / `#2563eb` dark): Primary action buttons (`View Analytics`, `Add Task`, `Sign In`), active bottom-ruled navigation indicator, team efficiency metric, and active billable timer text.
+- **Cobalt Deep** (`#1e40af` light / `#1d4ed8` dark): Primary button hover fill.
 - **Cobalt Focus** (`#1d4ed8` light / `#60a5fa` dark): Accessible 2px keyboard focus rings, dark-mode `Flow` wordmark accent, and dark-mode active tab bottom rule.
 - **Cobalt Wash** (`#eff4ff` light / `rgba(59, 130, 246, 0.14)` dark): Quiet tinted surface for active `In Progress` billable timer chips, `You` badge, inline `Assign` pipeline action, and drag-drop target highlights.
 
@@ -259,7 +259,7 @@ A disciplined cool-neutral ledger palette in both light and dark modes, punctuat
 ### Hierarchy
 - **Wordmark** (`700`, `1.4375rem` / `23px` `Flow` alongside `19px` `Inter` `zen`, line-height `1`): Top-left sticky header brand lockup and session verification screen only.
 - **KPI Display** (`700`, `1.5rem` / `24px`, line-height `1.2`, tracking `-0.03em`, `tabular-nums`): Single-frame team KPI ledger values (`Utilization`, `Efficiency`, `Avg load`, `In progress`, `To do`).
-- **Headline** (`700`, `1.0625rem` / `17px`, line-height `1.3`, tracking `-0.02em`): Active board ledger title (`All Teams`, `Content`, `Design`).
+- **Headline** (`700`, `1.125rem` / `18px`, line-height `1.3`, tracking `-0.02em`): Active board ledger title (`All Teams`, `Content`, `Design`).
 - **Title** (`700`, `0.875rem` / `14px`, line-height `1.4`, tracking `-0.015em`): Member swimlane names and `TeamPipeline` band headings (`13px` bold).
 - **Card Title** (`600`, `0.8125rem` / `13px`, line-height `1.375`): Task card titles, pipeline deliverable titles, and desktop navigation tab labels.
 - **Body** (`500`–`600`, `0.75rem` / `12px`, line-height `1.5`): Control labels, search inputs, dropdown items, telemetry scores, and body descriptions.
@@ -274,11 +274,11 @@ A disciplined cool-neutral ledger palette in both light and dark modes, punctuat
 
 zenFlow centers its operational workspace inside a `1400px` max-width container (`max-w-[1400px]`) with responsive horizontal gutters (`16px` mobile, `24px` at `640px`, `32px` at `1024px`) and `32px` bottom padding (`pb-8`).
 
-- **Sticky Chrome & Urgent Ticker:** A `54px` (`3.375rem`) sticky header anchors at `top: 0` on desktop (`>=1280px`); below `1280px`, a `44px` (`2.75rem`) horizontal sub-header strip adds team navigation for a combined `99px` (`6.1875rem`) `--header-height`. The urgent `MarqueeRibbon` pins directly beneath at `top: var(--header-height)` whenever overdue or due-today tasks exist.
-- **Single-Frame KPI Ledger:** `OverviewBar` renders one `.ledger-frame` containing a `.ledger-band` header and a hairline-divided `.ledger-kpi-grid` (`5` equal columns at `>=1024px`, `3` columns at `>=640px`, collapsing cleanly on `<640px` so active work leads above the fold). Directly beneath sits a unified toolbar row (`search input` + `Select Team Board` + `View Analytics` + `Export Report`).
+- **Sticky Chrome & Urgent Ticker:** A `55px` (`3.4375rem`, including `1px` bottom border) sticky header anchors at `top: 0` on desktop (`>=1280px`); below `1280px`, a `44px` (`2.75rem`) horizontal sub-header strip adds team navigation for a combined `99px` (`6.1875rem`) `--header-height`. The urgent `MarqueeRibbon` pins directly beneath at `top: var(--header-height)` on `>=640px` whenever overdue or due-today tasks exist, and scrolls inline on `<640px` to preserve above-the-fold canvas space.
+- **Single-Frame KPI Ledger:** `OverviewBar` renders one `.ledger-frame` containing a `.ledger-band` header and a hairline-divided `.ledger-kpi-grid` (`5` equal columns at `>=1024px`, `3` columns at `>=640px`, collapsing cleanly on `<640px` so active work leads above the fold). Directly beneath sits a unified toolbar row (`search input` + `Select Team Board` + `Free Pool` + `View Analytics` + `Export Report`, with `View Analytics`/`Export Report` folding into a mobile overflow menu below `640px`).
 - **Centralized Pipeline Triage Strip:** `TeamPipeline` uses a `.ledger-frame` with a ruled `1`-, `2`-, or `3`-column responsive grid (`divide-y md:divide-y-0 md:divide-x`) depending on item count, avoiding nested cards inside the pipeline container.
 - **Ruled Swimlane Grids:** Each member workspace is a collapsible `.ledger-frame` whose body divides cleanly into `4` status columns (`repeat(4, minmax(195px, 1fr))`), expanding to `5` columns (`repeat(5, minmax(185px, 1fr))`) when `Completed` is toggled open. Column cells use `1px solid var(--border-subtle)` right dividers, `10px 12px` padding, a `200px` min-height, and a `385px` internal scroll ceiling. Below `640px`, the horizontal scroll wrapper snaps cleanly across `min(80vw, 300px)` columns and dialog inputs bump to `16px` to prevent mobile zoom.
-- **Right-edge Capacity Sidebar:** `FreePoolContainer` exposes a fixed right-edge handle labeled “Free pool” with the live count. It slides open into a roster up to 360px wide. At widths of 1280px and above, the panel can be docked to reserve space beside the board. On smaller screens it overlays the board, with a near-full-width panel on phones.
+- **Toolbar Capacity Popover:** `FreePoolContainer` renders an obsidian pill trigger directly in the `OverviewBar` toolbar (`Free Pool · N <3h/d`) that opens a right-anchored popover roster without occluding lower swimlane headers.
 
 ### Named Rules
 **The Hairline Partition Rule.** Separate adjacent KPI cells, pipeline entries, and swimlane status columns with 1px structural rules (`--border` / `--border-subtle`) inside a shared `.ledger-frame` rather than wrapping every sub-region in nested rounded cards.
@@ -319,7 +319,7 @@ Controls feel crisp, immediate, and tactile—with `150ms` `cubic-bezier(0.2, 0.
 
 ### Buttons
 - **Shape:** Crisp engineered rectangle (`7px` radius), `34px` minimum height, `6px 12px` padding, `12px` semibold `Inter`, `6px` icon-to-label gap.
-- **Primary (`.button-primary`):** Solid Cobalt Accent (`#1d4ed8` light / `#3b82f6` dark) with crisp white ink (`#ffffff`). Hover shifts to Cobalt Deep (`#1e40af` / `#2563eb`). Disabled drops to `50%` opacity.
+- **Primary (`.button-primary`):** Solid Cobalt Accent (`#1d4ed8` light / `#2563eb` dark) with crisp white ink (`#ffffff`). Hover shifts to Cobalt Deep (`#1e40af` / `#1d4ed8`). Disabled drops to `50%` opacity.
 - **Secondary (`.button-secondary`):** Paper White (`--surface`) with 1px Hairline Rule (`--border`) and primary ink (`--text-primary`). Hover fills with Slate Mist (`--surface-subtle`).
 - **Danger Outline (`.button-danger-outline`):** Transparent surface with `rgba(220, 38, 38, 0.35)` border and `#b91c1c` ink (`#fca5a5` in dark mode); hover adds an `8%` crimson tint.
 - **Icon Button (`.icon-button`):** Square `32px × 32px` (`7px` radius) bordered surface button for theme toggle, collapse/expand, and user profile actions.
@@ -338,16 +338,16 @@ Controls feel crisp, immediate, and tactile—with `150ms` `cubic-bezier(0.2, 0.
 
 ### Inputs / Fields
 - **Workspace & Pipeline Search Inputs:** `7px` radius `--surface` input with 1px `--border`, `12px` text (`--text-primary`), `--text-muted` placeholder, left-aligned `14px` magnifying glass icon, and clear (`X`) button when populated.
-- **Focus & Inline Editing:** Borders shift directly to `--accent` (`#1d4ed8` / `#3b82f6`) with global `2px solid var(--focus)` keyboard focus outlines. Inline task renaming uses a `5px` radius cobalt-bordered input directly inside the card title slot.
+- **Focus & Inline Editing:** Borders shift directly to `--accent` (`#1d4ed8` / `#2563eb`) with global `2px solid var(--focus)` keyboard focus outlines. Inline task renaming uses a `5px` radius cobalt-bordered input directly inside the card title slot.
 
 ### Navigation
-- **Sticky Header (`.app-header`):** `54px` tall (`3.375rem`), frosted `--surface` (`92%` opacity, `backdrop-blur-md`), 1px bottom hairline. Left hosts the `32px` obsidian `zenFlow` wave icon + `zenFlow` wordmark; right houses the bordered Firestore connection indicator, `32px` theme toggle, and compact user profile menu trigger.
+- **Sticky Header (`.app-header`):** `55px` tall (`3.4375rem` with `1px` border), frosted `--surface` (`92%` opacity, `backdrop-blur-md`), 1px bottom hairline. Left hosts the `32px` obsidian `zenFlow` wave icon + `zenFlow` wordmark; right houses the bordered Firestore connection indicator, `32px` theme toggle, and compact user profile menu trigger.
 - **Flush Bottom-Ruled Team Tabs:** Full-height (`54px`) horizontal tabs (`All`, `Content`, `Design`) with `13px` semibold labels and `11px` tabular member counts. The active tab anchors a `2px` cobalt bottom rule (`layoutId="active-role-tab-rule"`, `180ms` `cubic-bezier(0.2, 0.7, 0.2, 1)`) flush against the header border. Below `1280px`, tabs move into a `44px` horizontally scrollable sub-header row.
 
 ### Signature Components
 - **Centralized `TeamPipeline` Triage Strip:** Collapsible `.ledger-frame` uniting unassigned and assigned discipline deliverables in a ruled multi-column strip (`1`/`2`/`3` columns via `divide-x`) with inline rename, cognitive-load dot, tabular estimate, and right-aligned `Assign` action.
-- **Urgent `MarqueeRibbon`:** Pinned `10px` radius crimson-tinted alert strip (with a crimson border, pale crimson light surface, and translucent deep crimson dark surface) led by a solid vermilion `.ledger-alert-badge` and hairline-divided clickable overdue/due-today task items scrolling smoothly over `35s` (paused on hover, horizontal scroll fallback under `prefers-reduced-motion`).
-- **`Free Pool` Capacity Sidebar:** A fixed obsidian handle on the right edge displays the live count. The sidebar slides in over the board, with an optional dock on wide screens. A dark header, discipline filters, daily assigned hours, swimlane links, and `+ Task` action support allocation. Reduced motion removes the slide.
+- **Urgent `MarqueeRibbon`:** `10px` radius crimson-tinted alert strip led by a solid vermilion `.ledger-alert-badge` and hairline-divided clickable overdue/due-today task items scrolling smoothly over `35s` (paused on hover, horizontal scroll fallback under `prefers-reduced-motion`). Pinned beneath the sticky header on `>=640px`, inline on `<640px`.
+- **`Free Pool` Capacity Popover:** Compact obsidian pill (`bg-[#121418] dark:bg-[#1e2430]`) inside the `OverviewBar` toolbar displaying live count (`<3h/d`) and opening a right-anchored popover with a dark header band, discipline filters, daily assigned hours, swimlane links, and `+ Task` allocation without obstructing swimlane headers.
 
 ## Do's and Don'ts
 

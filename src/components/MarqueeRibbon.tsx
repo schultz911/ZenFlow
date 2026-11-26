@@ -66,7 +66,7 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
   const displayList = shouldScroll ? [...urgentTasks, ...urgentTasks] : urgentTasks;
 
   return (
-    <div className="sticky top-[var(--header-height)] z-20 w-full bg-[var(--canvas)]/96 backdrop-blur-md border-b border-[var(--border-subtle)]">
+    <div className="sm:sticky sm:top-[var(--header-height)] z-20 w-full bg-[var(--canvas)]/96 backdrop-blur-md border-b border-[var(--border-subtle)]">
       <div className="marquee-ribbon-layout mx-auto max-w-[1400px] py-1.5 [--ribbon-gutter:1rem] sm:[--ribbon-gutter:1.5rem] lg:[--ribbon-gutter:2rem]">
         <div
           id="due-tasks-marquee-ribbon"
@@ -75,7 +75,11 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
           <div className="ledger-alert-badge shrink-0 z-10 select-none">
             <AlertTriangle aria-hidden="true" className="h-3 w-3 shrink-0" />
             <span className="uppercase tracking-wider">
-              {overdueCount > 0 ? `${overdueCount} Overdue` : `${dueTodayCount} Due Today`}
+              {overdueCount > 0 && dueTodayCount > 0
+                ? `${overdueCount} Overdue · ${dueTodayCount} Today`
+                : overdueCount > 0
+                  ? `${overdueCount} Overdue`
+                  : `${dueTodayCount} Due Today`}
             </span>
           </div>
 

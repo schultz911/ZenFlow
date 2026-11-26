@@ -555,7 +555,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
             {/* Form Body */}
             <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-              <div className="px-5 py-4 overflow-y-auto flex-1 space-y-4">
+              <div className="px-5 py-4 overflow-y-auto flex-1 space-y-4 min-h-[340px]">
+                {!canEdit && (
+                  <div className="callout callout-warning">
+                    Read-only view: You only have permission to edit tasks on your assigned board or swimlane.
+                  </div>
+                )}
+
                 {/* Error Banner */}
                 {submitError && (
                   <div role="alert" className="callout callout-danger flex items-center gap-2">
@@ -594,7 +600,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 )}
 
                 {activeTab === 'details' && (
-                  <>
+                  <fieldset disabled={!canEdit} className="space-y-4 m-0 p-0 border-0 min-w-0">
                 {/* Task Name */}
                 <div>
                   <label className="field-label" htmlFor="task-title-input">
@@ -653,26 +659,29 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     {canEdit && assigneeIds.length > 0 && eligibleUsers.some(u => !assigneeIds.includes(u.id)) && (
                       <div className="mt-1.5 flex items-center gap-1.5">
                         <Users className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
-                        <select
-                          aria-label="Share task with additional member"
-                          value=""
-                          onChange={e => {
-                            const extraId = e.target.value;
-                            if (extraId && !assigneeIds.includes(extraId)) {
-                              setAssigneeIds(prev => [...prev, extraId]);
-                            }
-                          }}
-                          className="field-control !py-1 !text-[11px] cursor-pointer"
-                        >
-                          <option value="">+ Share / Co-assign with teammate...</option>
-                          {eligibleUsers
-                            .filter(u => !assigneeIds.includes(u.id))
-                            .map(u => (
-                              <option key={u.id} value={u.id}>
-                                {u.name} ({getUserTag(u).label})
-                              </option>
-                            ))}
-                        </select>
+                        <div className="relative flex-1 min-w-0">
+                          <select
+                            aria-label="Share task with additional member"
+                            value=""
+                            onChange={e => {
+                              const extraId = e.target.value;
+                              if (extraId && !assigneeIds.includes(extraId)) {
+                                setAssigneeIds(prev => [...prev, extraId]);
+                              }
+                            }}
+                            className="field-control sm:!py-1 sm:!text-[11px] pr-7 cursor-pointer"
+                          >
+                            <option value="">+ Share / Co-assign with teammate...</option>
+                            {eligibleUsers
+                              .filter(u => !assigneeIds.includes(u.id))
+                              .map(u => (
+                                <option key={u.id} value={u.id}>
+                                  {u.name} ({getUserTag(u).label})
+                                </option>
+                              ))}
+                          </select>
+                          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-[var(--text-muted)]" />
+                        </div>
                       </div>
                     )}
                     {assigneeIds.length > 1 && (
@@ -921,13 +930,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     </p>
                   )}
                 </div>
-
-                {!canEdit && (
-                  <div className="callout callout-warning">
-                    Read-only view: You only have permission to edit tasks on your assigned board or swimlane.
-                  </div>
-                )}
-                  </>
+                  </fieldset>
                 )}
 
                 {activeTab === 'specs' && (

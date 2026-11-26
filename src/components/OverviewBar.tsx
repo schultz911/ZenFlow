@@ -9,6 +9,7 @@ import {
   formatHoursRatio,
   getTaskAssigneeIds,
   groupTasksByAssignee,
+  getEfficiencyToneClass,
 } from '../utils/workload';
 import {
   Search,
@@ -23,18 +24,21 @@ import {
   BarChart3,
   X,
   Loader2,
+  MoreHorizontal,
 } from 'lucide-react';
 
 interface OverviewBarProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onOpenAnalytics: () => void;
+  freePool: React.ReactNode;
 }
 
 export const OverviewBar: React.FC<OverviewBarProps> = ({
   searchQuery,
   onSearchChange,
   onOpenAnalytics,
+  freePool,
 }) => {
   const { canSwitchBoards, isSuperadmin } = useAuth();
   const { activeRoleTab, activeBoardId, setActiveBoardId } = useBoardUi();
@@ -47,6 +51,8 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const [showMobileActionsMenu, setShowMobileActionsMenu] = useState(false);
+  const mobileActionsMenuRef = useRef<HTMLDivElement>(null);
   const [isBoardDropdownOpen, setIsBoardDropdownOpen] = useState(false);
   const boardDropdownRef = useRef<HTMLDivElement>(null);
   const [mobileMetricsExpanded, setMobileMetricsExpanded] = useState(false);
@@ -56,11 +62,12 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
     const dismiss = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return;
       if (showExportMenu) { setShowExportMenu(false); document.getElementById('export-workspace-btn')?.focus(); }
+      if (showMobileActionsMenu) { setShowMobileActionsMenu(false); document.getElementById('mobile-actions-menu-btn')?.focus(); }
       if (isBoardDropdownOpen) { setIsBoardDropdownOpen(false); document.getElementById('board-selector-btn')?.focus(); }
     };
     document.addEventListener('keydown', dismiss);
     return () => document.removeEventListener('keydown', dismiss);
-  }, [showExportMenu, isBoardDropdownOpen]);
+  }, [showExportMenu, showMobileActionsMenu, isBoardDropdownOpen]);
 
   useEffect(() => {
     if (!isBoardDropdownOpen) return;
@@ -80,15 +87,18 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
   }, [activeBoardId, creativeDirectors]);
 
   useEffect(() => {
-    if (!showExportMenu) return;
+    if (!showExportMenu && !showMobileActionsMenu) return;
     const handleOutside = (e: MouseEvent) => {
-      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+      if (showExportMenu && exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
         setShowExportMenu(false);
+      }
+      if (showMobileActionsMenu && mobileActionsMenuRef.current && !mobileActionsMenuRef.current.contains(e.target as Node)) {
+        setShowMobileActionsMenu(false);
       }
     };
     document.addEventListener('mousedown', handleOutside);
     return () => document.removeEventListener('mousedown', handleOutside);
-  }, [showExportMenu]);
+  }, [showExportMenu, showMobileActionsMenu]);
 
   useEffect(() => {
     setLocalSearch(searchQuery);
@@ -160,7 +170,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
       <section className="ledger-frame" aria-label="Team overview">
         <div className="ledger-band flex flex-wrap items-center justify-between gap-2.5 px-4 py-2 sm:px-5">
           <div className="flex items-baseline gap-2.5">
-            <h1 className="text-[17px] font-bold tracking-tight text-[var(--text-primary)]">
+            <h1 className="text-lg font-bold tracking-tight text-[var(--text-primary)]">
               {activeRoleTab === 'all' ? 'All Teams' : activeRoleTab === 'content' ? 'Content' : 'Design'}
             </h1>
             <span className="text-xs font-medium text-[var(--text-secondary)] tabular-nums">
@@ -193,7 +203,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
 
         <div className={`${mobileMetricsExpanded ? 'grid' : 'hidden sm:grid'} ledger-kpi-grid`}>
           <div className="metric-card col-span-3 sm:col-span-1 border-b lg:border-b-0 border-r border-[var(--border-subtle)]">
-            <h2 className="metric-label whitespace-nowrap">Utilization</h2>
+            <p className="metric-label whitespace-nowrap">Utilization</p>
             <p className="metric-value mt-1 text-emerald-700 dark:text-emerald-400">
               {teamUtilization.utilizationPercent}
               <span className="text-sm font-semibold tracking-normal">%</span>
@@ -204,8 +214,8 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
           </div>
 
           <div className="metric-card col-span-3 sm:col-span-1 border-b lg:border-b-0 sm:border-r border-[var(--border-subtle)]">
-            <h2 className="metric-label whitespace-nowrap">Efficiency</h2>
-            <p className="metric-value mt-1 text-[#1d4ed8] dark:text-blue-400">
+            <p className="metric-label whitespace-nowrap">Efficiency</p>
+            <p className={`metric-value mt-1 ${getEfficiencyToneClass(teamEfficiency.efficiencyPercent)}`}>
               {teamEfficiency.efficiencyPercent !== null ? (
                 <>
                   {Math.round(teamEfficiency.efficiencyPercent)}
@@ -223,7 +233,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
           </div>
 
           <div className="metric-card col-span-2 sm:col-span-1 sm:border-b lg:border-b-0 border-r border-[var(--border-subtle)]">
-            <h2 className="metric-label whitespace-nowrap">Avg load</h2>
+            <p className="metric-label whitespace-nowrap">Avg load</p>
             <p
               className={`metric-value mt-1 ${
                 avgWorkload >= 12
@@ -240,17 +250,18 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
           </div>
 
           <div className="metric-card col-span-2 sm:col-span-1 border-r border-[var(--border-subtle)]">
-            <h2 className="metric-label whitespace-nowrap">In progress</h2>
+            <p className="metric-label whitespace-nowrap">In progress</p>
             <p className="metric-value mt-1 text-[var(--text-primary)]">{inProgressCount}</p>
             <p className="metric-detail">{teamTasks.length} assigned</p>
           </div>
 
           <div className="metric-card col-span-2 sm:col-span-2 lg:col-span-1">
-            <h2 className="metric-label whitespace-nowrap">To do</h2>
+            <p className="metric-label whitespace-nowrap">To do</p>
             <p className="metric-value mt-1 text-[var(--text-primary)]">{todoCount}</p>
             <p className="metric-detail">Ready</p>
           </div>
         </div>
+        {freePool}
       </section>
 
       {/* Compact Toolbar: Search + Team Board + Free Pool + Analytics + Export */}
@@ -347,18 +358,82 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
             </div>
           )}
 
+          <div className="relative sm:hidden" ref={mobileActionsMenuRef}>
+            <button
+              id="mobile-actions-menu-btn"
+              type="button"
+              aria-expanded={showMobileActionsMenu}
+              aria-label="Analytics and export actions"
+              onClick={() => setShowMobileActionsMenu(prev => !prev)}
+              className="button-secondary mobile-tap-control"
+            >
+              <MoreHorizontal className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
+              <span>More</span>
+            </button>
+
+            {showMobileActionsMenu && (
+              <div aria-label="Analytics and export actions" className="menu-surface absolute right-0 mt-1.5 w-56 rounded-[9px] border border-[var(--border)] p-1 z-30">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMobileActionsMenu(false);
+                    onOpenAnalytics();
+                  }}
+                  className="menu-item cursor-pointer"
+                >
+                  <BarChart3 className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
+                  <span>View Analytics</span>
+                </button>
+                <div className="my-1 border-t border-[var(--border-subtle)]" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMobileActionsMenu(false);
+                    exportWorkspaceXLS(tasks, users);
+                  }}
+                  className="menu-item cursor-pointer"
+                >
+                  <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                  <span>Export Excel (.xls) Report</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMobileActionsMenu(false);
+                    exportWorkspaceJSON(tasks, users);
+                  }}
+                  className="menu-item cursor-pointer"
+                >
+                  <FileCode className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
+                  <span>Export JSON Audit</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMobileActionsMenu(false);
+                    downloadAuditLogs();
+                  }}
+                  className="menu-item cursor-pointer"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
+                  <span>Download SOC2 Audit (.ndjson)</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           <button
             id="view-analytics-btn"
             type="button"
             onClick={onOpenAnalytics}
             title="Open executive workspace analytics modal"
-            className="button-secondary mobile-tap-control"
+            className="hidden sm:inline-flex button-secondary mobile-tap-control"
           >
             <BarChart3 className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
             <span>View Analytics</span>
           </button>
 
-          <div className="relative" ref={exportMenuRef}>
+          <div className="relative hidden sm:block" ref={exportMenuRef}>
             <button
               id="export-workspace-btn"
               type="button"

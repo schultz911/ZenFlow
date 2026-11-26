@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useAuth, useWorkspace } from '../context/DashboardContext';
 import { Task, User, RoleFilter } from '../types';
-import { getCognitiveLoadLabel, getTaskAssigneeIds } from '../utils/workload';
+import { formatDateOnly, getCognitiveLoadLabel, getTaskAssigneeIds } from '../utils/workload';
 import { isValidHttpUrl } from '../utils/taskMetadata';
 import {
   Inbox,
@@ -399,13 +399,13 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                           <>
                             <span className="text-[var(--text-muted)]">·</span>
                             <span className="text-[var(--text-secondary)] tabular-nums truncate">
-                              {task.dueDate}
+                              {formatDateOnly(task.dueDate)}
                             </span>
                           </>
                         )}
                       </div>
 
-                      <div className="flex items-center card-actions opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
+                      <div className="flex items-center card-actions [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
                         <button
                           type="button"
                           onClick={e => {
@@ -578,12 +578,11 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                             type="button"
                             onClick={() => canAssignTask && onOpenAssignmentModal(task)}
                             title={canAssignTask ? 'Click to reassign or adjust estimates' : `Assigned to ${assignee.name}`}
-                            className={`flex items-center gap-1 text-[11px] font-semibold transition-colors ${
+                            className={`mobile-tap-control sm:min-h-0 flex items-center gap-1 text-[11px] font-semibold transition-colors ${
                               canAssignTask
                                 ? 'text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer'
                                 : 'text-[var(--text-primary)] cursor-default'
                             }`}
-                            style={{ minHeight: 'auto' }}
                           >
                             <span className="h-1.5 w-1.5 rounded-full bg-[#1d4ed8] dark:bg-blue-400 shrink-0" />
                             <span className="truncate max-w-[95px]">
@@ -595,12 +594,11 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                             type="button"
                             onClick={() => onOpenAssignmentModal(task)}
                             title={canAssignTask ? 'Assign task to matching discipline member' : 'Unassigned in pipeline'}
-                            className={`inline-flex items-center gap-1 rounded-[5px] px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
+                            className={`mobile-tap-control sm:min-h-0 inline-flex items-center gap-1 rounded-[5px] px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
                               canAssignTask
                                 ? 'bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25'
                                 : 'text-[var(--text-secondary)]'
                             }`}
-                            style={{ minHeight: 'auto' }}
                           >
                             <UserX className="h-3 w-3" />
                             <span>{canAssignTask ? 'Assign' : 'Unassigned'}</span>

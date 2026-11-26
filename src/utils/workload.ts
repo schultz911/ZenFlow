@@ -1178,6 +1178,13 @@ export function formatHoursRatio(firstHours: number, secondHours: number): strin
   return `(${formatHours(firstHours)} / ${formatHours(secondHours)})`;
 }
 
+export function getEfficiencyToneClass(efficiencyPercent: number | null): string {
+  if (efficiencyPercent === null) return 'text-[var(--text-secondary)]';
+  if (efficiencyPercent >= 100) return 'text-emerald-700 dark:text-emerald-400';
+  if (efficiencyPercent >= 50) return 'text-[#1d4ed8] dark:text-blue-400';
+  return 'text-red-600 dark:text-red-400';
+}
+
 export function formatHours(hours: number): string {
   if (hours > 0 && hours < 0.05) return '<0.1h';
   return `${Math.round(hours * 10) / 10}h`;

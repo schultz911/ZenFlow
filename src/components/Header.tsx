@@ -197,7 +197,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                   aria-expanded={userDropdownOpen}
                   aria-controls="user-profile-menu"
                   onClick={() => setUserDropdownOpen(prev => !prev)}
-                  className="flex items-center gap-2 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-subtle)] py-1 px-2.5 text-left text-xs transition-colors"
+                  className="mobile-tap-control flex items-center gap-2 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-subtle)] py-1 px-2.5 text-left text-xs transition-colors"
                 >
                   <div
                     className={`flex h-6 w-6 items-center justify-center rounded-[5px] bg-gradient-to-tr ${

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task, TaskStatus, DragTaskInfo, CognitiveLoad } from '../types';
@@ -8,6 +8,7 @@ import {
   getUserTag,
   calculateTasksEfficiency,
   formatHoursRatio,
+  getEfficiencyToneClass,
   getLocalOffsetDateKey,
   isTaskAssignedToUser,
 } from '../utils/workload';
@@ -160,7 +161,7 @@ function ColumnScrollArea({
         {children}
       </div>
       {hasMoreBelow && (
-        <div className="pt-1.5 mt-1 border-t border-[var(--border-subtle)] text-center text-[11px] font-medium text-[var(--text-muted)] tabular-nums select-none">
+        <div className="pt-1.5 mt-1 border-t border-[var(--border-subtle)] text-center text-xs font-medium text-[var(--text-muted)] tabular-nums select-none">
           More tasks below ({taskCount} total) · Scroll
         </div>
       )}
@@ -318,17 +319,32 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     }
   }, [quickAddTitle, quickAddDueDate, isSubmittingQuickAdd, onQuickAddTask, user.id, quickAddLoad]);
 
+  const updateMemberMenuPos = useCallback(() => {
+    const btn = memberMenuBtnRef.current;
+    if (!btn) return;
+    const rect = btn.getBoundingClientRect();
+    const menuW = memberMenuPopRef.current?.offsetWidth || 208;
+    const menuH = memberMenuPopRef.current?.offsetHeight || 180;
+    const left = Math.max(10, Math.min(rect.right - menuW, window.innerWidth - menuW - 10));
+    const openAbove = rect.bottom + menuH + 10 > window.innerHeight && rect.top >= menuH + 10;
+    const rawTop = openAbove ? rect.top - menuH - 6 : rect.bottom + 6;
+    const top = Math.max(10, Math.min(rawTop, window.innerHeight - menuH - 10));
+    setMemberMenuPos({ top, left });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (memberMenuOpen) {
+      updateMemberMenuPos();
+    }
+  }, [memberMenuOpen, updateMemberMenuPos]);
+
   useEffect(() => {
     if (!memberMenuOpen) return;
-    const updateMenuPos = () => {
-      const btn = memberMenuBtnRef.current;
-      if (!btn) return;
-      const rect = btn.getBoundingClientRect();
-      const menuW = 208;
-      const left = Math.max(10, Math.min(rect.right - menuW, window.innerWidth - menuW - 10));
-      setMemberMenuPos({ top: rect.bottom + 6, left });
-    };
-    updateMenuPos();
+    updateMemberMenuPos();
+    const focusTimer = window.setTimeout(() => {
+      const firstItem = memberMenuPopRef.current?.querySelector<HTMLElement>('[role="menuitem"]');
+      firstItem?.focus();
+    }, 0);
     const onOutside = (e: MouseEvent) => {
       const target = e.target as Node;
       if (
@@ -343,19 +359,36 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
         e.preventDefault();
         setMemberMenuOpen(false);
         memberMenuBtnRef.current?.focus();
+        return;
+      }
+      if (e.key === 'Tab') {
+        setMemberMenuOpen(false);
+        return;
+      }
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Home' || e.key === 'End') {
+        const items = Array.from(memberMenuPopRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') || []);
+        if (items.length === 0) return;
+        e.preventDefault();
+        const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+        let nextIndex = 0;
+        if (e.key === 'ArrowDown') nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % items.length;
+        else if (e.key === 'ArrowUp') nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
+        else if (e.key === 'End') nextIndex = items.length - 1;
+        items[nextIndex]?.focus();
       }
     };
     document.addEventListener('mousedown', onOutside);
     window.addEventListener('keydown', onKey);
-    window.addEventListener('resize', updateMenuPos);
-    window.addEventListener('scroll', updateMenuPos, true);
+    window.addEventListener('resize', updateMemberMenuPos);
+    window.addEventListener('scroll', updateMemberMenuPos, true);
     return () => {
+      window.clearTimeout(focusTimer);
       document.removeEventListener('mousedown', onOutside);
       window.removeEventListener('keydown', onKey);
-      window.removeEventListener('resize', updateMenuPos);
-      window.removeEventListener('scroll', updateMenuPos, true);
+      window.removeEventListener('resize', updateMemberMenuPos);
+      window.removeEventListener('scroll', updateMemberMenuPos, true);
     };
-  }, [memberMenuOpen]);
+  }, [memberMenuOpen, updateMemberMenuPos]);
 
   const handleTaskDragStart = useCallback(
     (draggedTask: Task) => {
@@ -741,8 +774,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 onClick={() => onMoveUserUp?.(user.id)}
                 title="Move workspace up"
                 aria-label={`Move ${user.name} up`}
-                className="px-1 py-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                style={{ minHeight: 'auto' }}
+                className="min-w-[36px] min-h-[36px] sm:min-w-0 sm:min-h-0 flex items-center justify-center px-1 py-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
                 <ArrowUp className="h-2.5 w-2.5" />
               </button>
@@ -752,8 +784,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 onClick={() => onMoveUserDown?.(user.id)}
                 title="Move workspace down"
                 aria-label={`Move ${user.name} down`}
-                className="px-1 py-0.5 border-t border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                style={{ minHeight: 'auto' }}
+                className="min-w-[36px] min-h-[36px] sm:min-w-0 sm:min-h-0 flex items-center justify-center px-1 py-0.5 border-t border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
                 <ArrowDown className="h-2.5 w-2.5" />
               </button>
@@ -814,8 +845,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               type="button"
               onClick={() => onOpenWorkloadModal(user)}
               title="Click to view workload breakdown"
-              className="flex items-center gap-1.5 pr-3 text-left hover:text-[#1d4ed8] dark:hover:text-blue-400 transition-colors cursor-pointer"
-              style={{ minHeight: 'auto' }}
+              className="mobile-tap-control sm:min-h-0 flex items-center gap-1.5 pr-3 text-left hover:text-[#1d4ed8] dark:hover:text-blue-400 transition-colors cursor-pointer"
             >
               {workload.level === 'overloaded' ? (
                 <span className="ledger-alert-badge">
@@ -845,17 +875,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Eff
               </span>
-              <span
-                className={`text-xs font-bold ${
-                  userEfficiency.efficiencyPercent === null
-                    ? 'text-[var(--text-secondary)]'
-                    : userEfficiency.efficiencyPercent >= 100
-                    ? 'text-emerald-700 dark:text-emerald-400'
-                    : userEfficiency.efficiencyPercent >= 50
-                    ? 'text-[#1d4ed8] dark:text-blue-400'
-                    : 'text-red-600 dark:text-red-400'
-                }`}
-              >
+              <span className={`text-xs font-bold ${getEfficiencyToneClass(userEfficiency.efficiencyPercent)}`}>
                 {userEfficiency.efficiencyPercent !== null ? `${Math.round(userEfficiency.efficiencyPercent)}%` : '—'}
               </span>
               {userEfficiency.efficiencyPercent !== null && (
@@ -890,7 +910,9 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 id={`member-actions-btn-${user.id}`}
                 ref={memberMenuBtnRef}
                 type="button"
+                aria-haspopup="menu"
                 aria-expanded={memberMenuOpen}
+                aria-controls={`member-actions-menu-${user.id}`}
                 aria-label={`More actions for ${user.name}`}
                 title={`Member options for ${user.name}`}
                 onClick={() => setMemberMenuOpen(prev => !prev)}
@@ -916,8 +938,9 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
 
           {memberMenuOpen && memberMenuPos && createPortal(
             <div
+              id={`member-actions-menu-${user.id}`}
               ref={memberMenuPopRef}
-              role="region"
+              role="menu"
               aria-label={`${user.name} actions`}
               style={{ top: `${memberMenuPos.top}px`, left: `${memberMenuPos.left}px` }}
               className="menu-surface fixed z-50 w-52 rounded-[9px] border border-[var(--border)] p-1 text-[var(--text-primary)]"
@@ -925,6 +948,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               {canEdit && tasksByColumn.retainer.length === 0 && !isCollapsed && (
                 <button
                   type="button"
+                  role="menuitem"
                   onClick={() => {
                     setMemberMenuOpen(false);
                     setShowEmptyOngoing(prev => !prev);
@@ -939,6 +963,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               {archivedTasks.length > 0 && (
                 <button
                   type="button"
+                  role="menuitem"
                   onClick={() => {
                     setMemberMenuOpen(false);
                     setShowArchived(prev => !prev);
@@ -957,6 +982,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 <button
                   id={`edit-user-btn-${user.id}`}
                   type="button"
+                  role="menuitem"
                   onClick={() => {
                     setMemberMenuOpen(false);
                     onEditUser(user);
@@ -970,10 +996,11 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
 
               {onDeleteUser && canManageUser(user) && !isCurrentUser && (
                 <>
-                  <div className="my-1 border-t border-[var(--border-subtle)]" />
+                  <div role="separator" className="my-1 border-t border-[var(--border-subtle)]" />
                   <button
                     id={`delete-user-btn-${user.id}`}
                     type="button"
+                    role="menuitem"
                     onClick={() => {
                       setMemberMenuOpen(false);
                       onDeleteUser(user);
@@ -1078,7 +1105,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                             }}
                             title={`Inline quick add to ${col.title}`}
                             aria-label={`Quick add to ${col.title}`}
-                            className={`mobile-tap-control rounded-[5px] p-1 sm:min-h-0 transition-colors cursor-pointer shrink-0 ${
+                            className={`mobile-tap-square sm:min-w-0 sm:min-h-0 flex items-center justify-center rounded-[5px] p-1 transition-colors cursor-pointer shrink-0 ${
                               quickAddStatus === col.status
                                 ? 'bg-[#1d4ed8] text-white'
                                 : 'text-[var(--text-muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)]'

@@ -277,7 +277,7 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
     >
       <div className="ledger-band flex items-center justify-between gap-4 px-4 py-2.5 sm:px-5">
         <div className="flex items-center gap-2.5">
-          <h2 className="text-[13px] font-bold tracking-tight text-[var(--text-primary)]">Workspace Setup</h2>
+          <p className="text-[13px] font-bold tracking-tight text-[var(--text-primary)]">Workspace Setup</p>
           <span className="text-[11px] font-semibold tabular-nums text-[var(--text-secondary)]">
             {completedCount}/3 complete
           </span>
