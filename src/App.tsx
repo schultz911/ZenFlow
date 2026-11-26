@@ -15,15 +15,16 @@ import { MarqueeRibbon } from './components/MarqueeRibbon';
 import { EditUserModal } from './components/EditUserModal';
 import { DuplicateTaskModal } from './components/DuplicateTaskModal';
 import { DeleteTaskModal } from './components/DeleteTaskModal';
-import { FreePoolContainer } from './components/FreePoolContainer';
 import { AnalyticsModal } from './components/AnalyticsModal';
 import { TeamPipeline } from './components/TeamPipeline';
 import { DisciplineTaskModal } from './components/modals/DisciplineTaskModal';
 import { TaskAssignmentModal } from './components/TaskAssignmentModal';
 import { OnboardingChecklist } from './components/OnboardingChecklist';
 import { User, Task, TaskStatus } from './types';
-import { getTaskAssigneeIds, groupTasksByAssignee } from './utils/workload';
-import { UserPlus, FileText, Palette, Search, Trash2, AlertTriangle, X, Loader2 } from 'lucide-react';
+import { getTaskAssigneeIds, groupTasksByAssignee, formatTaskStatus } from './utils/workload';
+import { UserPlus, FileText, Palette, Search, Trash2, AlertTriangle, X, Loader2, RotateCcw, Keyboard } from 'lucide-react';
+import { DialogPanel } from './components/ui/DialogPanel';
+import { AnimatePresence } from 'motion/react';
 
 const EMPTY_TASKS: Task[] = [];
 
@@ -32,6 +33,7 @@ function DashboardContent() {
     currentUser,
     isAuthChecking,
     canManageMembers,
+    canCreatePipelineTask,
   } = useAuth();
   const {
     users,
@@ -75,12 +77,19 @@ function DashboardContent() {
   const [analyticsModalOpen, setAnalyticsModalOpen] = useState(false);
   const [disciplineModalOpen, setDisciplineModalOpen] = useState(false);
   const [selectedTaskForAssignment, setSelectedTaskForAssignment] = useState<Task | null>(null);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [undoToast, setUndoToast] = useState<{
+    message: string;
+    undo: () => Promise<void>;
+  } | null>(null);
 
   // Stable refs for currentUser and users — allow keyboard effect and task modal handler to have empty dep arrays
   const currentUserRef = useRef(currentUser);
   const appUsersRef = useRef(users);
+  const canCreatePipelineRef = useRef(canCreatePipelineTask);
   useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
   useEffect(() => { appUsersRef.current = users; }, [users]);
+  useEffect(() => { canCreatePipelineRef.current = canCreatePipelineTask; }, [canCreatePipelineTask]);
 
   // Task modal open handler — stabilized with empty deps; reads currentUser/users from refs
   const handleOpenAddTask = useCallback((userId?: string, status?: TaskStatus) => {
@@ -278,43 +287,40 @@ function DashboardContent() {
     return stablePartitioned;
   }, [allTasksByUserId, filteredTasks, tasks]);
 
-  // Global keyboard shortcut listeners
+  // Global keyboard shortcuts (non-hijacking single-key shortcuts outside inputs)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Escape: close all open modals
-      if (e.key === 'Escape') {
-        setLoginModalOpen(false);
-        setTaskModalOpen(false);
-        setWorkloadModalUser(null);
-        setFirestoreModalOpen(false);
-        setUserToDelete(null);
-        setEditingUser(null);
-        setAdjustBillableTask(null);
-        setAnalyticsModalOpen(false);
-        setDisciplineModalOpen(false);
-        setSelectedTaskForAssignment(null);
-      }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      const isEditable = Boolean(
+        target && (
+          target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable
+        )
+      );
+      if (isEditable || document.querySelector('[role="dialog"]')) return;
 
-      // Ctrl+N / Cmd+N: Quick create task
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
-        e.preventDefault();
-        setDisciplineModalOpen(true);
-      }
-
-      // Ctrl+F / Cmd+F: Focus search input
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+      if (e.key === '/') {
         const searchInput = document.getElementById('task-search-input') as HTMLInputElement | null;
         if (searchInput) {
           e.preventDefault();
           searchInput.focus();
           searchInput.select();
         }
+      } else if (e.key.toLowerCase() === 'n' && canCreatePipelineRef.current) {
+        e.preventDefault();
+        setDisciplineModalOpen(true);
+      } else if (e.key === '?') {
+        e.preventDefault();
+        setShortcutsOpen(prev => !prev);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []); // stable — handleOpenAddTask reads from refs; Escape closures over stable setters
+  }, []);
 
   const handleEditTask = useCallback((task: Task) => {
     setTaskToEdit(task);
@@ -420,6 +426,12 @@ function DashboardContent() {
     return () => clearTimeout(timer);
   }, [workspaceNotice]);
 
+  useEffect(() => {
+    if (!undoToast) return;
+    const timer = setTimeout(() => setUndoToast(null), 6000);
+    return () => clearTimeout(timer);
+  }, [undoToast]);
+
   const handleQuickAddTask = useCallback(
     async (
       userId: string,
@@ -441,9 +453,43 @@ function DashboardContent() {
 
   const handleRescheduleTask = useCallback(
     async (taskId: string, newDueDate: string | undefined) => {
+      const prevTask = tasks.find(t => t.id === taskId);
+      const prevDueDate = prevTask?.dueDate;
       await updateTask(taskId, { dueDate: newDueDate });
+      if (prevTask && prevDueDate !== newDueDate) {
+        setUndoToast({
+          message: `Rescheduled "${prevTask.title}"`,
+          undo: async () => {
+            await updateTask(taskId, { dueDate: prevDueDate });
+          },
+        });
+      }
     },
-    [updateTask]
+    [tasks, updateTask]
+  );
+
+  const handleMoveTaskWithUndo = useCallback<typeof moveTask>(
+    async (taskId, targetUserId, newStatus, newIndex, newDueDate, extraUpdates) => {
+      const prevTask = tasks.find(t => t.id === taskId);
+      const prevSnapshot = prevTask
+        ? {
+            userId: prevTask.userId || targetUserId,
+            status: prevTask.status,
+            order: prevTask.order,
+            dueDate: prevTask.dueDate ?? null,
+          }
+        : null;
+      await moveTask(taskId, targetUserId, newStatus, newIndex, newDueDate, extraUpdates);
+      if (prevTask && prevSnapshot && (prevSnapshot.status !== newStatus || prevSnapshot.userId !== targetUserId)) {
+        setUndoToast({
+          message: `Moved "${prevTask.title}" to ${formatTaskStatus(newStatus)}`,
+          undo: async () => {
+            await moveTask(taskId, prevSnapshot.userId, prevSnapshot.status, prevSnapshot.order, prevSnapshot.dueDate);
+          },
+        });
+      }
+    },
+    [tasks, moveTask]
   );
 
   const handleUpdateTaskTitle = useCallback(
@@ -541,18 +587,15 @@ function DashboardContent() {
           onOpenNewUserModal={handleOpenNewUser}
           onOpenFirestoreModal={handleOpenFirestore}
           onOpenSetupModal={() => setSetupChecklistOpen(true)}
+          onOpenShortcutsModal={() => setShortcutsOpen(true)}
         />
 
-        {/* Pinned Ribbons — sticky just below the header */}
-        <div className="sticky top-[var(--header-height)] z-20 w-full">
-          <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8 pt-2 space-y-1.5">
-            <MarqueeRibbon
-              tasks={tasks}
-              users={users}
-              onTaskClick={handleEditTask}
-            />
-          </div>
-        </div>
+        {/* Pinned Marquee Ribbon (renders its own sticky frosted container only when urgent tasks exist) */}
+        <MarqueeRibbon
+          tasks={tasks}
+          users={users}
+          onTaskClick={handleEditTask}
+        />
 
         {/* Main Container with drop-outside-board deletion support */}
         <main
@@ -569,7 +612,7 @@ function DashboardContent() {
               setActiveDragInfo(null);
             }
           }}
-          className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 lg:px-8 pb-20"
+          className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 lg:px-8 pb-8"
         >
 
           {/* Onboarding Checklist */}
@@ -583,6 +626,8 @@ function DashboardContent() {
             searchQuery={searchQuery}
             onSearchChange={setSearchQuery}
             onOpenAnalytics={() => setAnalyticsModalOpen(true)}
+            onAddTask={handleOpenAddTask}
+            onSelectFreeUser={handleSelectFreeResource}
           />
 
           {/* Search Results Summary & Cross-Tab Navigation Ribbon */}
@@ -652,6 +697,7 @@ function DashboardContent() {
             roleFilter={activeRoleTab}
             tasks={tasks}
             users={users}
+            globalSearch={searchQuery}
             onOpenCreateModal={() => setDisciplineModalOpen(true)}
             onOpenAssignmentModal={t => setSelectedTaskForAssignment(t)}
             onEditTask={handleEditTask}
@@ -731,7 +777,7 @@ function DashboardContent() {
                     onDeleteTask={handleRequestDeleteTask}
                     onEditUser={setEditingUser}
                     onDeleteUser={handleOpenDeleteUser}
-                    onMoveTask={moveTask}
+                    onMoveTask={handleMoveTaskWithUndo}
                     onDuplicateTask={handleOpenDuplicateTask}
                     onDisciplineMismatch={handleDisciplineMismatch}
                     onOpenWorkloadModal={handleOpenWorkloadModal}
@@ -827,13 +873,102 @@ function DashboardContent() {
           onClose={() => setSelectedTaskForAssignment(null)}
         />
 
-        {/* Floating Resource Free Pool across all boards */}
-        <FreePoolContainer
-          users={users}
-          tasks={tasks}
-          onAddTask={handleOpenAddTask}
-          onSelectUser={handleSelectFreeResource}
-        />
+        {/* Undo Toast */}
+        {undoToast && !activeDragInfo && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="free-pool-panel fixed bottom-12 sm:bottom-4 left-4 z-40 flex items-center gap-2.5 rounded-[9px] border border-[var(--border)] bg-[var(--surface-raised)] px-3 py-2 text-xs text-[var(--text-primary)] max-w-[calc(100vw-2rem)] sm:max-w-sm"
+          >
+            <span className="truncate font-medium">{undoToast.message}</span>
+            <button
+              type="button"
+              onClick={async () => {
+                const action = undoToast;
+                setUndoToast(null);
+                await action.undo().catch(err => {
+                  setWorkspaceNotice(err instanceof Error ? err.message : 'Could not undo the last action. Please retry.');
+                });
+              }}
+              className="inline-flex items-center gap-1 rounded-[5px] bg-[var(--accent-soft)] px-2 py-1 text-[11px] font-semibold text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25 shrink-0 cursor-pointer"
+              style={{ minHeight: 'auto' }}
+            >
+              <RotateCcw className="h-3 w-3" />
+              <span>Undo</span>
+            </button>
+            <button
+              type="button"
+              aria-label="Dismiss notification"
+              onClick={() => setUndoToast(null)}
+              className="rounded p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] shrink-0 cursor-pointer"
+              style={{ minHeight: 'auto' }}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Keyboard Shortcuts Reference Modal */}
+        <AnimatePresence>
+          {shortcutsOpen && (
+            <div
+              className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4"
+              onClick={e => {
+                if (e.target === e.currentTarget) setShortcutsOpen(false);
+              }}
+            >
+              <DialogPanel
+                aria-label="Keyboard shortcuts"
+                onClose={() => setShortcutsOpen(false)}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 6 }}
+                transition={{ duration: 0.15 }}
+                onClick={e => e.stopPropagation()}
+                className="w-full max-w-sm overflow-hidden"
+              >
+                <div className="dialog-header">
+                  <div className="flex items-center gap-2">
+                    <Keyboard className="h-4 w-4 text-[#1d4ed8] dark:text-blue-400" />
+                    <h2 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">Keyboard Shortcuts</h2>
+                  </div>
+                  <button
+                    type="button"
+                    aria-label="Close shortcuts"
+                    onClick={() => setShortcutsOpen(false)}
+                    className="icon-button shrink-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <dl className="divide-y divide-[var(--border-subtle)] text-xs px-5 py-2">
+                  <div className="flex items-center justify-between py-2.5">
+                    <dt className="text-[var(--text-secondary)]">Focus workspace search</dt>
+                    <dd className="ledger-badge font-mono">/</dd>
+                  </div>
+                  {canCreatePipelineTask && (
+                    <div className="flex items-center justify-between py-2.5">
+                      <dt className="text-[var(--text-secondary)]">New pipeline brief</dt>
+                      <dd className="ledger-badge font-mono">n</dd>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between py-2.5">
+                    <dt className="text-[var(--text-secondary)]">Close active modal or popover</dt>
+                    <dd className="ledger-badge font-mono">Esc</dd>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <dt className="text-[var(--text-secondary)]">Rename card title inline</dt>
+                    <dd className="ledger-badge font-mono">Double-click</dd>
+                  </div>
+                  <div className="flex items-center justify-between py-2.5">
+                    <dt className="text-[var(--text-secondary)]">Toggle shortcuts reference</dt>
+                    <dd className="ledger-badge font-mono">?</dd>
+                  </div>
+                </dl>
+              </DialogPanel>
+            </div>
+          )}
+        </AnimatePresence>
 
         {/* Floating Drag-to-Delete Zone: Shown when a card is being dragged */}
         {activeDragInfo && (
@@ -866,6 +1001,7 @@ function DashboardContent() {
       {/* Sign-In & Add-Member Modals */}
       <SignInModal
         isOpen={!currentUser || (loginModalOpen && !isNewAccountModal)}
+        canDismiss={Boolean(currentUser)}
         onClose={() => setLoginModalOpen(false)}
       />
       <AddMemberModal

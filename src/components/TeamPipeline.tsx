@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { useAuth, useWorkspace } from '../context/DashboardContext';
 import { Task, User, RoleFilter } from '../types';
@@ -7,7 +7,6 @@ import { isValidHttpUrl } from '../utils/taskMetadata';
 import {
   Inbox,
   Plus,
-  Search,
   UserX,
   Clock,
   Edit2,
@@ -21,13 +20,13 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
-  X,
 } from 'lucide-react';
 
 interface TeamPipelineProps {
   roleFilter: RoleFilter;
   tasks: Task[];
   users: User[];
+  globalSearch?: string;
   onOpenCreateModal: () => void;
   onOpenAssignmentModal: (task: Task) => void;
   onEditTask: (task: Task) => void;
@@ -45,6 +44,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
   roleFilter,
   tasks,
   users,
+  globalSearch = '',
   onOpenCreateModal,
   onOpenAssignmentModal,
   onEditTask,
@@ -58,13 +58,21 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
   } = useAuth();
   const { updateTask } = useWorkspace();
 
-  const [pipelineSearch, setPipelineSearch] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'unassigned' | 'assigned'>('all');
   const [isDragOver, setIsDragOver] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
+  const titleClickTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (titleClickTimerRef.current !== null) {
+        window.clearTimeout(titleClickTimerRef.current);
+      }
+    };
+  }, []);
 
   const userMap = useMemo(() => {
     const map = new Map<string, User>();
@@ -105,7 +113,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
       result = result.filter(t => getTaskAssigneeIds(t).length > 0);
     }
 
-    const query = pipelineSearch.trim().toLowerCase();
+    const query = globalSearch.trim().toLowerCase();
     if (query) {
       result = result.filter(t => {
         const matchesTitle = t.title.toLowerCase().includes(query);
@@ -122,7 +130,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
     }
 
     return result;
-  }, [pipelineTasks, filterMode, pipelineSearch, userMap]);
+  }, [pipelineTasks, filterMode, globalSearch, userMap]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -205,14 +213,14 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
           )}
         </div>
 
-        {/* Hairline Filter Switch, Search & Create Task */}
+        {/* Hairline Filter Switch & Create Task */}
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center rounded-[7px] bg-[var(--surface-subtle)] p-0.5 border border-[var(--border)] text-[11px] font-semibold">
             <button
               type="button"
               aria-pressed={filterMode === 'all'}
               onClick={() => setFilterMode('all')}
-              className={`px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
+              className={`mobile-tap-control px-2.5 py-1 sm:min-h-0 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
                 filterMode === 'all'
                   ? 'bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border)]'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
@@ -224,7 +232,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
               type="button"
               aria-pressed={filterMode === 'unassigned'}
               onClick={() => setFilterMode('unassigned')}
-              className={`px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
+              className={`mobile-tap-control px-2.5 py-1 sm:min-h-0 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
                 filterMode === 'unassigned'
                   ? 'bg-[var(--surface)] text-amber-700 dark:text-amber-400 border border-[var(--border)]'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
@@ -236,7 +244,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
               type="button"
               aria-pressed={filterMode === 'assigned'}
               onClick={() => setFilterMode('assigned')}
-              className={`px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
+              className={`mobile-tap-control px-2.5 py-1 sm:min-h-0 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
                 filterMode === 'assigned'
                   ? 'bg-[var(--surface)] text-[#1d4ed8] dark:text-blue-400 border border-[var(--border)]'
                   : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
@@ -246,36 +254,14 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
             </button>
           </div>
 
-          <div className="relative">
-            <input
-              type="text"
-              value={pipelineSearch}
-              onChange={e => setPipelineSearch(e.target.value)}
-              aria-label="Search pipeline"
-              placeholder="Search pipeline..."
-              className="w-40 sm:w-44 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] pl-7 pr-6 py-1 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
-            />
-            <Search className="absolute left-2 top-2.5 h-3.5 w-3.5 text-[var(--text-muted)]" />
-            {pipelineSearch && (
-              <button
-                type="button"
-                aria-label="Clear pipeline search"
-                onClick={() => setPipelineSearch('')}
-                className="absolute right-1.5 top-1.5 p-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-
           {canCreatePipelineTask ? (
             <button
               type="button"
               onClick={onOpenCreateModal}
-              className="button-primary"
+              className="button-primary mobile-tap-control"
             >
               <Plus className="h-3.5 w-3.5" />
-              <span>Add Task</span>
+              <span>New Brief</span>
             </button>
           ) : (
             <div
@@ -306,25 +292,25 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
             <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
               <Inbox className="h-4 w-4 text-[var(--text-muted)] mb-1.5" />
               <p className="text-xs font-semibold text-[var(--text-primary)]">
-                {pipelineSearch || filterMode !== 'all'
+                {globalSearch.trim() || filterMode !== 'all'
                   ? 'No matching tasks in pipeline'
                   : `${pipelineHeading} is currently empty`}
               </p>
-              <p className="text-[11px] text-[var(--text-secondary)] max-w-sm mt-0.5">
-                {pipelineSearch || filterMode !== 'all'
-                  ? 'Try clearing the search query or changing the filter mode.'
+              <p className="text-xs text-[var(--text-secondary)] max-w-sm mt-0.5">
+                {globalSearch.trim() || filterMode !== 'all'
+                  ? 'Try clearing the workspace search or changing the filter mode.'
                   : canCreatePipelineTask
-                  ? 'Create tasks using Add Task to generate Content or Design pipeline deliverables.'
+                  ? 'Create deliverables using New Brief to generate Content or Design pipeline tasks.'
                   : 'Unscheduled deliverables created by Accounts will appear here.'}
               </p>
-              {canCreatePipelineTask && !pipelineSearch && filterMode === 'all' && (
+              {canCreatePipelineTask && !globalSearch.trim() && filterMode === 'all' && (
                 <button
                   type="button"
                   onClick={onOpenCreateModal}
                   className="button-primary mt-2.5"
                 >
                   <Plus className="h-3.5 w-3.5" />
-                  <span>Add Task</span>
+                  <span>New Brief</span>
                 </button>
               )}
             </div>
@@ -375,8 +361,10 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                     }}
                     onDragEndCapture={() => onDragTaskEnd?.()}
                     className={`group relative flex flex-col justify-between px-4 py-2.5 hover:bg-[var(--surface-muted)] transition-colors select-none cursor-grab active:cursor-grabbing ${
-                      idx >= 3 ? 'lg:border-t lg:border-[var(--border-subtle)]' : ''
-                    } ${idx >= 2 && displayedTasks.length > 2 ? 'md:border-t md:border-[var(--border-subtle)] lg:border-t-0' : ''}`}
+                      idx >= 2 && displayedTasks.length > 2 ? 'md:border-t md:border-[var(--border-subtle)]' : ''
+                    } ${
+                      idx === 2 ? 'lg:border-t-0' : idx >= 3 ? 'lg:border-t lg:border-[var(--border-subtle)]' : ''
+                    }`}
                   >
                     {/* Top Line: Discipline · Priority · Due + Quick Actions */}
                     <div className="flex items-center justify-between gap-2 mb-1">
@@ -425,8 +413,8 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                             onEditTask(task);
                           }}
                           title="Edit task details"
+                          aria-label={`Edit ${task.title}`}
                           className="rounded p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
-                          style={{ minHeight: 'auto' }}
                         >
                           <Edit2 className="h-3 w-3" />
                         </button>
@@ -437,8 +425,8 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                             onDeleteTask(task);
                           }}
                           title="Delete pipeline task"
+                          aria-label={`Delete ${task.title}`}
                           className="rounded p-1 text-[var(--text-secondary)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
-                          style={{ minHeight: 'auto' }}
                         >
                           <Trash2 className="h-3 w-3" />
                         </button>
@@ -449,7 +437,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         {task.isSubtask && task.parentTaskTitle && (
-                          <div className="flex items-center gap-1 text-[10.5px] text-[#1d4ed8] dark:text-blue-400 font-medium truncate">
+                          <div className="flex items-center gap-1 text-[11px] text-[#1d4ed8] dark:text-blue-400 font-medium truncate">
                             <CornerDownRight className="h-2.5 w-2.5 shrink-0" />
                             <span className="truncate">{task.parentTaskTitle}</span>
                           </div>
@@ -485,17 +473,34 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                             />
                           </div>
                         ) : (
-                          <h4
-                            onClick={e => {
-                              e.stopPropagation();
-                              setEditingTaskId(task.id);
-                              setEditingTitle(task.title);
-                            }}
-                            title="Click to rename"
-                            className="text-[13px] font-semibold text-[var(--text-primary)] truncate hover:text-[#1d4ed8] dark:hover:text-blue-400 cursor-text leading-snug"
-                          >
-                            {task.title}
-                          </h4>
+                          <h3 className="text-[13px] font-semibold text-[var(--text-primary)] leading-snug">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (titleClickTimerRef.current !== null) {
+                                  window.clearTimeout(titleClickTimerRef.current);
+                                }
+                                titleClickTimerRef.current = window.setTimeout(() => {
+                                  titleClickTimerRef.current = null;
+                                  onEditTask(task);
+                                }, 220);
+                              }}
+                              onDoubleClick={e => {
+                                e.stopPropagation();
+                                if (titleClickTimerRef.current !== null) {
+                                  window.clearTimeout(titleClickTimerRef.current);
+                                  titleClickTimerRef.current = null;
+                                }
+                                setEditingTaskId(task.id);
+                                setEditingTitle(task.title);
+                              }}
+                              title="Click to inspect brief · Double-click to rename"
+                              className="w-full text-left truncate hover:text-[#1d4ed8] dark:hover:text-blue-400 cursor-pointer transition-colors"
+                              style={{ minHeight: 'auto' }}
+                            >
+                              {task.title}
+                            </button>
+                          </h3>
                         )}
 
                         {/* Compact Single-Line Meta: Client · Project · Type · Brief + Load · Est (wrap-safe, no dangling middot) */}

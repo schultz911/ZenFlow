@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { User, TaskStatus } from '../types';
 import { useAuth, useBoardUi, useWorkspace } from '../context/DashboardContext';
 import {
   exportWorkspaceXLS,
@@ -10,6 +11,7 @@ import {
   getTaskAssigneeIds,
   groupTasksByAssignee,
 } from '../utils/workload';
+import { FreePoolContainer } from './FreePoolContainer';
 import {
   Search,
   Download,
@@ -22,18 +24,23 @@ import {
   ShieldCheck,
   BarChart3,
   X,
+  Loader2,
 } from 'lucide-react';
 
 interface OverviewBarProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onOpenAnalytics: () => void;
+  onAddTask: (userId: string, status?: TaskStatus) => void;
+  onSelectFreeUser: (user: User) => void;
 }
 
 export const OverviewBar: React.FC<OverviewBarProps> = ({
   searchQuery,
   onSearchChange,
   onOpenAnalytics,
+  onAddTask,
+  onSelectFreeUser,
 }) => {
   const { canSwitchBoards, isSuperadmin } = useAuth();
   const { activeRoleTab, activeBoardId, setActiveBoardId } = useBoardUi();
@@ -48,6 +55,8 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const [isBoardDropdownOpen, setIsBoardDropdownOpen] = useState(false);
   const boardDropdownRef = useRef<HTMLDivElement>(null);
+  const [mobileMetricsExpanded, setMobileMetricsExpanded] = useState(false);
+  const isSearchPending = localSearch !== searchQuery;
 
   useEffect(() => {
     const dismiss = (event: KeyboardEvent) => {
@@ -165,17 +174,30 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
             </span>
           </div>
 
-          {overloadedMembersCount > 0 && (
-            <span className="ledger-alert-badge">
-              <AlertTriangle aria-hidden="true" className="h-3 w-3 shrink-0" />
-              <span>
-                {overloadedMembersCount} {overloadedMembersCount === 1 ? 'member over' : 'members over'} 12 pts WIP cap
+          <div className="flex items-center gap-2 flex-wrap">
+            {overloadedMembersCount > 0 && (
+              <span className="ledger-alert-badge">
+                <AlertTriangle aria-hidden="true" className="h-3 w-3 shrink-0" />
+                <span>
+                  {overloadedMembersCount} {overloadedMembersCount === 1 ? 'member over' : 'members over'} 12 pts load cap
+                </span>
               </span>
-            </span>
-          )}
+            )}
+            <button
+              type="button"
+              onClick={() => setMobileMetricsExpanded(prev => !prev)}
+              aria-expanded={mobileMetricsExpanded}
+              className="sm:hidden mobile-tap-control inline-flex items-center gap-1 rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-semibold text-[var(--text-secondary)] tabular-nums cursor-pointer"
+            >
+              <span>
+                {teamUtilization.utilizationPercent}% util · {avgWorkload} pts
+              </span>
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${mobileMetricsExpanded ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
         </div>
 
-        <div className="ledger-kpi-grid">
+        <div className={`${mobileMetricsExpanded ? 'grid' : 'hidden sm:grid'} ledger-kpi-grid`}>
           <div className="metric-card col-span-3 sm:col-span-1 border-b lg:border-b-0 border-r border-[var(--border-subtle)]">
             <h2 className="metric-label whitespace-nowrap">Utilization</h2>
             <p className="metric-value mt-1 text-emerald-700 dark:text-emerald-400">
@@ -237,11 +259,15 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
         </div>
       </section>
 
-      {/* Compact Toolbar: Search + Team Board + Analytics + Export */}
+      {/* Compact Toolbar: Search + Team Board + Free Pool + Analytics + Export */}
       <div className="flex items-center justify-between gap-2.5 flex-wrap">
         <div className="relative w-full sm:w-80">
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--text-muted)]">
-            <Search className="h-3.5 w-3.5" />
+            {isSearchPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-[#1d4ed8] dark:text-blue-400" />
+            ) : (
+              <Search className="h-3.5 w-3.5" />
+            )}
           </div>
           <input
             id="task-search-input"
@@ -249,8 +275,8 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
             type="text"
             value={localSearch}
             onChange={e => setLocalSearch(e.target.value)}
-            placeholder="Search tasks, members, clients (Ctrl+F)..."
-            className="w-full rounded-[7px] border border-[var(--border)] bg-[var(--surface)] py-1.5 pl-9 pr-8 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition-colors"
+            placeholder="Search tasks, members, clients (/)..."
+            className="mobile-tap-control w-full rounded-[7px] border border-[var(--border)] bg-[var(--surface)] py-1.5 pl-9 pr-9 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition-colors"
           />
           {localSearch && (
             <button
@@ -260,7 +286,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                 setLocalSearch('');
                 onSearchChange('');
               }}
-              className="absolute inset-y-0 right-0 flex items-center pr-2.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
+              className="mobile-tap-control absolute inset-y-0 right-0 flex items-center justify-center w-9 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
             >
               <X className="h-3.5 w-3.5" />
             </button>
@@ -275,7 +301,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                 type="button"
                 aria-expanded={isBoardDropdownOpen}
                 onClick={() => setIsBoardDropdownOpen(prev => !prev)}
-                className="button-secondary"
+                className="button-secondary mobile-tap-control"
               >
                 <Users className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
                 <span className="max-w-[140px] truncate">{currentBoardLabel}</span>
@@ -327,14 +353,21 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
             </div>
           )}
 
+          <FreePoolContainer
+            users={users}
+            tasks={tasks}
+            onAddTask={onAddTask}
+            onSelectUser={onSelectFreeUser}
+          />
+
           <button
             id="view-analytics-btn"
             type="button"
             onClick={onOpenAnalytics}
             title="Open executive workspace analytics modal"
-            className="button-primary"
+            className="button-secondary mobile-tap-control"
           >
-            <BarChart3 className="h-3.5 w-3.5" />
+            <BarChart3 className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
             <span>View Analytics</span>
           </button>
 
@@ -345,21 +378,21 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
               aria-expanded={showExportMenu}
               onClick={() => setShowExportMenu(prev => !prev)}
               title="Export workspace or audit reports"
-              className="button-secondary"
+              className="button-secondary mobile-tap-control"
             >
               <Download className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
               <span>Export Report</span>
             </button>
 
             {showExportMenu && (
-              <div className="menu-surface absolute right-0 mt-1.5 w-52 rounded-[9px] border border-[var(--border)] p-1 z-20">
+              <div aria-label="Export options" className="menu-surface absolute right-0 mt-1.5 w-52 rounded-[9px] border border-[var(--border)] p-1 z-20">
                 <button
                   type="button"
                   onClick={() => {
                     setShowExportMenu(false);
                     exportWorkspaceXLS(tasks, users);
                   }}
-                  className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                  className="menu-item cursor-pointer"
                 >
                   <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
                   <span>Export Excel (.xls) Report</span>
@@ -370,7 +403,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                     setShowExportMenu(false);
                     exportWorkspaceJSON(tasks, users);
                   }}
-                  className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                  className="menu-item cursor-pointer"
                 >
                   <FileCode className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
                   <span>Export JSON Audit</span>
@@ -382,7 +415,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                     setShowExportMenu(false);
                     downloadAuditLogs();
                   }}
-                  className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                  className="menu-item cursor-pointer"
                 >
                   <ShieldCheck className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
                   <span>Download SOC2 Audit (.ndjson)</span>

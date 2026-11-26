@@ -1,8 +1,8 @@
 import { DialogPanel } from './ui/DialogPanel';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task } from '../types';
-import { getUserTag } from '../utils/workload';
+import { getUserTag, getTaskAssigneeIds, isTaskAssignedToUser } from '../utils/workload';
 import { AlertTriangle, Trash2, X, Loader2 } from 'lucide-react';
 
 interface DeleteUserModalProps {
@@ -21,31 +21,25 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({
   onConfirmDelete,
 }) => {
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // Close on Escape key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen && !isDeleting) {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, isDeleting, onClose]);
-
-  const { userTasks, counts } = useMemo(() => {
-    if (!user) return { userTasks: [], counts: { pipeline: 0, todo: 0, in_progress: 0, in_review: 0, done: 0, archived: 0 } };
+  const { userTasks, soleCount, sharedCount, counts } = useMemo(() => {
+    if (!user) return { userTasks: [], soleCount: 0, sharedCount: 0, counts: { pipeline: 0, todo: 0, in_progress: 0, in_review: 0, done: 0, archived: 0 } };
     const list: Task[] = [];
+    let sole = 0;
+    let shared = 0;
     const c = { pipeline: 0, todo: 0, in_progress: 0, in_review: 0, done: 0, archived: 0 };
     for (const t of tasks) {
-      if (t.userId === user.id) {
+      if (isTaskAssignedToUser(t, user.id)) {
         list.push(t);
+        if (getTaskAssigneeIds(t).length > 1) shared++;
+        else sole++;
         if (t.status in c) {
           c[t.status as keyof typeof c]++;
         }
       }
     }
-    return { userTasks: list, counts: c };
+    return { userTasks: list, soleCount: sole, sharedCount: shared, counts: c };
   }, [tasks, user]);
 
   const pipelineCount = counts.pipeline;
@@ -57,13 +51,14 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({
 
   const handleDelete = async () => {
     if (!user) return;
+    setDeleteError(null);
     try {
       setIsDeleting(true);
       await onConfirmDelete(user.id);
       setIsDeleting(false);
       onClose();
     } catch (err) {
-      console.error('Failed to delete user:', err);
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete member. Please try again.');
       setIsDeleting(false);
     }
   };
@@ -112,6 +107,13 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({
             </div>
 
             <div className="p-5 space-y-4">
+              {deleteError && (
+                <div role="alert" className="callout callout-danger flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>{deleteError}</span>
+                </div>
+              )}
+
               {/* User Identity Strip */}
               <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] p-3 flex items-center gap-3">
                 <div
@@ -149,15 +151,20 @@ export const DeleteUserModal: React.FC<DeleteUserModalProps> = ({
                     <span>Permanent Deletion Warning</span>
                   </p>
                   <p>
-                    Deleting <strong>{user.name}</strong> will permanently erase their profile and all{' '}
-                    <strong className="tabular-nums">{userTasks.length}</strong> associated task{userTasks.length === 1 ? '' : 's'}. This action cannot be reversed.
+                    Deleting <strong>{user.name}</strong> will permanently erase their profile, delete{' '}
+                    <strong className="tabular-nums">{soleCount}</strong> sole-assigned task{soleCount === 1 ? '' : 's'}
+                    {sharedCount > 0 && (
+                      <>
+                        , and unassign them from <strong className="tabular-nums">{sharedCount}</strong> shared task{sharedCount === 1 ? '' : 's'}
+                      </>
+                    )}. This action cannot be reversed.
                   </p>
                 </div>
 
                 {userTasks.length > 0 && (
                   <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2.5">
                     <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)] mb-2 tabular-nums">
-                      Tasks to be deleted ({userTasks.length} total)
+                      Affected Tasks ({userTasks.length} total)
                     </p>
                     <div className="flex flex-wrap gap-1.5 tabular-nums">
                       {pipelineCount > 0 && (

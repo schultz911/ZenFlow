@@ -66,60 +66,66 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
   const displayList = shouldScroll ? [...urgentTasks, ...urgentTasks] : urgentTasks;
 
   return (
-    <div
-      id="due-tasks-marquee-ribbon"
-      className="flex items-center gap-2 sm:gap-3 rounded-[10px] border border-red-200 dark:border-red-500/30 bg-red-50/75 dark:bg-red-950/25 px-2.5 sm:px-3 py-1.5 text-xs overflow-hidden"
-    >
-      <div className="ledger-alert-badge shrink-0 z-10 select-none">
-        <AlertTriangle className="h-3 w-3 shrink-0" />
-        <span className="uppercase tracking-wider">
-          {overdueCount > 0 ? `${overdueCount} Overdue` : `${dueTodayCount} Due Today`}
-        </span>
-      </div>
-
-      <div ref={containerRef} className="min-w-0 flex-1 overflow-hidden relative">
+    <div className="sticky top-[var(--header-height)] z-20 w-full bg-[var(--canvas)]/96 backdrop-blur-md border-b border-[var(--border-subtle)]">
+      <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8 py-1.5">
         <div
-          ref={contentRef}
-          className={`${
-            shouldScroll
-              ? 'animate-marquee items-center divide-x divide-red-200/80 dark:divide-red-500/25'
-              : 'flex items-center divide-x divide-red-200/80 dark:divide-red-500/25 overflow-x-auto no-scrollbar'
-          }`}
+          id="due-tasks-marquee-ribbon"
+          className="flex items-center gap-2 sm:gap-3 rounded-[10px] border border-red-200 dark:border-red-500/35 bg-[#fef2f2] dark:bg-[#231418] px-2.5 sm:px-3 py-1.5 text-xs overflow-hidden"
         >
-          {displayList.map((task, idx) => {
-            const firstUid = getTaskAssigneeIds(task)[0];
-            const user = firstUid ? userMap.get(firstUid) : undefined;
-            const isOverdue = task.days < 0;
+          <div className="ledger-alert-badge shrink-0 z-10 select-none">
+            <AlertTriangle aria-hidden="true" className="h-3 w-3 shrink-0" />
+            <span className="uppercase tracking-wider">
+              {overdueCount > 0 ? `${overdueCount} Overdue` : `${dueTodayCount} Due Today`}
+            </span>
+          </div>
 
-            return (
-              <button
-                key={`${task.id}-${idx}`}
-                type="button"
-                onClick={() => onTaskClick(task)}
-                title={`Click to inspect or reschedule "${task.title}" (Assigned to ${user?.name || 'Unassigned'})`}
-                className="flex items-center gap-1.5 px-2.5 first:pl-0.5 py-0.5 text-left transition-colors cursor-pointer shrink-0 group max-w-full"
-                style={{ minHeight: 'auto' }}
-              >
-                <span className="font-semibold text-[var(--text-primary)] max-w-[70px] sm:max-w-[110px] truncate text-[11px]">
-                  {user?.name || 'Unassigned'}
-                </span>
-                <span className="text-[var(--text-muted)] text-[11px] shrink-0">·</span>
-                <span className="text-[var(--text-secondary)] max-w-[92px] sm:max-w-[200px] truncate text-[11px] group-hover:text-[#1d4ed8] dark:group-hover:text-blue-400 transition-colors">
-                  {task.title}
-                </span>
-                <span
-                  className={`inline-flex items-center gap-1 tabular-nums text-[11px] font-semibold shrink-0 whitespace-nowrap ${
-                    isOverdue
-                      ? 'text-red-700 dark:text-red-400'
-                      : 'text-amber-700 dark:text-amber-400'
-                  }`}
-                >
-                  <Clock className="h-2.5 w-2.5 shrink-0" />
-                  <span>{isOverdue ? `${Math.abs(task.days)}d late` : 'Today'}</span>
-                </span>
-              </button>
-            );
-          })}
+          <div ref={containerRef} className="min-w-0 flex-1 overflow-hidden relative">
+            <div
+              ref={contentRef}
+              className={`${
+                shouldScroll
+                  ? 'animate-marquee items-center divide-x divide-red-200/80 dark:divide-red-500/25'
+                  : 'flex items-center divide-x divide-red-200/80 dark:divide-red-500/25 overflow-x-auto no-scrollbar'
+              }`}
+            >
+              {displayList.map((task, idx) => {
+                const isClone = shouldScroll && idx >= urgentTasks.length;
+                const firstUid = getTaskAssigneeIds(task)[0];
+                const user = firstUid ? userMap.get(firstUid) : undefined;
+                const isOverdue = task.days < 0;
+
+                return (
+                  <button
+                    key={`${task.id}-${idx}`}
+                    type="button"
+                    aria-hidden={isClone || undefined}
+                    tabIndex={isClone ? -1 : undefined}
+                    onClick={() => onTaskClick(task)}
+                    title={`Click to inspect or reschedule "${task.title}" (Assigned to ${user?.name || 'Unassigned'})`}
+                    className="mobile-tap-control flex items-center gap-1.5 px-2.5 first:pl-0.5 py-1.5 sm:py-0.5 sm:min-h-0 text-left transition-colors cursor-pointer shrink-0 group max-w-full"
+                  >
+                    <span className="font-semibold text-[var(--text-primary)] max-w-[70px] sm:max-w-[110px] truncate text-[11px]">
+                      {user?.name || 'Unassigned'}
+                    </span>
+                    <span className="text-[var(--text-muted)] text-[11px] shrink-0">·</span>
+                    <span className="text-[var(--text-secondary)] max-w-[92px] sm:max-w-[200px] truncate text-[11px] group-hover:text-[#1d4ed8] dark:group-hover:text-blue-400 transition-colors">
+                      {task.title}
+                    </span>
+                    <span
+                      className={`inline-flex items-center gap-1 tabular-nums text-[11px] font-semibold shrink-0 whitespace-nowrap ${
+                        isOverdue
+                          ? 'text-red-700 dark:text-red-400'
+                          : 'text-amber-700 dark:text-amber-400'
+                      }`}
+                    >
+                      <Clock aria-hidden="true" className="h-2.5 w-2.5 shrink-0" />
+                      <span>{isOverdue ? `${Math.abs(task.days)}d late` : 'Today'}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
     </div>

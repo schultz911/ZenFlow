@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, UserPlus, AlertCircle, Loader2, ShieldAlert, ChevronDown } from 'lucide-react';
+import { X, UserPlus, AlertCircle, Loader2, ShieldAlert } from 'lucide-react';
 import { useAuth, useClickUp, useWorkspace } from '../context/DashboardContext';
 import { Role } from '../types';
 import { DialogPanel } from './ui/DialogPanel';
 import { MemberRoleFields } from './forms/MemberRoleFields';
+import { ClickupMemberPicker } from './ClickupMemberPicker';
 
 interface AddMemberModalProps {
   isOpen: boolean;
@@ -234,36 +235,23 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose,
 
                 {isClickupConnected && clickupMembers.length > 0 && (
                   <div>
-                    <label className="field-label" htmlFor="addmember-clickup">
+                    <label className="field-label">
                       Link ClickUp User (Optional)
                     </label>
-                    <div className="relative">
-                      <select
-                        id="addmember-clickup"
-                        value={selectedClickupUserId}
-                        onChange={e => setSelectedClickupUserId(e.target.value)}
-                        className="field-control pr-8 cursor-pointer"
-                      >
-                        <option value="">— Auto-match by email —</option>
-                        {clickupMembers.map(m => (
-                          <option key={m.id} value={m.id}>
-                            {m.username} ({m.email})
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
-                    </div>
+                    <ClickupMemberPicker
+                      members={clickupMembers}
+                      selectedMemberId={selectedClickupUserId || undefined}
+                      onSelect={member => setSelectedClickupUserId(member ? member.id : '')}
+                    />
                   </div>
                 )}
 
-                {isClickupConnected && (
-                  <div className="callout callout-info flex items-start gap-2.5 text-[11px]">
-                    <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" />
-                    <p>
-                      The new member will be able to sign in immediately using their registered Google email.
-                    </p>
-                  </div>
-                )}
+                <div className="callout callout-info flex items-start gap-2.5 text-[11px]">
+                  <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5" />
+                  <p>
+                    The new member will be able to sign in immediately using their registered Google email.
+                  </p>
+                </div>
               </div>
 
               <div className="dialog-footer">

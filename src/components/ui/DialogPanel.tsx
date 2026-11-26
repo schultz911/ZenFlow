@@ -26,7 +26,10 @@ export function DialogPanel({ children, className = '', onClose, busy = false, .
     const focusable = () => Array.from(panel.querySelectorAll<HTMLElement>(
       'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
     )).filter(element => element.getClientRects().length > 0 && !element.closest('[inert]'));
-    panel.focus({ preventScroll: true });
+    if (!panel.contains(document.activeElement)) {
+      const initialTarget = panel.querySelector<HTMLElement>('[autofocus]') || focusable()[0] || panel;
+      initialTarget.focus({ preventScroll: true });
+    }
     const keydown = (event: KeyboardEvent) => {
       if (panels.at(-1) !== panel) return;
       if (event.key === 'Escape') {

@@ -1,8 +1,8 @@
 import { DialogPanel } from './ui/DialogPanel';
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task } from '../types';
-import { calculateUserWorkload, formatDueDate, getCognitiveLoadLabel, calculateWeeklyVelocity, getUserTag, isTaskAssignedToUser } from '../utils/workload';
+import { calculateUserWorkload, formatDueDate, formatTaskStatus, getCognitiveLoadLabel, calculateWeeklyVelocity, getUserTag, isTaskAssignedToUser } from '../utils/workload';
 import { X, TrendingUp, Clock, CheckCircle2 } from 'lucide-react';
 
 interface WorkloadModalProps {
@@ -34,18 +34,6 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
     if (!isOpen || !user) return null;
     return calculateWeeklyVelocity(userTasks);
   }, [isOpen, user, userTasks]);
-
-  // Escape key dismissal
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
 
   const maxBarHeight = 65;
   const maxCountScale = Math.max(3, velocity?.maxDayCount || 3);
@@ -134,19 +122,19 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                   {/* Ruled Quick Metrics */}
                   <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-[var(--border-subtle)] border-t sm:border-t-0 sm:border-l border-[var(--border-subtle)] pt-2.5 sm:pt-0 sm:pl-3 gap-y-2 text-xs tabular-nums">
                     <div className="pr-3">
-                      <p className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">In Progress</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">In Progress</p>
                       <p className="font-semibold text-[#1d4ed8] dark:text-blue-400 mt-0.5">{workload.inProgressCount}</p>
                     </div>
                     <div className="px-3">
-                      <p className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Dated</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Dated</p>
                       <p className="font-semibold text-[var(--text-primary)] mt-0.5">{workload.todoWithDeadlineCount}</p>
                     </div>
                     <div className="px-3">
-                      <p className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">No Date</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">No Date</p>
                       <p className="font-semibold text-[var(--text-secondary)] mt-0.5">{workload.todoNoDeadlineCount}</p>
                     </div>
                     <div className="pl-3">
-                      <p className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">In Review</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">In Review</p>
                       <p className="font-semibold text-amber-700 dark:text-amber-400 mt-0.5">{workload.inReviewCount}</p>
                     </div>
                   </div>
@@ -154,7 +142,7 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
 
                 {/* Visual capacity indicator */}
                 <div className="px-4 py-3 bg-[var(--surface-muted)] border-t border-[var(--border-subtle)]">
-                  <div className="flex justify-between text-[10.5px] tabular-nums text-[var(--text-secondary)] mb-1.5 font-medium">
+                  <div className="flex justify-between text-[11px] tabular-nums text-[var(--text-secondary)] mb-1.5 font-medium">
                     <span>Light (0–3.9)</span>
                     <span>Optimal (4–7.9)</span>
                     <span>Heavy (8–11.9)</span>
@@ -227,9 +215,14 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                       return (
                         <g
                           key={day.dateStr}
-                          className="cursor-pointer group"
+                          role="img"
+                          tabIndex={0}
+                          aria-label={`${day.displayDate} (${day.dayLabel}): ${day.completedCount} completed (${day.completedPoints} points)`}
+                          className="group focus:outline-none"
                           onMouseEnter={() => setHoveredDate(day.dateStr)}
                           onMouseLeave={() => setHoveredDate(null)}
+                          onFocus={() => setHoveredDate(day.dateStr)}
+                          onBlur={() => setHoveredDate(null)}
                         >
                           <rect
                             x={slotX}
@@ -283,7 +276,7 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                             y={124}
                             textAnchor="middle"
                             fill="var(--text-muted)"
-                            className="text-[10.5px] tabular-nums select-none"
+                            className="text-[11px] tabular-nums select-none"
                           >
                             {day.displayDate.split(' ')[1]}
                           </text>
@@ -320,21 +313,27 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
 
               {/* Task by Task Breakdown Table */}
               <div>
-                <h3 className="field-label tabular-nums">
-                  Active Tasks ({workload.items.length})
-                </h3>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                  <h3 className="field-label !mb-0 tabular-nums">
+                    Active Tasks ({workload.items.length})
+                  </h3>
+                  <span className="text-[11px] text-[var(--text-muted)]">
+                    Score = Cognitive load weight × Deadline proximity (12 pts cap)
+                  </span>
+                </div>
                 {workload.items.length === 0 ? (
                   <p className="rounded-[7px] border border-dashed border-[var(--border)] p-4 text-center text-xs text-[var(--text-secondary)]">
                     No active tasks contributing to workload score.
                   </p>
                 ) : (
                   <div role="region" aria-label="Active task workload breakdown. Scroll horizontally to see all columns." tabIndex={0} className="overflow-x-auto rounded-[7px] border border-[var(--border)] bg-[var(--surface)]">
-                    <table className="w-full min-w-[540px] text-left text-xs">
-                      <thead className="bg-[var(--surface-muted)] text-[10.5px] uppercase tracking-wider text-[var(--text-secondary)] border-b border-[var(--border)]">
+                    <table className="w-full min-w-[560px] text-left text-xs">
+                      <thead className="bg-[var(--surface-muted)] text-[11px] uppercase tracking-wider text-[var(--text-secondary)] border-b border-[var(--border)]">
                         <tr>
                           <th scope="col" className="py-2 px-3 font-semibold">Task</th>
-                          <th scope="col" className="py-2 px-3 font-semibold">Status</th>
+                          <th scope="col" className="py-2 px-3 font-semibold whitespace-nowrap">Status</th>
                           <th scope="col" className="py-2 px-3 font-semibold">Cognitive Load</th>
+                          <th scope="col" className="py-2 px-3 font-semibold whitespace-nowrap">Points</th>
                           <th scope="col" className="py-2 px-3 font-semibold">Due Date &amp; Proximity</th>
                         </tr>
                       </thead>
@@ -342,15 +341,16 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                         {workload.items.map(item => {
                           const dueInfo = formatDueDate(item.dueDate);
                           const loadLabel = getCognitiveLoadLabel(item.cognitiveLoad, user.role);
+                          const itemPoints = Math.round(item.calculatedScore * 100) / 100;
 
                           return (
                             <tr key={item.taskId} className="hover:bg-[var(--surface-muted)] transition-colors">
                               <td className="py-2 px-3 font-semibold text-[var(--text-primary)] max-w-[180px] truncate">
                                 {item.title}
                               </td>
-                              <td className="py-2 px-3">
-                                <span className="ledger-badge capitalize">
-                                  {item.status.replace('_', ' ')}
+                              <td className="py-2 px-3 whitespace-nowrap">
+                                <span className="ledger-badge whitespace-nowrap">
+                                  {formatTaskStatus(item.status)}
                                 </span>
                               </td>
                               <td className="py-2 px-3">
@@ -358,10 +358,13 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                                   {loadLabel}
                                 </span>
                               </td>
+                              <td className="py-2 px-3 whitespace-nowrap tabular-nums font-bold text-[var(--text-primary)]">
+                                {itemPoints} pts
+                              </td>
                               <td className="py-2 px-3 tabular-nums text-[var(--text-secondary)]">
                                 {item.status === 'in_review' ? (
                                   <span className="text-amber-700 dark:text-amber-400 font-semibold text-[11px]">
-                                    {item.billableHours !== undefined ? `${item.billableHours}h` : '0h'} billable ({Math.round(item.calculatedScore * 100) / 100} pts)
+                                    {item.billableHours !== undefined ? `${item.billableHours}h` : '0h'} billable
                                   </span>
                                 ) : item.hasDeadline ? (
                                   <span className={dueInfo.isOverdue ? 'text-red-600 dark:text-red-400 font-semibold' : dueInfo.isToday ? 'text-amber-700 dark:text-amber-400 font-semibold' : ''}>

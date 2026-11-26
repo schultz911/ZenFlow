@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task, TaskStatus, DragTaskInfo, CognitiveLoad } from '../types';
 import {
@@ -7,8 +8,10 @@ import {
   getUserTag,
   calculateTasksEfficiency,
   formatHoursRatio,
+  getLocalOffsetDateKey,
   isTaskAssignedToUser,
 } from '../utils/workload';
+import { DateQuickPresets } from './ui/DateQuickPresets';
 import { TaskCard } from './TaskCard';
 import { RetainerSwimlane } from './RetainerSwimlane';
 import { DeadlineDemandModal } from './DeadlineDemandModal';
@@ -25,7 +28,6 @@ import {
   Archive,
   ChevronDown,
   ChevronUp,
-  ChevronRight,
   Activity,
   UserCheck,
   ArrowDownToLine,
@@ -34,6 +36,7 @@ import {
   ArrowDown,
   Calendar,
   UserCog,
+  MoreHorizontal,
 } from 'lucide-react';
 import { useAuth, useWorkspace } from '../context/DashboardContext';
 
@@ -122,6 +125,49 @@ const COLUMNS: ColumnConfig[] = [
   },
 ];
 
+function ColumnScrollArea({
+  children,
+  taskCount,
+}: {
+  children: React.ReactNode;
+  taskCount: number;
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [hasMoreBelow, setHasMoreBelow] = useState(false);
+
+  const checkOverflow = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setHasMoreBelow(el.scrollHeight - el.clientHeight - el.scrollTop > 6);
+  }, []);
+
+  useEffect(() => {
+    checkOverflow();
+    const el = scrollRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(checkOverflow);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [checkOverflow, taskCount]);
+
+  return (
+    <>
+      <div
+        ref={scrollRef}
+        onScroll={checkOverflow}
+        className="flex-1 space-y-2 max-h-[385px] overflow-y-auto pt-0.5 pb-1 pr-0.5"
+      >
+        {children}
+      </div>
+      {hasMoreBelow && (
+        <div className="pt-1.5 mt-1 border-t border-[var(--border-subtle)] text-center text-[11px] font-medium text-[var(--text-muted)] tabular-nums select-none">
+          More tasks below ({taskCount} total) · Scroll
+        </div>
+      )}
+    </>
+  );
+}
+
 const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   user,
   tasks,
@@ -159,6 +205,11 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   const canEdit = useMemo(() => canEditUserTasks(user.id), [canEditUserTasks, user.id]);
 
   const [showArchived, setShowArchived] = useState(false);
+  const [showEmptyOngoing, setShowEmptyOngoing] = useState(false);
+  const [memberMenuOpen, setMemberMenuOpen] = useState(false);
+  const [memberMenuPos, setMemberMenuPos] = useState<{ top: number; left: number } | null>(null);
+  const memberMenuBtnRef = useRef<HTMLButtonElement>(null);
+  const memberMenuPopRef = useRef<HTMLDivElement>(null);
   const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
   const [dragOverHeader, setDragOverHeader] = useState(false);
   const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
@@ -251,18 +302,9 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     };
   }, [quickAddStatus]);
 
-  const getPresetDateStr = useCallback((daysAhead: number) => {
-    const d = new Date();
-    d.setDate(d.getDate() + daysAhead);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  }, []);
-
   const handleCommitQuickAdd = useCallback(async (status: TaskStatus) => {
     const trimmed = quickAddTitle.trim();
-    const resolvedDueDate = quickAddDueDate || getPresetDateStr(1);
+    const resolvedDueDate = quickAddDueDate || getLocalOffsetDateKey(1);
     if (!trimmed || !resolvedDueDate || isSubmittingQuickAdd) return;
     setIsSubmittingQuickAdd(true);
     try {
@@ -270,11 +312,50 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
         await onQuickAddTask(user.id, trimmed, status, quickAddLoad, resolvedDueDate);
       }
       setQuickAddTitle('');
-      setQuickAddDueDate(getPresetDateStr(1));
+      setQuickAddDueDate(getLocalOffsetDateKey(1));
     } finally {
       setIsSubmittingQuickAdd(false);
     }
-  }, [quickAddTitle, quickAddDueDate, getPresetDateStr, isSubmittingQuickAdd, onQuickAddTask, user.id, quickAddLoad]);
+  }, [quickAddTitle, quickAddDueDate, isSubmittingQuickAdd, onQuickAddTask, user.id, quickAddLoad]);
+
+  useEffect(() => {
+    if (!memberMenuOpen) return;
+    const updateMenuPos = () => {
+      const btn = memberMenuBtnRef.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      const menuW = 208;
+      const left = Math.max(10, Math.min(rect.right - menuW, window.innerWidth - menuW - 10));
+      setMemberMenuPos({ top: rect.bottom + 6, left });
+    };
+    updateMenuPos();
+    const onOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        memberMenuBtnRef.current && !memberMenuBtnRef.current.contains(target) &&
+        memberMenuPopRef.current && !memberMenuPopRef.current.contains(target)
+      ) {
+        setMemberMenuOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMemberMenuOpen(false);
+        memberMenuBtnRef.current?.focus();
+      }
+    };
+    document.addEventListener('mousedown', onOutside);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('resize', updateMenuPos);
+    window.addEventListener('scroll', updateMenuPos, true);
+    return () => {
+      document.removeEventListener('mousedown', onOutside);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', updateMenuPos);
+      window.removeEventListener('scroll', updateMenuPos, true);
+    };
+  }, [memberMenuOpen]);
 
   const handleTaskDragStart = useCallback(
     (draggedTask: Task) => {
@@ -698,7 +779,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 {user.name}
               </h3>
               {isCurrentUser && (
-                <span className="rounded-[4px] bg-[var(--accent-soft)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#1d4ed8] dark:text-blue-300">
+                <span className="rounded-[4px] bg-[var(--accent-soft)] px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-[#1d4ed8] dark:text-blue-300">
                   You
                 </span>
               )}
@@ -712,16 +793,6 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 </span>
               )}
 
-              {workload.level === 'overloaded' && (
-                <span
-                  title="Cognitive capacity reached (12+ pts)."
-                  className="ledger-alert-badge"
-                >
-                  <Activity className="h-3 w-3 shrink-0" />
-                  <span>{workload.totalScore} / 12 pts · Overload</span>
-                </span>
-              )}
-
               {isCrossUserDrag && (
                 <span className="inline-flex items-center gap-1 rounded-[5px] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 px-2 py-0.5 text-[11px] font-semibold">
                   <UserCheck className="h-3 w-3" />
@@ -729,7 +800,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 </span>
               )}
             </div>
-            <p className="text-[11px] text-[var(--text-secondary)] truncate max-w-xs">
+            <p className="text-xs text-[var(--text-secondary)] truncate max-w-xs">
               {user.email}
             </p>
           </div>
@@ -746,23 +817,32 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               className="flex items-center gap-1.5 pr-3 text-left hover:text-[#1d4ed8] dark:hover:text-blue-400 transition-colors cursor-pointer"
               style={{ minHeight: 'auto' }}
             >
-              <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Load
-              </span>
-              <span className="text-xs font-bold tabular-nums text-[var(--text-primary)]">
-                {workload.totalScore}
-              </span>
-              <span className={`text-[11px] font-semibold ${workload.badgeText}`}>
-                {workload.levelLabel}
-              </span>
-              <HelpCircle className="h-3 w-3 text-[var(--text-muted)]" />
+              {workload.level === 'overloaded' ? (
+                <span className="ledger-alert-badge">
+                  <Activity aria-hidden="true" className="h-3 w-3 shrink-0" />
+                  <span>{workload.totalScore} / 12 pts · Overload</span>
+                </span>
+              ) : (
+                <>
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                    Load
+                  </span>
+                  <span className="text-xs font-bold tabular-nums text-[var(--text-primary)]">
+                    {workload.totalScore}
+                  </span>
+                  <span className={`text-[11px] font-semibold ${workload.badgeText}`}>
+                    {workload.levelLabel}
+                  </span>
+                  <HelpCircle className="h-3 w-3 text-[var(--text-muted)]" />
+                </>
+              )}
             </button>
 
             <div
               title="Estimated / billable hours on completed work"
               className="flex items-center gap-1.5 pl-3 select-none tabular-nums"
             >
-              <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Eff
               </span>
               <span
@@ -787,73 +867,127 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
           </div>
 
           <div className="flex items-center gap-1.5">
+            {canEdit && (
+              <button
+                id={`add-task-btn-${user.id}`}
+                type="button"
+                onClick={() => onAddTask(user.id, 'todo')}
+                title={`Add task to ${user.name}`}
+                className="button-secondary mobile-tap-control"
+              >
+                <Plus className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
+                <span>Add Task</span>
+              </button>
+            )}
 
-          {canEdit && (
-            <button
-              id={`add-task-btn-${user.id}`}
-              type="button"
-              onClick={() => onAddTask(user.id, 'todo')}
-              title="Add new task"
-              className="button-primary"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              <span>Add Task</span>
-            </button>
-          )}
+            {(
+              (canEdit && tasksByColumn.retainer.length === 0 && !isCollapsed) ||
+              (onEditUser && canManageUser(user)) ||
+              (onDeleteUser && canManageUser(user) && !isCurrentUser) ||
+              archivedTasks.length > 0
+            ) && (
+              <button
+                id={`member-actions-btn-${user.id}`}
+                ref={memberMenuBtnRef}
+                type="button"
+                aria-expanded={memberMenuOpen}
+                aria-label={`More actions for ${user.name}`}
+                title={`Member options for ${user.name}`}
+                onClick={() => setMemberMenuOpen(prev => !prev)}
+                className={`icon-button border border-[var(--border)] bg-[var(--surface)] relative ${
+                  showArchived ? 'text-[#1d4ed8] dark:text-blue-400 border-[var(--accent)]' : ''
+                }`}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            )}
 
-          {onEditUser && canManageUser(user) && (
             <button
-              id={`edit-user-btn-${user.id}`}
+              id={`collapse-btn-${user.id}`}
               type="button"
-              onClick={() => onEditUser(user)}
-              title={`Edit ${user.name}'s profile`}
-              aria-label={`Edit ${user.name}'s profile`}
+              onClick={toggleCollapse}
+              title={isCollapsed ? 'Expand workspace' : 'Collapse workspace'}
+              aria-label={isCollapsed ? `Expand ${user.name}'s workspace` : `Collapse ${user.name}'s workspace`}
               className="icon-button border border-[var(--border)] bg-[var(--surface)]"
             >
-              <UserCog className="h-3.5 w-3.5" />
+              {isCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
             </button>
-          )}
-
-          {onDeleteUser && canManageUser(user) && !isCurrentUser && (
-            <button
-              id={`delete-user-btn-${user.id}`}
-              type="button"
-              onClick={() => onDeleteUser(user)}
-              title={`Delete ${user.name} and all associated tasks`}
-              aria-label={`Delete ${user.name}`}
-              className="icon-button border border-[var(--border)] bg-[var(--surface)] hover:text-red-600 dark:hover:text-red-400"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          )}
-
-          {archivedTasks.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setShowArchived(prev => !prev)}
-              className="button-secondary tabular-nums"
-            >
-              <Archive className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
-              <span>Completed ({archivedTasks.length})</span>
-              {showArchived ? (
-                <ChevronDown className="h-3.5 w-3.5" />
-              ) : (
-                <ChevronRight className="h-3.5 w-3.5" />
-              )}
-            </button>
-          )}
-
-          <button
-            id={`collapse-btn-${user.id}`}
-            type="button"
-            onClick={toggleCollapse}
-            title={isCollapsed ? 'Expand workspace' : 'Collapse workspace'}
-            aria-label={isCollapsed ? `Expand ${user.name}'s workspace` : `Collapse ${user.name}'s workspace`}
-            className="icon-button border border-[var(--border)] bg-[var(--surface)]"
-          >
-            {isCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
-          </button>
           </div>
+
+          {memberMenuOpen && memberMenuPos && createPortal(
+            <div
+              ref={memberMenuPopRef}
+              role="region"
+              aria-label={`${user.name} actions`}
+              style={{ top: `${memberMenuPos.top}px`, left: `${memberMenuPos.left}px` }}
+              className="menu-surface fixed z-50 w-52 rounded-[9px] border border-[var(--border)] p-1 text-[var(--text-primary)]"
+            >
+              {canEdit && tasksByColumn.retainer.length === 0 && !isCollapsed && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMemberMenuOpen(false);
+                    setShowEmptyOngoing(prev => !prev);
+                  }}
+                  className="menu-item cursor-pointer"
+                >
+                  <Plus className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400" />
+                  <span>{showEmptyOngoing ? 'Hide Ongoing Strip' : 'Add Ongoing Task'}</span>
+                </button>
+              )}
+
+              {archivedTasks.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMemberMenuOpen(false);
+                    setShowArchived(prev => !prev);
+                  }}
+                  className="menu-item justify-between cursor-pointer tabular-nums"
+                >
+                  <span className="flex items-center gap-2">
+                    <Archive className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
+                    <span>{showArchived ? 'Hide Completed' : 'Show Completed'}</span>
+                  </span>
+                  <span className="ledger-badge">{archivedTasks.length}</span>
+                </button>
+              )}
+
+              {onEditUser && canManageUser(user) && (
+                <button
+                  id={`edit-user-btn-${user.id}`}
+                  type="button"
+                  onClick={() => {
+                    setMemberMenuOpen(false);
+                    onEditUser(user);
+                  }}
+                  className="menu-item cursor-pointer"
+                >
+                  <UserCog className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
+                  <span>Edit Member Profile</span>
+                </button>
+              )}
+
+              {onDeleteUser && canManageUser(user) && !isCurrentUser && (
+                <>
+                  <div className="my-1 border-t border-[var(--border-subtle)]" />
+                  <button
+                    id={`delete-user-btn-${user.id}`}
+                    type="button"
+                    onClick={() => {
+                      setMemberMenuOpen(false);
+                      onDeleteUser(user);
+                    }}
+                    className="menu-item !text-red-600 dark:!text-red-400 hover:!bg-red-50 dark:hover:!bg-red-500/10 cursor-pointer"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Delete Member</span>
+                  </button>
+                </>
+              )}
+            </div>,
+            document.body
+          )}
         </div>
       </div>
 
@@ -868,12 +1002,13 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
             transition={{ duration: 0.18, ease: [0.2, 0.7, 0.2, 1] }}
             className="overflow-hidden"
           >
-            {/* Retainer Swimlane */}
-            {tasksByColumn.retainer.length > 0 || canEdit ? (
+            {/* Retainer Swimlane (hidden when empty unless toggled) */}
+            {(tasksByColumn.retainer.length > 0 || showEmptyOngoing) && (
               <div className="px-4 sm:px-5 pt-2.5 pb-2 border-b border-[var(--border-subtle)] bg-[var(--surface)]">
                 <RetainerSwimlane
                   user={user}
                   tasks={tasksByColumn.retainer}
+                  defaultOpenAdd={showEmptyOngoing && tasksByColumn.retainer.length === 0}
                   onQuickAdd={handleQuickAddRetainer}
                   onEditTask={onEditTask}
                   onUpdateTitle={onUpdateTaskTitle}
@@ -881,10 +1016,10 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                   onCreateSubtask={onDuplicateTask || onEditTask}
                 />
               </div>
-            ) : null}
+            )}
 
             {/* Ruled 4/5-Column Ledger Grid (no nested rounded boxes) */}
-            <div className="overflow-x-auto bg-[var(--surface)]">
+            <div className="board-columns-scroll overflow-x-auto bg-[var(--surface)]">
               <div
                 className={`board-columns ${
                   showArchived ? 'board-columns-with-archive' : ''
@@ -913,35 +1048,45 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                           <h4 className={`text-[11px] uppercase tracking-wider font-bold truncate ${col.headerColor}`}>
                             {col.title}
                           </h4>
-                          <span className="text-[11px] font-semibold tabular-nums text-[var(--text-muted)]">
-                            {columnTasks.length}
-                          </span>
+                          {col.status === 'in_progress' && columnTasks.length > 2 ? (
+                            <span
+                              title="In-Progress WIP limit (2 tasks) exceeded"
+                              className="text-[11px] font-bold tabular-nums text-red-600 dark:text-red-400"
+                            >
+                              {columnTasks.length}/2
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-semibold tabular-nums text-[var(--text-muted)]">
+                              {columnTasks.length}
+                            </span>
+                          )}
                         </div>
 
-                        <button
-                          type="button"
-                          data-quick-add-toggle={col.status}
-                          onClick={() => {
-                            if (quickAddStatus === col.status) {
-                              setQuickAddStatus(null);
-                            } else {
-                              setQuickAddStatus(col.status);
-                              setQuickAddTitle('');
-                              setQuickAddLoad('medium');
-                              setQuickAddDueDate(getPresetDateStr(1));
-                            }
-                          }}
-                          title={`Inline quick add to ${col.title}`}
-                          aria-label={`Quick add to ${col.title}`}
-                          className={`rounded-[5px] p-1 transition-colors cursor-pointer shrink-0 ${
-                            quickAddStatus === col.status
-                              ? 'bg-[#1d4ed8] text-white'
-                              : 'text-[var(--text-muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)]'
-                          }`}
-                          style={{ minHeight: 'auto' }}
-                        >
-                          <Plus className="h-3.5 w-3.5" />
-                        </button>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            data-quick-add-toggle={col.status}
+                            onClick={() => {
+                              if (quickAddStatus === col.status) {
+                                setQuickAddStatus(null);
+                              } else {
+                                setQuickAddStatus(col.status);
+                                setQuickAddTitle('');
+                                setQuickAddLoad('medium');
+                                setQuickAddDueDate(getLocalOffsetDateKey(1));
+                              }
+                            }}
+                            title={`Inline quick add to ${col.title}`}
+                            aria-label={`Quick add to ${col.title}`}
+                            className={`mobile-tap-control rounded-[5px] p-1 sm:min-h-0 transition-colors cursor-pointer shrink-0 ${
+                              quickAddStatus === col.status
+                                ? 'bg-[#1d4ed8] text-white'
+                                : 'text-[var(--text-muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)]'
+                            }`}
+                          >
+                            <Plus className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </div>
 
                       {isDropActive && isCrossUserDrag && (
@@ -957,8 +1102,8 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                         </motion.div>
                       )}
 
-                      <div className="flex-1 space-y-2 max-h-[385px] overflow-y-auto pt-0.5 pb-1 pr-0.5">
-                        {quickAddStatus === col.status && (
+                      <ColumnScrollArea taskCount={columnTasks.length}>
+                        {quickAddStatus === col.status && canEdit && (
                           <motion.div
                             ref={quickAddCardRef}
                             initial={{ opacity: 0, y: -4 }}
@@ -983,44 +1128,25 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                               className="w-full rounded-[5px] border border-[var(--border)] bg-[var(--surface-muted)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
                             />
 
-                            <div className="flex items-center justify-between gap-1 text-[11px] pt-1.5 border-t border-[var(--border-subtle)]">
-                              <div className="flex items-center gap-1 text-[var(--text-secondary)] shrink-0">
-                                <Calendar className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" />
-                                <span className="font-semibold text-[11px] text-[var(--text-primary)]">Due *:</span>
-                              </div>
-                              <div className="flex items-center gap-1 flex-wrap justify-end">
-                                {([
-                                  { label: 'Today', days: 0 },
-                                  { label: 'Tomorrow', days: 1 },
-                                  { label: '+3d', days: 3 },
-                                  { label: '+7d', days: 7 },
-                                ]).map(preset => {
-                                  const dateStr = getPresetDateStr(preset.days);
-                                  const isSelected = quickAddDueDate === dateStr;
-                                  return (
-                                    <button
-                                      key={preset.label}
-                                      type="button"
-                                      onClick={() => setQuickAddDueDate(dateStr)}
-                                      className={`rounded-[5px] px-1.5 py-0.5 text-[11px] font-semibold border transition-colors cursor-pointer ${
-                                        isSelected
-                                          ? 'bg-[#1d4ed8] text-white border-[#1d4ed8]'
-                                          : 'border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)]'
-                                      }`}
-                                      style={{ minHeight: 'auto' }}
-                                    >
-                                      {preset.label}
-                                    </button>
-                                  );
-                                })}
+                            <div className="space-y-1.5 pt-1.5 border-t border-[var(--border-subtle)]">
+                              <div className="flex items-center justify-between gap-1 text-[11px] text-[var(--text-secondary)]">
+                                <span className="inline-flex items-center gap-1 font-semibold text-[var(--text-primary)]">
+                                  <Calendar className="h-3 w-3 text-amber-600 dark:text-amber-400 shrink-0" />
+                                  Due *
+                                </span>
                                 <input
                                   type="date"
                                   value={quickAddDueDate}
                                   onChange={e => setQuickAddDueDate(e.target.value)}
-                                  className="rounded-[5px] border border-[var(--border)] bg-transparent px-1 py-0.5 text-[11px] text-[var(--text-primary)] cursor-pointer focus:outline-none"
+                                  className="rounded-[5px] border border-[var(--border)] bg-transparent px-1.5 py-0.5 text-[11px] tabular-nums text-[var(--text-primary)] cursor-pointer focus:outline-none"
                                   style={{ minHeight: 'auto' }}
                                 />
                               </div>
+                              <DateQuickPresets
+                                value={quickAddDueDate}
+                                onSelectDate={setQuickAddDueDate}
+                                includeToday
+                              />
                             </div>
 
                             <div className="flex items-center justify-between gap-1.5 pt-0.5">
@@ -1075,28 +1201,39 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
 
                         <AnimatePresence mode="popLayout">
                           {columnTasks.length === 0 && quickAddStatus !== col.status ? (
-                            <motion.div
-                              key="empty-dropzone"
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              exit={{ opacity: 0 }}
-                              onClick={() => {
-                                setQuickAddStatus(col.status);
-                                setQuickAddTitle('');
-                                setQuickAddLoad('medium');
-                                setQuickAddDueDate(getPresetDateStr(1));
-                              }}
-                              className={`flex h-20 cursor-pointer flex-col items-center justify-center rounded-[7px] p-3 text-center transition-colors ${
-                                isDropActive
-                                  ? 'border border-dashed border-[#1d4ed8] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300'
-                                  : 'text-[var(--text-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-secondary)]'
-                              }`}
-                            >
-                              <span className="inline-flex items-center gap-1 text-[11px] font-medium">
-                                <Plus className="h-3 w-3" />
-                                <span>{isDropActive ? `Drop in ${col.title}` : 'Add or drop'}</span>
-                              </span>
-                            </motion.div>
+                            canEdit ? (
+                              <motion.button
+                                key="empty-dropzone"
+                                type="button"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                onClick={() => {
+                                  setQuickAddStatus(col.status);
+                                  setQuickAddTitle('');
+                                  setQuickAddLoad('medium');
+                                  setQuickAddDueDate(getLocalOffsetDateKey(1));
+                                }}
+                                aria-label={`Add task to ${col.title} for ${user.name}`}
+                                className={`flex w-full h-20 cursor-pointer flex-col items-center justify-center rounded-[7px] p-3 text-center transition-colors ${
+                                  isDropActive
+                                    ? 'border border-dashed border-[#1d4ed8] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300'
+                                    : 'text-[var(--text-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-secondary)]'
+                                }`}
+                              >
+                                <span className="inline-flex items-center gap-1 text-[11px] font-medium">
+                                  <Plus className="h-3 w-3" />
+                                  <span>{isDropActive ? `Drop in ${col.title}` : 'Add or drop'}</span>
+                                </span>
+                              </motion.button>
+                            ) : (
+                              <div
+                                key="empty-readonly"
+                                className="flex w-full h-20 items-center justify-center rounded-[7px] p-3 text-center text-[11px] text-[var(--text-muted)] select-none"
+                              >
+                                <span>No tasks in {col.title}</span>
+                              </div>
+                            )
                           ) : (
                             columnTasks.map(task => {
                               const isTaskDropTarget = dragOverTaskId === task.id;
@@ -1149,7 +1286,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                             })
                           )}
                         </AnimatePresence>
-                      </div>
+                      </ColumnScrollArea>
                     </div>
                   );
                 })}

@@ -4,19 +4,20 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { useAuth, useBoardUi, useClickUp, useWorkspace } from '../../context/DashboardContext';
 import { RoleFilter, TaskDisciplineMetadata } from '../../types';
-import { getLastDayOfMonth } from '../../utils/workload';
 import { isValidHttpUrl } from '../../utils/taskMetadata';
+import { DateQuickPresets } from '../ui/DateQuickPresets';
 import {
   X,
   FileText,
   Palette,
   Plus,
   AlertCircle,
-  Sparkles,
+  FilePlus2,
   Check,
   FolderKanban,
   Loader2,
   ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 interface DisciplineTaskModalProps {
@@ -48,6 +49,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
 
   const [needsContent, setNeedsContent] = useState(true);
   const [needsDesign, setNeedsDesign] = useState(false);
+  const [showClickupDestination, setShowClickupDestination] = useState(false);
 
   // ClickUp Space / Folder / List state
   const [selectedSpaceId, setSelectedSpaceId] = useState('');
@@ -142,8 +144,9 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
       setNeedsDesign(true);
     } else {
       setNeedsContent(true);
-      setNeedsDesign(defaultRole === 'all');
+      setNeedsDesign(false);
     }
+    setShowClickupDestination(false);
 
     setSelectedSpaceId('');
     setSelectedFolderId('');
@@ -293,20 +296,6 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
     }
   };
 
-  const setQuickDate = (daysFromNow: number | null, isEndOfMonth = false) => {
-    if (daysFromNow === null && !isEndOfMonth) {
-      setDueDate('');
-      return;
-    }
-    if (isEndOfMonth) {
-      setDueDate(getLastDayOfMonth());
-      return;
-    }
-    const d = new Date();
-    d.setDate(d.getDate() + (daysFromNow || 0));
-    setDueDate(d.toISOString().split('T')[0]);
-  };
-
   const selectedDisciplines = useMemo(() => {
     const list: Array<'content' | 'design'> = [];
     if (needsContent) list.push('content');
@@ -319,7 +308,12 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || isSubmitting) return;
+    if (isSubmitting) return;
+    if (!title.trim()) {
+      setSubmitError('Deliverable title is required.');
+      document.getElementById('disciplinetaskmodal-field-1')?.focus();
+      return;
+    }
 
     if (!canCreatePipelineTask) {
       setSubmitError('Only Accounts team members and authorized special roles can create tasks in team pipelines.');
@@ -417,14 +411,14 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
           <div className="dialog-header">
             <div className="flex items-center gap-2.5 min-w-0">
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-400">
-                <Sparkles className="h-4 w-4" />
+                <FilePlus2 className="h-4 w-4" />
               </div>
               <div className="min-w-0">
                 <h3 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
-                  Add Pipeline Deliverable
+                  New Pipeline Brief
                 </h3>
                 <p className="text-[11px] text-[var(--text-secondary)] truncate">
-                  Creates a parent ClickUp deliverable and subtask(s) for selected disciplines.
+                  Creates a parent deliverable and unassigned discipline subtasks.
                 </p>
               </div>
             </div>
@@ -502,24 +496,207 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                 </div>
               )}
 
-              {/* ClickUp Destination Section */}
-              <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] overflow-hidden">
-                <div className="flex items-center justify-between gap-2 px-3.5 py-2 border-b border-[var(--border-subtle)]">
-                  <div className="flex items-center gap-2">
-                    <FolderKanban className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-primary)]">
-                      ClickUp Destination
-                    </span>
-                  </div>
-                  {!isClickupConnected && (
-                    <span className="text-[11px] text-amber-700 dark:text-amber-400 font-medium">
-                      Connect ClickUp in Settings to sync spaces &amp; lists
-                    </span>
-                  )}
+              {/* Shared Section: Task Basics FIRST */}
+              <div className="space-y-4">
+                <div>
+                  <label className="field-label" htmlFor="disciplinetaskmodal-field-1">
+                    Parent Deliverable Title <span className="text-red-600 dark:text-red-400">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={title}
+                    onChange={e => setTitle(e.target.value)}
+                    placeholder="e.g. Q4 Product Launch Campaign Pack"
+                    className="field-control"
+                    id="disciplinetaskmodal-field-1"
+                  />
                 </div>
 
-                {(clickupActionError || isClickupConnected) && (
-                  <div className="p-3.5 space-y-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="field-label !mb-0" htmlFor="disciplinetaskmodal-field-2">
+                      Brief
+                    </label>
+                    <span className="text-[11px] text-[var(--text-muted)]">
+                      Shared &amp; linked to parent task
+                    </span>
+                  </div>
+                  <textarea
+                    rows={3}
+                    value={description}
+                    onChange={e => setDescription(e.target.value)}
+                    placeholder="Detailed campaign brief, objectives, audience, messaging, and context..."
+                    className="field-control resize-y"
+                    id="disciplinetaskmodal-field-2"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="field-label !mb-0" htmlFor="disciplinetaskmodal-brand-guidelines">
+                      Brand Guidelines Link
+                    </label>
+                    <span className="text-[11px] text-[var(--text-muted)]">
+                      Shared &amp; linked to parent task
+                    </span>
+                  </div>
+                  <input
+                    type="url"
+                    value={brandGuidelines}
+                    onChange={e => setBrandGuidelines(e.target.value)}
+                    placeholder="https://... (Brand book, Notion, Google Drive, Figma)"
+                    className="field-control"
+                    id="disciplinetaskmodal-brand-guidelines"
+                  />
+                </div>
+
+                {/* Account / Client & Project */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="field-label" htmlFor="disciplinetaskmodal-field-3">
+                      Account / Client
+                    </label>
+                    <input
+                      type="text"
+                      list="discipline-client-options"
+                      value={client}
+                      onChange={e => setClient(e.target.value)}
+                      placeholder="Auto-filled from Space/Folder or custom"
+                      className="field-control"
+                      id="disciplinetaskmodal-field-3"
+                    />
+                    <datalist id="discipline-client-options">
+                      {existingClients.map(c => (
+                        <option key={c} value={c} />
+                      ))}
+                    </datalist>
+                  </div>
+
+                  <div>
+                    <label className="field-label" htmlFor="disciplinetaskmodal-field-4">
+                      Project / Campaign
+                    </label>
+                    <input
+                      type="text"
+                      list="discipline-project-options"
+                      value={project}
+                      onChange={e => setProject(e.target.value)}
+                      placeholder="Auto-filled from List or custom"
+                      className="field-control"
+                      id="disciplinetaskmodal-field-4"
+                    />
+                    <datalist id="discipline-project-options">
+                      {existingProjects.map(p => (
+                        <option key={p} value={p} />
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
+
+                {/* Priority & Deadline */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div>
+                    <label className="field-label">
+                      Priority
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      {(['low', 'medium', 'high'] as const).map(p => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setPriority(p)}
+                          className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-[7px] py-1.5 text-xs font-semibold capitalize border transition-colors cursor-pointer ${
+                            priority === p
+                              ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
+                              : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]'
+                          }`}
+                        >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${
+                              p === 'high'
+                                ? 'bg-red-600 dark:bg-red-400'
+                                : p === 'medium'
+                                ? 'bg-amber-600 dark:bg-amber-400'
+                                : 'bg-emerald-600 dark:bg-emerald-400'
+                            }`}
+                          />
+                          <span>{p}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                      <label className="field-label !mb-0" htmlFor="disciplinetaskmodal-field-5">
+                        Target Deadline
+                      </label>
+                      <DateQuickPresets
+                        value={dueDate}
+                        onSelectDate={setDueDate}
+                        allowClear
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="date"
+                        value={dueDate}
+                        onChange={e => setDueDate(e.target.value)}
+                        className="field-control flex-1 min-w-0 tabular-nums cursor-pointer"
+                        id="disciplinetaskmodal-field-5"
+                      />
+                      {dueDate && (
+                        <button
+                          type="button"
+                          onClick={() => setDueDate('')}
+                          title="Clear deadline"
+                          aria-label="Clear deadline"
+                          className="icon-button border border-[var(--border)] bg-[var(--surface)] shrink-0"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Collapsible ClickUp Destination Section */}
+              <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowClickupDestination(prev => !prev)}
+                  aria-expanded={showClickupDestination}
+                  className="w-full flex items-center justify-between gap-2 px-3.5 py-2.5 text-left hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FolderKanban className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--text-primary)]">
+                      ClickUp Destination (Optional)
+                    </span>
+                    {selectedSpace && (
+                      <span className="text-[11px] text-[#1d4ed8] dark:text-blue-400 font-medium truncate">
+                        · {selectedSpace.name}{selectedList ? ` / ${selectedList.name}` : ''}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {!isClickupConnected && (
+                      <span className="text-[11px] text-amber-700 dark:text-amber-400 font-medium hidden sm:inline">
+                        Not connected
+                      </span>
+                    )}
+                    {showClickupDestination ? (
+                      <ChevronUp className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5 text-[var(--text-muted)]" />
+                    )}
+                  </div>
+                </button>
+
+                {showClickupDestination && (clickupActionError || isClickupConnected ? (
+                  <div className="p-3.5 border-t border-[var(--border-subtle)] space-y-3">
                     {clickupActionError && (
                       <div role="alert" className="callout callout-danger text-[11px]">
                         {clickupActionError}
@@ -725,197 +902,11 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       </div>
                     )}
                   </div>
-                )}
-              </div>
-
-              {/* Shared Section: Task Basics */}
-              <div className="space-y-4">
-                <div>
-                  <label className="field-label" htmlFor="disciplinetaskmodal-field-1">
-                    Parent Deliverable Title <span className="text-red-600 dark:text-red-400">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={title}
-                    onChange={e => setTitle(e.target.value)}
-                    placeholder="e.g. Q4 Product Launch Campaign Pack"
-                    className="field-control"
-                    id="disciplinetaskmodal-field-1"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="field-label !mb-0" htmlFor="disciplinetaskmodal-field-2">
-                      Brief
-                    </label>
-                    <span className="text-[11px] text-[var(--text-muted)]">
-                      Shared &amp; linked to parent task
-                    </span>
-                  </div>
-                  <textarea
-                    rows={4}
-                    value={description}
-                    onChange={e => setDescription(e.target.value)}
-                    placeholder="Detailed campaign brief, objectives, audience, messaging, and context..."
-                    className="field-control resize-y"
-                    id="disciplinetaskmodal-field-2"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="field-label !mb-0" htmlFor="disciplinetaskmodal-brand-guidelines">
-                      Brand Guidelines Link
-                    </label>
-                    <span className="text-[11px] text-[var(--text-muted)]">
-                      Shared &amp; linked to parent task
-                    </span>
-                  </div>
-                  <input
-                    type="url"
-                    value={brandGuidelines}
-                    onChange={e => setBrandGuidelines(e.target.value)}
-                    placeholder="https://... (Brand book, Notion, Google Drive, Figma)"
-                    className="field-control"
-                    id="disciplinetaskmodal-brand-guidelines"
-                  />
-                </div>
-
-                {/* Account / Client & Project */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <div>
-                    <label className="field-label" htmlFor="disciplinetaskmodal-field-3">
-                      Account / Client
-                    </label>
-                    <input
-                      type="text"
-                      list="discipline-client-options"
-                      value={client}
-                      onChange={e => setClient(e.target.value)}
-                      placeholder="Auto-filled from Space/Folder or custom"
-                      className="field-control"
-                      id="disciplinetaskmodal-field-3"
-                    />
-                    <datalist id="discipline-client-options">
-                      {existingClients.map(c => (
-                        <option key={c} value={c} />
-                      ))}
-                    </datalist>
-                  </div>
-
-                  <div>
-                    <label className="field-label" htmlFor="disciplinetaskmodal-field-4">
-                      Project / Campaign
-                    </label>
-                    <input
-                      type="text"
-                      list="discipline-project-options"
-                      value={project}
-                      onChange={e => setProject(e.target.value)}
-                      placeholder="Auto-filled from List or custom"
-                      className="field-control"
-                      id="disciplinetaskmodal-field-4"
-                    />
-                    <datalist id="discipline-project-options">
-                      {existingProjects.map(p => (
-                        <option key={p} value={p} />
-                      ))}
-                    </datalist>
-                  </div>
-                </div>
-
-                {/* Priority & Deadline */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <div>
-                    <label className="field-label">
-                      Priority
-                    </label>
-                    <div className="flex items-center gap-1.5">
-                      {(['low', 'medium', 'high'] as const).map(p => (
-                        <button
-                          key={p}
-                          type="button"
-                          onClick={() => setPriority(p)}
-                          className={`flex-1 inline-flex items-center justify-center gap-1.5 rounded-[7px] py-1.5 text-xs font-semibold capitalize border transition-colors cursor-pointer ${
-                            priority === p
-                              ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
-                              : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]'
-                          }`}
-                        >
-                          <span
-                            className={`h-1.5 w-1.5 rounded-full ${
-                              p === 'high'
-                                ? 'bg-red-600 dark:bg-red-400'
-                                : p === 'medium'
-                                ? 'bg-amber-600 dark:bg-amber-400'
-                                : 'bg-emerald-600 dark:bg-emerald-400'
-                            }`}
-                          />
-                          <span>{p}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <label className="field-label !mb-0" htmlFor="disciplinetaskmodal-field-5">
-                        Target Deadline
-                      </label>
-                      <div className="flex items-center gap-1 text-[11px]">
-                        <button
-                          type="button"
-                          onClick={() => setQuickDate(1)}
-                          className="text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer"
-                          style={{ minHeight: 'auto' }}
-                        >
-                          Tomorrow
-                        </button>
-                        <span className="text-[var(--text-muted)]">·</span>
-                        <button
-                          type="button"
-                          onClick={() => setQuickDate(7)}
-                          className="text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer"
-                          style={{ minHeight: 'auto' }}
-                        >
-                          1W
-                        </button>
-                        <span className="text-[var(--text-muted)]">·</span>
-                        <button
-                          type="button"
-                          onClick={() => setQuickDate(null, true)}
-                          className="text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer"
-                          style={{ minHeight: 'auto' }}
-                        >
-                          End Month
-                        </button>
-                      </div>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="date"
-                        value={dueDate}
-                        onChange={e => setDueDate(e.target.value)}
-                        className="field-control tabular-nums cursor-pointer"
-                        id="disciplinetaskmodal-field-5"
-                      />
-                      {dueDate && (
-                        <button
-                          type="button"
-                          onClick={() => setDueDate('')}
-                          title="Clear deadline"
-                          aria-label="Clear deadline"
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] cursor-pointer"
-                          style={{ minHeight: 'auto' }}
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                ) : (
+                  <p className="px-3.5 py-2.5 border-t border-[var(--border-subtle)] text-xs text-[var(--text-secondary)]">
+                    Connect ClickUp in Database &amp; Compliance settings to route deliverables directly into ClickUp Spaces &amp; Lists.
+                  </p>
+                ))}
               </div>
 
               {/* Content Discipline Fields */}
@@ -964,7 +955,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={!title.trim() || selectedDisciplines.length === 0 || isSubmitting}
+                  disabled={isSubmitting || !canCreatePipelineTask}
                   className="button-primary"
                 >
                   {isSubmitting

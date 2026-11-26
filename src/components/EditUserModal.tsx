@@ -102,18 +102,6 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
     }
   }, [user, isOpen]);
 
-  // Global Escape key dismissal
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isSubmitting && !isRemapping) {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, isSubmitting, isRemapping, onClose]);
-
   const isTargetSuperadmin = isSuperadminUser(user);
   const cleanCurrentEmail = email.trim().toLowerCase();
   const isEmailChanged = Boolean(user && isSuperadmin && !isTargetSuperadmin && cleanCurrentEmail !== (user.email || '').toLowerCase());

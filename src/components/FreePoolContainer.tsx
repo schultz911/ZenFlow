@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task, TaskStatus, RoleFilter } from '../types';
 import { getUserTag, formatHours, getAssignedHoursByMemberAndDate, getTaskAssigneeIds, meetsDailyUtilizationTarget } from '../utils/workload';
@@ -6,7 +6,6 @@ import { getAnalyticsClock } from '../domain/analyticsDate';
 import {
   Users,
   ChevronDown,
-  ChevronUp,
   Plus,
   CheckCircle2,
   ArrowUpRight,
@@ -25,34 +24,32 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
   onAddTask,
   onSelectUser,
 }) => {
-  const [isExpanded, setIsExpanded] = useState<boolean>(() => {
-    const mobile = window.matchMedia('(max-width: 639px)').matches;
-    try {
-      const saved = localStorage.getItem(mobile ? 'zenflow_freepool_expanded_mobile' : 'zenflow_freepool_expanded');
-      return saved !== null ? saved === 'true' : false;
-    } catch {
-      return false;
-    }
-  });
-
+  const [isExpanded, setIsExpanded] = useState(false);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
+  const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const toggleExpanded = () => {
-    setIsExpanded(prev => {
-      const next = !prev;
-      try {
-        localStorage.setItem(
-          window.matchMedia('(max-width: 639px)').matches
-            ? 'zenflow_freepool_expanded_mobile'
-            : 'zenflow_freepool_expanded',
-          String(next)
-        );
-      } catch {
-        // ignore
+  useEffect(() => {
+    if (!isExpanded) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setIsExpanded(false);
+        setTimeout(() => triggerRef.current?.focus(), 0);
       }
-      return next;
-    });
-  };
+    };
+    const onOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsExpanded(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    document.addEventListener('mousedown', onOutside);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('mousedown', onOutside);
+    };
+  }, [isExpanded]);
 
   const { freeUsers, userStats } = useMemo(() => {
     const inReviewCounts = new Map<string, number>();
@@ -100,39 +97,36 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
   const designCount = useMemo(() => freeUsers.filter(u => u.role === 'design').length, [freeUsers]);
 
   return (
-    <div className="fixed bottom-0 inset-x-0 sm:inset-x-auto sm:bottom-4 sm:right-4 z-40 select-none">
-      <AnimatePresence mode="wait">
-        {!isExpanded ? (
-          <motion.button
-            key="collapsed"
-            type="button"
-            layout
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 8 }}
-            transition={{ duration: 0.16, ease: [0.2, 0.7, 0.2, 1] }}
-            onClick={toggleExpanded}
-            className="free-pool-panel group flex w-full sm:w-auto items-center justify-between sm:justify-start gap-2.5 px-4 sm:px-3.5 py-2 rounded-none sm:rounded-[9px] bg-[#121418] dark:bg-[#1e2430] border-t sm:border border-[#2a303c] text-white hover:bg-[#1b1f27] dark:hover:bg-[#252c3b] transition-colors cursor-pointer"
-            title="Click to view free resources pool"
-          >
-            <div className="flex items-center gap-2.5">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
-              <span className="text-xs font-semibold tracking-tight">Free Pool</span>
-              <span className="tabular-nums text-[11px] font-semibold text-emerald-300">
-                {freeUsers.length} under 3h/d
-              </span>
-            </div>
-            <ChevronUp className="h-3.5 w-3.5 text-white/60 group-hover:text-white transition-colors" />
-          </motion.button>
-        ) : (
+    <div ref={containerRef} className="relative select-none">
+      <button
+        id="free-pool-trigger"
+        ref={triggerRef}
+        type="button"
+        aria-expanded={isExpanded}
+        aria-controls="free-pool-popover"
+        onClick={() => setIsExpanded(prev => !prev)}
+        className="mobile-tap-control flex items-center gap-2 min-h-[34px] px-3 py-1.5 rounded-[7px] bg-[#121418] dark:bg-[#1e2430] border border-[#2a303c] text-white hover:bg-[#1b1f27] dark:hover:bg-[#252c3b] text-xs font-semibold transition-colors cursor-pointer"
+        title="View team members under 3h/day capacity"
+      >
+        <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
+        <span>Free Pool</span>
+        <span className="tabular-nums text-[11px] font-semibold text-emerald-300">
+          {freeUsers.length} &lt;3h/d
+        </span>
+        <ChevronDown className={`h-3.5 w-3.5 text-white/60 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+      </button>
+
+      <AnimatePresence>
+        {isExpanded && (
           <motion.div
-            key="expanded"
-            layout
-            initial={{ opacity: 0, y: 10 }}
+            id="free-pool-popover"
+            role="region"
+            aria-label="Free Pool available capacity"
+            initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 10 }}
-            transition={{ duration: 0.18, ease: [0.2, 0.7, 0.2, 1] }}
-            className="free-pool-panel w-full sm:w-88 sm:max-w-[calc(100vw-2rem)] rounded-t-[10px] sm:rounded-[10px] border-t sm:border border-[var(--border)] bg-[var(--surface)]/96 backdrop-blur-md overflow-hidden flex flex-col max-h-[440px]"
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.16, ease: [0.2, 0.7, 0.2, 1] }}
+            className="free-pool-panel fixed sm:absolute left-4 right-4 sm:left-auto sm:right-0 sm:top-full sm:mt-1.5 bottom-4 sm:bottom-auto z-40 sm:w-88 sm:max-w-[calc(100vw-2rem)] rounded-[10px] border border-[var(--border)] bg-[var(--surface)]/98 backdrop-blur-md overflow-hidden flex flex-col max-h-[440px]"
           >
             {/* Header Band */}
             <div className="flex items-center justify-between px-3.5 py-2.5 bg-[#121418] dark:bg-[#1a1f2a] text-white border-b border-white/10">
@@ -146,10 +140,10 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
 
               <button
                 type="button"
-                onClick={toggleExpanded}
-                aria-label="Minimize Free Pool"
+                onClick={() => setIsExpanded(false)}
+                aria-label="Close Free Pool"
                 className="p-1 rounded-[5px] hover:bg-white/10 text-white/70 hover:text-white transition-colors cursor-pointer"
-                title="Minimize Free Pool"
+                title="Close Free Pool"
               >
                 <ChevronDown className="h-4 w-4" />
               </button>
@@ -161,41 +155,40 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
               <span className="font-semibold text-emerald-700 dark:text-emerald-400">Ready to assign</span>
             </div>
 
-            {/* Role Filter Tabs */}
-            <div className="free-pool-filters flex items-center gap-1 px-3.5 py-2 border-b border-[var(--border-subtle)] bg-[var(--surface)]">
-              <button
-                type="button"
-                onClick={() => setRoleFilter('all')}
-                className={`px-2.5 py-1 rounded-[6px] text-[11px] font-semibold transition-colors cursor-pointer tabular-nums ${
-                  roleFilter === 'all'
-                    ? 'bg-[#121418] dark:bg-white text-white dark:text-[#121418]'
-                    : 'text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)]'
-                }`}
-              >
-                All ({freeUsers.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setRoleFilter('content')}
-                className={`px-2.5 py-1 rounded-[6px] text-[11px] font-semibold transition-colors cursor-pointer tabular-nums ${
-                  roleFilter === 'content'
-                    ? 'bg-[#1d4ed8] text-white'
-                    : 'text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)]'
-                }`}
-              >
-                Content ({contentCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => setRoleFilter('design')}
-                className={`px-2.5 py-1 rounded-[6px] text-[11px] font-semibold transition-colors cursor-pointer tabular-nums ${
-                  roleFilter === 'design'
-                    ? 'bg-[#1d4ed8] text-white'
-                    : 'text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)]'
-                }`}
-              >
-                Design ({designCount})
-              </button>
+            {/* Role Filter Tabs (Unified Segmented Track) */}
+            <div className="free-pool-filters px-3.5 py-2 border-b border-[var(--border-subtle)] bg-[var(--surface)]">
+              <div className="segmented-track w-full">
+                <button
+                  type="button"
+                  aria-pressed={roleFilter === 'all'}
+                  onClick={() => setRoleFilter('all')}
+                  className={`segmented-item flex-1 cursor-pointer tabular-nums ${
+                    roleFilter === 'all' ? 'segmented-item-active' : ''
+                  }`}
+                >
+                  All ({freeUsers.length})
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={roleFilter === 'content'}
+                  onClick={() => setRoleFilter('content')}
+                  className={`segmented-item flex-1 cursor-pointer tabular-nums ${
+                    roleFilter === 'content' ? 'segmented-item-active' : ''
+                  }`}
+                >
+                  Content ({contentCount})
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={roleFilter === 'design'}
+                  onClick={() => setRoleFilter('design')}
+                  className={`segmented-item flex-1 cursor-pointer tabular-nums ${
+                    roleFilter === 'design' ? 'segmented-item-active' : ''
+                  }`}
+                >
+                  Design ({designCount})
+                </button>
+              </div>
             </div>
 
             {/* Member List */}
@@ -226,10 +219,18 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                   return (
                     <div
                       key={user.id}
-                      onClick={() => onSelectUser?.(user)}
-                      className="group flex items-center justify-between px-3.5 py-2 hover:bg-[var(--surface-muted)] transition-colors cursor-pointer"
+                      className="group flex items-center justify-between gap-2 px-3.5 py-2 hover:bg-[var(--surface-muted)] transition-colors"
                     >
-                      <div className="flex items-center gap-2.5 min-w-0 pr-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsExpanded(false);
+                          onSelectUser?.(user);
+                        }}
+                        aria-label={`Jump to ${user.name}'s swimlane`}
+                        className="flex flex-1 items-center gap-2.5 min-w-0 text-left cursor-pointer"
+                        style={{ minHeight: 'auto' }}
+                      >
                         <div className="relative shrink-0">
                           <div
                             className={`h-7 w-7 rounded-[6px] overflow-hidden text-xs font-semibold flex items-center justify-center text-white bg-gradient-to-br ${
@@ -265,17 +266,18 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                             )}
                           </div>
                         </div>
-                      </div>
+                      </button>
 
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           type="button"
-                          onClick={e => {
-                            e.stopPropagation();
+                          onClick={() => {
+                            setIsExpanded(false);
                             onAddTask(user.id, 'todo');
                           }}
                           className="flex items-center gap-1 px-2 py-1 rounded-[6px] bg-emerald-700 hover:bg-emerald-600 text-white text-[11px] font-semibold transition-colors cursor-pointer"
                           title={`Assign task to ${user.name}`}
+                          style={{ minHeight: '28px' }}
                         >
                           <Plus className="h-3 w-3" />
                           <span>Task</span>
@@ -283,10 +285,14 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
 
                         <button
                           type="button"
-                          onClick={() => onSelectUser?.(user)}
-                          aria-label={`Jump to ${user.name}'s swimlane`}
+                          onClick={() => {
+                            setIsExpanded(false);
+                            onSelectUser?.(user);
+                          }}
+                          aria-label={`View ${user.name}'s swimlane`}
                           className="p-1 rounded-[6px] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
                           title="View board swimlane"
+                          style={{ minHeight: '28px', minWidth: '28px' }}
                         >
                           <ArrowUpRight className="h-3.5 w-3.5" />
                         </button>

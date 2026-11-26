@@ -141,9 +141,9 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
             )}
           </div>
 
-          {/* Dropdown Options */}
+          {/* Dropdown Options (floats cleanly without shifting modal layout) */}
           {isOpen && (
-            <div className="menu-surface mt-1.5 w-full rounded-[9px] border border-[var(--border)] p-1.5 z-30 max-h-56 overflow-y-auto space-y-0.5">
+            <div className="menu-surface absolute left-0 right-0 top-full mt-1.5 w-full rounded-[9px] border border-[var(--border)] p-1.5 z-40 max-h-56 overflow-y-auto space-y-0.5">
               <button
                 type="button"
                 onClick={() => {
@@ -158,7 +158,7 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <div className="flex h-6 w-6 items-center justify-center rounded-[5px] bg-[var(--surface-subtle)] border border-[var(--border)] text-[var(--text-muted)] text-[10px]">
+                  <div className="flex h-6 w-6 items-center justify-center rounded-[5px] bg-[var(--surface-subtle)] border border-[var(--border)] text-[var(--text-muted)] text-[11px]">
                     —
                   </div>
                   <span>No ClickUp Mapping (Unassigned)</span>
@@ -203,7 +203,7 @@ export const ClickupMemberPicker: React.FC<ClickupMemberPickerProps> = ({
                         ) : (
                           <div
                             style={{ backgroundColor: m.color || '#1d4ed8' }}
-                            className="flex h-6 w-6 items-center justify-center rounded-[5px] text-[10px] font-bold text-white shrink-0"
+                            className="flex h-6 w-6 items-center justify-center rounded-[5px] text-[11px] font-bold text-white shrink-0"
                           >
                             {m.initials || (m.username ? m.username.slice(0, 2).toUpperCase() : '??')}
                           </div>

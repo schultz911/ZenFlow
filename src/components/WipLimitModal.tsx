@@ -1,5 +1,5 @@
 import { DialogPanel } from './ui/DialogPanel';
-import React, { useEffect } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { X, CheckCircle2, ArrowLeft, Layers } from 'lucide-react';
 import { Task, User } from '../types';
@@ -21,18 +21,6 @@ export const WipLimitModal: React.FC<WipLimitModalProps> = ({
   onMoveToDone,
   onMoveToTodo,
 }) => {
-  // Escape key dismissal
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
   return (
     <AnimatePresence>
       {isOpen && user && (

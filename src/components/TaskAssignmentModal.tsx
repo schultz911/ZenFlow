@@ -6,6 +6,9 @@ import { Task, CognitiveLoad } from '../types';
 import {
   getUserDailyAssignedHours,
   formatHours,
+  formatLocalDateKey,
+  groupTasksByAssignee,
+  quickWorkloadScore,
   COGNITIVE_LOAD_WEIGHTS,
   getUserTag,
 } from '../utils/workload';
@@ -73,6 +76,8 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
     return eligibleUsers.find(u => u.id === selectedUserId) || null;
   }, [selectedUserId, eligibleUsers]);
 
+  const tasksByUser = useMemo(() => groupTasksByAssignee(tasks), [tasks]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!task || isSubmitting) return;
@@ -94,7 +99,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
     setSubmitError(null);
 
     const parsedHours = estimatedHours.trim() ? Math.max(0, parseFloat(estimatedHours)) : undefined;
-    const todayIso = new Date().toISOString().split('T')[0];
+    const todayIso = formatLocalDateKey();
 
     try {
       await updateTask(task.id, {
@@ -220,10 +225,11 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                           ? creativeDirectors.find(c => c.id === user.creativeDirectorId)?.name || 'Team'
                           : 'Independent';
                         const dailyHours = getUserDailyAssignedHours(user, tasks);
+                        const loadScore = quickWorkloadScore(tasksByUser.get(user.id) || []);
                         const tag = getUserTag(user);
                         return (
                           <option key={user.id} value={user.id}>
-                            {user.name} ({tag.label || user.designation || 'Member'}) — CD: {cdName} · {formatHours(dailyHours)}/day assigned
+                            {user.name} ({tag.label || user.designation || 'Member'}) — {cdName} · {loadScore}/12 pts · {formatHours(dailyHours)}/d
                           </option>
                         );
                       })}
@@ -232,12 +238,22 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                   </div>
                 )}
 
-                {selectedUserObj && (
-                  <div className="mt-2 flex items-center justify-between text-xs text-[var(--text-secondary)] bg-[var(--surface-muted)] px-3 py-1.5 rounded-[7px] border border-[var(--border)] tabular-nums">
-                    <span>Selected: <strong className="text-[var(--text-primary)]">{selectedUserObj.name}</strong></span>
-                    <span>Assigned: <strong className="text-[#1d4ed8] dark:text-blue-400">{formatHours(getUserDailyAssignedHours(selectedUserObj, tasks))}/day</strong></span>
-                  </div>
-                )}
+                {selectedUserObj && (() => {
+                  const selectedLoad = quickWorkloadScore(tasksByUser.get(selectedUserObj.id) || []);
+                  const selectedDailyHours = getUserDailyAssignedHours(selectedUserObj, tasks);
+                  return (
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-secondary)] bg-[var(--surface-muted)] px-3 py-1.5 rounded-[7px] border border-[var(--border)] tabular-nums">
+                      <span>Selected: <strong className="text-[var(--text-primary)]">{selectedUserObj.name}</strong></span>
+                      <div className="flex items-center gap-2.5">
+                        <span className={selectedLoad >= 12 ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
+                          Load: <strong>{selectedLoad} / 12 pts</strong>
+                        </span>
+                        <span className="text-[var(--text-muted)]">·</span>
+                        <span>Assigned: <strong className="text-[#1d4ed8] dark:text-blue-400">{formatHours(selectedDailyHours)}/day</strong></span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               {/* Cognitive Load Specification */}
@@ -258,6 +274,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                       <button
                         key={load}
                         type="button"
+                        aria-pressed={isSelected}
                         onClick={() => setCognitiveLoad(load)}
                         className={`flex flex-col items-center justify-center p-2.5 rounded-[7px] border text-xs font-semibold capitalize transition-colors cursor-pointer ${
                           isSelected
@@ -313,7 +330,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5 mt-2">
-                  {[2, 4, 8, 16, 24].map(h => (
+                  {[2, 4, 8, 16].map(h => (
                     <button
                       key={h}
                       type="button"

@@ -1,9 +1,10 @@
 import { DialogPanel } from './ui/DialogPanel';
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useBoardUi, useWorkspace } from '../context/DashboardContext';
 import { Task, TaskStatus, User } from '../types';
-import { formatDateOnly, getLastDayOfMonth, getUserTag } from '../utils/workload';
+import { formatDateOnly, formatTaskStatus, getUserTag } from '../utils/workload';
+import { DateQuickPresets } from './ui/DateQuickPresets';
 import {
   X,
   CopyPlus,
@@ -145,7 +146,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
     setFeedback(null);
   }, [isOpen, task, sourceBoard, availableBoards, initialTargetUserId, initialTargetStatus, users]);
 
-  // Compute members belonging to the selected board (excluding current task owner)
+  // Compute members belonging to the selected board
   const availableUsers = useMemo(() => {
     if (!task) return [];
     let boardUsers: User[] = [];
@@ -180,20 +181,6 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
   const selectedBoardObj = useMemo(() => {
     return availableBoards.find(b => b.id === selectedBoardId) || null;
   }, [availableBoards, selectedBoardId]);
-
-  // Quick preset deadline helpers
-  const handleSetQuickDeadline = useCallback((daysAhead: number) => {
-    const d = new Date();
-    d.setDate(d.getDate() + daysAhead);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    setTargetDueDate(`${yyyy}-${mm}-${dd}`);
-  }, []);
-
-  const handleSetEndOfMonth = useCallback(() => {
-    setTargetDueDate(getLastDayOfMonth());
-  }, []);
 
   // Submit duplication as subtask
   const handleDuplicate = async (e: React.FormEvent) => {
@@ -250,18 +237,6 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
     }
     onClose();
   };
-
-  // Escape key dismissal
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isSubmitting) {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, isSubmitting, onClose]);
 
   return (
     <AnimatePresence>
@@ -394,34 +369,12 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                           >
                             {availableUsers.map(u => (
                               <option key={u.id} value={u.id}>
-                                {u.name} ({getUserTag(u).label.toUpperCase()}) — {u.email}
+                                {u.name} ({getUserTag(u).label}) — {u.email}
                               </option>
                             ))}
                           </select>
                           <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
                         </div>
-
-                        {selectedTargetUser && (
-                          <div className="flex items-center justify-between rounded-[7px] bg-[var(--surface-muted)] px-2.5 py-1.5 text-[11px] border border-[var(--border)]">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div
-                                className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] text-[10px] font-semibold text-white bg-gradient-to-br ${
-                                  selectedTargetUser.avatarColor || 'from-blue-600 to-indigo-600'
-                                }`}
-                              >
-                                {selectedTargetUser.name.charAt(0).toUpperCase()}
-                              </div>
-                              <span className="font-semibold text-[var(--text-primary)] truncate">
-                                {selectedTargetUser.name}
-                              </span>
-                              {selectedTargetUser.role && (
-                                <span className="ledger-badge uppercase">
-                                  {selectedTargetUser.role}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        )}
                       </div>
                     ) : (
                       <div className="callout callout-warning flex items-center gap-2">
@@ -472,11 +425,11 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                           value={targetStatus}
                           onChange={e => setTargetStatus(e.target.value as TaskStatus)}
                           disabled={isSubmitting || feedback?.type === 'success'}
-                          className="field-control pr-8 capitalize cursor-pointer"
+                          className="field-control pr-8 cursor-pointer"
                           id="duplicatetaskmodal-field-4"
                         >
                           {task.status !== 'retainer' && (
-                            <option value={task.status}>Keep Original ({task.status.replace('_', ' ')})</option>
+                            <option value={task.status}>Keep Original ({formatTaskStatus(task.status)})</option>
                           )}
                           <option value="pipeline">Pipeline</option>
                           <option value="todo">To Do</option>
@@ -506,26 +459,13 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                         className="field-control tabular-nums cursor-pointer"
                         id="duplicatetaskmodal-field-5"
                       />
-                      <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                        {[
-                          { label: 'Original', action: () => setTargetDueDate(task.dueDate || '') },
-                          { label: '+1d', action: () => handleSetQuickDeadline(1) },
-                          { label: '+3d', action: () => handleSetQuickDeadline(3) },
-                          { label: '+1w', action: () => handleSetQuickDeadline(7) },
-                          { label: 'EOM', action: handleSetEndOfMonth },
-                        ].map(preset => (
-                          <button
-                            key={preset.label}
-                            type="button"
-                            onClick={preset.action}
-                            disabled={isSubmitting || feedback?.type === 'success'}
-                            className="rounded-[5px] border border-[var(--border)] px-1.5 py-0.5 text-[11px] font-medium tabular-nums bg-[var(--surface-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
-                            style={{ minHeight: '24px' }}
-                          >
-                            {preset.label}
-                          </button>
-                        ))}
-                      </div>
+                      <DateQuickPresets
+                        value={targetDueDate}
+                        onSelectDate={setTargetDueDate}
+                        originalDate={task.dueDate || undefined}
+                        disabled={isSubmitting || feedback?.type === 'success'}
+                        className="mt-1.5"
+                      />
                     </div>
                   </div>
                 </div>

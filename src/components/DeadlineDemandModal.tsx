@@ -1,8 +1,9 @@
 import { DialogPanel } from './ui/DialogPanel';
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, X, Check, ArrowRight } from 'lucide-react';
 import { Task, TaskStatus } from '../types';
+import { formatLocalDateKey, formatTaskStatus, getLocalOffsetDateKey } from '../utils/workload';
 
 interface DeadlineDemandModalProps {
   isOpen: boolean;
@@ -23,40 +24,11 @@ export const DeadlineDemandModal: React.FC<DeadlineDemandModalProps> = ({
 }) => {
   const [selectedDate, setSelectedDate] = useState<string>('');
 
-  // Escape key dismissal
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        onCancel();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onCancel]);
+  const todayStr = formatLocalDateKey();
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const getPresetDate = (daysAhead: number) => getLocalOffsetDateKey(daysAhead);
 
-  const getPresetDate = (daysAhead: number) => {
-    const d = new Date();
-    d.setDate(d.getDate() + daysAhead);
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  };
-
-  const statusLabels: Record<TaskStatus, string> = {
-    pipeline: 'Pipeline',
-    retainer: 'Ongoing',
-    todo: 'To Do',
-    in_progress: 'In Progress',
-    in_review: 'In Review',
-    done: 'Done',
-    archived: 'Archived',
-  };
-
-  const targetLabel = targetStatus ? (statusLabels[targetStatus] || targetStatus) : '';
+  const targetLabel = targetStatus ? formatTaskStatus(targetStatus) : '';
 
   const handleApply = (date: string) => {
     if (!date || !task) return;

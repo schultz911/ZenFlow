@@ -1,11 +1,12 @@
 import { DialogPanel } from './ui/DialogPanel';
 import { ContentSpecFields, DesignSpecFields } from './forms/DisciplineSpecFields';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth, useWorkspace } from '../context/DashboardContext';
 import { Task, CognitiveLoad, TaskStatus, TaskDisciplineMetadata } from '../types';
-import { getTaskBillableMs, formatBillableDetailed, formatLeadDuration, getLastDayOfMonth, getUserTag, getTaskAssigneeIds } from '../utils/workload';
+import { getTaskBillableMs, formatBillableDetailed, formatLeadDuration, formatTaskStatus, getLocalOffsetDateKey, getUserTag, getTaskAssigneeIds } from '../utils/workload';
 import { isValidHttpUrl, foldLegacyDisciplineMetadata } from '../utils/taskMetadata';
+import { DateQuickPresets } from './ui/DateQuickPresets';
 import {
   X,
   Calendar,
@@ -106,6 +107,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [activeTab, setActiveTab] = useState<'details' | 'specs' | 'activity'>('details');
 
   // Resolved discipline for this task
   const taskDiscipline = useMemo(() => {
@@ -149,7 +151,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     return canEditUserTasks(taskToEdit.userId);
   }, [taskToEdit, canEditUserTasks]);
 
+  const currentUserIdRef = useRef(currentUser?.id);
+  const firstUserIdRef = useRef(users[0]?.id);
+  currentUserIdRef.current = currentUser?.id;
+  firstUserIdRef.current = users[0]?.id;
+
   useEffect(() => {
+    if (!isOpen) return;
     if (taskToEdit) {
       setTitle(taskToEdit.title || '');
       setDescription(taskToEdit.description || '');
@@ -176,10 +184,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       setTitle('');
       setDescription('');
       setBrandGuidelines('');
-      const defaultUser = defaultUserId || currentUser?.id || users[0]?.id || '';
+      const defaultUser = defaultUserId || currentUserIdRef.current || firstUserIdRef.current || '';
       setUserId(defaultUser);
       setAssigneeIds(defaultUser ? [defaultUser] : []);
-      setDueDate('');
+      setDueDate(getLocalOffsetDateKey(1));
       setCognitiveLoad('medium');
       setStatus(defaultStatus || 'todo');
       setClient('');
@@ -196,7 +204,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     }
     setShowConfirmDelete(false);
     setSubmitError(null);
-  }, [taskToEdit, defaultUserId, defaultStatus, currentUser, users]);
+    setActiveTab('details');
+  }, [isOpen, taskToEdit, defaultUserId, defaultStatus]);
 
   // Activity log calculation
   const activities = useMemo(() => {
@@ -242,27 +251,32 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     }
   }, [taskToEdit]);
 
-  // Quick date selector helpers
-  const setQuickDate = (daysFromNow: number | null, isEndOfMonth: boolean = false) => {
-    if (daysFromNow === null && !isEndOfMonth) {
-      setDueDate('');
-      return;
-    }
-    if (isEndOfMonth) {
-      setDueDate(getLastDayOfMonth());
-      return;
-    }
-    const d = new Date();
-    d.setDate(d.getDate() + (daysFromNow || 0));
-    setDueDate(d.toISOString().split('T')[0]);
-  };
+  const isDeadlineRequired = status !== 'pipeline' && status !== 'retainer';
+  const isUserIdRequired = status !== 'pipeline';
+  const detailsIncomplete =
+    !title.trim() ||
+    (isUserIdRequired && assigneeIds.length === 0 && !userId) ||
+    (isDeadlineRequired && !dueDate.trim());
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const isDeadlineRequired = status !== 'pipeline' && status !== 'retainer';
-    const isUserIdRequired = status !== 'pipeline';
+    if (!canEdit) return;
     const effectiveAssignees = assigneeIds.length > 0 ? assigneeIds : (userId ? [userId] : []);
-    if (!title.trim() || (isUserIdRequired && effectiveAssignees.length === 0) || (isDeadlineRequired && !dueDate.trim()) || !canEdit) return;
+    if (!title.trim()) {
+      setActiveTab('details');
+      setSubmitError('Task name is required on Details & Schedule.');
+      return;
+    }
+    if (isUserIdRequired && effectiveAssignees.length === 0) {
+      setActiveTab('details');
+      setSubmitError('Select an assignee or set status to Pipeline.');
+      return;
+    }
+    if (isDeadlineRequired && !dueDate.trim()) {
+      setActiveTab('details');
+      setSubmitError('A deadline is required for active workflow tasks on Details & Schedule.');
+      return;
+    }
 
     const trimmedDocLink = contentDocLink.trim();
     if (taskDiscipline === 'content' && status === 'done') {
@@ -358,17 +372,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     }
   };
 
-  // Close on Escape key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
   return (
     <AnimatePresence>
       {isOpen && (
@@ -389,7 +392,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
             transition={{ duration: 0.16, ease: [0.2, 0.7, 0.2, 1] }}
             onClick={e => e.stopPropagation()}
             id="task-modal"
-            className="w-full max-w-lg my-auto flex flex-col overflow-hidden"
+            className="w-full max-w-xl my-auto flex flex-col overflow-hidden"
           >
             {/* Header */}
             <div className="dialog-header">
@@ -399,7 +402,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 </h2>
                 {taskToEdit && (
                   <span
-                    className={`rounded-[5px] px-1.5 py-0.5 text-[10.5px] font-semibold uppercase tracking-wider border ${
+                    className={`rounded-[5px] px-1.5 py-0.5 text-[11px] font-semibold border ${
                       taskToEdit.status === 'done' || taskToEdit.status === 'retainer'
                         ? 'bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 border-emerald-600/25'
                         : taskToEdit.status === 'in_progress'
@@ -409,7 +412,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                         : 'bg-[var(--surface-subtle)] text-[var(--text-secondary)] border-[var(--border)]'
                     }`}
                   >
-                    {taskToEdit.status === 'done' ? 'Sent' : taskToEdit.status.replace('_', ' ')}
+                    {formatTaskStatus(taskToEdit.status)}
                   </span>
                 )}
                 {taskToEdit?.isSubtask && (
@@ -514,6 +517,45 @@ export const TaskModal: React.FC<TaskModalProps> = ({
               </div>
             )}
 
+            {/* Progressive Disclosure Tabs */}
+            <div className="px-5 py-2 border-b border-[var(--border)] bg-[var(--surface)] shrink-0">
+              <div className="segmented-track w-full">
+                <button
+                  type="button"
+                  aria-pressed={activeTab === 'details'}
+                  onClick={() => setActiveTab('details')}
+                  className={`segmented-item flex-1 cursor-pointer gap-1.5 ${activeTab === 'details' ? 'segmented-item-active' : ''}`}
+                >
+                  <span>Details &amp; Schedule</span>
+                  {detailsIncomplete && (
+                    <span
+                      title="Required field incomplete"
+                      aria-label="Required field incomplete"
+                      className="h-1.5 w-1.5 rounded-full bg-amber-600 dark:bg-amber-400 shrink-0"
+                    />
+                  )}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={activeTab === 'specs'}
+                  onClick={() => setActiveTab('specs')}
+                  className={`segmented-item flex-1 cursor-pointer ${activeTab === 'specs' ? 'segmented-item-active' : ''}`}
+                >
+                  Brief &amp; Specs
+                </button>
+                {taskToEdit && (
+                  <button
+                    type="button"
+                    aria-pressed={activeTab === 'activity'}
+                    onClick={() => setActiveTab('activity')}
+                    className={`segmented-item flex-1 cursor-pointer tabular-nums ${activeTab === 'activity' ? 'segmented-item-active' : ''}`}
+                  >
+                    Activity ({activities.length})
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Form Body */}
             <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
               <div className="px-5 py-4 overflow-y-auto flex-1 space-y-4">
@@ -554,6 +596,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   </div>
                 )}
 
+                {activeTab === 'details' && (
+                  <>
                 {/* Task Name */}
                 <div>
                   <label className="field-label" htmlFor="task-title-input">
@@ -609,6 +653,31 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       </select>
                       <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
                     </div>
+                    {canEdit && assigneeIds.length > 0 && eligibleUsers.some(u => !assigneeIds.includes(u.id)) && (
+                      <div className="mt-1.5 flex items-center gap-1.5">
+                        <Users className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
+                        <select
+                          aria-label="Share task with additional member"
+                          value=""
+                          onChange={e => {
+                            const extraId = e.target.value;
+                            if (extraId && !assigneeIds.includes(extraId)) {
+                              setAssigneeIds(prev => [...prev, extraId]);
+                            }
+                          }}
+                          className="field-control !py-1 !text-[11px] cursor-pointer"
+                        >
+                          <option value="">+ Share / Co-assign with teammate...</option>
+                          {eligibleUsers
+                            .filter(u => !assigneeIds.includes(u.id))
+                            .map(u => (
+                              <option key={u.id} value={u.id}>
+                                {u.name} ({getUserTag(u).label})
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
                     {assigneeIds.length > 1 && (
                       <div className="mt-1.5 flex flex-wrap items-center gap-1">
                         <Users className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
@@ -618,7 +687,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                           return (
                             <span
                               key={aid}
-                              className="inline-flex items-center gap-1 rounded-[5px] bg-emerald-600/10 border border-emerald-600/25 px-1.5 py-0.5 text-[10.5px] font-semibold text-emerald-700 dark:text-emerald-400"
+                              className="inline-flex items-center gap-1 rounded-[5px] bg-emerald-600/10 border border-emerald-600/25 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400"
                             >
                               <span>{member.name}</span>
                               {canEdit && assigneeIds.length > 1 && (
@@ -710,15 +779,16 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   </div>
                 </div>
 
-                {/* Estimated Time (Hours) */}
+                {/* Estimated Time & Priority */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-1.5">
                     <label className="field-label !mb-0 flex items-center gap-1.5" htmlFor="task-estimated-hours-input">
                       <Timer className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
-                      <span>Time Estimated (Hours)</span>
+                      <span>Time Estimated</span>
                     </label>
                     <span className="text-[11px] text-[var(--text-muted)]">
-                      Split across working days until deadline
+                      Split across days
                     </span>
                   </div>
                   <div className="relative">
@@ -744,13 +814,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   <label className="field-label">
                     Priority
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-1.5">
                     {(['low', 'medium', 'high'] as const).map(p => {
                       const isSelected = priority === p;
                       return (
                         <button
                           key={p}
                           type="button"
+                          aria-pressed={isSelected}
                           onClick={() => setPriority(p)}
                           className={`flex items-center justify-center gap-1.5 py-1.5 rounded-[7px] border text-xs font-semibold capitalize transition-colors cursor-pointer ${
                             isSelected
@@ -773,33 +844,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     })}
                   </div>
                 </div>
-
-                {/* Discipline Subtask Specifications (Editable) */}
-                {(taskDiscipline === 'content' || taskDiscipline === 'design') && (
-                  taskDiscipline === 'design' ? (
-                    <DesignSpecFields
-                      idPrefix="task-modal"
-                      assetType={assetType}
-                      onChangeAssetType={setAssetType}
-                      designSpecifications={designSpecifications}
-                      onChangeDesignSpecifications={setDesignSpecifications}
-                      brandAssetsReferences={brandAssetsReferences}
-                      onChangeBrandAssetsReferences={setBrandAssetsReferences}
-                      readOnly={!canEdit}
-                    />
-                  ) : (
-                    <ContentSpecFields
-                      idPrefix="task-modal"
-                      contentType={contentType}
-                      onChangeContentType={setContentType}
-                      contentSpecifications={contentSpecifications}
-                      onChangeContentSpecifications={setContentSpecifications}
-                      sourceContentReferences={sourceContentReferences}
-                      onChangeSourceContentReferences={setSourceContentReferences}
-                      readOnly={!canEdit}
-                    />
-                  )
-                )}
+                </div>
 
                 {/* Cognitive Load */}
                 <div>
@@ -814,6 +859,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                         <button
                           key={level}
                           type="button"
+                          aria-pressed={isSelected}
                           onClick={() => setCognitiveLoad(level)}
                           className={`flex flex-col items-center justify-center p-2 rounded-[7px] border text-center transition-colors cursor-pointer ${
                             isSelected
@@ -853,42 +899,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     </label>
 
                     {/* Quick Select Buttons */}
-                    <div className="flex items-center gap-1 text-[11px]">
-                      <button
-                        type="button"
-                        onClick={() => setQuickDate(1)}
-                        className="rounded-[5px] px-1.5 py-0.5 font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] cursor-pointer"
-                        style={{ minHeight: 'auto' }}
-                      >
-                        Tomorrow
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setQuickDate(7)}
-                        className="rounded-[5px] px-1.5 py-0.5 font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] cursor-pointer"
-                        style={{ minHeight: 'auto' }}
-                      >
-                        +1 Week
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setQuickDate(null, true)}
-                        className="rounded-[5px] px-1.5 py-0.5 font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] cursor-pointer"
-                        style={{ minHeight: 'auto' }}
-                      >
-                        Month End
-                      </button>
-                      {dueDate && (
-                        <button
-                          type="button"
-                          onClick={() => setQuickDate(null)}
-                          className="rounded-[5px] px-1.5 py-0.5 font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 cursor-pointer"
-                          style={{ minHeight: 'auto' }}
-                        >
-                          Clear
-                        </button>
-                      )}
-                    </div>
+                    <DateQuickPresets
+                      value={dueDate}
+                      onSelectDate={setDueDate}
+                      allowClear
+                    />
                   </div>
 
                   <input
@@ -914,6 +929,37 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   <div className="callout callout-warning">
                     Read-only view: You only have permission to edit tasks on your assigned board or swimlane.
                   </div>
+                )}
+                  </>
+                )}
+
+                {activeTab === 'specs' && (
+                  <>
+                {/* Discipline Subtask Specifications (Editable) */}
+                {(taskDiscipline === 'content' || taskDiscipline === 'design') && (
+                  taskDiscipline === 'design' ? (
+                    <DesignSpecFields
+                      idPrefix="task-modal"
+                      assetType={assetType}
+                      onChangeAssetType={setAssetType}
+                      designSpecifications={designSpecifications}
+                      onChangeDesignSpecifications={setDesignSpecifications}
+                      brandAssetsReferences={brandAssetsReferences}
+                      onChangeBrandAssetsReferences={setBrandAssetsReferences}
+                      readOnly={!canEdit}
+                    />
+                  ) : (
+                    <ContentSpecFields
+                      idPrefix="task-modal"
+                      contentType={contentType}
+                      onChangeContentType={setContentType}
+                      contentSpecifications={contentSpecifications}
+                      onChangeContentSpecifications={setContentSpecifications}
+                      sourceContentReferences={sourceContentReferences}
+                      onChangeSourceContentReferences={setSourceContentReferences}
+                      readOnly={!canEdit}
+                    />
+                  )
                 )}
 
                 {/* Content Document Link */}
@@ -1012,10 +1058,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     className="field-control"
                   />
                 </div>
+                  </>
+                )}
 
+                {activeTab === 'activity' && taskToEdit && (
+                  <>
                 {/* Delegated Subtasks Preview */}
                 {delegatedSubtasks.length > 0 && (
-                  <div className="pt-3 border-t border-[var(--border-subtle)] space-y-2">
+                  <div className="space-y-2">
                     <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
                       <CornerDownRight className="w-3.5 h-3.5 text-[#1d4ed8] dark:text-blue-400" />
                       <span className="tabular-nums">Delegated Subtasks ({delegatedSubtasks.length})</span>
@@ -1030,7 +1080,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                           >
                             <div className="flex items-center gap-2 min-w-0">
                               <div
-                                className={`flex h-5 w-5 items-center justify-center rounded-[5px] text-[10px] font-semibold text-white bg-gradient-to-br ${
+                                className={`flex h-5 w-5 items-center justify-center rounded-[5px] text-[11px] font-semibold text-white bg-gradient-to-br ${
                                   assignee?.avatarColor || 'from-blue-600 to-indigo-600'
                                 } shrink-0`}
                               >
@@ -1040,8 +1090,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                                 {st.title}
                               </span>
                             </div>
-                            <span className="ledger-badge uppercase shrink-0">
-                              {typeof st.status === 'string' ? st.status.replace('_', ' ') : 'todo'}
+                            <span className="ledger-badge shrink-0">
+                              {formatTaskStatus(st.status)}
                             </span>
                           </div>
                         );
@@ -1051,8 +1101,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 )}
 
                 {/* Activity Audit Trail & Cycle Time */}
-                {taskToEdit && (
-                  <div className="pt-3 border-t border-[var(--border-subtle)] space-y-2.5">
+                  <div className="space-y-2.5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
                         <History className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
@@ -1086,7 +1135,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                         Created {formatActivityTime(taskToEdit.createdAt || '')} · No modifications recorded yet
                       </div>
                     ) : (
-                      <div className="max-h-36 overflow-y-auto rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] divide-y divide-[var(--border-subtle)] text-xs">
+                      <div className="max-h-56 overflow-y-auto rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] divide-y divide-[var(--border-subtle)] text-xs">
                         {activities.map((act, actIdx) => {
                           if (!act) return null;
                           let IconComponent = Clock;
@@ -1122,7 +1171,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                                     act.action === 'created'
                                       ? 'Task created'
                                       : act.action === 'status_change'
-                                      ? `Status changed from ${fromStr.replace('_', ' ')} to ${toStr.replace('_', ' ')}`
+                                      ? `Status changed from ${formatTaskStatus(fromStr)} to ${formatTaskStatus(toStr)}`
                                       : act.action === 'reassigned'
                                       ? `Reassigned to ${toStr}`
                                       : act.action === 'billable_adjusted'
@@ -1142,6 +1191,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       </div>
                     )}
                   </div>
+                  </>
                 )}
               </div>
 
@@ -1157,7 +1207,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 <button
                   id="task-submit-button"
                   type="submit"
-                  disabled={isSubmitting || !title.trim() || (status !== 'pipeline' && assigneeIds.length === 0 && !userId) || (status !== 'pipeline' && status !== 'retainer' && !dueDate.trim()) || !canEdit}
+                  disabled={isSubmitting || !canEdit}
                   className="button-primary"
                 >
                   <span>{isSubmitting ? 'Saving...' : taskToEdit ? 'Save Changes' : 'Create Task'}</span>

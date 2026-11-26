@@ -14,6 +14,7 @@ import {
 interface RetainerSwimlaneProps {
   user: User;
   tasks: Task[];
+  defaultOpenAdd?: boolean;
   onQuickAdd: (
     userId: string,
     title: string,
@@ -28,13 +29,17 @@ interface RetainerSwimlaneProps {
 const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
   user,
   tasks,
+  defaultOpenAdd = false,
   onQuickAdd,
   onEditTask,
   onUpdateTitle,
   onDeleteTask,
   onCreateSubtask,
 }) => {
-  const [isAdding, setIsAdding] = useState(false);
+  const [isAdding, setIsAdding] = useState(defaultOpenAdd);
+  useEffect(() => {
+    if (defaultOpenAdd) setIsAdding(true);
+  }, [defaultOpenAdd]);
   const [newTitle, setNewTitle] = useState('');
   const [newLoad, setNewLoad] = useState<CognitiveLoad>('medium');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -262,16 +267,21 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                       />
                     </div>
                   ) : (
-                    <h5
-                      onClick={e => {
-                        e.stopPropagation();
-                        setEditingTaskId(task.id);
-                        setEditingTitle(task.title);
-                      }}
-                      title={task.title}
-                      className="text-xs font-semibold text-[var(--text-primary)] break-words whitespace-normal hover:text-[#1d4ed8] dark:hover:text-blue-400 cursor-text leading-tight"
-                    >
-                      {task.title}
+                    <h5 className="text-xs font-semibold leading-tight">
+                      <button
+                        type="button"
+                        onClick={() => onEditTask(task)}
+                        onDoubleClick={e => {
+                          e.stopPropagation();
+                          setEditingTaskId(task.id);
+                          setEditingTitle(task.title);
+                        }}
+                        title={`${task.title} · Click for details, double-click to rename`}
+                        className="w-full text-left text-[var(--text-primary)] break-words whitespace-normal hover:text-[#1d4ed8] dark:hover:text-blue-400 cursor-pointer transition-colors"
+                        style={{ minHeight: 'auto' }}
+                      >
+                        {task.title}
+                      </button>
                     </h5>
                   )}
 
@@ -306,8 +316,8 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                       onCreateSubtask(task);
                     }}
                     title="Create subtask from this ongoing task"
+                    aria-label={`Create subtask from ${task.title}`}
                     className="rounded-[5px] p-1 text-[var(--text-secondary)] hover:text-[#1d4ed8] dark:hover:text-blue-400 hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
-                    style={{ minHeight: 'auto' }}
                   >
                     <CopyPlus className="h-3 w-3" />
                   </button>
@@ -318,8 +328,8 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                       onEditTask(task);
                     }}
                     title="Open ongoing task details"
+                    aria-label={`Edit ${task.title}`}
                     className="rounded-[5px] p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
-                    style={{ minHeight: 'auto' }}
                   >
                     <Edit2 className="h-3 w-3" />
                   </button>
@@ -330,8 +340,8 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                       onDeleteTask(task.id);
                     }}
                     title="Delete ongoing task"
+                    aria-label={`Delete ${task.title}`}
                     className="rounded-[5px] p-1 text-[var(--text-secondary)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
-                    style={{ minHeight: 'auto' }}
                   >
                     <Trash2 className="h-3 w-3" />
                   </button>

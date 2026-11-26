@@ -8,9 +8,10 @@ import { DialogPanel } from './ui/DialogPanel';
 interface SignInModalProps {
   isOpen: boolean;
   onClose: () => void;
+  canDismiss?: boolean;
 }
 
-export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose }) => {
+export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose, canDismiss = true }) => {
   const { loginWithGoogle, authError, setAuthError, accessRequestNotice, setAccessRequestNotice } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -46,13 +47,13 @@ export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose }) => 
           transition={{ duration: 0.15 }}
           className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
           onClick={e => {
-            if (e.target === e.currentTarget && !isSubmitting) onClose();
+            if (canDismiss && e.target === e.currentTarget && !isSubmitting) onClose();
           }}
         >
           <DialogPanel
-            aria-label="Sign in to ZenFlow"
-            onClose={onClose}
-            busy={isSubmitting}
+            aria-label="Sign in to zenFlow"
+            onClose={canDismiss ? onClose : undefined}
+            busy={isSubmitting || !canDismiss}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
@@ -73,15 +74,17 @@ export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose }) => 
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={isSubmitting}
-                aria-label="Close modal"
-                className="icon-button shrink-0"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              {canDismiss && (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  disabled={isSubmitting}
+                  aria-label="Close modal"
+                  className="icon-button shrink-0"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
             </div>
 
             <div className="p-5 space-y-4">

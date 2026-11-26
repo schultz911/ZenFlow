@@ -92,18 +92,6 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
     }));
   };
 
-  // Close on Escape key
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !isSyncing && !isUploadingKey && !purgeModalOpen) {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose, isSyncing, isUploadingKey, purgeModalOpen]);
-
   // Refresh status and collapse details when modal opens
   useEffect(() => {
     if (isOpen) {
@@ -486,29 +474,38 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                               rows={3}
                               className="field-control font-mono text-[11px]"
                             />
-                            <div className="firestore-actions">
-                              <button
-                                type="submit"
-                                disabled={isUploadingKey || !serviceAccountInput.trim()}
-                                className="button-primary"
-                              >
-                                {isUploadingKey ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                  <Key className="h-3.5 w-3.5" />
-                                )}
-                                <span>{isUploadingKey ? 'Connecting...' : 'Apply Credentials'}</span>
-                              </button>
-                              <button
-                                type="button"
-                                className="button-danger-outline"
-                                disabled={isUploadingKey || isSyncing}
-                                onClick={() => setPurgeModalOpen(true)}
-                              >
-                                Purge Database
-                              </button>
-                            </div>
+                            <button
+                              type="submit"
+                              disabled={isUploadingKey || !serviceAccountInput.trim()}
+                              className="button-primary w-full"
+                            >
+                              {isUploadingKey ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Key className="h-3.5 w-3.5" />
+                              )}
+                              <span>{isUploadingKey ? 'Connecting...' : 'Apply Credentials'}</span>
+                            </button>
                           </form>
+
+                          <div className="mt-3 pt-3 border-t border-red-200 dark:border-red-500/25 flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-[11px] font-bold uppercase tracking-wider text-red-700 dark:text-red-400">
+                                Danger Zone
+                              </p>
+                              <p className="text-[11px] text-[var(--text-secondary)]">
+                                Wipe all workspace tasks and member accounts.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              className="button-danger-outline shrink-0"
+                              disabled={isUploadingKey || isSyncing}
+                              onClick={() => setPurgeModalOpen(true)}
+                            >
+                              Purge Database
+                            </button>
+                          </div>
                         </div>
                       )}
                     </div>
@@ -863,29 +860,29 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
 
                       {/* Expandable Recent Audit Log Feed */}
                       {showAuditFeed && (
-                        <div className="rounded-[7px] border border-[#262b36] bg-[#11141a] text-[#f1f4f9] p-3 text-[11px] font-mono space-y-2 max-h-56 overflow-y-auto">
-                          <div className="flex items-center justify-between text-[11px] text-[#98a2b3] border-b border-[#262b36] pb-1.5 tabular-nums">
+                        <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface-subtle)] text-[var(--text-primary)] p-3 text-[11px] font-mono space-y-2 max-h-56 overflow-y-auto">
+                          <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)] border-b border-[var(--border)] pb-1.5 tabular-nums">
                             <span>Recent Audit Events ({auditLogs.length})</span>
                             <span>Immutable Stream</span>
                           </div>
                           {auditLogs.length === 0 ? (
-                            <div className="text-[#7f8a9d] py-3 text-center font-sans text-xs">No audit records logged yet.</div>
+                            <div className="text-[var(--text-muted)] py-3 text-center font-sans text-xs">No audit records logged yet.</div>
                           ) : (
                             auditLogs.slice(0, 20).map(entry => (
-                              <div key={entry.id} className="border-b border-[#1f242e] pb-1.5 last:border-0 last:pb-0">
-                                <div className="flex items-center justify-between gap-2 text-[#98a2b3]">
-                                  <span className="text-blue-400 uppercase text-[11px] font-semibold tracking-wider truncate">
+                              <div key={entry.id} className="border-b border-[var(--border-subtle)] pb-1.5 last:border-0 last:pb-0">
+                                <div className="flex items-center justify-between gap-2 text-[var(--text-secondary)]">
+                                  <span className="text-[#1d4ed8] dark:text-blue-400 uppercase text-[11px] font-semibold tracking-wider truncate">
                                     [{entry.category}] {entry.action}
                                   </span>
-                                  <span className="text-[11px] text-[#7f8a9d] tabular-nums shrink-0">
+                                  <span className="text-[11px] text-[var(--text-muted)] tabular-nums shrink-0">
                                     {new Date(entry.timestamp).toLocaleTimeString()}
                                   </span>
                                 </div>
-                                <div className="text-[#f1f4f9] text-[11px] truncate mt-0.5">
+                                <div className="text-[var(--text-primary)] text-[11px] truncate mt-0.5">
                                   {entry.details || `${entry.targetType}:${entry.targetId}`}
                                 </div>
                                 {entry.actor?.name && (
-                                  <div className="text-[11px] text-[#7f8a9d]">
+                                  <div className="text-[11px] text-[var(--text-muted)]">
                                     Actor: {entry.actor.name} ({entry.actor.email || 'system'})
                                   </div>
                                 )}

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Task, TaskStatus, Role } from '../types';
-import { getDuePillInfo, formatDateOnly, formatCompletedDate, getCognitiveLoadLabel, getTaskBillableMs, formatBillableHours, formatBillableDetailed, getLastDayOfMonth, getTaskAssigneeCount } from '../utils/workload';
+import { getDuePillInfo, formatDateOnly, formatCompletedDate, getCognitiveLoadLabel, getTaskBillableMs, formatBillableHours, formatBillableDetailed, getLastDayOfMonth, getLocalOffsetDateKey, getTaskAssigneeCount } from '../utils/workload';
 import { isValidHttpUrl } from '../utils/taskMetadata';
 import {
   GripVertical,
@@ -83,6 +83,15 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(task.title);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const titleClickTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (titleClickTimerRef.current !== null) {
+        window.clearTimeout(titleClickTimerRef.current);
+      }
+    };
+  }, []);
 
   // Live timer for in_progress billable hours
   const [now, setNow] = useState(() => Date.now());
@@ -181,12 +190,21 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       updateFlyoutPosition();
     };
 
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowSnoozeFlyout(false);
+      }
+    };
+
     document.addEventListener('mousedown', handleOutside);
+    document.addEventListener('keydown', handleKeyDown);
     window.addEventListener('scroll', handleScroll, true);
     window.addEventListener('resize', handleResize);
 
     return () => {
       document.removeEventListener('mousedown', handleOutside);
+      document.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('scroll', handleScroll, true);
       window.removeEventListener('resize', handleResize);
     };
@@ -206,12 +224,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   };
 
   const handleSnooze = (daysToAdd: number) => {
-    const target = new Date();
-    target.setDate(target.getDate() + daysToAdd);
-    const yyyy = target.getFullYear();
-    const mm = String(target.getMonth() + 1).padStart(2, '0');
-    const dd = String(target.getDate()).padStart(2, '0');
-    handleApplyDate(`${yyyy}-${mm}-${dd}`);
+    handleApplyDate(getLocalOffsetDateKey(daysToAdd));
   };
 
   const handleEndOfMonth = () => {
@@ -337,6 +350,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   onDuplicateToBoard(task);
                 }}
                 title="Create and assign subtask"
+                aria-label={`Create subtask from ${task.title}`}
                 className="rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[#1d4ed8] dark:hover:text-blue-400 transition-colors cursor-pointer"
               >
                 <CopyPlus className="h-3 w-3" />
@@ -349,6 +363,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 onEdit(task);
               }}
               title="Edit task details"
+              aria-label={`Edit ${task.title}`}
               className="rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             >
               <Edit2 className="h-3 w-3" />
@@ -360,6 +375,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 onDelete(task.id);
               }}
               title="Delete task"
+              aria-label={`Delete ${task.title}`}
               className="rounded p-1 text-[var(--text-secondary)] hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer"
             >
               <Trash2 className="h-3 w-3" />
@@ -385,6 +401,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 e.stopPropagation();
                 onAdjustBillableHours?.(task);
               }}
+              aria-label={`Adjust billable duration for ${task.title} (${formatBillableHours(billableMs)})`}
               title={`Billable Duration: ${formatBillableDetailed(billableMs)} · Click to correct hours`}
               className={`inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums select-none transition-colors cursor-pointer shrink-0 group/timer ${task.status === 'in_progress'
                 ? 'bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25'
@@ -401,8 +418,10 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 e.stopPropagation();
                 onAdjustBillableHours?.(task);
               }}
+              aria-label={`Log billable hours for ${task.title}`}
               title="Click to log billable hours"
-              className="card-actions opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[11px] font-medium tabular-nums border border-dashed border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer shrink-0"
+              className="inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[11px] font-medium tabular-nums bg-[var(--surface-subtle)] border border-transparent hover:border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer shrink-0"
+              style={{ minHeight: 'auto' }}
             >
               <Timer className="h-2.5 w-2.5" />
               <span>0h</span>
@@ -439,7 +458,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         </div>
       )}
 
-      {/* Task Title (Inline Editable on click without modal) */}
+      {/* Task Title (Click opens details modal; double-click renames inline) */}
       {isEditingTitle ? (
         <div className="my-1" onClick={e => e.stopPropagation()}>
           <input
@@ -465,25 +484,41 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           </div>
         </div>
       ) : (
-        <h4
-          onClick={e => {
-            e.stopPropagation();
-            setIsEditingTitle(true);
-          }}
-          title="Click to edit task title directly"
-          className={`text-[13px] font-semibold leading-snug cursor-text rounded px-1 -mx-1 py-0.5 hover:bg-[var(--surface-subtle)] transition-colors group/title flex items-center justify-between gap-1.5 ${task.status === 'done'
-            ? 'line-through text-[var(--text-secondary)] font-medium'
-            : 'text-[var(--text-primary)] hover:text-[#1d4ed8] dark:hover:text-blue-400'
-            }`}
-        >
-          <span className="break-words">{task.title}</span>
-          <Edit2 className="h-2.5 w-2.5 opacity-0 group-hover/title:opacity-60 shrink-0 text-[var(--text-secondary)]" />
+        <h4 className="text-[13px] font-semibold leading-snug">
+          <button
+            type="button"
+            onClick={() => {
+              if (titleClickTimerRef.current !== null) {
+                window.clearTimeout(titleClickTimerRef.current);
+              }
+              titleClickTimerRef.current = window.setTimeout(() => {
+                titleClickTimerRef.current = null;
+                onEdit(task);
+              }, 220);
+            }}
+            onDoubleClick={e => {
+              e.stopPropagation();
+              if (titleClickTimerRef.current !== null) {
+                window.clearTimeout(titleClickTimerRef.current);
+                titleClickTimerRef.current = null;
+              }
+              setIsEditingTitle(true);
+            }}
+            title="Click to open task details · Double-click to rename"
+            className={`w-full text-left cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-[var(--surface-subtle)] transition-colors group/title flex items-center justify-between gap-1.5 ${task.status === 'done'
+              ? 'line-through text-[var(--text-secondary)] font-medium'
+              : 'text-[var(--text-primary)] hover:text-[#1d4ed8] dark:hover:text-blue-400'
+              }`}
+            style={{ minHeight: 'auto' }}
+          >
+            <span className="break-words">{task.title}</span>
+          </button>
         </h4>
       )}
 
       {/* Optional Context snippet */}
       {task.description && (
-        <p className="mt-0.5 text-[11px] text-[var(--text-secondary)] line-clamp-2 leading-relaxed">
+        <p className="mt-0.5 text-xs text-[var(--text-secondary)] line-clamp-2 leading-relaxed">
           {task.description}
         </p>
       )}
@@ -604,15 +639,6 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleSnooze(2)}
-                  className="flex w-full items-center justify-between rounded-[6px] px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
-                  style={{ minHeight: '28px' }}
-                >
-                  <span>In 2 days</span>
-                  <span className="text-[11px] tabular-nums text-[var(--text-muted)]">+2d</span>
-                </button>
-                <button
-                  type="button"
                   onClick={() => handleSnooze(3)}
                   className="flex w-full items-center justify-between rounded-[6px] px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
                   style={{ minHeight: '28px' }}
@@ -627,7 +653,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   style={{ minHeight: '28px' }}
                 >
                   <span>Next week</span>
-                  <span className="text-[11px] tabular-nums text-[var(--text-muted)]">+7d</span>
+                  <span className="text-[11px] tabular-nums text-[var(--text-muted)]">+1w</span>
                 </button>
                 <button
                   type="button"
@@ -641,7 +667,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 
                 {/* Custom date picker input */}
                 <div className="pt-1.5 mt-1 border-t border-[var(--border-subtle)] px-1.5 pb-1">
-                  <label className="block text-[10.5px] uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1">
+                  <label className="block text-[11px] uppercase tracking-wider font-semibold text-[var(--text-secondary)] mb-1">
                     Pick Date
                   </label>
                   <div className="flex items-center gap-1">
@@ -690,8 +716,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               }}
               title={`Move back to ${prevStatus.replace('_', ' ')}`}
               aria-label={`Move back to ${prevStatus.replace('_', ' ')}`}
-              className="rounded-[5px] p-1 text-[var(--text-muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
-              style={{ minHeight: 'auto' }}
+              className="mobile-tap-control rounded-[5px] p-1 sm:min-h-0 min-w-[36px] sm:min-w-0 flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             >
               <ChevronLeft className="h-3 w-3" />
             </button>
@@ -705,8 +730,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 onMoveStatus(task.id, nextStatus);
               }}
               title={`Advance to ${nextStatus === 'done' ? 'Sent' : nextStatus.replace('_', ' ')}`}
-              className="inline-flex items-center gap-0.5 rounded-[5px] bg-[var(--surface-subtle)] hover:bg-[var(--border)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
-              style={{ minHeight: 'auto' }}
+              className="mobile-tap-control inline-flex items-center gap-0.5 rounded-[5px] bg-[var(--surface-subtle)] hover:bg-[var(--border)] px-2 sm:px-1.5 py-1 sm:py-0.5 sm:min-h-0 text-[11px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             >
               <span className="capitalize">{nextStatus === 'done' ? 'Sent' : nextStatus.replace('_', ' ')}</span>
               <ChevronRight className="h-2.5 w-2.5" />
@@ -719,8 +743,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 onMoveStatus(task.id, 'archived');
               }}
               title="Mark as complete"
-              className="inline-flex items-center gap-1 rounded-[5px] bg-[var(--surface-subtle)] hover:bg-[var(--border)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
-              style={{ minHeight: 'auto' }}
+              className="mobile-tap-control inline-flex items-center gap-1 rounded-[5px] bg-[var(--surface-subtle)] hover:bg-[var(--border)] px-2 sm:px-1.5 py-1 sm:py-0.5 sm:min-h-0 text-[11px] font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             >
               <Archive className="h-2.5 w-2.5" />
               <span>Complete</span>

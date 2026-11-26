@@ -1,9 +1,9 @@
 import { DialogPanel } from './ui/DialogPanel';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Timer, X, Clock, Plus, Minus, RotateCcw, Check } from 'lucide-react';
+import { Timer, X, Clock, Plus, Minus, RotateCcw, Check, AlertCircle } from 'lucide-react';
 import { Task } from '../types';
-import { getTaskBillableMs, formatBillableHours, formatBillableDetailed } from '../utils/workload';
+import { getTaskBillableMs, formatBillableHours, formatBillableDetailed, formatTaskStatus } from '../utils/workload';
 
 interface BillableHoursModalProps {
   isOpen: boolean;
@@ -13,12 +13,10 @@ interface BillableHoursModalProps {
 }
 
 const QUICK_PRESETS = [
-  { label: '+15m', minutes: 15 },
-  { label: '+30m', minutes: 30 },
-  { label: '+1h', minutes: 60 },
-  { label: '+2h', minutes: 120 },
-  { label: '-15m', minutes: -15 },
-  { label: '-30m', minutes: -30 },
+  { label: '15m', minutes: 15 },
+  { label: '30m', minutes: 30 },
+  { label: '1h', minutes: 60 },
+  { label: '15m', minutes: -15 },
 ];
 
 const REASON_PRESETS = [
@@ -39,6 +37,7 @@ export const BillableHoursModal: React.FC<BillableHoursModalProps> = ({
   const [minutes, setMinutes] = useState<number>(0);
   const [reason, setReason] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const hoursInputRef = useRef<HTMLInputElement>(null);
 
   // Derive initial values when task changes or modal opens
@@ -49,6 +48,7 @@ export const BillableHoursModal: React.FC<BillableHoursModalProps> = ({
       setHours(Math.floor(totalMinutes / 60));
       setMinutes(totalMinutes % 60);
       setReason('');
+      setSaveError(null);
       setIsSubmitting(false);
 
       // Focus input on mount
@@ -57,19 +57,6 @@ export const BillableHoursModal: React.FC<BillableHoursModalProps> = ({
       }, 50);
     }
   }, [isOpen, task]);
-
-  // Keyboard shortcut listener (Esc to close)
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
 
   const currentDurationMs = useMemo(() => {
     return task ? getTaskBillableMs(task) : 0;
@@ -99,12 +86,13 @@ export const BillableHoursModal: React.FC<BillableHoursModalProps> = ({
     e.preventDefault();
     if (!task || isSubmitting) return;
 
+    setSaveError(null);
     setIsSubmitting(true);
     try {
       await onSave(task.id, newDurationMs, reason.trim() || undefined);
       onClose();
     } catch (err) {
-      console.error('Failed to adjust billable hours:', err);
+      setSaveError(err instanceof Error ? err.message : 'Failed to save billable duration. Please try again.');
       setIsSubmitting(false);
     }
   };
@@ -158,6 +146,13 @@ export const BillableHoursModal: React.FC<BillableHoursModalProps> = ({
 
             <form onSubmit={handleSubmit}>
               <div className="p-5 space-y-4">
+                {saveError && (
+                  <div role="alert" className="callout callout-danger flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                    <span>{saveError}</span>
+                  </div>
+                )}
+
                 {/* Current Tracked Duration Summary Strip */}
                 <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2.5 flex items-center justify-between gap-2 text-xs">
                   <div className="flex items-center gap-1.5 flex-wrap tabular-nums">
@@ -175,8 +170,8 @@ export const BillableHoursModal: React.FC<BillableHoursModalProps> = ({
                       Active in progress
                     </span>
                   ) : (
-                    <span className="ledger-badge capitalize shrink-0">
-                      {task.status.replace('_', ' ')}
+                    <span className="ledger-badge shrink-0">
+                      {formatTaskStatus(task.status)}
                     </span>
                   )}
                 </div>
@@ -239,16 +234,17 @@ export const BillableHoursModal: React.FC<BillableHoursModalProps> = ({
                   <div className="flex flex-wrap gap-1.5">
                     {QUICK_PRESETS.map(preset => (
                       <button
-                        key={preset.label}
+                        key={preset.minutes}
                         type="button"
+                        aria-label={`${preset.minutes > 0 ? 'Add' : 'Subtract'} ${preset.label}`}
                         onClick={() => applyPresetMinutes(preset.minutes)}
                         className="inline-flex items-center gap-0.5 rounded-[5px] border border-[var(--border)] bg-[var(--surface-subtle)] hover:bg-[var(--border)] px-2.5 py-1 text-xs font-semibold tabular-nums text-[var(--text-primary)] transition-colors cursor-pointer"
                         style={{ minHeight: '28px' }}
                       >
                         {preset.minutes > 0 ? (
-                          <Plus className="h-2.5 w-2.5 text-[#1d4ed8] dark:text-blue-400" />
+                          <Plus aria-hidden="true" className="h-2.5 w-2.5 text-[#1d4ed8] dark:text-blue-400" />
                         ) : (
-                          <Minus className="h-2.5 w-2.5 text-amber-700 dark:text-amber-400" />
+                          <Minus aria-hidden="true" className="h-2.5 w-2.5 text-amber-700 dark:text-amber-400" />
                         )}
                         <span>{preset.label}</span>
                       </button>

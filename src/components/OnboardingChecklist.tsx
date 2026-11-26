@@ -32,6 +32,7 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
 
   const [dismissed, setDismissed] = useState(true);
   const [hasSynced, setHasSynced] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [connectingKey, setConnectingKey] = useState(false);
@@ -150,12 +151,14 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
   );
 
   const completedCount = [step1Done, step2Done, step3Done].filter(Boolean).length;
+  const showCompactStrip = !forceOpen && !isExpanded && step1Done;
 
   const handleDismiss = () => {
     try {
       localStorage.setItem(`${DISMISS_PREFIX}${currentUser.id}`, 'true');
     } catch {}
     setDismissed(true);
+    setIsExpanded(false);
     onCloseForceOpen();
   };
 
@@ -168,6 +171,7 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
       const res = await connectClickup(apiKeyInput.trim());
       if (res.success) {
         setApiKeyInput('');
+        setIsExpanded(true);
       } else {
         setKeyError(res.error || 'Could not verify ClickUp API key');
       }
@@ -229,6 +233,42 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
     }
   };
 
+  if (showCompactStrip) {
+    return (
+      <section
+        id="workspace-onboarding-checklist"
+        aria-label="Workspace Setup"
+        className="mb-3 rounded-[9px] border border-[var(--border)] bg-[var(--surface)] px-3.5 py-2 flex flex-wrap items-center justify-between gap-2 text-xs"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="h-2 w-2 rounded-full bg-amber-600 dark:bg-amber-400 shrink-0" />
+          <span className="font-semibold text-[var(--text-primary)]">ClickUp setup:</span>
+          <span className="tabular-nums text-[var(--text-secondary)]">
+            {completedCount}/3 complete
+          </span>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => setIsExpanded(true)}
+            className="mobile-tap-control rounded-[5px] border border-[var(--border)] bg-[var(--surface-subtle)] hover:bg-[var(--border)] px-2.5 py-1 sm:min-h-0 text-[11px] font-semibold text-[#1d4ed8] dark:text-blue-400 transition-colors cursor-pointer"
+          >
+            Finish setup
+          </button>
+          <button
+            type="button"
+            onClick={handleDismiss}
+            aria-label="Dismiss workspace setup"
+            className="mobile-tap-control inline-flex items-center gap-1 rounded-[5px] px-2 py-1 sm:min-h-0 text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+          >
+            <span>Skip for now</span>
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section
       id="workspace-onboarding-checklist"
@@ -242,15 +282,25 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
             {completedCount}/3 complete
           </span>
         </div>
-        <button
-          type="button"
-          onClick={handleDismiss}
-          className="inline-flex items-center gap-1 rounded-[5px] px-2 py-1 text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
-          style={{ minHeight: 'auto' }}
-        >
-          <span>{allComplete ? 'Close' : 'Skip for now'}</span>
-          <X className="h-3.5 w-3.5" />
-        </button>
+        <div className="flex items-center gap-2">
+          {!forceOpen && step1Done && (
+            <button
+              type="button"
+              onClick={() => setIsExpanded(false)}
+              className="mobile-tap-control rounded-[5px] px-2 py-1 sm:min-h-0 text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+            >
+              Collapse
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleDismiss}
+            className="mobile-tap-control inline-flex items-center gap-1 rounded-[5px] px-2 py-1 sm:min-h-0 text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+          >
+            <span>{allComplete ? 'Close' : 'Skip for now'}</span>
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
 
       <div className="divide-y divide-[var(--border-subtle)]">
@@ -271,12 +321,12 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
                 <KeyRound className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
                 <span>Add personal ClickUp API key</span>
               </div>
-              <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 {step1Done
                   ? 'Connected and verified against ClickUp.'
                   : 'Unlocks your ClickUp spaces, member mapping, and task sync.'}
               </p>
-              {keyError && <p className="text-[11px] text-red-600 dark:text-red-400 mt-1">{keyError}</p>}
+              {keyError && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{keyError}</p>}
             </div>
           </div>
 
@@ -318,15 +368,15 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
                 <FolderKanban className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
                 <span>Confirm ClickUp Space &amp; sync tasks</span>
               </div>
-              <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 {!step1Done
                   ? 'Complete Step 1 first to load available spaces.'
                   : matchedMember
                   ? `Matched ClickUp profile: ${matchedMember.username || matchedMember.email}`
-                  : 'Select your default delivery space and send your ZenFlow tasks to ClickUp.'}
+                  : 'Select your default delivery space and send your zenFlow tasks to ClickUp.'}
               </p>
               {syncNotice && (
-                <p className="text-[11px] text-[var(--text-secondary)] mt-1">{syncNotice}</p>
+                <p className="text-xs text-[var(--text-secondary)] mt-1">{syncNotice}</p>
               )}
             </div>
           </div>
@@ -388,7 +438,7 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
                 <Webhook className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
                 <span>Enable real-time ClickUp webhook</span>
               </div>
-              <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
+              <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 {clickupWebhookStatus?.registered
                   ? 'Real-time updates active for workspace changes.'
                   : webhookNotice || 'Runs automatically once a key is connected and workspace webhook is unset.'}

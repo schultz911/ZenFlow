@@ -33,9 +33,9 @@ const reset = () => {
 };
 
 const checks: Array<[string, () => Promise<void>]> = [
-  ['Default button starts at 5 and a click cannot confirm', async () => {
+  ['Default button starts at 5s and a click cannot confirm', async () => {
     const button = await render(false, 5000);
-    assert(button.textContent?.endsWith('5'), 'initial countdown is not 5');
+    assert(button.textContent?.endsWith('5s'), 'initial countdown is not 5s');
     pointer(button, 'pointerdown'); pointer(button, 'pointerup'); await wait(20); reset();
   }],
   ['Moving outside pointer capture cancels and reentry cannot resume', async () => {

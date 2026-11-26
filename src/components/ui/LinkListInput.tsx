@@ -25,7 +25,7 @@ export const LinkListInput: React.FC<LinkListInputProps> = ({
   const [isAdding, setIsAdding] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleAdd = () => {
+  const handleAdd = (onBlur = false) => {
     const trimmed = draft.trim();
     if (!trimmed) {
       setIsAdding(false);
@@ -33,7 +33,11 @@ export const LinkListInput: React.FC<LinkListInputProps> = ({
       return;
     }
     if (!isValidHttpUrl(trimmed)) {
-      setError('Enter a valid URL starting with http:// or https://');
+      if (onBlur) {
+        setError(null);
+      } else {
+        setError('Enter a valid URL starting with http:// or https://');
+      }
       return;
     }
     if (!links.includes(trimmed)) {
@@ -94,7 +98,7 @@ export const LinkListInput: React.FC<LinkListInputProps> = ({
               onBlur={e => {
                 const action = (e.relatedTarget as HTMLElement | null)?.dataset?.linkAction;
                 if (action === 'cancel' || action === 'add') return;
-                handleAdd();
+                handleAdd(true);
               }}
               placeholder={placeholder}
               autoFocus
@@ -103,7 +107,7 @@ export const LinkListInput: React.FC<LinkListInputProps> = ({
             <button
               type="button"
               data-link-action="add"
-              onClick={handleAdd}
+              onClick={() => handleAdd(false)}
               className="button-primary shrink-0"
             >
               Add

@@ -2,7 +2,7 @@ import { DialogPanel } from './ui/DialogPanel';
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Task, User } from '../types';
-import { getTaskAssigneeIds } from '../utils/workload';
+import { formatTaskStatus, getTaskAssigneeIds } from '../utils/workload';
 import { AlertTriangle, Trash2, X, Loader2, CornerDownRight } from 'lucide-react';
 
 interface DeleteTaskModalProps {
@@ -26,17 +26,6 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
   const [deleteError, setDeleteError] = useState('');
 
   useEffect(() => setDeleteError(''), [isOpen, task?.id, targetUserId]);
-
-  // Close on Escape key
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen && !isDeleting) {
-        onClose();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, isDeleting, onClose]);
 
   const assigneeIds = task ? getTaskAssigneeIds(task) : [];
   const isSharedRemoval = Boolean(task && targetUserId && assigneeIds.length > 1 && assigneeIds.includes(targetUserId));
@@ -126,8 +115,8 @@ export const DeleteTaskModal: React.FC<DeleteTaskModalProps> = ({
 
                 <div className="flex items-center justify-between px-3 py-2">
                   <dt className="text-[var(--text-secondary)]">Status</dt>
-                  <dd className="font-medium capitalize text-[var(--text-primary)]">
-                    {task.status === 'done' ? 'Sent' : task.status === 'archived' ? 'Completed' : task.status.replace('_', ' ')}
+                  <dd className="font-medium text-[var(--text-primary)]">
+                    {formatTaskStatus(task.status)}
                   </dd>
                 </div>
               </dl>

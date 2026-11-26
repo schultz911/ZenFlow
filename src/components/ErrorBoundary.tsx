@@ -52,16 +52,21 @@ export class ErrorBoundary extends React.Component<Props, State> {
               </p>
 
               {this.state.error?.message && (
-                <div className="rounded-[7px] bg-[var(--surface-subtle)] border border-[var(--border)] p-3 text-left font-mono text-[11px] break-words space-y-1.5 max-h-48 overflow-y-auto">
-                  <p className="font-semibold text-red-700 dark:text-red-400">
-                    {this.state.error.message}
-                  </p>
-                  {this.state.error.stack && (
-                    <pre className="text-[11px] text-[var(--text-muted)] whitespace-pre-wrap overflow-x-auto">
-                      {this.state.error.stack.split('\n').slice(0, 4).join('\n')}
-                    </pre>
-                  )}
-                </div>
+                <details className="rounded-[7px] bg-[var(--surface-subtle)] border border-[var(--border)] p-3 text-left text-xs">
+                  <summary className="cursor-pointer font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] select-none">
+                    Technical details
+                  </summary>
+                  <div className="mt-2 font-mono text-[11px] break-words space-y-1.5 max-h-40 overflow-y-auto">
+                    <p className="font-semibold text-red-700 dark:text-red-400">
+                      {this.state.error.message}
+                    </p>
+                    {this.state.error.stack && (
+                      <pre className="text-[11px] text-[var(--text-muted)] whitespace-pre-wrap overflow-x-auto">
+                        {this.state.error.stack.split('\n').slice(0, 4).join('\n')}
+                      </pre>
+                    )}
+                  </div>
+                </details>
               )}
 
               <button

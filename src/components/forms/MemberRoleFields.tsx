@@ -92,7 +92,7 @@ export const MemberRoleFields: React.FC<MemberRoleFieldsProps> = ({
           !canAssignAdmin
             ? 'opacity-50 bg-[var(--surface-subtle)] border-[var(--border)]'
             : isAdministrator
-            ? 'border-red-600/35 bg-red-600/[0.06] dark:bg-red-500/10'
+            ? 'border-[var(--accent)]/45 bg-[var(--accent-soft)]'
             : 'border-[var(--border)] bg-[var(--surface-muted)]'
         }`}
         title={
@@ -102,7 +102,11 @@ export const MemberRoleFields: React.FC<MemberRoleFieldsProps> = ({
         }
       >
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] bg-red-600/10 text-red-600 dark:text-red-400">
+          <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-[6px] ${
+            isAdministrator
+              ? 'bg-[#1d4ed8]/15 text-[#1d4ed8] dark:text-blue-400'
+              : 'bg-[var(--surface-subtle)] text-[var(--text-secondary)]'
+          }`}>
             <Shield className="h-3.5 w-3.5" />
           </div>
           <div className="min-w-0">
@@ -124,7 +128,7 @@ export const MemberRoleFields: React.FC<MemberRoleFieldsProps> = ({
             onChange={e => onChangeAdministrator(e.target.checked)}
             className="sr-only peer"
           />
-          <div className="w-9 h-5 bg-[var(--border)] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-[var(--focus)] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[var(--border)] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--danger)]" />
+          <div className="w-9 h-5 bg-[var(--border)] peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-[var(--focus)] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[var(--border)] after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[var(--accent)]" />
         </label>
       </div>
 
@@ -146,6 +150,7 @@ export const MemberRoleFields: React.FC<MemberRoleFieldsProps> = ({
             <button
               key={opt.id}
               type="button"
+              aria-pressed={role === opt.id}
               onClick={() => onChangeRole(prev => (prev === opt.id ? undefined : opt.id))}
               title={opt.tooltip}
               className={`flex items-start gap-2 rounded-[7px] border p-2.5 text-left transition-colors cursor-pointer ${

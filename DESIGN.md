@@ -19,12 +19,24 @@ colors:
   hairline-rule: "#dfe3ea"
   hairline-subtle: "#eceff4"
   rule-hover: "#c5ccd8"
-  dark-cobalt-accent: "#3b82f6"
-  dark-cobalt-hover: "#2563eb"
+  dark-cobalt-accent: "#2563eb"
+  dark-cobalt-hover: "#1d4ed8"
   dark-cobalt-focus: "#60a5fa"
   dark-emerald-capacity: "#34d399"
   dark-amber-caution: "#fbbf24"
-  dark-vermilion-alert: "#ef4444"
+  dark-vermilion-alert: "#dc2626"
+  callout-info-dark: "#93c5fd"
+  callout-warning-light: "#92400e"
+  callout-warning-dark: "#fcd34d"
+  callout-danger-dark: "#fca5a5"
+  callout-success-light: "#065f46"
+  callout-success-dark: "#6ee7b7"
+  emerald-hover: "#047857"
+  emerald-hover-dark: "#065f46"
+  crimson-border: "#991b1b"
+  crimson-hover: "#a71919"
+  crimson-fill: "#7f1d1d"
+  emerald-confirm: "#166534"
   dark-ink-canvas: "#0f1115"
   dark-ledger-surface: "#15181f"
   dark-ledger-band: "#191d26"
@@ -213,7 +225,7 @@ A disciplined cool-neutral ledger palette in both light and dark modes, punctuat
 - **Cobalt Wash** (`#eff4ff` light / `rgba(59, 130, 246, 0.14)` dark): Quiet tinted surface for active `In Progress` billable timer chips, `You` badge, inline `Assign` pipeline action, and drag-drop target highlights.
 
 ### Secondary
-- **Vermilion Alert** (`#dc2626` light / `#ef4444` dark): Solid high-contrast alert badge background (`.ledger-alert-badge`) for WIP overload (`>12 pts`), overdue marquee counter, overdue deadline text, and high cognitive-load status dots.
+- **Vermilion Alert** (`#dc2626` light / `#dc2626` dark): Solid high-contrast alert badge background (`.ledger-alert-badge`) for WIP overload (`>12 pts`), overdue marquee counter, overdue deadline text, and high cognitive-load status dots.
 - **Crimson Hold** (`#b91c1c`): Destructive outline button ink and the 5-second hold-to-purge confirmation fill (filling to `#7f1d1d` while held, `#166534` on completion).
 - **Emerald Capacity** (`#059669` light / `#34d399` dark): Team utilization KPI, healthy efficiency scores (`>=75%`), `Sent` column status, live Firestore connection indicator, and Free Pool (`<3h/day`) availability dots and actions.
 - **Amber Caution** (`#b45309` light / `#fbbf24` dark): `In Review` column headers, unassigned pipeline counts, approaching deadlines (`Today`), moderate cognitive-load dots, and elevated workload averages (`8–11.9 pts`).
@@ -232,7 +244,7 @@ A disciplined cool-neutral ledger palette in both light and dark modes, punctuat
 - **Rule Hover / Dark Rule Hover** (`#c5ccd8` light / `#3a4254` dark): Subtle border darkening on resting task card hover.
 
 ### Named Rules
-**The Vermilion Reserve Rule.** Solid vermilion (`#dc2626` / `#ef4444`) is strictly reserved for WIP overload (`>=12 pts`), overdue alarms, high-load dots, and destructive actions—never for decorative tags, neutral banners, or standard CTAs.
+**The Vermilion Reserve Rule.** Solid vermilion (`#dc2626`) is strictly reserved for WIP overload (`>=12 pts`), overdue alarms, high-load dots, and destructive actions—never for decorative tags, neutral banners, or standard CTAs.
 
 **The Dual-Mode Parity Rule.** Every background, hairline border, and text token resolves through semantic CSS custom properties (`--canvas`, `--surface`, `--border`, `--text-primary`) so light alabaster and dark ink-slate preserve identical scan hierarchy and contrast.
 
@@ -259,13 +271,13 @@ A disciplined cool-neutral ledger palette in both light and dark modes, punctuat
 
 ## Layout
 
-zenFlow centers its operational workspace inside a `1400px` max-width container (`max-w-[1400px]`) with responsive horizontal gutters (`16px` mobile, `24px` at `640px`, `32px` at `1024px`) and `80px` bottom padding (`pb-20`) to keep the lowest swimlane clear of the floating Free Pool dock.
+zenFlow centers its operational workspace inside a `1400px` max-width container (`max-w-[1400px]`) with responsive horizontal gutters (`16px` mobile, `24px` at `640px`, `32px` at `1024px`) and `32px` bottom padding (`pb-8`).
 
-- **Sticky Chrome & Urgent Ticker:** A `54px` (`3.375rem`) sticky header anchors at `top: 0` on desktop (`>=1280px`); below `1280px`, a `44px` (`2.75rem`) horizontal sub-header strip adds team navigation for a combined `104px` (`6.5rem`) `--header-height`. The urgent `MarqueeRibbon` pins directly beneath at `top: var(--header-height)` whenever overdue or due-today tasks exist.
-- **Single-Frame KPI Ledger:** `OverviewBar` renders one `.ledger-frame` containing a `.ledger-band` header and a hairline-divided `.ledger-kpi-grid` (`5` equal columns at `>=1024px`, `3` columns at `>=640px`, and a `6`-column mobile grid spanning `3/3/2/2/2`). Directly beneath sits a compact toolbar row (`search input` + `Select Team Board` + `View Analytics` + `Export Report`).
+- **Sticky Chrome & Urgent Ticker:** A `54px` (`3.375rem`) sticky header anchors at `top: 0` on desktop (`>=1280px`); below `1280px`, a `44px` (`2.75rem`) horizontal sub-header strip adds team navigation for a combined `99px` (`6.1875rem`) `--header-height`. The urgent `MarqueeRibbon` pins directly beneath at `top: var(--header-height)` whenever overdue or due-today tasks exist.
+- **Single-Frame KPI Ledger:** `OverviewBar` renders one `.ledger-frame` containing a `.ledger-band` header and a hairline-divided `.ledger-kpi-grid` (`5` equal columns at `>=1024px`, `3` columns at `>=640px`, collapsing cleanly on `<640px` so active work leads above the fold). Directly beneath sits a unified toolbar row (`search input` + `Select Team Board` + `Free Pool` + `View Analytics` + `Export Report`).
 - **Centralized Pipeline Triage Strip:** `TeamPipeline` uses a `.ledger-frame` with a ruled `1`-, `2`-, or `3`-column responsive grid (`divide-y md:divide-y-0 md:divide-x`) depending on item count, avoiding nested cards inside the pipeline container.
-- **Ruled Swimlane Grids:** Each member workspace is a collapsible `.ledger-frame` whose body divides cleanly into `4` status columns (`repeat(4, minmax(195px, 1fr))`), expanding to `5` columns (`repeat(5, minmax(185px, 1fr))`) when `Completed` is toggled open. Column cells use `1px solid var(--border-subtle)` right dividers, `10px 12px` padding, a `200px` min-height, and a `385px` internal scroll ceiling. Below `640px`, columns switch to horizontal flex scroll-snap (`min(80vw, 300px)` per column) and dialog inputs bump to `16px` to prevent mobile zoom.
-- **Floating Capacity Dock:** `FreePoolContainer` anchors at `fixed bottom-4 right-4` (`16px` inset) as a compact obsidian pill trigger that expands upward into a `320px`–`352px` (`max-h-[440px]`) scrollable roster.
+- **Ruled Swimlane Grids:** Each member workspace is a collapsible `.ledger-frame` whose body divides cleanly into `4` status columns (`repeat(4, minmax(195px, 1fr))`), expanding to `5` columns (`repeat(5, minmax(185px, 1fr))`) when `Completed` is toggled open. Column cells use `1px solid var(--border-subtle)` right dividers, `10px 12px` padding, a `200px` min-height, and a `385px` internal scroll ceiling. Below `640px`, the horizontal scroll wrapper snaps cleanly across `min(80vw, 300px)` columns and dialog inputs bump to `16px` to prevent mobile zoom.
+- **Toolbar Capacity Popover:** `FreePoolContainer` renders an obsidian pill trigger directly in the `OverviewBar` toolbar (never obstructing lower swimlane headers) showing live emerald count `<3h/day` and expanding into a `320px`–`352px` (`max-h-[440px]`) right-anchored popover roster.
 
 ### Named Rules
 **The Hairline Partition Rule.** Separate adjacent KPI cells, pipeline entries, and swimlane status columns with 1px structural rules (`--border` / `--border-subtle`) inside a shared `.ledger-frame` rather than wrapping every sub-region in nested rounded cards.
@@ -320,7 +332,7 @@ Controls feel crisp, immediate, and tactile—with `150ms` `cubic-bezier(0.2, 0.
 
 ### Cards / Containers
 - **Ledger Frame & Band (`.ledger-frame`, `.ledger-band`):** Outer `10px` radius white/dark-slate container with 1px `--border`, `overflow: hidden`, and a `--surface-muted` top header band separated by a 1px bottom rule. Zero shadow.
-- **KPI Metric Cell (`.metric-card`):** `12px 16px` padding (`10px 12px` on `<640px`), uppercase `11px` tracking-wide label, `24px` bold tabular figure, and `11px` tabular detail subline separated by internal `--border-subtle` dividers.
+- **KPI Metric Cell (`.metric-card`):** `12px 16px` padding (`10px 12px` on `<640px`), uppercase `11px` tracking-wide label, `24px` bold tabular figure, and `12px` tabular detail subline separated by internal `--border-subtle` dividers.
 - **Task Card (`.task-card`):** `7px` radius `--surface` container with 1px `--border` and `10px` internal padding. Hover shifts border to `#c5ccd8` (`#3a4254` dark) and reveals edit/duplicate/delete icon actions; dragging drops opacity to `0.35` with a cobalt focus ring; `Sent` cards dim to `--surface-muted` at `70%` opacity with strikethrough titles. Bottom metadata row separates deadline + status stepper via a `1px solid var(--border-subtle)` top divider.
 
 ### Inputs / Fields
@@ -341,7 +353,7 @@ Controls feel crisp, immediate, and tactile—with `150ms` `cubic-bezier(0.2, 0.
 ### Do:
 - **Do** partition KPI groups, pipeline rows, and swimlane columns with 1px structural rules (`--border` and `--border-subtle`) inside a shared `.ledger-frame` (**The Hairline Partition Rule**).
 - **Do** apply `font-variant-numeric: tabular-nums` to every KPI figure, efficiency percentage, billable hour ratio, cognitive-load score, member count, and deadline (**The Tabular Ledger Rule**).
-- **Do** reserve solid vermilion (`#dc2626` / `#ef4444`) strictly for WIP overload (`>=12 pts`), overdue alarms, high-load dots, and destructive safety actions (**The Vermilion Reserve Rule**).
+- **Do** reserve solid vermilion (`#dc2626`) strictly for WIP overload (`>=12 pts`), overdue alarms, high-load dots, and destructive safety actions (**The Vermilion Reserve Rule**).
 - **Do** use semantic CSS custom properties (`--canvas`, `--surface`, `--surface-muted`, `--border`, `--text-primary`, `--accent`) so every new view maintains instant light/dark parity (**The Dual-Mode Parity Rule**).
 - **Do** preserve the `zenFlow` wordmark (`Inter` bold `zen` + `Dancing Script` bold `Flow`) and keep all operational typography strictly in `Inter`.
 - **Do** limit elevation shadows (`--shadow-floating`, `--shadow-dialog`) and frosted `backdrop-blur` strictly to sticky headers, dropdown menus, dialogs, and the floating `Free Pool` dock.

@@ -198,6 +198,15 @@ export function getUserTag(user?: {
 }
 
 /**
+ * Returns a local YYYY-MM-DD date string offset by daysAhead from fromDate.
+ */
+export function getLocalOffsetDateKey(daysAhead: number, fromDate: Date = new Date()): string {
+  const target = new Date(fromDate);
+  target.setDate(target.getDate() + daysAhead);
+  return formatLocalDateKey(target);
+}
+
+/**
  * Calculates the last day of the current month formatted as YYYY-MM-DD.
  * If today is already the last day of the month, rolls over to the last day of the next month.
  */
@@ -210,10 +219,7 @@ export function getLastDayOfMonth(fromDate: Date = new Date()): string {
     ? new Date(y, m + 2, 0)
     : currentMonthLastDay;
 
-  const yyyy = target.getFullYear();
-  const mm = String(target.getMonth() + 1).padStart(2, '0');
-  const dd = String(target.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+  return formatLocalDateKey(target);
 }
 
 /**
@@ -625,30 +631,30 @@ export function calculateUserWorkload(userTasks: Task[], referenceDate = getWork
   // Classify workload capacity levels
   let level: 'light' | 'optimal' | 'heavy' | 'overloaded' = 'light';
   let levelLabel = 'Light Load';
-  let levelColor = 'text-green-400';
-  let badgeBg = 'bg-green-500/10 border-green-500/20';
-  let badgeText = 'text-green-400';
+  let levelColor = 'text-emerald-700 dark:text-emerald-400';
+  let badgeBg = 'bg-emerald-500/10 border-emerald-500/20';
+  let badgeText = 'text-emerald-700 dark:text-emerald-400';
   let progressPercent = Math.min(100, Math.round((roundedScore / 12) * 100));
 
   if (roundedScore >= 12.0) {
     level = 'overloaded';
     levelLabel = 'Overloaded';
-    levelColor = 'text-red-400';
+    levelColor = 'text-red-700 dark:text-red-400';
     badgeBg = 'bg-red-500/10 border-red-500/20';
-    badgeText = 'text-red-400';
+    badgeText = 'text-red-700 dark:text-red-400';
     progressPercent = 100;
   } else if (roundedScore >= 8.0) {
     level = 'heavy';
     levelLabel = 'Heavy Load';
-    levelColor = 'text-yellow-400';
-    badgeBg = 'bg-yellow-500/10 border-yellow-500/20';
-    badgeText = 'text-yellow-400';
+    levelColor = 'text-amber-700 dark:text-amber-400';
+    badgeBg = 'bg-amber-500/10 border-amber-500/20';
+    badgeText = 'text-amber-700 dark:text-amber-400';
   } else if (roundedScore >= 4.0) {
     level = 'optimal';
     levelLabel = 'Optimal Load';
-    levelColor = 'text-blue-400';
+    levelColor = 'text-blue-700 dark:text-blue-400';
     badgeBg = 'bg-blue-500/10 border-blue-500/20';
-    badgeText = 'text-blue-400';
+    badgeText = 'text-blue-700 dark:text-blue-400';
   }
 
   return {
@@ -932,7 +938,7 @@ export function calculateWeeklyVelocity(userTasks: Task[]): WeeklyVelocityMetric
 /**
  * Formats a Date as YYYY-MM-DD in the user's local timezone (avoids UTC day-shift bugs).
  */
-export function formatLocalDateKey(d: Date): string {
+export function formatLocalDateKey(d: Date = new Date()): string {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
@@ -1173,6 +1179,21 @@ export function formatHoursRatio(firstHours: number, secondHours: number): strin
 export function formatHours(hours: number): string {
   if (hours > 0 && hours < 0.05) return '<0.1h';
   return `${Math.round(hours * 10) / 10}h`;
+}
+
+const TASK_STATUS_LABELS: Record<string, string> = {
+  pipeline: 'Pipeline',
+  retainer: 'Ongoing',
+  todo: 'To Do',
+  in_progress: 'In Progress',
+  in_review: 'In Review',
+  done: 'Sent',
+  archived: 'Completed',
+};
+
+export function formatTaskStatus(status: string | undefined): string {
+  if (!status) return 'To Do';
+  return TASK_STATUS_LABELS[status] || status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 export interface DeliveryUnitInfo {

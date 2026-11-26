@@ -9,6 +9,7 @@ import {
   calculateTasksEfficiency,
   formatHours,
   formatHoursRatio,
+  formatTaskStatus,
   meetsDailyUtilizationTarget,
   rankTaskHours,
   getDeliveryUnits,
@@ -159,24 +160,24 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
     }
   }, [filterScope, uniqueClients, deliveryUnits, uniqueProjects, users, selectedClientId, selectedDeliveryUnitId, selectedProjectId, selectedUserId, requestedHistory, snapshot]);
 
-  // Filter tasks and users based on active scope
+  // Filter tasks and users based on active scope (delivery roles only for workspace-wide capacity metrics)
   const { scopedUsers, scopedTasks } = useMemo(() => {
-    let uList = users;
+    let uList = users.filter(u => u.role === 'content' || u.role === 'design');
     let tList = tasks;
 
     if (filterScope === 'client') {
       tList = selectedClientId ? tasks.filter(t => t.client?.trim() === selectedClientId) : [];
       const clientUserIds = new Set(tList.flatMap(t => getTaskAssigneeIds(t)));
-      uList = users.filter(u => clientUserIds.has(u.id));
+      uList = users.filter(u => clientUserIds.has(u.id) && (u.role === 'content' || u.role === 'design'));
     } else if (filterScope === 'delivery_unit') {
       const du = deliveryUnits.find(d => d.id === selectedDeliveryUnitId);
       const duUserIds = new Set(du?.userIds);
-      uList = users.filter(u => duUserIds.has(u.id));
+      uList = users.filter(u => duUserIds.has(u.id) && (u.role === 'content' || u.role === 'design'));
       tList = tasks.filter(t => getTaskAssigneeIds(t).some(id => duUserIds.has(id)));
     } else if (filterScope === 'project') {
       tList = selectedProjectId ? tasks.filter(t => t.project?.trim() === selectedProjectId) : [];
       const projUserIds = new Set(tList.flatMap(t => getTaskAssigneeIds(t)));
-      uList = users.filter(u => projUserIds.has(u.id));
+      uList = users.filter(u => projUserIds.has(u.id) && (u.role === 'content' || u.role === 'design'));
     } else if (filterScope === 'user') {
       uList = users.filter(u => u.id === selectedUserId);
       tList = tasks.filter(t => isTaskAssignedToUser(t, selectedUserId));
@@ -533,7 +534,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
           {/* Ruled Dialog Header */}
           <div className="dialog-header">
             <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
-              <h2 className="text-[15px] font-bold tracking-tight text-[var(--text-primary)]">
+              <h2 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
                 Workspace Analytics
               </h2>
               <span className="ledger-badge">
@@ -792,7 +793,12 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                         tone={efficiencyPercent >= 100 ? 'green' : efficiencyPercent >= 50 ? 'blue' : 'red'}
                         detail={`${Math.round(efficiencyPercent)} percent, with 100 percent on estimate`} />
                     )}
-                    <p className="metric-detail">Estimated / billable hours</p>
+                    <p
+                      className="metric-detail"
+                      title="Efficiency = Estimated Hours / Billable Hours (>100% means delivered faster than estimate)"
+                    >
+                      Est / Bill · &gt;100% = under est
+                    </p>
                   </div>
                 </div>
 
@@ -800,17 +806,20 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                 <div className="metric-card flex flex-col justify-between sm:border-t lg:border-t-0 border-[var(--border-subtle)]">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <span className="metric-label">Top Accounts</span>
-                    <Briefcase className="h-3.5 w-3.5 text-[var(--text-muted)] shrink-0" />
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-medium text-[var(--text-muted)]">Bill / Est</span>
+                      <Briefcase className="h-3.5 w-3.5 text-[var(--text-muted)] shrink-0" />
+                    </div>
                   </div>
                   <div className="space-y-2">
                     {topMetrics.topAccountsList.slice(0, 3).map(acct => (
                       <div key={acct.key} className="text-xs">
                         <div className="flex justify-between items-center gap-1.5 text-[11px] mb-1">
-                          <span className="font-semibold text-[var(--text-primary)] truncate max-w-[120px]">
+                          <span className="font-semibold text-[var(--text-primary)] truncate max-w-[110px]">
                             {acct.key}
                           </span>
                           <span className="text-[11px] tabular-nums text-[var(--text-secondary)] shrink-0">
-                            {formatHoursRatio(acct.billableHours, acct.estimatedHours)}
+                            {formatHours(acct.billableHours)} bill / {formatHours(acct.estimatedHours)} est
                           </span>
                         </div>
                         <div className="metric-track !mt-0">
@@ -987,7 +996,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                           <span className="text-xs font-bold text-red-600 dark:text-red-400 block">
                             {Math.round(item.efficiencyPercent)}%
                           </span>
-                          <span className="text-[11px] text-[var(--text-muted)]">
+                          <span className="text-[11px] text-[var(--text-muted)]" title="Estimated / Billable hours">
                             {formatHoursRatio(item.timeEstimated, item.timeTaken)}
                           </span>
                         </div>
@@ -1018,11 +1027,14 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Left Column: Section 3 */}
               <section className="ledger-frame flex flex-col">
-                <div className="ledger-band flex items-center gap-2 px-4 py-2.5">
-                  <Building2 className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
-                  <h3 className="text-[13px] font-bold tracking-tight text-[var(--text-primary)] truncate">
-                    {sections3And4Data.section3Title}
-                  </h3>
+                <div className="ledger-band flex items-center justify-between gap-2 px-4 py-2.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Building2 className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
+                    <h3 className="text-[13px] font-bold tracking-tight text-[var(--text-primary)] truncate">
+                      {sections3And4Data.section3Title}
+                    </h3>
+                  </div>
+                  <span className="text-[11px] font-medium text-[var(--text-muted)] shrink-0">Billable / Est</span>
                 </div>
 
                 <div className="divide-y divide-[var(--border-subtle)] max-h-72 overflow-y-auto bg-[var(--surface)]">
@@ -1034,7 +1046,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                             {item.client}
                           </span>
                           <span className="font-semibold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">
-                            {formatHoursRatio(item.billableHours, item.estimatedHours)}
+                            {formatHours(item.billableHours)} bill / {formatHours(item.estimatedHours)} est
                           </span>
                         </div>
                         {item.topProjects && item.topProjects.length > 0 && (
@@ -1043,7 +1055,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                             {item.topProjects.slice(0, 3).map((p: any, idx: number) => (
                               <span key={p.project}>
                                 {idx > 0 && <span className="text-[var(--text-muted)] mx-1">·</span>}
-                                {p.project} {formatHoursRatio(p.billableHours, p.estimatedHours)}
+                                {p.project} ({formatHours(p.billableHours)} bill / {formatHours(p.estimatedHours)} est)
                               </span>
                             ))}
                           </div>
@@ -1059,7 +1071,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                           {item.du.name}
                         </span>
                         <span className="font-semibold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">
-                          {formatHoursRatio(item.billableHours, item.estimatedHours)}
+                          {formatHours(item.billableHours)} bill / {formatHours(item.estimatedHours)} est
                         </span>
                       </div>
                     ))
@@ -1072,7 +1084,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                           {item.client}
                         </span>
                         <span className="font-semibold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">
-                          {formatHoursRatio(item.billableHours, item.estimatedHours)}
+                          {formatHours(item.billableHours)} bill / {formatHours(item.estimatedHours)} est
                         </span>
                       </div>
                     ))
@@ -1086,11 +1098,14 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
 
               {/* Right Column: Section 4 */}
               <section className="ledger-frame flex flex-col">
-                <div className="ledger-band flex items-center gap-2 px-4 py-2.5">
-                  <FolderGit2 className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
-                  <h3 className="text-[13px] font-bold tracking-tight text-[var(--text-primary)] truncate">
-                    {sections3And4Data.section4Title}
-                  </h3>
+                <div className="ledger-band flex items-center justify-between gap-2 px-4 py-2.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FolderGit2 className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
+                    <h3 className="text-[13px] font-bold tracking-tight text-[var(--text-primary)] truncate">
+                      {sections3And4Data.section4Title}
+                    </h3>
+                  </div>
+                  <span className="text-[11px] font-medium text-[var(--text-muted)] shrink-0">Billable / Est</span>
                 </div>
 
                 <div className="divide-y divide-[var(--border-subtle)] max-h-72 overflow-y-auto bg-[var(--surface)]">
@@ -1102,7 +1117,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                             {item.du.name}
                           </span>
                           <span className="font-semibold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">
-                            {formatHoursRatio(item.billableHours, item.estimatedHours)}
+                            {formatHours(item.billableHours)} bill / {formatHours(item.estimatedHours)} est
                           </span>
                         </div>
                         {item.topClients && item.topClients.length > 0 && (
@@ -1111,7 +1126,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                             {item.topClients.slice(0, 2).map((c: any, idx: number) => (
                               <span key={c.client}>
                                 {idx > 0 && <span className="text-[var(--text-muted)] mx-1">·</span>}
-                                {c.client} {formatHoursRatio(c.billableHours, c.estimatedHours)}
+                                {c.client} ({formatHours(c.billableHours)} bill / {formatHours(c.estimatedHours)} est)
                               </span>
                             ))}
                           </div>
@@ -1127,7 +1142,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                           {item.project}
                         </span>
                         <span className="font-semibold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">
-                          {formatHoursRatio(item.billableHours, item.estimatedHours)}
+                          {formatHours(item.billableHours)} bill / {formatHours(item.estimatedHours)} est
                         </span>
                       </div>
                     ))
@@ -1140,7 +1155,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                           {item.du.name}
                         </span>
                         <span className="font-semibold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">
-                          {formatHoursRatio(item.billableHours, item.estimatedHours)}
+                          {formatHours(item.billableHours)} bill / {formatHours(item.estimatedHours)} est
                         </span>
                       </div>
                     ))
@@ -1153,7 +1168,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                         {(sections3And4Data.section4Items as any).projects.slice(0, 3).map((p: any) => (
                           <div key={p.project} className="flex justify-between items-center py-0.5 text-xs gap-2">
                             <span className="truncate text-[var(--text-primary)]">{p.project}</span>
-                            <span className="font-semibold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">{formatHoursRatio(p.billableHours, p.estimatedHours)}</span>
+                            <span className="font-semibold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">{formatHours(p.billableHours)} bill / {formatHours(p.estimatedHours)} est</span>
                           </div>
                         ))}
                       </div>
@@ -1162,7 +1177,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                         {(sections3And4Data.section4Items as any).tasks.slice(0, 4).map((t: any) => (
                           <div key={t.task.id} className="flex justify-between items-center py-0.5 text-xs gap-2">
                             <span className="truncate max-w-[240px] text-[var(--text-primary)]">{t.task.title}</span>
-                            <span className="font-semibold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">{formatHoursRatio(t.billableHours, t.estimatedHours)}</span>
+                            <span className="font-semibold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">{formatHours(t.billableHours)} bill / {formatHours(t.estimatedHours)} est</span>
                           </div>
                         ))}
                       </div>
@@ -1191,7 +1206,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                   {/* Team Averages Hairline Strip */}
                   {pressureMetrics.rankedUnits && pressureMetrics.rankedUnits.length > 0 && (
                     <div>
-                      <div className="px-4 pt-3 pb-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                      <div className="px-4 pt-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                         Team Workload Averages
                       </div>
                       {(() => {
@@ -1238,7 +1253,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
 
                   {/* Highest Workload Members */}
                   <div>
-                    <div className="px-4 pt-3 pb-1.5 text-[10.5px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
+                    <div className="px-4 pt-3 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                       Members with Highest Workload Scores &amp; Top Projects
                     </div>
                     {(() => {
@@ -1324,7 +1339,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                       <div className="min-w-0 pr-3">
                         <p className="font-semibold text-[var(--text-primary)] truncate">{pt.task.title}</p>
                         <p className="text-[11px] text-[var(--text-secondary)] mt-0.5">
-                          {pt.assignees.join(', ')} · {pt.task.status.replace('_', ' ')}
+                          {pt.assignees.join(', ')} · {formatTaskStatus(pt.task.status)}
                         </p>
                       </div>
                       <span className="font-bold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">
@@ -1346,7 +1361,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                       <div className="min-w-0 pr-3">
                         <p className="font-semibold text-[var(--text-primary)] truncate">{ut.item.title}</p>
                         <p className="text-[11px] text-[var(--text-secondary)] tabular-nums mt-0.5">
-                          {ut.item.status.replace('_', ' ')} · {ut.item.cognitiveLoad} load · Due {ut.item.dueDate || 'None'}
+                          {formatTaskStatus(ut.item.status)} · {ut.item.cognitiveLoad} load · Due {ut.item.dueDate || 'None'}
                         </p>
                       </div>
                       <span className="font-bold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">

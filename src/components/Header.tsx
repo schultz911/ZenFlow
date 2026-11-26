@@ -11,6 +11,7 @@ import {
   Shield,
   Database,
   ListChecks,
+  Keyboard,
 } from 'lucide-react';
 import { getUserTag } from '../utils/workload';
 
@@ -19,6 +20,7 @@ interface HeaderProps {
   onOpenNewUserModal: (prefill?: { name: string; email: string } | null) => void;
   onOpenFirestoreModal: () => void;
   onOpenSetupModal?: () => void;
+  onOpenShortcutsModal?: () => void;
 }
 
 const HeaderComponent: React.FC<HeaderProps> = ({
@@ -26,6 +28,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
   onOpenNewUserModal,
   onOpenFirestoreModal,
   onOpenSetupModal,
+  onOpenShortcutsModal,
 }) => {
   const {
     currentUser,
@@ -157,8 +160,9 @@ const HeaderComponent: React.FC<HeaderProps> = ({
               id="connection-status-button"
               type="button"
               onClick={onOpenFirestoreModal}
+              aria-label={`Database status: ${syncStatus === 'connected' ? 'Connected' : 'Syncing'}`}
               title={`Database Status: ${syncStatus === 'connected' ? 'Connected (Firestore)' : 'Connecting...'}`}
-              className="flex items-center gap-2 px-2.5 py-1.5 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-subtle)] text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+              className="mobile-tap-control flex items-center justify-center gap-2 min-w-[40px] sm:min-w-0 px-2.5 py-1.5 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-subtle)] text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             >
               <span
                 className={`h-2 w-2 rounded-full ${
@@ -224,7 +228,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                   {canManageMembers && accessRequests.length > 0 && (
                     <span
                       title={`${accessRequests.length} pending access request${accessRequests.length === 1 ? '' : 's'}`}
-                      className="rounded-full bg-[#1d4ed8] px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white tabular-nums"
+                      className="rounded-full bg-[var(--accent)] px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white tabular-nums"
                     >
                       {accessRequests.length}
                     </span>
@@ -246,6 +250,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
               {userDropdownOpen && (
                 <div
                   id="user-profile-menu"
+                  aria-label="User menu"
                   className="menu-surface absolute right-0 mt-1.5 w-72 rounded-[9px] border border-[var(--border)] p-1.5 z-50 text-[var(--text-primary)]"
                 >
                   {currentUser && (
@@ -288,7 +293,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                                     setUserDropdownOpen(false);
                                     onOpenNewUserModal({ name: reqItem.name, email: reqItem.email });
                                   }}
-                                  className="rounded-[5px] bg-[#1d4ed8] px-2 py-1 text-[11px] font-medium text-white hover:bg-blue-700 cursor-pointer"
+                                  className="rounded-[5px] bg-[var(--accent)] px-2 py-1 text-[11px] font-medium text-white hover:bg-[var(--accent-hover)] cursor-pointer"
                                 >
                                   Approve
                                 </button>
@@ -316,7 +321,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                           setUserDropdownOpen(false);
                           onOpenNewUserModal(null);
                         }}
-                        className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors"
+                        className="menu-item"
                       >
                         <UserPlus className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
                         <span>Add Team Member</span>
@@ -330,7 +335,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                           setUserDropdownOpen(false);
                           onOpenSetupModal();
                         }}
-                        className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                        className="menu-item cursor-pointer"
                       >
                         <ListChecks className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
                         <span>Workspace Setup</span>
@@ -343,11 +348,28 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                         setUserDropdownOpen(false);
                         onOpenFirestoreModal();
                       }}
-                      className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-xs font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                      className="menu-item cursor-pointer"
                     >
                       <Database className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
-                      <span>Database & Compliance</span>
+                      <span>Database &amp; Compliance</span>
                     </button>
+
+                    {onOpenShortcutsModal && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setUserDropdownOpen(false);
+                          onOpenShortcutsModal();
+                        }}
+                        className="menu-item justify-between cursor-pointer"
+                      >
+                        <span className="flex items-center gap-2">
+                          <Keyboard className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
+                          <span>Keyboard Shortcuts</span>
+                        </span>
+                        <kbd className="ledger-badge font-mono !py-0">?</kbd>
+                      </button>
+                    )}
 
                     <div className="my-1 border-t border-[var(--border-subtle)]" />
 
@@ -357,7 +379,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                         setUserDropdownOpen(false);
                         logout();
                       }}
-                      className="flex w-full items-center gap-2 rounded-[6px] px-2.5 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                      className="menu-item !text-red-600 dark:!text-red-400 hover:!bg-red-50 dark:hover:!bg-red-500/10"
                     >
                       <LogOut className="h-3.5 w-3.5" />
                       <span>Sign Out</span>

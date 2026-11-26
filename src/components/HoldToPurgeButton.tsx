@@ -51,8 +51,8 @@ export const HoldToPurgeButton: React.FC<HoldToPurgeButtonProps> = ({
 
   const label = busy ? 'Purging database…'
     : state.phase === 'success' ? 'Database purged'
-    : state.phase === 'holding' ? `Keep holding to purge · ${state.remaining}`
-    : `Hold to purge database · ${Math.ceil(holdDurationMs / 1000)}`;
+    : state.phase === 'holding' ? `Keep holding to purge · ${state.remaining}s`
+    : `Hold to purge database · ${Math.ceil(holdDurationMs / 1000)}s`;
 
   return (
     <div className={`w-full ${className}`}>
