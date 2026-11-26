@@ -72,7 +72,17 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   const [flyoutPosition, setFlyoutPosition] = useState<{ top: number; left: number } | null>(null);
   const [customDateDraft, setCustomDateDraft] = useState(task.dueDate || '');
   const snoozeRef = useRef<HTMLDivElement>(null);
+  const snoozeTriggerRef = useRef<HTMLButtonElement>(null);
   const flyoutMenuRef = useRef<HTMLDivElement>(null);
+  const titleClickTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (titleClickTimerRef.current !== null) {
+        window.clearTimeout(titleClickTimerRef.current);
+      }
+    };
+  }, []);
 
   // Synchronize draft date when flyout opens or task dueDate updates
   useEffect(() => {
@@ -176,10 +186,16 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
     }
   }, [showSnoozeFlyout, updateFlyoutPosition]);
 
-  // Dismiss snooze flyout on click outside; keep anchored on scroll/resize
+  // Dismiss snooze flyout on click outside; trap Tab and restore trigger focus on Escape
   useEffect(() => {
     if (!showSnoozeFlyout) return;
     updateFlyoutPosition();
+    const focusFrame = requestAnimationFrame(() => {
+      const firstControl = flyoutMenuRef.current?.querySelector<HTMLElement>(
+        'button:not([disabled]), input:not([disabled])'
+      );
+      firstControl?.focus({ preventScroll: true });
+    });
 
     const handleOutside = (e: MouseEvent) => {
       const target = e.target as Node;
@@ -211,17 +227,32 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       if (e.key === 'Escape') {
         e.preventDefault();
         setShowSnoozeFlyout(false);
+        snoozeTriggerRef.current?.focus({ preventScroll: true });
+      } else if (e.key === 'Tab' && flyoutMenuRef.current) {
+        const items = Array.from(
+          flyoutMenuRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled])')
+        );
+        if (items.length === 0) return;
+        const idx = items.indexOf(document.activeElement as HTMLElement);
+        if (e.shiftKey && idx <= 0) {
+          e.preventDefault();
+          items.at(-1)?.focus();
+        } else if (!e.shiftKey && (idx < 0 || idx === items.length - 1)) {
+          e.preventDefault();
+          items[0].focus();
+        }
       }
     };
 
     document.addEventListener('mousedown', handleOutside);
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown, true);
     window.addEventListener('scroll', handleScroll, true);
     window.addEventListener('resize', handleResize);
 
     return () => {
+      cancelAnimationFrame(focusFrame);
       document.removeEventListener('mousedown', handleOutside);
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keydown', handleKeyDown, true);
       window.removeEventListener('scroll', handleScroll, true);
       window.removeEventListener('resize', handleResize);
     };
@@ -344,17 +375,6 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               {task.cognitiveLoad} load
             </span>
           </span>
-
-          {assigneeCount > 1 && (
-            <span
-              title={`Shared task across ${assigneeCount} assignees (workload & time divided evenly)`}
-              className="inline-flex items-center gap-0.5 tabular-nums font-semibold text-emerald-700 dark:text-emerald-400"
-            >
-              <span className="text-[var(--text-muted)] mr-0.5">·</span>
-              <Users className="h-2.5 w-2.5" />
-              <span>1/{assigneeCount}</span>
-            </span>
-          )}
         </div>
 
         {/* Top Right: Quick Hover Actions & Mobile Overflow + Tabular Estimate / Billable Duration */}
@@ -463,6 +483,16 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               </div>
             )}
           </div>
+
+          {assigneeCount > 1 && (
+            <span
+              title={`Shared task across ${assigneeCount} assignees (workload & time divided evenly)`}
+              className="inline-flex items-center gap-0.5 text-[11px] tabular-nums font-semibold text-emerald-700 dark:text-emerald-400 shrink-0"
+            >
+              <Users className="h-2.5 w-2.5" />
+              <span>1/{assigneeCount}</span>
+            </span>
+          )}
 
           {sharedEstimatedHours !== undefined && (
             <span
@@ -576,8 +606,30 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         <h5 className="text-[13px] font-semibold leading-snug">
           <button
             type="button"
-            onClick={() => onEdit(task)}
-            title="Click to open task details"
+            onClick={() => {
+              if (!canEdit) {
+                onEdit(task);
+                return;
+              }
+              if (titleClickTimerRef.current !== null) {
+                window.clearTimeout(titleClickTimerRef.current);
+              }
+              titleClickTimerRef.current = window.setTimeout(() => {
+                titleClickTimerRef.current = null;
+                onEdit(task);
+              }, 185);
+            }}
+            onDoubleClick={e => {
+              if (!canEdit) return;
+              e.stopPropagation();
+              if (titleClickTimerRef.current !== null) {
+                window.clearTimeout(titleClickTimerRef.current);
+                titleClickTimerRef.current = null;
+              }
+              setTitleDraft(task.title);
+              setIsEditingTitle(true);
+            }}
+            title={canEdit ? 'Click for task details, double-click to rename' : 'Click to open task details'}
             className={`mobile-tap-control sm:min-h-0 w-full text-left cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-[var(--surface-subtle)] transition-colors group/title flex items-center justify-between gap-1.5 ${task.status === 'done'
               ? 'line-through text-[var(--text-secondary)] font-medium'
               : 'text-[var(--text-primary)] hover:text-[#1d4ed8] dark:hover:text-blue-400'
@@ -663,7 +715,9 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             </div>
           ) : (
             <button
+              ref={snoozeTriggerRef}
               type="button"
+              aria-expanded={showSnoozeFlyout}
               onClick={e => {
                 e.stopPropagation();
                 setShowSnoozeFlyout(prev => {
@@ -755,6 +809,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                         } else if (e.key === 'Escape') {
                           e.preventDefault();
                           setShowSnoozeFlyout(false);
+                          snoozeTriggerRef.current?.focus({ preventScroll: true });
                         }
                       }}
                       className="mobile-tap-control sm:min-h-[28px] flex-1 min-w-0 rounded-[5px] border border-[var(--border)] bg-[var(--surface)] px-1.5 py-1 text-[11px] tabular-nums text-[var(--text-primary)] cursor-pointer focus:border-[var(--accent)] focus:outline-none"
@@ -814,7 +869,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               }}
               title={`Move back to ${prevStatus.replace('_', ' ')}`}
               aria-label={`Move back to ${prevStatus.replace('_', ' ')}`}
-              className="mobile-tap-control rounded-[5px] p-1 sm:min-h-0 min-w-[36px] sm:min-w-0 flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+              className="mobile-tap-square rounded-[5px] p-1 sm:min-h-0 min-w-[44px] sm:min-w-0 flex items-center justify-center text-[var(--text-muted)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             >
               <ChevronLeft className="h-3 w-3" />
             </button>

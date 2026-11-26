@@ -80,6 +80,7 @@ function DashboardContent() {
   const [sortByPressure, setSortByPressure] = useState(false);
   const [disciplineModalOpen, setDisciplineModalOpen] = useState(false);
   const [selectedTaskForAssignment, setSelectedTaskForAssignment] = useState<Task | null>(null);
+  const [assignmentPresetUserId, setAssignmentPresetUserId] = useState<string | undefined>(undefined);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [undoToast, setUndoToast] = useState<{
     message: string;
@@ -697,6 +698,10 @@ function DashboardContent() {
                 tasks={tasks}
                 activeRoleTab={activeRoleTab}
                 onAddTask={handleOpenAddTask}
+                onAssignBrief={(brief, targetUserId) => {
+                  setAssignmentPresetUserId(targetUserId);
+                  setSelectedTaskForAssignment(brief);
+                }}
                 onSelectUser={handleSelectFreeResource}
                 isExpanded={freePoolOpen}
                 onExpandedChange={setFreePoolOpen}
@@ -947,7 +952,11 @@ function DashboardContent() {
         <TaskAssignmentModal
           isOpen={Boolean(selectedTaskForAssignment)}
           task={selectedTaskForAssignment}
-          onClose={() => setSelectedTaskForAssignment(null)}
+          initialAssigneeId={assignmentPresetUserId}
+          onClose={() => {
+            setSelectedTaskForAssignment(null);
+            setAssignmentPresetUserId(undefined);
+          }}
         />
 
         {/* Undo Toast */}

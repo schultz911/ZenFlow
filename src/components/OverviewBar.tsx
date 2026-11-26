@@ -25,6 +25,7 @@ import {
   X,
   Loader2,
   MoreHorizontal,
+  ArrowUpDown,
 } from 'lucide-react';
 
 interface OverviewBarProps {
@@ -85,7 +86,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
   }, [isBoardDropdownOpen]);
 
   const currentBoardLabel = useMemo(() => {
-    if (activeBoardId === 'all') return 'All Teams';
+    if (activeBoardId === 'all') return 'All Clusters';
     const cd = creativeDirectors.find(c => c.id === activeBoardId);
     return cd ? `${cd.name}'s Team` : 'Team Board';
   }, [activeBoardId, creativeDirectors]);
@@ -193,15 +194,17 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                     ? 'Overloaded members sorted first — click to restore default board order'
                     : 'Click to jump to overloaded members and sort by pressure'
                 }
-                className={`ledger-alert-badge cursor-pointer transition hover:brightness-95 ${
+                className={`ledger-alert-badge mobile-tap-control sm:min-h-0 cursor-pointer transition hover:brightness-95 ${
                   sortByPressure ? 'ring-2 ring-red-500/35 ring-offset-1 ring-offset-[var(--surface-muted)]' : ''
                 }`}
               >
                 <AlertTriangle aria-hidden="true" className="h-3 w-3 shrink-0" />
                 <span>
-                  {overloadedMembersCount} {overloadedMembersCount === 1 ? 'member over' : 'members over'} 12 pts load cap
-                  {sortByPressure ? ' · Sorted' : ''}
+                  {overloadedMembersCount} {overloadedMembersCount === 1 ? 'member over' : 'members over'} 12 pts
                 </span>
+                <span aria-hidden="true" className="opacity-75">·</span>
+                <ArrowUpDown aria-hidden="true" className="h-3 w-3 shrink-0" />
+                <span>{sortByPressure ? 'Sorted' : 'Sort overloaded first'}</span>
               </button>
             )}
             <button
@@ -242,10 +245,12 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                 '—'
               )}
             </p>
-            <p className="metric-detail" title="Estimated / billable hours on completed work">
+            <p className="metric-detail" title="Estimated vs. billable hours on completed work">
               {teamEfficiency.efficiencyPercent !== null ? (
                 <>
-                  <span className="text-[11px] font-normal text-[var(--text-muted)] mr-1">est / bill</span>
+                  <span className="text-[11px] font-normal text-[var(--text-muted)] mr-1">
+                    {Math.round(teamEfficiency.efficiencyPercent) >= 100 ? 'est / bill · under est' : 'est / bill · over est'}
+                  </span>
                   <span>{formatHoursRatio(teamEfficiency.estimatedHours, teamEfficiency.billableHours)}</span>
                 </>
               ) : (
@@ -362,7 +367,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                           : 'text-[var(--text-primary)]'
                       }`}
                     >
-                      <span>All Teams (Superadmin)</span>
+                      <span>All Clusters (Superadmin)</span>
                       {activeBoardId === 'all' && <Check className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />}
                     </button>
                   )}

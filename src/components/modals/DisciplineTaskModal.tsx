@@ -6,6 +6,7 @@ import { useAuth, useBoardUi, useClickUp, useWorkspace } from '../../context/Das
 import { RoleFilter, TaskDisciplineMetadata } from '../../types';
 import { isValidHttpUrl } from '../../utils/taskMetadata';
 import { DateQuickPresets } from '../ui/DateQuickPresets';
+import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import {
   X,
   FileText,
@@ -179,11 +180,31 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
     setSubmitError(null);
   };
 
+  const isDirty = isOpen && Boolean(
+    title.trim() ||
+    description.trim() ||
+    brandGuidelines.trim() ||
+    client.trim() ||
+    project.trim() ||
+    dueDate.trim() ||
+    priority !== 'medium' ||
+    contentSpecifications.trim() ||
+    designSpecifications.trim() ||
+    sourceContentReferences.length > 0 ||
+    brandAssetsReferences.length > 0
+  );
+  const { showDiscardConfirm, requestClose, confirmDiscard, resetDiscardConfirm } = useDiscardGuard(
+    isDirty,
+    isSubmitting,
+    onClose
+  );
+
   useEffect(() => {
     if (isOpen) {
       resetForm();
+      resetDiscardConfirm();
     }
-  }, [isOpen]);
+  }, [isOpen, resetDiscardConfirm]);
 
   // Fetch folders & lists whenever a ClickUp Space is selected
   useEffect(() => {
@@ -412,12 +433,12 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
       <div
         className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
         onClick={e => {
-          if (e.target === e.currentTarget && !isSubmitting) onClose();
+          if (e.target === e.currentTarget) requestClose();
         }}
       >
         <DialogPanel
           aria-label="Create pipeline requirement"
-          onClose={onClose}
+          onClose={requestClose}
           busy={isSubmitting}
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
@@ -444,7 +465,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
             <button
               aria-label="Close dialog"
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="icon-button shrink-0"
             >
               <X className="h-4 w-4" />
@@ -508,6 +529,22 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
           {/* Scrollable Form Body */}
           <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
             <div className="flex-1 overflow-y-auto p-5 space-y-5">
+              {showDiscardConfirm && (
+                <div role="alertdialog" aria-label="Discard unsaved brief" className="callout callout-warning space-y-2">
+                  <p className="text-xs font-semibold">Discard unsaved brief?</p>
+                  <p className="text-[11px] opacity-90">
+                    You have unsubmitted brief details that will be lost if you close now.
+                  </p>
+                  <div className="flex gap-2 pt-1">
+                    <button type="button" onClick={resetDiscardConfirm} className="button-secondary">
+                      Keep Editing
+                    </button>
+                    <button type="button" onClick={confirmDiscard} className="button-danger-outline">
+                      Discard
+                    </button>
+                  </div>
+                </div>
+              )}
               {submitError && (
                 <div role="alert" className="callout callout-danger flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
@@ -522,6 +559,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                     Parent Deliverable Title <span className="text-red-600 dark:text-red-400">*</span>
                   </label>
                   <input
+                    autoFocus
                     type="text"
                     required
                     value={title}
@@ -616,10 +654,10 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                 {/* Priority & Deadline */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                   <div>
-                    <label className="field-label">
+                    <span id="disciplinetaskmodal-priority-label" className="field-label">
                       Priority
-                    </label>
-                    <div className="flex items-center gap-1.5">
+                    </span>
+                    <div role="group" aria-labelledby="disciplinetaskmodal-priority-label" className="flex items-center gap-1.5">
                       {(['low', 'medium', 'high'] as const).map(p => (
                         <button
                           key={p}
@@ -971,7 +1009,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={requestClose}
                   className="button-secondary"
                 >
                   Cancel

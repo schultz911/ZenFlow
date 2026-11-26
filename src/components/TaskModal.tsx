@@ -176,7 +176,28 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     assetType: string;
     designSpecifications: string;
     brandAssetsReferences: string[];
-  }) => JSON.stringify(vals);
+  }) =>
+    JSON.stringify([
+      vals.title,
+      vals.description,
+      vals.brandGuidelines,
+      vals.userId,
+      vals.assigneeIds,
+      vals.dueDate,
+      vals.cognitiveLoad,
+      vals.status,
+      vals.client,
+      vals.project,
+      vals.estimatedHours,
+      vals.priority,
+      vals.contentDocLink,
+      vals.contentType,
+      vals.contentSpecifications,
+      vals.sourceContentReferences,
+      vals.assetType,
+      vals.designSpecifications,
+      vals.brandAssetsReferences,
+    ]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -636,11 +657,32 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
             {/* Progressive Disclosure Tabs */}
             <div className="px-5 py-2 border-b border-[var(--border)] bg-[var(--surface)] shrink-0">
-              <div className="segmented-track w-full" role="tablist" aria-label="Task detail sections">
+              <div
+                className="segmented-track w-full"
+                role="tablist"
+                aria-label="Task detail sections"
+                onKeyDown={e => {
+                  const tabs = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+                  const idx = tabs.indexOf(document.activeElement as HTMLButtonElement);
+                  if (idx === -1 || tabs.length === 0) return;
+                  let nextIdx = -1;
+                  if (e.key === 'ArrowRight') nextIdx = (idx + 1) % tabs.length;
+                  else if (e.key === 'ArrowLeft') nextIdx = (idx - 1 + tabs.length) % tabs.length;
+                  else if (e.key === 'Home') nextIdx = 0;
+                  else if (e.key === 'End') nextIdx = tabs.length - 1;
+                  if (nextIdx !== -1) {
+                    e.preventDefault();
+                    const nextTab = tabs[nextIdx];
+                    nextTab.focus();
+                    nextTab.click();
+                  }
+                }}
+              >
                 <button
                   id="task-tab-details"
                   type="button"
                   role="tab"
+                  tabIndex={activeTab === 'details' ? 0 : -1}
                   aria-selected={activeTab === 'details'}
                   aria-controls="task-modal-tabpanel"
                   onClick={() => setActiveTab('details')}
@@ -659,6 +701,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   id="task-tab-specs"
                   type="button"
                   role="tab"
+                  tabIndex={activeTab === 'specs' ? 0 : -1}
                   aria-selected={activeTab === 'specs'}
                   aria-controls="task-modal-tabpanel"
                   onClick={() => setActiveTab('specs')}
@@ -671,6 +714,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     id="task-tab-activity"
                     type="button"
                     role="tab"
+                    tabIndex={activeTab === 'activity' ? 0 : -1}
                     aria-selected={activeTab === 'activity'}
                     aria-controls="task-modal-tabpanel"
                     onClick={() => setActiveTab('activity')}
@@ -924,6 +968,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                               {canEdit && assigneeIds.length > 1 && (
                                 <button
                                   type="button"
+                                  aria-label={`Remove ${member.name}`}
+                                  title={`Remove ${member.name}`}
                                   onClick={() => {
                                     const next = assigneeIds.filter(id => id !== aid);
                                     setAssigneeIds(next);
@@ -1048,10 +1094,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
                 {/* Priority */}
                 <div>
-                  <label className="field-label">
+                  <span id="taskmodal-priority-label" className="field-label">
                     Priority
-                  </label>
-                  <div className="grid grid-cols-3 gap-1.5">
+                  </span>
+                  <div role="group" aria-labelledby="taskmodal-priority-label" className="grid grid-cols-3 gap-1.5">
                     {(['low', 'medium', 'high'] as const).map(p => {
                       const isSelected = priority === p;
                       return (

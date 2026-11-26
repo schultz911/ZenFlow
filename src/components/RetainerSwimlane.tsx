@@ -120,12 +120,11 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
               setNewTitle('');
             }}
             title={isAdding ? 'Cancel adding task' : 'Add ongoing task'}
-            className={`flex items-center gap-1 rounded-[5px] px-2 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+            className={`mobile-tap-control sm:min-h-0 flex items-center gap-1 rounded-[5px] px-2 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors cursor-pointer ${
               isAdding
                 ? 'bg-[var(--surface-subtle)] text-[var(--text-primary)] border border-[var(--border)]'
                 : 'text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
             }`}
-            style={{ minHeight: 'auto' }}
           >
             {isAdding ? (
               <>
@@ -178,8 +177,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                 type="button"
                 disabled={!newTitle.trim() || isSubmitting}
                 onClick={handleCommitAdd}
-                className="rounded-[5px] bg-emerald-700 hover:bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors cursor-pointer disabled:opacity-40"
-                style={{ minHeight: 'auto' }}
+                className="mobile-tap-control sm:min-h-0 rounded-[5px] bg-emerald-700 hover:bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white transition-colors cursor-pointer disabled:opacity-40"
               >
                 Add Ongoing
               </button>
@@ -203,111 +201,116 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.96 }}
                 transition={{ duration: 0.15 }}
-                className="task-card group relative flex items-start gap-2 shrink-0 px-2.5 py-1.5 select-none w-48 sm:w-52 max-w-[220px]"
+                className="task-card group relative flex flex-col justify-between gap-2 shrink-0 p-2.5 select-none w-56 sm:w-60"
               >
-                {/* Fixed Retainer Indicator */}
-                <div
-                  title="Ongoing task"
-                  className="flex h-5 w-5 items-center justify-center rounded-[5px] bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5"
-                >
-                  <Repeat className="h-3 w-3" />
-                </div>
+                <div className="flex items-start gap-2 min-w-0">
+                  {/* Fixed Retainer Indicator */}
+                  <div
+                    title="Ongoing task"
+                    className="flex h-5 w-5 items-center justify-center rounded-[5px] bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5"
+                  >
+                    <Repeat className="h-3 w-3" />
+                  </div>
 
-                {/* Task Title & Metadata */}
-                <div className="min-w-0 flex-1">
-                  {isEditingThis ? (
-                    <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                      <input
-                        type="text"
-                        autoFocus
-                        value={editingTitle}
-                        onChange={e => setEditingTitle(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
+                  {/* Full-width Task Title & Optional Client · Project */}
+                  <div className="min-w-0 flex-1">
+                    {isEditingThis ? (
+                      <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                        <input
+                          type="text"
+                          autoFocus
+                          value={editingTitle}
+                          onChange={e => setEditingTitle(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const trimmed = editingTitle.trim();
+                              if (trimmed && onUpdateTitle) {
+                                onUpdateTitle(task.id, trimmed);
+                              }
+                              setEditingTaskId(null);
+                            } else if (e.key === 'Escape') {
+                              setEditingTaskId(null);
+                            }
+                          }}
+                          onBlur={() => {
                             const trimmed = editingTitle.trim();
                             if (trimmed && onUpdateTitle) {
                               onUpdateTitle(task.id, trimmed);
                             }
                             setEditingTaskId(null);
-                          } else if (e.key === 'Escape') {
-                            setEditingTaskId(null);
-                          }
-                        }}
-                        onBlur={() => {
-                          const trimmed = editingTitle.trim();
-                          if (trimmed && onUpdateTitle) {
-                            onUpdateTitle(task.id, trimmed);
-                          }
-                          setEditingTaskId(null);
-                        }}
-                        className="w-full rounded-[5px] border border-[var(--accent)] bg-[var(--surface)] px-1.5 py-0.5 text-xs text-[var(--text-primary)] focus:outline-none"
-                      />
-                    </div>
-                  ) : (
-                    <h5 className="text-xs font-semibold leading-tight">
-                      <button
-                        type="button"
-                        onClick={() => onEditTask(task)}
-                        onDoubleClick={e => {
-                          e.stopPropagation();
-                          setEditingTaskId(task.id);
-                          setEditingTitle(task.title);
-                        }}
-                        title={`${task.title} · Click for details, double-click to rename`}
-                        className="w-full text-left text-[var(--text-primary)] break-words whitespace-normal hover:text-[#1d4ed8] dark:hover:text-blue-400 cursor-pointer transition-colors"
-                        style={{ minHeight: 'auto' }}
-                      >
-                        {task.title}
-                      </button>
-                    </h5>
-                  )}
+                          }}
+                          className="w-full rounded-[5px] border border-[var(--accent)] bg-[var(--surface)] px-1.5 py-0.5 text-xs text-[var(--text-primary)] focus:outline-none"
+                        />
+                      </div>
+                    ) : (
+                      <h5 className="text-xs font-semibold leading-snug">
+                        <button
+                          type="button"
+                          onClick={() => onEditTask(task)}
+                          onDoubleClick={e => {
+                            e.stopPropagation();
+                            setEditingTaskId(task.id);
+                            setEditingTitle(task.title);
+                          }}
+                          title={`${task.title} · Click for details, double-click to rename`}
+                          className="mobile-tap-control sm:min-h-0 w-full text-left text-[var(--text-primary)] break-words whitespace-normal rounded px-1 -mx-1 py-0.5 hover:bg-[var(--surface-subtle)] hover:text-[#1d4ed8] dark:hover:text-blue-400 cursor-pointer transition-colors"
+                        >
+                          {task.title}
+                        </button>
+                      </h5>
+                    )}
 
-                  {metaLine && (
-                    <p className="mt-0.5 text-[11px] text-[var(--text-secondary)] truncate" title={metaLine}>
-                      {metaLine}
-                    </p>
-                  )}
+                    {metaLine && (
+                      <p className="mt-0.5 text-[11px] text-[var(--text-secondary)] truncate" title={metaLine}>
+                        {metaLine}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
-                {/* Quick actions on hover (always visible on touch devices) */}
-                <div className="flex items-center card-actions [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
+                {/* Ruled Footer: Prominent Subtask CTA + Edit/Delete */}
+                <div className="pt-1.5 border-t border-[var(--border-subtle)] flex items-center justify-between gap-2">
                   <button
                     type="button"
                     onClick={e => {
                       e.stopPropagation();
                       onCreateSubtask(task);
                     }}
-                    title="Create subtask from this ongoing task"
+                    title="Create and schedule a subtask from this ongoing item"
                     aria-label={`Create subtask from ${task.title}`}
-                    className="inline-flex items-center justify-center rounded-[5px] p-1 text-[var(--text-secondary)] hover:text-[#1d4ed8] dark:hover:text-blue-400 hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                    className="mobile-tap-control sm:min-h-0 inline-flex items-center gap-1 rounded-[5px] bg-[var(--accent-soft)] px-2 py-1 text-[11px] font-semibold text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25 transition-colors cursor-pointer"
                   >
-                    <CopyPlus className="h-3 w-3" />
+                    <CopyPlus className="h-3 w-3 shrink-0" />
+                    <span>Subtask</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={e => {
-                      e.stopPropagation();
-                      onEditTask(task);
-                    }}
-                    title="Open ongoing task details"
-                    aria-label={`Edit ${task.title}`}
-                    className="inline-flex items-center justify-center rounded-[5px] p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
-                  >
-                    <Edit2 className="h-3 w-3" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={e => {
-                      e.stopPropagation();
-                      onDeleteTask(task.id);
-                    }}
-                    title="Delete ongoing task"
-                    aria-label={`Delete ${task.title}`}
-                    className="inline-flex items-center justify-center rounded-[5px] p-1 text-[var(--text-secondary)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
+
+                  <div className="flex items-center card-actions [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={e => {
+                        e.stopPropagation();
+                        onEditTask(task);
+                      }}
+                      title="Open ongoing task details"
+                      aria-label={`Edit ${task.title}`}
+                      className="mobile-tap-square sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center rounded-[5px] p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                    >
+                      <Edit2 className="h-3 w-3" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={e => {
+                        e.stopPropagation();
+                        onDeleteTask(task.id);
+                      }}
+                      title="Delete ongoing task"
+                      aria-label={`Delete ${task.title}`}
+                      className="mobile-tap-square sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center rounded-[5px] p-1 text-[var(--text-secondary)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
                 </div>
               </motion.div>
             );

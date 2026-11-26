@@ -1,11 +1,12 @@
 import { DialogPanel } from './ui/DialogPanel';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useBoardUi, useWorkspace } from '../context/DashboardContext';
 import { CognitiveLoad, Task, TaskStatus, User } from '../types';
-import { formatDateOnly, formatTaskStatus, getUserTag } from '../utils/workload';
+import { formatDateOnly, formatTaskStatus, getLocalOffsetDateKey, getUserTag } from '../utils/workload';
 import { DateQuickPresets } from './ui/DateQuickPresets';
 import { CognitiveLoadSelector } from './ui/CognitiveLoadSelector';
+import { useDiscardGuard } from '../hooks/useDiscardGuard';
 import {
   X,
   CopyPlus,
@@ -109,35 +110,39 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
   } | null>(null);
 
   // Initialize board and form when task changes or modal opens
+  const initialSnapshotRef = useRef<string>('');
   useEffect(() => {
     if (!isOpen || !task) {
       setFeedback(null);
       setIsSubmitting(false);
+      initialSnapshotRef.current = '';
       return;
     }
 
+    const ownerFallback = task.status === 'retainer' ? sourceUser : null;
     const preselectedUser = initialTargetUserId
-      ? users.find(u => u.id === initialTargetUserId) || null
-      : null;
+      ? users.find(u => u.id === initialTargetUserId) || ownerFallback
+      : ownerFallback;
 
+    let initBoardId = 'all';
+    let initUserId = '';
     if (preselectedUser) {
-      const targetBoardId = preselectedUser.isCreativeDirector
+      initBoardId = preselectedUser.isCreativeDirector
         ? preselectedUser.id
         : preselectedUser.creativeDirectorId
         ? preselectedUser.creativeDirectorId
         : availableBoards.some(b => b.id === 'independent')
         ? 'independent'
         : 'all';
-      setSelectedBoardId(targetBoardId);
-      setSelectedUserId(preselectedUser.id);
+      initUserId = preselectedUser.id;
     } else {
       // Default to a different board than source user's board
       const currentBoardId = sourceBoard?.id || '';
       const otherBoard = availableBoards.find(b => b.id !== currentBoardId && b.id !== 'all');
-      const defaultBoardId = otherBoard ? otherBoard.id : (availableBoards[0]?.id || 'all');
-      setSelectedBoardId(defaultBoardId);
-      setSelectedUserId('');
+      initBoardId = otherBoard ? otherBoard.id : (availableBoards[0]?.id || 'all');
     }
+    setSelectedBoardId(initBoardId);
+    setSelectedUserId(initUserId);
 
     setSubtaskTitle(task.title);
     const resolvedStatus =
@@ -147,12 +152,45 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
         ? 'todo'
         : task.status;
     setTargetStatus(resolvedStatus);
-    setTargetDueDate(task.dueDate || '');
-    setTargetCognitiveLoad(task.cognitiveLoad || 'medium');
-    setTargetPriority(task.priority || 'medium');
-    setTargetEstimatedHours(task.estimatedHours !== undefined ? String(task.estimatedHours) : '');
+    const defaultDue = task.dueDate || (task.status === 'retainer' ? getLocalOffsetDateKey(1) : '');
+    const defaultLoad: CognitiveLoad = task.cognitiveLoad || 'medium';
+    const defaultPriority: 'low' | 'medium' | 'high' = task.priority || 'medium';
+    const defaultEstimated = task.estimatedHours !== undefined ? String(task.estimatedHours) : '';
+    setTargetDueDate(defaultDue);
+    setTargetCognitiveLoad(defaultLoad);
+    setTargetPriority(defaultPriority);
+    setTargetEstimatedHours(defaultEstimated);
     setFeedback(null);
-  }, [isOpen, task, sourceBoard, availableBoards, initialTargetUserId, initialTargetStatus, users]);
+    initialSnapshotRef.current = JSON.stringify({
+      subtaskTitle: task.title,
+      targetStatus: resolvedStatus,
+      targetDueDate: defaultDue,
+      targetCognitiveLoad: defaultLoad,
+      targetPriority: defaultPriority,
+      targetEstimatedHours: defaultEstimated,
+    });
+  }, [isOpen, task, sourceUser, sourceBoard, availableBoards, initialTargetUserId, initialTargetStatus, users]);
+
+  const isDirty = useMemo(() => {
+    if (!isOpen || !task || !initialSnapshotRef.current || feedback?.type === 'success') return false;
+    return JSON.stringify({
+      subtaskTitle,
+      targetStatus,
+      targetDueDate,
+      targetCognitiveLoad,
+      targetPriority,
+      targetEstimatedHours,
+    }) !== initialSnapshotRef.current;
+  }, [
+    isOpen, task, feedback?.type, subtaskTitle, targetStatus, targetDueDate,
+    targetCognitiveLoad, targetPriority, targetEstimatedHours,
+  ]);
+
+  const { showDiscardConfirm, requestClose, confirmDiscard, resetDiscardConfirm } = useDiscardGuard(
+    isDirty,
+    isSubmitting,
+    onClose
+  );
 
   // Compute members belonging to the selected board
   const availableUsers = useMemo(() => {
@@ -262,12 +300,12 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
           transition={{ duration: 0.15 }}
           className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto"
           onClick={e => {
-            if (e.target === e.currentTarget && !isSubmitting) {
-              onClose();
+            if (e.target === e.currentTarget) {
+              requestClose();
             }
           }}
         >
-          <DialogPanel aria-label="Duplicate task" onClose={onClose} busy={isSubmitting}
+          <DialogPanel aria-label="Duplicate task" onClose={requestClose} busy={isSubmitting}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
@@ -281,14 +319,14 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-400">
                   <CopyPlus className="h-4 w-4" />
                 </div>
-                <h3 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
+                <h2 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
                   Create and Assign Subtask
-                </h3>
+                </h2>
               </div>
               <button
                 type="button"
                 aria-label="Close dialog"
-                onClick={onClose}
+                onClick={requestClose}
                 className="icon-button shrink-0"
               >
                 <X className="h-4 w-4" />
@@ -298,6 +336,22 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
             {/* Form */}
             <form onSubmit={handleDuplicate} className="flex flex-col flex-1 min-h-0">
               <div className="p-5 overflow-y-auto flex-1 space-y-4">
+                {showDiscardConfirm && (
+                  <div role="alertdialog" aria-label="Discard unsaved subtask" className="callout callout-warning space-y-2">
+                    <p className="text-xs font-semibold">Discard unsaved subtask?</p>
+                    <p className="text-[11px] opacity-90">
+                      You have unsubmitted subtask changes that will be lost if you close now.
+                    </p>
+                    <div className="flex gap-2 pt-1">
+                      <button type="button" onClick={resetDiscardConfirm} className="button-secondary">
+                        Keep Editing
+                      </button>
+                      <button type="button" onClick={confirmDiscard} className="button-danger-outline">
+                        Discard
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {/* Source Parent Task Summary */}
                 <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] divide-y divide-[var(--border-subtle)]">
                   <div className="flex items-start justify-between gap-2 px-3.5 py-2.5">
@@ -347,14 +401,15 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
 
                 {/* Selection Steps */}
                 <div className="space-y-3.5">
-                  {/* Step 1: Destination Board */}
+                  {/* Destination Board */}
                   <div>
                     <label className="field-label flex items-center gap-1.5" htmlFor="duplicatetaskmodal-field-1">
                       <Layers className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
-                      <span>1. Destination Board (Team)</span>
+                      <span>Destination Board (Team)</span>
                     </label>
                     <div className="relative">
                       <select
+                        autoFocus
                         value={selectedBoardId}
                         onChange={e => setSelectedBoardId(e.target.value)}
                         disabled={isSubmitting || feedback?.type === 'success'}
@@ -371,11 +426,11 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                     </div>
                   </div>
 
-                  {/* Step 2: Destination Assignee on that Board */}
+                  {/* Destination Assignee on that Board */}
                   <div>
                     <label className="field-label flex items-center gap-1.5" htmlFor="duplicatetaskmodal-field-2">
                       <UserCheck className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
-                      <span>2. Subtask Owner</span>
+                      <span>Subtask Owner</span>
                     </label>
                     {availableUsers.length > 0 ? (
                       <div className="space-y-2">
@@ -409,7 +464,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="field-label !mb-0 flex items-center gap-1.5" htmlFor="duplicatetaskmodal-field-3">
                         <GitFork className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
-                        <span>3. Subtask Title</span>
+                        <span>Subtask Title</span>
                       </label>
                       {subtaskTitle !== task.title && (
                         <button
@@ -463,7 +518,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
                         <label className="field-label !mb-0" htmlFor="duplicatetaskmodal-field-5">
-                          Deadline
+                          Deadline {targetStatus !== 'pipeline' && targetStatus !== 'retainer' && <span className="text-red-600 dark:text-red-400">*</span>}
                         </label>
                         {targetDueDate && (
                           <span className="text-[11px] tabular-nums text-[#1d4ed8] dark:text-blue-400 font-semibold">
@@ -473,12 +528,22 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                       </div>
                       <input
                         type="date"
+                        required={targetStatus !== 'pipeline' && targetStatus !== 'retainer'}
                         value={targetDueDate}
                         onChange={e => setTargetDueDate(e.target.value)}
                         disabled={isSubmitting || feedback?.type === 'success'}
-                        className="field-control tabular-nums cursor-pointer"
+                        className={`field-control tabular-nums cursor-pointer ${
+                          targetStatus !== 'pipeline' && targetStatus !== 'retainer' && !targetDueDate.trim()
+                            ? '!border-amber-600/60 dark:!border-amber-400/50'
+                            : ''
+                        }`}
                         id="duplicatetaskmodal-field-5"
                       />
+                      {targetStatus !== 'pipeline' && targetStatus !== 'retainer' && !targetDueDate.trim() && (
+                        <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-400">
+                          A deadline is required before scheduling into an active lane.
+                        </p>
+                      )}
                       <DateQuickPresets
                         value={targetDueDate}
                         onSelectDate={setTargetDueDate}
@@ -519,8 +584,8 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                     </div>
 
                     <div>
-                      <label className="field-label">Priority</label>
-                      <div className="grid grid-cols-3 gap-1.5">
+                      <span id="duplicatetaskmodal-priority-label" className="field-label">Priority</span>
+                      <div role="group" aria-labelledby="duplicatetaskmodal-priority-label" className="grid grid-cols-3 gap-1.5">
                         {(['low', 'medium', 'high'] as const).map(p => {
                           const isSelected = targetPriority === p;
                           return (
@@ -605,7 +670,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={onClose}
+                    onClick={feedback?.type === 'success' ? onClose : requestClose}
                     className="button-secondary"
                   >
                     {feedback?.type === 'success' ? 'Close' : 'Cancel'}

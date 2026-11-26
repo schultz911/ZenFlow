@@ -455,13 +455,13 @@
     .board-columns-scroll { scroll-snap-type: x proximity; scroll-padding-inline: 12px; }
     .board-columns { display: flex; gap: 0; }
     .board-columns > div { flex: 0 0 min(80vw, 300px); scroll-snap-align: start; }
-    .card-actions button { min-width: 40px; min-height: 40px; }
-    .button-secondary, .button-danger-outline, .button-primary, .button-danger, .button-emerald { min-height: 40px; }
-    .segmented-item { min-height: 40px; }
-    .mobile-team-navigation button { min-width: 40px; min-height: 40px; }
-    .icon-button { width: 40px; height: 40px; }
-    .mobile-tap-control { min-height: 40px !important; }
-    .mobile-tap-square { min-width: 40px !important; min-height: 40px !important; }
+    .card-actions button { min-width: 44px; min-height: 44px; }
+    .button-secondary, .button-danger-outline, .button-primary, .button-danger, .button-emerald { min-height: 44px; }
+    .segmented-item { min-height: 44px; }
+    .mobile-team-navigation button { min-width: 44px; min-height: 44px; }
+    .icon-button { width: 44px; height: 44px; }
+    .mobile-tap-control { min-height: 44px !important; }
+    .mobile-tap-square { min-width: 44px !important; min-height: 44px !important; }
     .dialog-panel { max-height: calc(100dvh - 1.5rem); }
   }
 }

@@ -787,7 +787,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 onClick={() => onMoveUserUp?.(user.id)}
                 title="Move workspace up"
                 aria-label={`Move ${user.name} up`}
-                className="min-w-[36px] min-h-[36px] sm:min-w-0 sm:min-h-0 flex items-center justify-center px-1 py-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                className="min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center px-1 py-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
                 <ArrowUp className="h-2.5 w-2.5" />
               </button>
@@ -797,7 +797,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 onClick={() => onMoveUserDown?.(user.id)}
                 title="Move workspace down"
                 aria-label={`Move ${user.name} down`}
-                className="min-w-[36px] min-h-[36px] sm:min-w-0 sm:min-h-0 flex items-center justify-center px-1 py-0.5 border-t border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                className="min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center px-1 py-0.5 border-t border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
                 <ArrowDown className="h-2.5 w-2.5" />
               </button>
@@ -883,8 +883,8 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
             </button>
 
             <div
-              title="Estimated / billable hours on completed work"
-              className="flex items-center gap-1.5 pl-3 select-none tabular-nums"
+              title="Estimated vs. billable hours on completed work"
+              className="flex items-center gap-1.5 pl-3 select-none tabular-nums whitespace-nowrap"
             >
               <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
                 Eff
@@ -894,10 +894,12 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               </span>
               {userEfficiency.efficiencyPercent !== null && (
                 <>
-                  <span className="text-[11px] text-[var(--text-secondary)]">
+                  <span className="text-[11px] text-[var(--text-secondary)] whitespace-nowrap">
                     {formatHoursRatio(userEfficiency.estimatedHours, userEfficiency.billableHours)}
                   </span>
-                  <span className="text-[11px] text-[var(--text-muted)]">est / bill</span>
+                  <span className="hidden sm:inline text-[11px] text-[var(--text-muted)] whitespace-nowrap">
+                    {Math.round(userEfficiency.efficiencyPercent) >= 100 ? 'est / bill · under est' : 'est / bill · over est'}
+                  </span>
                 </>
               )}
             </div>
@@ -1085,7 +1087,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                       className={`board-column-cell flex flex-col transition-colors duration-150 ${
                         isDropActive
                           ? 'bg-blue-50/70 dark:bg-blue-950/25'
-                          : 'bg-[var(--surface)]'
+                          : 'bg-[var(--surface-muted)]'
                       }`}
                     >
                       {/* Status Column Header */}

@@ -250,7 +250,28 @@ const HeaderComponent: React.FC<HeaderProps> = ({
               {userDropdownOpen && (
                 <div
                   id="user-profile-menu"
+                  role="menu"
                   aria-label="User menu"
+                  onKeyDown={e => {
+                    const items = Array.from(
+                      e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])')
+                    );
+                    if (items.length === 0) return;
+                    const idx = items.indexOf(document.activeElement as HTMLElement);
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      items[(idx + 1) % items.length].focus();
+                    } else if (e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      items[(idx - 1 + items.length) % items.length].focus();
+                    } else if (e.key === 'Home') {
+                      e.preventDefault();
+                      items[0].focus();
+                    } else if (e.key === 'End') {
+                      e.preventDefault();
+                      items[items.length - 1].focus();
+                    }
+                  }}
                   className="menu-surface absolute right-0 mt-1.5 w-72 rounded-[9px] border border-[var(--border)] p-1.5 z-50 text-[var(--text-primary)]"
                 >
                   {currentUser && (
@@ -317,6 +338,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                     {canManageMembers && (
                       <button
                         type="button"
+                        role="menuitem"
                         onClick={() => {
                           setUserDropdownOpen(false);
                           onOpenNewUserModal(null);
@@ -331,6 +353,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                     {onOpenSetupModal && (
                       <button
                         type="button"
+                        role="menuitem"
                         onClick={() => {
                           setUserDropdownOpen(false);
                           onOpenSetupModal();
@@ -344,6 +367,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
 
                     <button
                       type="button"
+                      role="menuitem"
                       onClick={() => {
                         setUserDropdownOpen(false);
                         onOpenFirestoreModal();
@@ -357,6 +381,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                     {onOpenShortcutsModal && (
                       <button
                         type="button"
+                        role="menuitem"
                         onClick={() => {
                           setUserDropdownOpen(false);
                           onOpenShortcutsModal();
@@ -371,10 +396,11 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                       </button>
                     )}
 
-                    <div className="my-1 border-t border-[var(--border-subtle)]" />
+                    <div role="separator" className="my-1 border-t border-[var(--border-subtle)]" />
 
                     <button
                       type="button"
+                      role="menuitem"
                       onClick={() => {
                         setUserDropdownOpen(false);
                         logout();

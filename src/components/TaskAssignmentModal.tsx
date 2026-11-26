@@ -27,12 +27,14 @@ import {
 interface TaskAssignmentModalProps {
   isOpen: boolean;
   task: Task | null;
+  initialAssigneeId?: string;
   onClose: () => void;
 }
 
 export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
   isOpen,
   task,
+  initialAssigneeId,
   onClose,
 }) => {
   const { canAssignTask } = useAuth();
@@ -69,14 +71,14 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
 
   useEffect(() => {
     if (task) {
-      setSelectedUserId(task.userId || '');
+      setSelectedUserId(task.userId || initialAssigneeId || '');
       setCognitiveLoad(task.cognitiveLoad || 'medium');
       setEstimatedHours(task.estimatedHours !== undefined ? String(task.estimatedHours) : '');
       setDueDate(task.dueDate || getLocalOffsetDateKey(1));
       setKeepInPipeline(false);
       setSubmitError(null);
     }
-  }, [task]);
+  }, [task, initialAssigneeId]);
 
   const selectedUserObj = useMemo(() => {
     if (!selectedUserId) return null;

@@ -100,7 +100,15 @@ export function DialogPanel({ children, className = '', onClose, busy = false, .
       'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
     )).filter(element => element.getClientRects().length > 0 && !element.closest('[inert]'));
     if (!panel.contains(document.activeElement)) {
-      const initialTarget = panel.querySelector<HTMLElement>('[autofocus]') || focusable()[0] || panel;
+      const items = focusable();
+      const nonClose = items.filter(el => !el.getAttribute('aria-label')?.toLowerCase().includes('close'));
+      const firstField = nonClose.find(el => el.matches('input, select, textarea'));
+      const initialTarget =
+        panel.querySelector<HTMLElement>('[autofocus], [data-autofocus]') ||
+        firstField ||
+        nonClose[0] ||
+        items[0] ||
+        panel;
       initialTarget.focus({ preventScroll: true });
     }
     const keydown = (event: KeyboardEvent) => {

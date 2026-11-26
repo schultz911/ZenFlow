@@ -55,9 +55,9 @@ export const LinkListInput: React.FC<LinkListInputProps> = ({
   return (
     <div>
       <div className="flex items-center justify-between mb-1.5">
-        <label className="field-label !mb-0" htmlFor={id}>
+        <span id={`${id}-label`} className="field-label !mb-0">
           {label}
-        </label>
+        </span>
         {!readOnly && !isAdding && (
           <button
             type="button"
@@ -79,6 +79,7 @@ export const LinkListInput: React.FC<LinkListInputProps> = ({
           <div className="flex items-center gap-1.5">
             <input
               id={id}
+              aria-labelledby={`${id}-label`}
               type="url"
               value={draft}
               onChange={e => {

@@ -221,50 +221,8 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
           )}
         </div>
 
-        {/* Hairline Filter Switch & Create Task */}
+        {/* Create Brief & Collapse Toggle (Filter tabs live inside body so collapsed bar stays single-row on mobile) */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center rounded-[7px] bg-[var(--surface-subtle)] p-0.5 border border-[var(--border)] text-[11px] font-semibold">
-            <button
-              type="button"
-              aria-pressed={filterMode === 'all'}
-              title="Show all deliverables in pipeline"
-              onClick={() => setFilterMode('all')}
-              className={`mobile-tap-control px-2.5 py-1 sm:min-h-0 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
-                filterMode === 'all'
-                  ? 'bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border)]'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
-              }`}
-            >
-              All ({totalCount})
-            </button>
-            <button
-              type="button"
-              aria-pressed={filterMode === 'unassigned'}
-              title="Filter to unassigned deliverables"
-              onClick={() => setFilterMode('unassigned')}
-              className={`mobile-tap-control px-2.5 py-1 sm:min-h-0 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
-                filterMode === 'unassigned'
-                  ? 'bg-[var(--surface)] text-amber-700 dark:text-amber-400 border border-[var(--border)]'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
-              }`}
-            >
-              Unassigned ({unassignedCount})
-            </button>
-            <button
-              type="button"
-              aria-pressed={filterMode === 'assigned'}
-              title="Filter to assigned deliverables waiting in pipeline"
-              onClick={() => setFilterMode('assigned')}
-              className={`mobile-tap-control px-2.5 py-1 sm:min-h-0 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
-                filterMode === 'assigned'
-                  ? 'bg-[var(--surface)] text-[#1d4ed8] dark:text-blue-400 border border-[var(--border)]'
-                  : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
-              }`}
-            >
-              Assigned ({assignedCount})
-            </button>
-          </div>
-
           {canCreatePipelineTask ? (
             <button
               type="button"
@@ -302,6 +260,49 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
       {/* Horizontal Scrollable Swimlane-Style Cards Strip */}
       {!isCollapsed && (
         <div id="team-pipeline-body" className="bg-[var(--surface)]">
+          <div className="px-3 sm:px-5 pt-2.5 flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center rounded-[7px] bg-[var(--surface-subtle)] p-0.5 border border-[var(--border)] text-[11px] font-semibold">
+              <button
+                type="button"
+                aria-pressed={filterMode === 'all'}
+                title="Show all deliverables in pipeline"
+                onClick={() => setFilterMode('all')}
+                className={`mobile-tap-control px-2.5 py-1 sm:min-h-0 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
+                  filterMode === 'all'
+                    ? 'bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border)]'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
+                }`}
+              >
+                All ({totalCount})
+              </button>
+              <button
+                type="button"
+                aria-pressed={filterMode === 'unassigned'}
+                title="Filter to unassigned deliverables"
+                onClick={() => setFilterMode('unassigned')}
+                className={`mobile-tap-control px-2.5 py-1 sm:min-h-0 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
+                  filterMode === 'unassigned'
+                    ? 'bg-[var(--surface)] text-amber-700 dark:text-amber-400 border border-[var(--border)]'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
+                }`}
+              >
+                Unassigned ({unassignedCount})
+              </button>
+              <button
+                type="button"
+                aria-pressed={filterMode === 'assigned'}
+                title="Filter to assigned deliverables waiting in pipeline"
+                onClick={() => setFilterMode('assigned')}
+                className={`mobile-tap-control px-2.5 py-1 sm:min-h-0 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
+                  filterMode === 'assigned'
+                    ? 'bg-[var(--surface)] text-[#1d4ed8] dark:text-blue-400 border border-[var(--border)]'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
+                }`}
+              >
+                Assigned ({assignedCount})
+              </button>
+            </div>
+          </div>
           {displayedTasks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
               <Inbox className="h-4 w-4 text-[var(--text-muted)] mb-1.5" />
@@ -442,10 +443,9 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                           {task.estimatedHours !== undefined && task.estimatedHours > 0 && (
                             <span
                               title={`Estimated Effort: ${task.estimatedHours} hours`}
-                              className="inline-flex items-center gap-0.5 text-[11px] tabular-nums font-semibold text-[var(--text-secondary)]"
+                              className="text-[11px] tabular-nums font-medium text-[var(--text-muted)] shrink-0"
                             >
-                              <Clock className="h-2.5 w-2.5 text-[var(--text-muted)]" />
-                              <span>{task.estimatedHours}h</span>
+                              {task.estimatedHours}h
                             </span>
                           )}
                         </div>
@@ -578,20 +578,24 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                             {assigneeIds.length > 1 ? `${assignee.name} +${assigneeIds.length - 1}` : assignee.name}
                           </span>
                         </button>
-                      ) : (
+                      ) : canAssignTask ? (
                         <button
                           type="button"
                           onClick={() => onOpenAssignmentModal(task)}
-                          title={canAssignTask ? 'Assign member and move straight into To Do' : 'Unassigned in pipeline'}
-                          className={`mobile-tap-control sm:min-h-0 inline-flex items-center gap-1 rounded-[5px] px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer ${
-                            canAssignTask
-                              ? 'bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25'
-                              : 'text-[var(--text-secondary)]'
-                          }`}
+                          title="Assign member and move straight into To Do"
+                          className="mobile-tap-control sm:min-h-0 inline-flex items-center gap-1 rounded-[5px] px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25"
                         >
                           <UserX className="h-3 w-3" />
-                          <span>{canAssignTask ? 'Assign' : 'Unassigned'}</span>
+                          <span>Assign</span>
                         </button>
+                      ) : (
+                        <span
+                          title="Unassigned in pipeline (view-only)"
+                          className="inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[11px] font-medium text-[var(--text-muted)]"
+                        >
+                          <UserX className="h-3 w-3" />
+                          <span>Unassigned</span>
+                        </span>
                       )}
                     </div>
                   </motion.div>

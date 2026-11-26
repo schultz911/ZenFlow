@@ -80,13 +80,13 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
   const displayList = shouldScroll ? [...urgentTasks, ...urgentTasks] : urgentTasks;
 
   return (
-    <div className="sm:sticky sm:top-[var(--header-height)] z-20 w-full bg-[var(--canvas)]/96 backdrop-blur-md border-b border-[var(--border-subtle)]">
+    <div className="xl:sticky xl:top-[var(--header-height)] z-20 w-full bg-[var(--canvas)]/96 backdrop-blur-md border-b border-[var(--border-subtle)]">
       <div className="marquee-ribbon-layout mx-auto max-w-[1400px] py-1.5 [--ribbon-gutter:1rem] sm:[--ribbon-gutter:1.5rem] lg:[--ribbon-gutter:2rem]">
         <div
           id="due-tasks-marquee-ribbon"
-          className="flex items-center gap-2 sm:gap-3 rounded-[10px] border border-red-200 dark:border-red-500/35 bg-[#fef2f2] dark:bg-[#231418] px-2.5 sm:px-3 py-1.5 text-xs overflow-hidden"
+          className="flex flex-col items-stretch sm:flex-row sm:items-center gap-1.5 sm:gap-3 rounded-[10px] border border-red-200 dark:border-red-500/35 bg-[#fef2f2] dark:bg-[#231418] px-2.5 sm:px-3 py-1.5 text-xs overflow-hidden"
         >
-          <div className="ledger-alert-badge shrink-0 z-10 select-none">
+          <div className="ledger-alert-badge shrink-0 z-10 select-none self-start sm:self-auto">
             <AlertTriangle aria-hidden="true" className="h-3 w-3 shrink-0" />
             <span className="uppercase tracking-wider">
               {overdueCount > 0 && dueTodayCount > 0
@@ -97,7 +97,7 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
             </span>
           </div>
 
-          <div ref={containerRef} className="min-w-0 flex-1 overflow-hidden relative">
+          <div ref={containerRef} className="min-w-0 w-full sm:flex-1 overflow-hidden relative">
             <div
               ref={contentRef}
               className={`${
@@ -120,13 +120,13 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
                     tabIndex={isClone ? -1 : undefined}
                     onClick={() => onTaskClick(task)}
                     title={`Click to inspect or reschedule "${task.title}" (Assigned to ${user?.name || 'Unassigned'})`}
-                    className="mobile-tap-control flex items-center gap-1.5 px-2.5 first:pl-0.5 py-1.5 sm:py-0.5 sm:min-h-0 text-left transition-colors cursor-pointer shrink-0 group max-w-full"
+                    className="mobile-tap-control flex items-center gap-1.5 px-2.5 first:pl-0.5 py-1.5 sm:py-0.5 sm:min-h-0 text-left transition-colors cursor-pointer shrink-0 group max-w-none"
                   >
-                    <span className="font-semibold text-[var(--text-primary)] max-w-[110px] truncate text-[11px]">
+                    <span className="font-semibold text-[var(--text-primary)] whitespace-nowrap text-[11px]">
                       {user?.name || 'Unassigned'}
                     </span>
                     <span aria-hidden="true" className="text-[var(--text-secondary)] text-[11px] shrink-0">·</span>
-                    <span className="text-[var(--text-secondary)] max-w-[150px] sm:max-w-[200px] truncate text-[11px] group-hover:text-[#1d4ed8] dark:group-hover:text-blue-400 transition-colors">
+                    <span className="text-[var(--text-secondary)] max-w-[200px] sm:max-w-[220px] truncate text-[11px] group-hover:text-[#1d4ed8] dark:group-hover:text-blue-400 transition-colors">
                       {task.title}
                     </span>
                     <span

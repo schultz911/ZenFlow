@@ -25,6 +25,7 @@ interface FreePoolContainerProps {
   tasks: Task[];
   activeRoleTab?: RoleFilter;
   onAddTask: (userId: string, status?: TaskStatus) => void;
+  onAssignBrief?: (task: Task, targetUserId: string) => void;
   onSelectUser?: (user: User) => void;
   isExpanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
@@ -35,11 +36,14 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
   tasks,
   activeRoleTab = 'all',
   onAddTask,
+  onAssignBrief,
   onSelectUser,
   isExpanded,
   onExpandedChange,
 }) => {
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
+  const [dragOverUserId, setDragOverUserId] = useState<string | null>(null);
+  const [pickerUserId, setPickerUserId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -56,13 +60,20 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [isExpanded, onExpandedChange]);
 
-  const { freeUsers, userStats } = useMemo(() => {
+  const { freeUsers, userStats, unassignedByTeam, unassignedTotal } = useMemo(() => {
     const inReviewCounts = new Map<string, number>();
     const pipelineCounts = new Map<string, number>();
+    const unassignedContent: Task[] = [];
+    const unassignedDesign: Task[] = [];
 
     for (const t of tasks) {
       if (!t) continue;
-      for (const uid of getTaskAssigneeIds(t)) {
+      const assignees = getTaskAssigneeIds(t);
+      if (t.status === 'pipeline' && assignees.length === 0) {
+        if (t.team === 'design') unassignedDesign.push(t);
+        else unassignedContent.push(t);
+      }
+      for (const uid of assignees) {
         if (t.status === 'in_review') {
           inReviewCounts.set(uid, (inReviewCounts.get(uid) || 0) + 1);
         } else if (t.status === 'pipeline') {
@@ -90,7 +101,12 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
       }
     }
 
-    return { freeUsers: free, userStats: stats };
+    return {
+      freeUsers: free,
+      userStats: stats,
+      unassignedByTeam: { content: unassignedContent, design: unassignedDesign },
+      unassignedTotal: unassignedContent.length + unassignedDesign.length,
+    };
   }, [users, tasks]);
 
   const filteredFreeUsers = useMemo(() => {
@@ -131,7 +147,14 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
 
       <aside id="free-pool-popover" aria-label="Free Pool" hidden={!isExpanded}>
         <div className="free-pool-filters">
-          <p className="text-xs text-[var(--text-secondary)]">Across boards · Under {targetHoursLabel} assigned today</p>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
+            <span>Across boards · Under {targetHoursLabel} assigned today</span>
+            {unassignedTotal > 0 && (
+              <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                · {unassignedTotal} unassigned pipeline brief{unassignedTotal === 1 ? '' : 's'} ready to assign (drag here or click Assign brief)
+              </span>
+            )}
+          </div>
           <div className="segmented-track" role="group" aria-label="Filter available members by discipline">
             {roleOptions.map(({ role, count }) => (
               <button
@@ -162,12 +185,43 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
               const roundedHours = formatHours(assignedHours);
               const assignedHoursLabel = roundedHours === targetHoursLabel ? `<${targetHoursLabel}` : roundedHours;
               const hoursId = `free-pool-${user.id}-hours`;
+              const matchingBriefs = user.role === 'design' ? unassignedByTeam.design : unassignedByTeam.content;
+              const isDropTarget = dragOverUserId === user.id;
 
               return (
                 <div
                   key={user.id}
                   role="listitem"
-                  className="free-pool-member"
+                  onDragOver={e => {
+                    if (!onAssignBrief) return;
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    if (dragOverUserId !== user.id) setDragOverUserId(user.id);
+                  }}
+                  onDragLeave={e => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node) && dragOverUserId === user.id) {
+                      setDragOverUserId(null);
+                    }
+                  }}
+                  onDrop={e => {
+                    if (!onAssignBrief) return;
+                    e.preventDefault();
+                    setDragOverUserId(null);
+                    let draggedTaskId = '';
+                    try {
+                      const raw = e.dataTransfer.getData('application/json');
+                      if (raw) draggedTaskId = JSON.parse(raw).taskId || '';
+                    } catch {
+                      // fallback to text/plain
+                    }
+                    if (!draggedTaskId) draggedTaskId = e.dataTransfer.getData('text/plain');
+                    const draggedTask = tasks.find(t => t.id === draggedTaskId);
+                    if (draggedTask) {
+                      onExpandedChange(false);
+                      onAssignBrief(draggedTask, user.id);
+                    }
+                  }}
+                  className={`free-pool-member transition-colors ${isDropTarget ? 'bg-[var(--accent-soft)]' : ''}`}
                 >
                   <button
                     type="button"
@@ -214,18 +268,68 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                     </span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onExpandedChange(false);
-                      onAddTask(user.id, 'todo');
-                    }}
-                    aria-label={`Add task for ${user.name}`}
-                    className="free-pool-row-action flex shrink-0 items-center gap-1 rounded-[6px] border border-[var(--border)] px-2 text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)]"
-                  >
-                    <Plus aria-hidden="true" className="size-3" />
-                    Task
-                  </button>
+                  <div className="relative flex items-center gap-1 shrink-0">
+                    {onAssignBrief && matchingBriefs.length > 0 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (matchingBriefs.length === 1) {
+                              setPickerUserId(null);
+                              onExpandedChange(false);
+                              onAssignBrief(matchingBriefs[0], user.id);
+                            } else {
+                              setPickerUserId(prev => (prev === user.id ? null : user.id));
+                            }
+                          }}
+                          aria-label={`Assign brief for ${user.name}`}
+                          aria-expanded={matchingBriefs.length > 1 ? pickerUserId === user.id : undefined}
+                          className="free-pool-row-action mobile-tap-control sm:min-h-0 flex shrink-0 items-center gap-1 rounded-[6px] bg-[var(--accent-soft)] px-2 text-[11px] font-semibold text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25 cursor-pointer"
+                        >
+                          <span>Assign brief{matchingBriefs.length > 1 ? ` (${matchingBriefs.length})` : ''}</span>
+                        </button>
+                        {pickerUserId === user.id && matchingBriefs.length > 1 && (
+                          <div
+                            role="menu"
+                            aria-label={`Select brief to assign to ${user.name}`}
+                            className="menu-surface absolute right-0 top-full mt-1 z-40 w-60 rounded-[8px] border border-[var(--border)] p-1"
+                          >
+                            {matchingBriefs.map(brief => (
+                              <button
+                                key={brief.id}
+                                type="button"
+                                role="menuitem"
+                                onClick={() => {
+                                  setPickerUserId(null);
+                                  onExpandedChange(false);
+                                  onAssignBrief(brief, user.id);
+                                }}
+                                className="menu-item cursor-pointer justify-between"
+                              >
+                                <span className="truncate">{brief.title}</span>
+                                {brief.estimatedHours ? (
+                                  <span className="text-[11px] text-[var(--text-muted)] tabular-nums shrink-0">{brief.estimatedHours}h</span>
+                                ) : null}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onExpandedChange(false);
+                        onAddTask(user.id, 'todo');
+                      }}
+                      aria-label={`Add task for ${user.name}`}
+                      className="free-pool-row-action flex shrink-0 items-center gap-1 rounded-[6px] border border-[var(--border)] px-2 text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)]"
+                    >
+                      <Plus aria-hidden="true" className="size-3" />
+                      Task
+                    </button>
+                  </div>
                 </div>
               );
             })
