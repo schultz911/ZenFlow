@@ -13,17 +13,6 @@ export function formatBillableHours(ms: number): string {
   return `${parseFloat(hours.toFixed(1))}h`;
 }
 
-export function getActiveBillableMs(task: Pick<Task, 'status' | 'inProgressDurationMs' | 'inProgressStartedAt'>, nowMs = Date.now()): number {
-  let ms = typeof task.inProgressDurationMs === 'number' ? task.inProgressDurationMs : 0;
-  if (task.status === 'in_progress' && task.inProgressStartedAt) {
-    const startMs = new Date(task.inProgressStartedAt).getTime();
-    if (!isNaN(startMs) && nowMs >= startMs) {
-      ms += nowMs - startMs;
-    }
-  }
-  return ms;
-}
-
 export function hasCanonicalParent(task: Pick<Task, 'parentTaskId'>, tasks: readonly Pick<Task, 'id'>[]): boolean {
   return Boolean(task.parentTaskId && !tasks.some(other => other.id === task.parentTaskId));
 }

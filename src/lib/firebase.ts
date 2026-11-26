@@ -1,4 +1,3 @@
-import { apiFetch } from './api';
 import type { FirebaseApp } from 'firebase/app';
 import appletConfig from '../../firebase-applet-config.json';
 
@@ -111,25 +110,4 @@ export async function signOutFirebase(): Promise<void> {
   } catch (err) {
     console.warn('Firebase signOut warning:', err);
   }
-}
-
-let inFlightStatusPromise: Promise<boolean> | null = null;
-
-/**
- * Validates connection to Firestore at app initialization (mandated by firebase-skill).
- * Checks the authenticated backend; direct client database access is disabled.
- * Deduplicates in-flight status requests to prevent redundant network egress on boot.
- */
-export async function testConnection(): Promise<boolean> {
-  if (inFlightStatusPromise) return inFlightStatusPromise;
-
-  inFlightStatusPromise = (async () => {
-    try {
-      const res = await apiFetch('/api/firestore/status');
-      if (!res.ok) return false;
-      return Boolean((await res.json()).connected);
-    } catch { return false; }
-    finally { setTimeout(() => { inFlightStatusPromise = null; }, 5000); }
-  })();
-  return inFlightStatusPromise;
 }

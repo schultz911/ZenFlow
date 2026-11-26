@@ -126,8 +126,12 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
   const transport: ClickUpTransport = deps.transport || ((url, init) => fetch(url, init));
   const sanitize = deps.sanitizeString || defaultSanitize;
 
+  const MAX_CACHE_ENTRIES = 500;
   const teamIdCache = new Map<string, string>();
   const apiCache = new Map<string, { data: any; expiresAt: number }>();
+
+  const tokenCacheKey = (token: string): string =>
+    createHash('sha256').update(token).digest('hex').slice(0, 16);
 
   let registeredWebhookId: string | null = webhookRegistry.latest()?.id || null;
   let activeWebhookEndpoint: string | null = webhookRegistry.latest()?.endpoint || null;
@@ -152,7 +156,17 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
   };
 
   const setCache = (key: string, data: any, ttlMs: number = CLICKUP_CACHE_TTL_MS) => {
-    apiCache.set(key, { data, expiresAt: Date.now() + ttlMs });
+    const now = Date.now();
+    if (apiCache.size >= MAX_CACHE_ENTRIES) {
+      for (const [k, v] of apiCache.entries()) {
+        if (now > v.expiresAt) apiCache.delete(k);
+      }
+      if (apiCache.size >= MAX_CACHE_ENTRIES) {
+        const oldestKey = apiCache.keys().next().value;
+        if (oldestKey !== undefined) apiCache.delete(oldestKey);
+      }
+    }
+    apiCache.set(key, { data, expiresAt: now + ttlMs });
   };
 
   const invalidateCache = (prefix?: string) => {
@@ -190,7 +204,8 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
   };
 
   const resolveTeamId = async (token: string): Promise<string | null> => {
-    const cached = teamIdCache.get(token);
+    const key = tokenCacheKey(token);
+    const cached = teamIdCache.get(key);
     if (cached) return cached;
     try {
       const teamRes = await transport(`${CLICKUP_API}/team`, {
@@ -199,7 +214,13 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       if (teamRes.ok) {
         const teamData = await teamRes.json();
         const tid = teamData.teams?.[0]?.id ? String(teamData.teams[0].id) : null;
-        if (tid) teamIdCache.set(token, tid);
+        if (tid) {
+          if (teamIdCache.size >= MAX_CACHE_ENTRIES) {
+            const oldestKey = teamIdCache.keys().next().value;
+            if (oldestKey !== undefined) teamIdCache.delete(oldestKey);
+          }
+          teamIdCache.set(key, tid);
+        }
         return tid;
       }
     } catch (err) {
@@ -899,6 +920,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       const parsedMs = Number(timeItem.after);
       if (!isNaN(parsedMs) && parsedMs > (existingTask.inProgressDurationMs || 0)) {
         existingTask.inProgressDurationMs = parsedMs;
+        (existingTask as Task & { lastSyncedClickupTimeMs?: number }).lastSyncedClickupTimeMs = parsedMs;
         existingTask.updatedAt = new Date().toISOString();
         const activityEntries = Array.isArray(existingTask.activityLog) ? [...existingTask.activityLog] : [];
         activityEntries.unshift({
@@ -937,7 +959,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       const token = resolveToken({ req, caller: res.locals.caller });
       if (!token) return res.status(400).json({ error: 'ClickUp API token not configured' });
 
-      const cacheKey = `spaces:${token}`;
+      const cacheKey = `spaces:${tokenCacheKey(token)}`;
       const cached = getFromCache(cacheKey);
       if (cached) return res.json(cached);
 
@@ -992,7 +1014,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       const token = resolveToken({ req, caller: res.locals.caller });
       if (!token) return res.status(400).json({ error: 'ClickUp API token not configured' });
 
-      const cacheKey = `members:${token}`;
+      const cacheKey = `members:${tokenCacheKey(token)}`;
       const cached = getFromCache(cacheKey);
       if (cached) return res.json(cached);
 
@@ -1028,7 +1050,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       const safeSpaceId = sanitizeClickupId(sanitize(req.query.spaceId));
       if (!token || !safeSpaceId) return res.status(400).json({ error: 'Valid spaceId and ClickUp token are required' });
 
-      const cacheKey = `folders:${safeSpaceId}:${token}`;
+      const cacheKey = `folders:${safeSpaceId}:${tokenCacheKey(token)}`;
       const cached = getFromCache(cacheKey);
       if (cached) return res.json(cached);
 
@@ -1054,7 +1076,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       if (rawListId && !safeListId) return res.status(400).json({ error: 'Invalid listId format' });
       if (!token) return res.status(400).json({ error: 'ClickUp API token required' });
 
-      const cacheKey = `custom-fields:${safeListId || 'team'}:${token}`;
+      const cacheKey = `custom-fields:${safeListId || 'team'}:${tokenCacheKey(token)}`;
       const cached = getFromCache(cacheKey);
       if (cached) return res.json(cached);
 
@@ -1222,6 +1244,7 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
     app.get('/api/clickup/webhook/status', (_req: Request, res: Response) => {
       refreshWebhookPointer();
       res.json({
+        listening: true,
         registered: Boolean(registeredWebhookId),
         webhookId: registeredWebhookId,
         endpointUrl: activeWebhookEndpoint || '/api/clickup/webhook',

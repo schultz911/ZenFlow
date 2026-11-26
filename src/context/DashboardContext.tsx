@@ -20,13 +20,19 @@ import {
   TaskActivity,
   AuditLogEntry,
   TaskDisciplineMetadata,
-  ClickupMember,
-  ClickupSpace,
-  ClickupList,
-  ClickupFolder,
-  ClickupCustomFieldOption,
-  ClickupWebhookStatus,
 } from '../types';
+import { ClickUpProvider, useClickUp, type ClickUpContextValue } from './ClickUpContext';
+
+export { useClickUp, type ClickUpContextValue };
+
+export class ClientRejectedError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ClientRejectedError';
+    this.status = status;
+  }
+}
 import { compareTasksByDeadline, formatBillableHours, getTaskBillableMs, getTaskAssigneeIds } from '../utils/workload';
 import { signInWithGoogle, signOutFirebase, onFirebaseAuthStateChanged } from '../lib/firebase';
 import {
@@ -60,7 +66,7 @@ import {
 
 export interface FirestoreStatus {
   connected: boolean;
-  mode: 'admin';
+  mode: 'admin' | 'local';
   projectId: string;
   databaseId: string;
   serviceAccountFound: boolean;
@@ -211,30 +217,6 @@ export interface WorkspaceContextValue {
   }) => Promise<{ task: Task; warning?: string; message?: string }>;
 }
 
-export interface ClickUpContextValue {
-  isZensciencesUser: boolean;
-  isClickupConnected: boolean;
-  clickupMembers: ClickupMember[];
-  loadClickupMembers: (apiKey?: string) => Promise<ClickupMember[]>;
-  clickupSpaces: ClickupSpace[];
-  selectedClickupSpaceId: string;
-  spaceFoldersAndListsMap: Record<string, { folders: ClickupFolder[]; folderlessLists: ClickupList[] }>;
-  getFoldersAndListsForSpace: (spaceId: string) => Promise<{ folders: ClickupFolder[]; folderlessLists: ClickupList[] }>;
-  connectClickup: (apiKey: string) => Promise<{ success: boolean; error?: string }>;
-  disconnectClickup: () => void;
-  setSelectedClickupSpaceId: (spaceId: string, spaceName?: string) => Promise<void>;
-  createClickupSpace: (name: string) => Promise<ClickupSpace | null>;
-  createClickupList: (name: string, spaceId: string, folderId?: string) => Promise<ClickupList | null>;
-  syncUserTasksWithClickUp: (userId: string) => Promise<{ success: boolean; syncedCount: number; archivedCount: number; message: string }>;
-  clickupCustomFieldOptions: ClickupCustomFieldOption[];
-  clickupTaskTypeFieldId: string;
-  isLoadingTaskTypes: boolean;
-  fetchClickupCustomFields: (params: { listId?: string; spaceId?: string; folderId?: string }) => Promise<ClickupCustomFieldOption[]>;
-  clickupWebhookStatus: ClickupWebhookStatus | null;
-  refreshClickupWebhookStatus: () => Promise<void>;
-  registerClickupWebhook: (customEndpoint?: string) => Promise<{ success: boolean; message: string; webhookId?: string }>;
-}
-
 export interface BoardUiContextValue {
   activeRoleTab: RoleFilter;
   setActiveRoleTab: (tab: RoleFilter) => void;
@@ -248,7 +230,6 @@ export interface BoardUiContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(undefined);
-const ClickUpContext = createContext<ClickUpContextValue | undefined>(undefined);
 const BoardUiContext = createContext<BoardUiContextValue | undefined>(undefined);
 
 const USER_SESSION_KEY = 'team_dash_current_user_v1';
@@ -340,33 +321,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   }, [activeRoleTab]);
 
-  // ClickUp state
-  const isZensciencesUser = useMemo(
-    () => Boolean(currentUser?.email?.toLowerCase().endsWith('@zensciences.com')),
-    [currentUser]
-  );
-  const isClickupConnected = useMemo(
-    () => Boolean(isZensciencesUser && currentUser?.clickupConnected),
-    [isZensciencesUser, currentUser?.clickupConnected]
-  );
-  const [clickupSpaces, setClickupSpaces] = useState<ClickupSpace[]>([]);
-  const [selectedClickupSpaceId, setSelectedClickupSpaceIdState] = useState<string>(
-    () => currentUser?.selectedClickupSpaceId || localStorage.getItem('zenflow_clickup_space_id') || ''
-  );
-  const selectedClickupSpaceIdRef = useRef<string>(selectedClickupSpaceId);
-  selectedClickupSpaceIdRef.current = selectedClickupSpaceId;
-
-  const [spaceFoldersAndListsMap, setSpaceFoldersAndListsMap] = useState<
-    Record<string, { folders: ClickupFolder[]; folderlessLists: ClickupList[] }>
-  >({});
-  const spaceFoldersAndListsMapRef = useRef(spaceFoldersAndListsMap);
-  spaceFoldersAndListsMapRef.current = spaceFoldersAndListsMap;
-  const [clickupMembers, setClickupMembers] = useState<ClickupMember[]>([]);
-  const [clickupCustomFieldOptions, setClickupCustomFieldOptions] = useState<ClickupCustomFieldOption[]>([]);
-  const [clickupTaskTypeFieldId, setClickupTaskTypeFieldId] = useState<string>('');
-  const [isLoadingTaskTypes, setIsLoadingTaskTypes] = useState<boolean>(false);
-  const [clickupWebhookStatus, setClickupWebhookStatus] = useState<ClickupWebhookStatus | null>(null);
-
   const refreshFirestoreStatus = useCallback(async () => {
     try {
       const res = await fetch('/api/firestore/status');
@@ -375,95 +329,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       // ignore
     }
   }, []);
-
-  const refreshClickupWebhookStatus = useCallback(async () => {
-    try {
-      const res = await fetch('/api/clickup/webhook/status');
-      if (res.ok) setClickupWebhookStatus(await res.json());
-    } catch {
-      // ignore
-    }
-  }, []);
-
-  const loadClickupFoldersAndLists = useCallback(async (spaceId: string, apiKey: string = '') => {
-    if (!spaceId) return;
-    try {
-      const res = await fetch(`/api/clickup/folders-and-lists?spaceId=${encodeURIComponent(spaceId)}`, {
-        headers: apiKey ? { 'x-clickup-api-key': apiKey } : {},
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setSpaceFoldersAndListsMap(prev => ({
-          ...prev,
-          [spaceId]: { folders: data.folders || [], folderlessLists: data.folderlessLists || [] },
-        }));
-      }
-    } catch (err) {
-      console.warn('Failed to load ClickUp folders & lists:', err);
-    }
-  }, []);
-
-  const loadClickupSpaces = useCallback(async (apiKey: string = '') => {
-    try {
-      const res = await fetch('/api/clickup/spaces', {
-        headers: apiKey ? { 'x-clickup-api-key': apiKey } : {},
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data.spaces)) {
-          setClickupSpaces(data.spaces);
-          if (data.spaces.length > 0 && !selectedClickupSpaceIdRef.current) {
-            const firstId = data.spaces[0].id;
-            setSelectedClickupSpaceIdState(firstId);
-            try { localStorage.setItem('zenflow_clickup_space_id', firstId); } catch {}
-          }
-        }
-      }
-    } catch (err) {
-      console.warn('Failed to load ClickUp spaces:', err);
-    }
-  }, []);
-
-  const getFoldersAndListsForSpace = useCallback(async (spaceId: string) => {
-    if (!spaceId) return { folders: [], folderlessLists: [] };
-    if (spaceFoldersAndListsMapRef.current[spaceId]) return spaceFoldersAndListsMapRef.current[spaceId];
-    try {
-      const res = await fetch(`/api/clickup/folders-and-lists?spaceId=${encodeURIComponent(spaceId)}`);
-      if (res.ok) {
-        const data = await res.json();
-        const result = { folders: data.folders || [], folderlessLists: data.folderlessLists || [] };
-        setSpaceFoldersAndListsMap(prev => ({ ...prev, [spaceId]: result }));
-        return result;
-      }
-    } catch (err) {
-      console.warn('Failed to load folders & lists for space:', err);
-    }
-    return { folders: [], folderlessLists: [] };
-  }, []);
-
-  const loadClickupMembers = useCallback(async (apiKey: string = ''): Promise<ClickupMember[]> => {
-    try {
-      const res = await fetch('/api/clickup/members', {
-        headers: apiKey ? { 'x-clickup-api-key': apiKey } : {},
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const list: ClickupMember[] = Array.isArray(data.members) ? data.members : [];
-        setClickupMembers(list);
-        return list;
-      }
-    } catch (err) {
-      console.warn('Failed to load ClickUp members:', err);
-    }
-    return [];
-  }, []);
-
-  useEffect(() => {
-    if (isClickupConnected) {
-      loadClickupSpaces('');
-      loadClickupMembers('');
-    }
-  }, [isClickupConnected, loadClickupSpaces, loadClickupMembers]);
 
   useEffect(() => {
     try {
@@ -758,7 +623,14 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     const updatedUser: User = data.user || data;
     if (data.merged && data.deletedUserId) {
       setUsers(prev => prev.filter(u => u.id !== data.deletedUserId).map(u => (u.id === updatedUser.id ? updatedUser : u)));
-      setTasks(prev => prev.map(t => (t.userId === data.deletedUserId ? { ...t, userId: updatedUser.id } : t)));
+      setTasks(prev =>
+        prev.map(t => {
+          const assignees = getTaskAssigneeIds(t);
+          if (!assignees.includes(data.deletedUserId) && t.userId !== data.deletedUserId) return t;
+          const remapped = Array.from(new Set(assignees.map(uid => (uid === data.deletedUserId ? updatedUser.id : uid))));
+          return { ...t, assigneeIds: remapped, userId: remapped[0] || updatedUser.id };
+        })
+      );
       if (currentUserRef.current?.id === data.deletedUserId) setCurrentUser(updatedUser);
     } else {
       setUsers(prev => prev.map(u => (u.id === userId ? updatedUser : u)));
@@ -793,12 +665,21 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         );
         const effectiveFromId = effectiveFromUser?.id || fromUserIdOrEmail;
 
+        const matchRefs = new Set(
+          [effectiveFromId, isEmail ? fromUserIdOrEmail : ''].filter(Boolean).map(v => v.toLowerCase())
+        );
         setTasks(prev =>
           prev.map(t => {
+            const assignees = getTaskAssigneeIds(t);
             const matches =
-              (effectiveFromId && t.userId === effectiveFromId) ||
-              (isEmail && t.userId?.toLowerCase() === fromUserIdOrEmail.toLowerCase());
-            return matches ? { ...t, userId: toUserId, assigneeIds: [toUserId] } : t;
+              assignees.some(uid => matchRefs.has(uid.toLowerCase())) ||
+              (t.userId ? matchRefs.has(t.userId.toLowerCase()) : false);
+            if (!matches) return t;
+            const remapped = Array.from(
+              new Set(assignees.map(uid => (matchRefs.has(uid.toLowerCase()) ? toUserId : uid)))
+            );
+            const finalIds = remapped.length > 0 ? remapped : [toUserId];
+            return { ...t, userId: finalIds[0], assigneeIds: finalIds };
           })
         );
         if (deleteSourceUser && data.deletedSourceUserId) {
@@ -821,182 +702,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   const downloadAuditLogs = useCallback(() => {
     window.open('/api/audit/download', '_blank', 'noopener,noreferrer');
   }, []);
-
-  // ClickUp actions
-  const connectClickup = useCallback(
-    async (apiKey: string): Promise<{ success: boolean; error?: string }> => {
-      const cleanKey = apiKey.trim();
-      if (!cleanKey) return { success: false, error: 'API key is required' };
-      try {
-        const res = await fetch('/api/clickup/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ apiKey: cleanKey }),
-        });
-        const data = await res.json();
-        if (!res.ok || !data.valid) return { success: false, error: data.error || 'Invalid ClickUp API Key' };
-        if (currentUserRef.current) {
-          await updateUserProfile(currentUserRef.current.id, { clickupApiKey: cleanKey });
-        }
-        await loadClickupSpaces('');
-        await loadClickupMembers('');
-        return { success: true };
-      } catch (err: any) {
-        return { success: false, error: err.message || 'Connection failed' };
-      }
-    },
-    [updateUserProfile, loadClickupSpaces, loadClickupMembers]
-  );
-
-  const disconnectClickup = useCallback(() => {
-    localStorage.removeItem('zenflow_clickup_api_key');
-    if (currentUserRef.current) updateUserProfile(currentUserRef.current.id, { clickupApiKey: '' });
-    setClickupSpaces([]);
-  }, [updateUserProfile]);
-
-  const setSelectedClickupSpaceId = useCallback(
-    async (spaceId: string, spaceName?: string) => {
-      setSelectedClickupSpaceIdState(spaceId);
-      try {
-        localStorage.setItem('zenflow_clickup_space_id', spaceId);
-        if (spaceName) localStorage.setItem('zenflow_clickup_space_name', spaceName);
-      } catch {}
-      if (currentUserRef.current) {
-        await updateUserProfile(currentUserRef.current.id, {
-          selectedClickupSpaceId: spaceId,
-          selectedClickupSpaceName: spaceName,
-        });
-      }
-      if (isClickupConnected) await loadClickupFoldersAndLists(spaceId, '');
-    },
-    [isClickupConnected, updateUserProfile, loadClickupFoldersAndLists]
-  );
-
-  const createClickupSpace = useCallback(
-    async (name: string): Promise<ClickupSpace | null> => {
-      if (!name.trim()) return null;
-      try {
-        const res = await fetch('/api/clickup/spaces', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: name.trim() }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          await loadClickupSpaces('');
-          return data.space;
-        }
-      } catch (err) {
-        console.warn('Failed to create ClickUp space:', err);
-      }
-      return null;
-    },
-    [loadClickupSpaces]
-  );
-
-  const createClickupList = useCallback(
-    async (name: string, spaceId: string, folderId?: string): Promise<ClickupList | null> => {
-      if (!name.trim() || (!spaceId && !folderId)) return null;
-      try {
-        const res = await fetch('/api/clickup/lists', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ spaceId, folderId, name: name.trim() }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setSpaceFoldersAndListsMap(prev => {
-            const next = { ...prev };
-            delete next[spaceId];
-            return next;
-          });
-          await loadClickupFoldersAndLists(spaceId, '');
-          return data.list;
-        }
-      } catch (err) {
-        console.warn('Failed to create ClickUp list:', err);
-      }
-      return null;
-    },
-    [loadClickupFoldersAndLists]
-  );
-
-  const syncUserTasksWithClickUp = useCallback(
-    async (userId: string) => {
-      try {
-        const res = await fetch('/api/clickup/sync-user-tasks', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (res.ok && data.success) {
-          await fetchState();
-          return {
-            success: true,
-            syncedCount: data.syncedCount || 0,
-            archivedCount: data.archivedCount || 0,
-            message: data.message || 'Sync complete',
-          };
-        }
-        return { success: false, syncedCount: 0, archivedCount: 0, message: data?.error || 'Failed to sync with ClickUp' };
-      } catch (err: any) {
-        return { success: false, syncedCount: 0, archivedCount: 0, message: err.message || 'Sync request failed' };
-      }
-    },
-    [fetchState]
-  );
-
-  const fetchClickupCustomFields = useCallback(
-    async (params: { listId?: string; spaceId?: string; folderId?: string }): Promise<ClickupCustomFieldOption[]> => {
-      setIsLoadingTaskTypes(true);
-      try {
-        const q = new URLSearchParams();
-        if (params.listId) q.set('listId', params.listId);
-        else if (params.spaceId) q.set('spaceId', params.spaceId);
-        else if (params.folderId) q.set('folderId', params.folderId);
-        const res = await fetch(`/api/clickup/custom-fields?${q.toString()}`);
-        if (res.ok) {
-          const data = await res.json();
-          const options: ClickupCustomFieldOption[] = data.options || [];
-          setClickupCustomFieldOptions(options);
-          if (data.taskTypeField?.id) setClickupTaskTypeFieldId(data.taskTypeField.id);
-          return options;
-        }
-      } catch (err) {
-        console.warn('[DashboardContext] Failed to fetch custom fields:', err);
-      } finally {
-        setIsLoadingTaskTypes(false);
-      }
-      return [];
-    },
-    []
-  );
-
-  const registerClickupWebhook = useCallback(
-    async (customEndpoint?: string): Promise<{ success: boolean; message: string; webhookId?: string }> => {
-      try {
-        const res = await fetch('/api/clickup/webhook/register', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ endpoint: customEndpoint }),
-        });
-        const data = await res.json();
-        if (res.ok && data.success) {
-          await refreshClickupWebhookStatus();
-          return {
-            success: true,
-            message: data.message || 'ClickUp real-time webhook registered successfully!',
-            webhookId: data.webhookId,
-          };
-        }
-        return { success: false, message: data.error || 'Failed to register webhook in ClickUp' };
-      } catch (err: any) {
-        return { success: false, message: err.message || 'Network error registering webhook' };
-      }
-    },
-    [refreshClickupWebhookStatus]
-  );
 
   // User & Task CRUD
   const createUser = useCallback(async (data: Parameters<WorkspaceContextValue['createUser']>[0]): Promise<User> => {
@@ -1021,12 +726,20 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     try {
       if (!navigator.onLine) throw new Error('Offline');
       const res = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+      if (res.status >= 400 && res.status < 500) {
+        const errData = await res.json().catch(() => ({}));
+        throw new ClientRejectedError(errData.error || `Request rejected (${res.status})`, res.status);
+      }
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
-    } catch {
+    } catch (err) {
+      if (err instanceof ClientRejectedError) {
+        void fetchState();
+        throw err;
+      }
       enqueueMutation({ type: 'delete_user', endpoint: `/api/users/${userId}`, method: 'DELETE' });
       setSyncStatus('offline');
     }
-  }, []);
+  }, [fetchState]);
 
   const createPipelineBundle = useCallback<WorkspaceContextValue['createPipelineBundle']>(async data => {
     const res = await fetch('/api/tasks/pipeline-bundle', {
@@ -1123,11 +836,11 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       const errData = await res.json().catch(() => ({}));
       if (res.status >= 400 && res.status < 500) {
         setTasks(prev => prev.filter(t => t.id !== tempId));
-        throw new Error(errData.error || `Server rejected request (${res.status})`);
+        throw new ClientRejectedError(errData.error || `Server rejected request (${res.status})`, res.status);
       }
       throw new Error(`Server returned ${res.status}`);
-    } catch (err: any) {
-      if (err?.message?.startsWith('Server rejected') || err?.message?.includes('Only authorized roles') || err?.message?.includes('discipline')) {
+    } catch (err) {
+      if (err instanceof ClientRejectedError) {
         throw err;
       }
       enqueueMutation({ type: 'create_task', endpoint: '/api/tasks', method: 'POST', payload: data });
@@ -1158,16 +871,20 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       }
       if (res.status >= 400 && res.status < 500) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `Request failed (${res.status})`);
+        throw new ClientRejectedError(errData.error || `Request failed (${res.status})`, res.status);
       }
       throw new Error(`Server returned ${res.status}`);
     } catch (err) {
+      if (err instanceof ClientRejectedError) {
+        void fetchState();
+        throw err;
+      }
       console.warn('Update task offline/failed, buffering in queue:', err);
       enqueueMutation({ type: 'update_task', endpoint: `/api/tasks/${id}`, method: 'PUT', payload: updates });
       setSyncStatus('offline');
     }
     return optimisticTask || (tasksRef.current.find(t => t.id === id) as Task);
-  }, []);
+  }, [fetchState]);
 
   const adjustBillableHours = useCallback(
     async (taskId: string, newDurationMs: number, reason?: string): Promise<Task> => {
@@ -1223,14 +940,22 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
           setTasks(prev => prev.map(t => (t.id === taskId ? serverTask : t)));
           return serverTask;
         }
+        if (res.status >= 400 && res.status < 500) {
+          const errData = await res.json().catch(() => ({}));
+          throw new ClientRejectedError(errData.error || `Request failed (${res.status})`, res.status);
+        }
         throw new Error(`Server returned ${res.status}`);
-      } catch {
+      } catch (err) {
+        if (err instanceof ClientRejectedError) {
+          void fetchState();
+          throw err;
+        }
         enqueueMutation({ type: 'update_task', endpoint: `/api/tasks/${taskId}`, method: 'PUT', payload });
         setSyncStatus('offline');
       }
       return optimisticTask || (tasksRef.current.find(t => t.id === taskId) as Task);
     },
-    []
+    [fetchState]
   );
 
   const deleteTask = useCallback(async (id: string): Promise<void> => {
@@ -1238,12 +963,20 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     try {
       if (!navigator.onLine) throw new Error('Offline');
       const res = await fetch(`/api/tasks/${id}`, { method: 'DELETE' });
+      if (res.status >= 400 && res.status < 500) {
+        const errData = await res.json().catch(() => ({}));
+        throw new ClientRejectedError(errData.error || `Request failed (${res.status})`, res.status);
+      }
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
-    } catch {
+    } catch (err) {
+      if (err instanceof ClientRejectedError) {
+        void fetchState();
+        throw err;
+      }
       enqueueMutation({ type: 'delete_task', endpoint: `/api/tasks/${id}`, method: 'DELETE' });
       setSyncStatus('offline');
     }
-  }, []);
+  }, [fetchState]);
 
   const removeAssigneeOrDeleteTask = useCallback(
     async (id: string, removeAssigneeId?: string): Promise<void> => {
@@ -1329,12 +1062,20 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ updates }),
       });
+      if (res.status >= 400 && res.status < 500) {
+        const errData = await res.json().catch(() => ({}));
+        throw new ClientRejectedError(errData.error || `Request failed (${res.status})`, res.status);
+      }
       if (!res.ok) throw new Error(`Server returned ${res.status}`);
-    } catch {
+    } catch (err) {
+      if (err instanceof ClientRejectedError) {
+        void fetchState();
+        throw err;
+      }
       enqueueMutation({ type: 'reorder_tasks', endpoint: '/api/tasks/reorder', method: 'POST', payload: { updates } });
       setSyncStatus('offline');
     }
-  }, []);
+  }, [fetchState]);
 
   const moveTask = useCallback<WorkspaceContextValue['moveTask']>(
     async (taskId, targetUserId, newStatus, newIndex, newDueDate, extraUpdates) => {
@@ -1555,55 +1296,6 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     ]
   );
 
-  const clickupValue = useMemo<ClickUpContextValue>(
-    () => ({
-      isZensciencesUser,
-      isClickupConnected,
-      clickupMembers,
-      loadClickupMembers,
-      clickupSpaces,
-      selectedClickupSpaceId,
-      spaceFoldersAndListsMap,
-      getFoldersAndListsForSpace,
-      connectClickup,
-      disconnectClickup,
-      setSelectedClickupSpaceId,
-      createClickupSpace,
-      createClickupList,
-      syncUserTasksWithClickUp,
-      clickupCustomFieldOptions,
-      clickupTaskTypeFieldId,
-      isLoadingTaskTypes,
-      fetchClickupCustomFields,
-      clickupWebhookStatus,
-      refreshClickupWebhookStatus,
-      registerClickupWebhook,
-    }),
-    [
-      isZensciencesUser,
-      isClickupConnected,
-      clickupMembers,
-      loadClickupMembers,
-      clickupSpaces,
-      selectedClickupSpaceId,
-      spaceFoldersAndListsMap,
-      getFoldersAndListsForSpace,
-      connectClickup,
-      disconnectClickup,
-      setSelectedClickupSpaceId,
-      createClickupSpace,
-      createClickupList,
-      syncUserTasksWithClickUp,
-      clickupCustomFieldOptions,
-      clickupTaskTypeFieldId,
-      isLoadingTaskTypes,
-      fetchClickupCustomFields,
-      clickupWebhookStatus,
-      refreshClickupWebhookStatus,
-      registerClickupWebhook,
-    ]
-  );
-
   const boardUiValue = useMemo<BoardUiContextValue>(
     () => ({
       activeRoleTab,
@@ -1621,9 +1313,9 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
   return (
     <AuthContext.Provider value={authValue}>
       <WorkspaceContext.Provider value={workspaceValue}>
-        <ClickUpContext.Provider value={clickupValue}>
+        <ClickUpProvider currentUser={currentUser} updateUserProfile={updateUserProfile} fetchState={fetchState}>
           <BoardUiContext.Provider value={boardUiValue}>{children}</BoardUiContext.Provider>
-        </ClickUpContext.Provider>
+        </ClickUpProvider>
       </WorkspaceContext.Provider>
     </AuthContext.Provider>
   );
@@ -1638,12 +1330,6 @@ export function useAuth(): AuthContextValue {
 export function useWorkspace(): WorkspaceContextValue {
   const ctx = useContext(WorkspaceContext);
   if (!ctx) throw new Error('useWorkspace must be used within a DashboardProvider');
-  return ctx;
-}
-
-export function useClickUp(): ClickUpContextValue {
-  const ctx = useContext(ClickUpContext);
-  if (!ctx) throw new Error('useClickUp must be used within a DashboardProvider');
   return ctx;
 }
 

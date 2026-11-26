@@ -16,6 +16,8 @@ import {
   isWorkingDay,
   getTaskAssigneeIds,
   isTaskAssignedToUser,
+  formatLocalDateKey,
+  parseLocalDate,
   DeliveryUnitInfo,
 } from '../utils/workload';
 import {
@@ -43,8 +45,8 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
 
   // Active time frame & calendar state
   const [timeframe, setTimeframe] = useState<AnalyticsTimeframe>('today');
-  const [customDate, setCustomDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
-  const [customEndDate, setCustomEndDate] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [customDate, setCustomDate] = useState<string>(() => formatLocalDateKey(new Date()));
+  const [customEndDate, setCustomEndDate] = useState<string>(() => formatLocalDateKey(new Date()));
   const [isRangeMode, setIsRangeMode] = useState<boolean>(false);
 
   // Filter Scope State
@@ -89,10 +91,10 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
     }
   }, [filterScope, uniqueClients, deliveryUnits, uniqueProjects, users, selectedClientId, selectedDeliveryUnitId, selectedProjectId, selectedUserId]);
 
-  // Compute active date range [startDate, endDate]
+  // Compute active date range [startDate, endDate] in local time with safe bounds
   const { dateRange, isLocked, lockLabel } = useMemo(() => {
     const now = new Date();
-    const todayStr = now.toISOString().slice(0, 10);
+    const todayStr = formatLocalDateKey(now);
 
     if (timeframe === 'today') {
       const isPast2359 = now.getHours() === 23 && now.getMinutes() >= 59;
@@ -104,16 +106,13 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
     }
 
     if (timeframe === 'week') {
-      // Find Monday of current week
-      const d = new Date(now);
-      const day = d.getDay();
-      const diffToMon = d.getDate() - day + (day === 0 ? -6 : 1);
-      const monday = new Date(d.setDate(diffToMon));
+      const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const day = monday.getDay();
+      monday.setDate(monday.getDate() - day + (day === 0 ? -6 : 1));
       const dates: string[] = [];
       for (let i = 0; i < 7; i++) {
-        const cur = new Date(monday);
-        cur.setDate(cur.getDate() + i);
-        dates.push(cur.toISOString().slice(0, 10));
+        const cur = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + i);
+        dates.push(formatLocalDateKey(cur));
       }
 
       const isSundayPast2359 = now.getDay() === 0 && now.getHours() === 23 && now.getMinutes() >= 59;
@@ -124,17 +123,27 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
       };
     }
 
-    // Custom calendar tool
-    const start = new Date(customDate);
-    const end = isRangeMode ? new Date(customEndDate) : new Date(customDate);
+    // Custom calendar tool (guard invalid dates and cap at 366 days)
+    const start = parseLocalDate(customDate);
+    const end = parseLocalDate(isRangeMode ? customEndDate : customDate);
+    if (!start || !end) {
+      return {
+        dateRange: [todayStr],
+        isLocked: false,
+        lockLabel: 'Select a valid date range',
+      };
+    }
+
     const dates: string[] = [];
-    const cur = new Date(start);
-    while (cur <= end) {
-      dates.push(cur.toISOString().slice(0, 10));
+    const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const MAX_DAYS = 366;
+    while (cur <= end && dates.length < MAX_DAYS) {
+      dates.push(formatLocalDateKey(cur));
       cur.setDate(cur.getDate() + 1);
     }
 
-    const isHistorical = end.toISOString().slice(0, 10) < todayStr || (end.toISOString().slice(0, 10) === todayStr && now.getHours() === 23 && now.getMinutes() >= 59);
+    const endKey = formatLocalDateKey(end);
+    const isHistorical = endKey < todayStr || (endKey === todayStr && now.getHours() === 23 && now.getMinutes() >= 59);
     return {
       dateRange: dates,
       isLocked: isHistorical,
@@ -231,7 +240,8 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
       let totalAssigned = 0;
 
       for (const dateStr of dateRange) {
-        const d = new Date(dateStr);
+        const d = parseLocalDate(dateStr);
+        if (!d) continue;
         // Only evaluate working days
         if (!isWorkingDay(d) && dateRange.length > 1) continue;
         const dailyAssigned = getUserDailyAssignedHours(u, tasks, d);
@@ -422,20 +432,43 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
       };
     }
 
-    // Default 'all' view:
-    // Key Accounts (Clients with projects)
-    // Key Delivery Units (Units with clients and projects)
-    const keyAccounts = computeClientsForTasks(tasks).map(c => {
-      const clientTasks = tasks.filter(t => (t.client?.trim() || 'Internal / Unassigned') === c.client);
-      const topProjects = computeProjectsForTasks(clientTasks);
-      return { ...c, topProjects };
-    });
+    // Default 'all' view: pre-group tasks once to avoid O(n^2) re-scans
+    const tasksByClient = new Map<string, Task[]>();
+    const userToDuId = new Map<string, string>();
+    for (const du of deliveryUnits) {
+      for (const uid of du.userIds) userToDuId.set(uid, du.id);
+    }
+    const tasksByDuId = new Map<string, Task[]>();
+    for (const t of tasks) {
+      const cName = t.client?.trim() || 'Internal / Unassigned';
+      const cList = tasksByClient.get(cName) || [];
+      cList.push(t);
+      tasksByClient.set(cName, cList);
+
+      const seenDus = new Set<string>();
+      for (const uid of getTaskAssigneeIds(t)) {
+        const duId = userToDuId.get(uid) || 'unit-general';
+        if (!seenDus.has(duId)) {
+          seenDus.add(duId);
+          const dList = tasksByDuId.get(duId) || [];
+          dList.push(t);
+          tasksByDuId.set(duId, dList);
+        }
+      }
+    }
+
+    const keyAccounts = computeClientsForTasks(tasks).map(c => ({
+      ...c,
+      topProjects: computeProjectsForTasks(tasksByClient.get(c.client) || []),
+    }));
 
     const keyUnits = computeDeliveryUnitsForTasks(tasks).map(u => {
-      const unitTasks = tasks.filter(t => getTaskAssigneeIds(t).some(id => u.du.userIds.includes(id)));
-      const topClients = computeClientsForTasks(unitTasks);
-      const topProjects = computeProjectsForTasks(unitTasks);
-      return { ...u, topClients, topProjects };
+      const unitTasks = tasksByDuId.get(u.du.id) || [];
+      return {
+        ...u,
+        topClients: computeClientsForTasks(unitTasks),
+        topProjects: computeProjectsForTasks(unitTasks),
+      };
     });
 
     return {
@@ -450,17 +483,30 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
 
   // SECTION 5: Pressure Metrics (Teams with highest average workload score across members)
   const pressureMetrics = useMemo(() => {
-    // Compute workload score for every user
+    const taskById = new Map<string, Task>(tasks.map(t => [t.id, t]));
+    const userById = new Map<string, User>(users.map(u => [u.id, u]));
+    const tasksByUserId = new Map<string, Task[]>();
+    for (const t of tasks) {
+      for (const uid of getTaskAssigneeIds(t)) {
+        const list = tasksByUserId.get(uid) || [];
+        list.push(t);
+        tasksByUserId.set(uid, list);
+      }
+    }
+
+    // Compute workload score for every user once
+    const workloadByUserId = new Map<string, ReturnType<typeof calculateUserWorkload>>();
     const userScores = new Map<string, { user: User; score: number; topProjects: Array<{ project: string; score: number }> }>();
 
     for (const u of scopedUsers) {
-      const uTasks = tasks.filter(t => isTaskAssignedToUser(t, u.id));
+      const uTasks = tasksByUserId.get(u.id) || [];
       const breakdown = calculateUserWorkload(uTasks);
+      workloadByUserId.set(u.id, breakdown);
 
       // Group breakdown items by project
       const projMap = new Map<string, number>();
       for (const item of breakdown.items) {
-        const t = tasks.find(tsk => tsk.id === item.taskId);
+        const t = taskById.get(item.taskId);
         const pName = t?.project?.trim() || 'General';
         projMap.set(pName, (projMap.get(pName) || 0) + item.calculatedScore);
       }
@@ -497,14 +543,32 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
 
     // Contextual rankings:
     if (filterScope === 'project') {
-      // Per project view: tasks contributing highest workload scores
+      // Per project view: tasks contributing highest workload scores (reusing per-user breakdowns)
+      const taskScoreByUserAndTask = new Map<string, number>();
+      const getBreakdownForUser = (uid: string) => {
+        let b = workloadByUserId.get(uid);
+        if (!b) {
+          b = calculateUserWorkload(tasksByUserId.get(uid) || []);
+          workloadByUserId.set(uid, b);
+        }
+        return b;
+      };
       const projectTasks = scopedTasks.map(t => {
         const firstUid = getTaskAssigneeIds(t)[0];
-        const u = firstUid ? users.find(usr => usr.id === firstUid) : undefined;
-        const uTasks = firstUid ? tasks.filter(tsk => isTaskAssignedToUser(tsk, firstUid)) : [];
-        const breakdown = calculateUserWorkload(uTasks);
-        const scoreItem = breakdown.items.find(i => i.taskId === t.id);
-        const score = scoreItem ? scoreItem.calculatedScore : 1.5;
+        const u = firstUid ? userById.get(firstUid) : undefined;
+        let score = 1.5;
+        if (firstUid) {
+          const cacheKey = `${firstUid}:${t.id}`;
+          if (taskScoreByUserAndTask.has(cacheKey)) {
+            score = taskScoreByUserAndTask.get(cacheKey)!;
+          } else {
+            const breakdown = getBreakdownForUser(firstUid);
+            for (const item of breakdown.items) {
+              taskScoreByUserAndTask.set(`${firstUid}:${item.taskId}`, item.calculatedScore);
+            }
+            score = taskScoreByUserAndTask.get(cacheKey) ?? 1.5;
+          }
+        }
         return {
           task: t,
           user: u,
@@ -522,16 +586,12 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
     if (filterScope === 'user') {
       // Per user view: tasks contributing highest workload scores
       const user = scopedUsers[0];
-      const uTasks = user ? tasks.filter(t => isTaskAssignedToUser(t, user.id)) : [];
-      const breakdown = calculateUserWorkload(uTasks);
-      const userRankedTasks = breakdown.items.map(item => {
-        const t = tasks.find(tsk => tsk.id === item.taskId);
-        return {
-          item,
-          task: t,
-          calculatedScore: item.calculatedScore,
-        };
-      }).sort((a, b) => b.calculatedScore - a.calculatedScore);
+      const breakdown = user ? (workloadByUserId.get(user.id) || calculateUserWorkload(tasksByUserId.get(user.id) || [])) : calculateUserWorkload([]);
+      const userRankedTasks = breakdown.items.map(item => ({
+        item,
+        task: taskById.get(item.taskId),
+        calculatedScore: item.calculatedScore,
+      })).sort((a, b) => b.calculatedScore - a.calculatedScore);
 
       return {
         mode: 'user_tasks',

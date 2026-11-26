@@ -1,4 +1,5 @@
 import { DialogPanel } from './ui/DialogPanel';
+import { apiFetch } from '../lib/api';
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -235,13 +236,11 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
 
     setIsUploadingKey(true);
     try {
-      const res = await fetch('/api/firestore/credentials', {
+      const res = await apiFetch('/api/firestore/credentials', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-zenflow-request': '1',
         },
-        credentials: 'same-origin',
         body: JSON.stringify({ serviceAccountKey: key }),
       });
 
@@ -275,7 +274,7 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
     setShowAuditFeed(prev => !prev);
   };
 
-  const isConnected = firestoreStatus?.mode === 'admin' || firestoreStatus?.serviceAccountFound;
+  const isConnected = Boolean(firestoreStatus?.connected);
   const displayProject = firestoreStatus?.projectId || 'Not Configured';
 
   const modalContent = (
@@ -409,7 +408,7 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                       <div className="flex items-center justify-between">
                         <span className="text-[var(--text-secondary)]">Persistence Mode</span>
                         <span className="font-medium text-neutral-800 dark:text-white/90">
-                          {firestoreStatus?.mode === 'admin'
+                          {isConnected
                             ? 'Cloud Firestore Admin'
                             : 'Local Storage'}
                         </span>

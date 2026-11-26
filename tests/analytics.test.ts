@@ -10,6 +10,8 @@ import {
   getDeliveryUnits,
   calculateUserWorkload,
   getUserDailyAssignedHours,
+  parseLocalDate,
+  formatLocalDateKey,
 } from '../src/utils/workload';
 import { Task, User } from '../src/types';
 
@@ -186,5 +188,14 @@ test('multi-assignee shared task divides workload score, daily hours, and effici
 
   const teamEff = calculateTasksEfficiency([sharedTask, sharedTask]);
   assert.equal(teamEff.totalEstimatedHours, 8); // deduplicated by task ID
+});
+
+test('parseLocalDate and formatLocalDateKey avoid UTC day-shift and reject invalid dates', () => {
+  const mon = parseLocalDate('2026-11-23');
+  assert.ok(mon);
+  assert.equal(mon.getDay(), 1); // Monday in local time regardless of host TZ
+  assert.equal(formatLocalDateKey(mon), '2026-11-23');
+  assert.equal(parseLocalDate(''), null);
+  assert.equal(parseLocalDate('2026-02-31'), null);
 });
 

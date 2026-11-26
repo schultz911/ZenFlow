@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth, useWorkspace } from '../context/DashboardContext';
 import { Task, CognitiveLoad, TaskStatus, TaskDisciplineMetadata } from '../types';
-import { getTaskBillableMs, formatBillableDetailed, getLastDayOfMonth, getUserTag, getTaskAssigneeIds } from '../utils/workload';
+import { getTaskBillableMs, formatBillableDetailed, formatLeadDuration, getLastDayOfMonth, getUserTag, getTaskAssigneeIds } from '../utils/workload';
 import { isValidHttpUrl, foldLegacyDisciplineMetadata } from '../utils/taskMetadata';
 import {
   X,
@@ -42,17 +42,6 @@ function formatActivityTime(isoString: string): string {
   } catch {
     return isoString;
   }
-}
-
-function formatDuration(ms: number): string {
-  if (ms <= 0) return '< 1m';
-  const hours = Math.floor(ms / (1000 * 60 * 60));
-  const days = Math.floor(hours / 24);
-  const remHours = hours % 24;
-  if (days > 0) return `${days}d ${remHours}h`;
-  if (hours > 0) return `${hours}h`;
-  const minutes = Math.floor(ms / (1000 * 60));
-  return `${Math.max(1, minutes)}m`;
 }
 
 interface TaskModalProps {
@@ -224,14 +213,14 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       const completedTime = taskToEdit.completedAt ? new Date(taskToEdit.completedAt).getTime() : null;
 
       const totalLeadTimeMs = (completedTime || now) - createdTime;
-      const totalLeadTimeStr = formatDuration(totalLeadTimeMs);
+      const totalLeadTimeStr = formatLeadDuration(totalLeadTimeMs, '< 1m');
 
       let currentStatusDurationStr = '< 1m';
       if (taskToEdit.activityLog && Array.isArray(taskToEdit.activityLog) && taskToEdit.activityLog.length > 0) {
         const lastTransition = [...taskToEdit.activityLog].reverse().find(a => a && a.action === 'status_change');
         if (lastTransition) {
           const transTime = new Date(lastTransition.timestamp).getTime();
-          currentStatusDurationStr = formatDuration(now - transTime);
+          currentStatusDurationStr = formatLeadDuration(now - transTime, '< 1m');
         } else {
           currentStatusDurationStr = totalLeadTimeStr;
         }

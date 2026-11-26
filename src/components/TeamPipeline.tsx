@@ -31,7 +31,6 @@ interface TeamPipelineProps {
   onOpenAssignmentModal: (task: Task) => void;
   onEditTask: (task: Task) => void;
   onDeleteTask: (task: Task) => void;
-  onMoveTask: (taskId: string, targetUserId: string, newStatus: any) => void;
   onDragTaskStart?: (task: Task) => void;
   onDragTaskEnd?: () => void;
 }
@@ -49,7 +48,6 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
   onOpenAssignmentModal,
   onEditTask,
   onDeleteTask,
-  onMoveTask: _onMoveTask,
   onDragTaskStart,
   onDragTaskEnd,
 }) => {

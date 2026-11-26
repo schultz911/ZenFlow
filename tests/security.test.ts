@@ -290,33 +290,74 @@ test('clickup route IDs, endpoint URLs, PAT isolation, and webhook lookup enforc
   );
 }));
 
-test('analytics snapshots enforce manager auth, safe IDs, and locked immutability', async () => withServer(async server => {
-  assert.equal(
-    (await server.request('/analytics/snapshots', 'alice', 'POST', { id: 'snap-1', timeframe: 'today' })).status,
-    403
-  );
-  assert.equal(
-    (await server.request('/analytics/snapshots', 'root', 'POST', { id: '../bad', timeframe: 'today' })).status,
-    400
-  );
-  const lockRes = await server.request('/analytics/snapshots', 'root', 'POST', {
-    id: 'snap-lock-1',
-    timeframe: 'today',
-    startDate: '2026-10-28',
-    endDate: '2026-10-28',
-    locked: true,
-    metrics: {},
+test('clickup webhook time sync prevents double-counting and status endpoints report honest state', async () => withServer(async server => {
+  const postedUrls: string[] = [];
+  server.setClickupTransport(async (url, init) => {
+    if (init?.method === 'POST' && (url.includes('/time_entries') || url.includes('/time'))) {
+      postedUrls.push(url);
+    }
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'cu_time_1', status: { status: 'to do' }, description: '' }),
+      text: async () => '',
+    };
   });
-  assert.ok(lockRes.status === 200 || lockRes.status === 201);
-  const overwriteRes = await server.request('/analytics/snapshots', 'root', 'POST', {
-    id: 'snap-lock-1',
-    timeframe: 'today',
-    startDate: '2026-10-28',
-    endDate: '2026-10-28',
-    locked: true,
-    metrics: {},
+
+  const taskA = server.store.tasks.find((t: any) => t.id === 'a');
+  taskA.clickupTaskId = 'cu_time_1';
+  server.store.users.find((u: any) => u.id === 'alice').clickupApiKey = 'pk_alice_token';
+
+  // Inbound webhook records 2 hours tracked in ClickUp
+  await server.clickup.processWebhookEvent({
+    taskId: 'cu_time_1',
+    eventType: 'taskTimeTrackedUpdated',
+    historyItems: [{ field: 'time_spent', after: 7200000 }],
+    rawBody: {},
   });
-  assert.equal(overwriteRes.status, 409);
+  assert.equal(taskA.inProgressDurationMs, 7200000);
+  assert.equal(taskA.lastSyncedClickupTimeMs, 7200000);
+
+  // Subsequent ZenFlow edit must NOT re-post those 2 hours back to ClickUp
+  const putRes = await server.request('/tasks/a', 'alice', 'PUT', { title: 'Renamed Task A' });
+  assert.equal(putRes.status, 200);
+  await new Promise(resolve => setTimeout(resolve, 25));
+  assert.equal(postedUrls.length, 0);
+
+  // Webhook status includes listening: true, and disconnected Firestore reports mode: 'local'
+  const whStatus = await (await server.request('/clickup/webhook/status', 'root')).json();
+  assert.equal(whStatus.listening, true);
+  const fsStatus = await (await server.request('/firestore/status', 'root')).json();
+  assert.equal(fsStatus.connected, false);
+  assert.equal(fsStatus.mode, 'local');
+}));
+
+test('remap-tasks preserves co-assignees on shared tasks and Firestore write failure returns 503 with rollback', async () => withServer(async server => {
+  // Share task 'a' between alice and bob
+  const taskA = server.store.tasks.find((t: any) => t.id === 'a');
+  taskA.assigneeIds = ['alice', 'bob'];
+  taskA.userId = 'alice';
+
+  const remapRes = await server.request('/users/remap-tasks', 'root', 'POST', {
+    fromUserId: 'alice',
+    toUserId: 'cd',
+  });
+  assert.equal(remapRes.status, 200);
+  assert.deepEqual(taskA.assigneeIds, ['cd', 'bob']);
+  assert.equal(taskA.userId, 'cd');
+
+  // Simulate cloud persistence write failure -> 503 + in-memory state preserved
+  const origSaveTask = server.repo.saveTask;
+  (server.repo as any).saveTask = async () => {
+    throw new Error('Simulated Firestore outage');
+  };
+  try {
+    const failedPut = await server.request('/tasks/a', 'root', 'PUT', { title: 'Should Not Persist' });
+    assert.equal(failedPut.status, 503);
+    assert.equal(server.store.tasks.find((t: any) => t.id === 'a').title, 'Task a');
+  } finally {
+    (server.repo as any).saveTask = origSaveTask;
+  }
 }));
 
 test('unsafe javascript URLs in contentDocLink are rejected on update and reorder', async () => withServer(async server => {

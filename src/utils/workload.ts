@@ -773,8 +773,8 @@ export interface WeeklyVelocityMetrics {
   hasData: boolean;
 }
 
-export function formatLeadDuration(ms: number): string {
-  if (ms <= 0) return '< 1h';
+export function formatLeadDuration(ms: number, zeroLabel: string = '< 1h'): string {
+  if (ms <= 0) return zeroLabel;
   const hours = Math.floor(ms / (1000 * 60 * 60));
   const days = Math.floor(hours / 24);
   const remHours = hours % 24;
@@ -917,16 +917,45 @@ export function calculateWeeklyVelocity(userTasks: Task[]): WeeklyVelocityMetric
 // ============================================================================
 
 /**
+ * Formats a Date as YYYY-MM-DD in the user's local timezone (avoids UTC day-shift bugs).
+ */
+export function formatLocalDateKey(d: Date): string {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/**
+ * Parses a YYYY-MM-DD string or ISO timestamp into local midnight, returning null if invalid.
+ */
+export function parseLocalDate(dateStr?: string): Date | null {
+  if (!dateStr) return null;
+  const trimmed = dateStr.trim();
+  const ymd = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (ymd) {
+    const year = Number(ymd[1]);
+    const month = Number(ymd[2]);
+    const day = Number(ymd[3]);
+    const parsed = new Date(year, month - 1, day);
+    if (parsed.getFullYear() === year && parsed.getMonth() === month - 1 && parsed.getDate() === day) {
+      return parsed;
+    }
+    return null;
+  }
+  const parsed = new Date(trimmed);
+  if (isNaN(parsed.getTime())) return null;
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+}
+
+/**
  * Calculates working days (Monday-Friday) between two dates inclusive.
  * If start date is after end date or working days is 0, defaults to 1.
  */
 export function getWorkingDaysCount(startDateStr: string, endDateStr: string): number {
-  const start = new Date(startDateStr);
-  const end = new Date(endDateStr);
-  if (isNaN(start.getTime()) || isNaN(end.getTime())) return 1;
-
-  const cur = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  const finish = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+  const cur = parseLocalDate(startDateStr);
+  const finish = parseLocalDate(endDateStr);
+  if (!cur || !finish) return 1;
   if (cur > finish) return 1;
 
   let count = 0;
@@ -951,17 +980,16 @@ export function isWorkingDay(d: Date): boolean {
  */
 export function getTaskDailyEstimatedHours(task: Task, onDate?: Date, perAssignee: boolean = true): number {
   if (!task.estimatedHours || task.estimatedHours <= 0) return 0;
-  const startRaw = task.startDate || task.createdAt;
-  const start = startRaw ? new Date(startRaw) : new Date();
-  const end = task.dueDate ? new Date(task.dueDate) : start;
-  const workingDays = getWorkingDaysCount(start.toISOString(), end.toISOString());
+  const start = parseLocalDate(task.startDate || task.createdAt) || parseLocalDate(formatLocalDateKey(new Date()))!;
+  const end = parseLocalDate(task.dueDate) || start;
+  const workingDays = getWorkingDaysCount(formatLocalDateKey(start), formatLocalDateKey(end));
   const divisor = perAssignee ? getTaskAssigneeCount(task) : 1;
   const dailyHours = task.estimatedHours / divisor / workingDays;
 
   if (!onDate) return Math.round(dailyHours * 10) / 10;
 
-  const dStart = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
-  const dEnd = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
+  const dStart = start.getTime();
+  const dEnd = end.getTime();
   const target = new Date(onDate.getFullYear(), onDate.getMonth(), onDate.getDate()).getTime();
 
   if (isWorkingDay(onDate) && target >= dStart && target <= dEnd) {
@@ -975,8 +1003,8 @@ export function getTaskDailyEstimatedHours(task: Task, onDate?: Date, perAssigne
  */
 export function getUserDailyAssignedHours(user: User, tasks: Task[], onDate: Date = new Date()): number {
   let totalDailyHours = 0;
-  const targetDateStr = onDate.toISOString().slice(0, 10);
-  const isTargetToday = targetDateStr === new Date().toISOString().slice(0, 10);
+  const targetDateStr = formatLocalDateKey(onDate);
+  const isTargetToday = targetDateStr === formatLocalDateKey(new Date());
 
   for (const t of tasks) {
     if (!t || !isTaskAssignedToUser(t, user.id)) continue;
@@ -985,10 +1013,9 @@ export function getUserDailyAssignedHours(user: User, tasks: Task[], onDate: Dat
     if (isTargetToday) {
       // For today: include active assigned tasks (including assigned pipeline deliverables)
       if (t.status === 'pipeline' || t.status === 'todo' || t.status === 'in_progress' || t.status === 'in_review') {
-        const startRaw = t.startDate || t.createdAt;
-        const start = startRaw ? new Date(startRaw) : new Date();
-        const end = t.dueDate ? new Date(t.dueDate) : start;
-        const workingDays = getWorkingDaysCount(start.toISOString(), end.toISOString());
+        const start = parseLocalDate(t.startDate || t.createdAt) || parseLocalDate(targetDateStr)!;
+        const end = parseLocalDate(t.dueDate) || start;
+        const workingDays = getWorkingDaysCount(formatLocalDateKey(start), formatLocalDateKey(end));
         totalDailyHours += (t.estimatedHours / getTaskAssigneeCount(t) / workingDays);
       }
     } else {

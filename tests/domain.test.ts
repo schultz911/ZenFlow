@@ -46,6 +46,17 @@ test('permissions: CD and Cluster Lead scopes match server policy and block cros
   const users = [cd1, cd2, alice, charlie];
   assert.equal(canEditTask(cd1, { userId: 'alice' }, users), true);
   assert.equal(canEditTask(cd1, { userId: 'charlie' }, users), false);
+
+  // Team Lead scoped to CD-1 cannot edit same-discipline member in CD-2's cluster
+  const tl1: MemberLike = {
+    id: 'tl-1',
+    email: 'tl1@zensciences.com',
+    role: 'content',
+    isTeamLead: true,
+    creativeDirectorId: 'cd-1',
+  };
+  assert.equal(canEdit(tl1, alice), true);
+  assert.equal(canEdit(tl1, charlie), false);
 });
 
 test('taskTransitions: reorder accumulates in-progress duration, strips pipeline deadlines, and propagates contentDocLink', () => {

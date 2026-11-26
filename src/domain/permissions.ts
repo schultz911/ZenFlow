@@ -112,11 +112,17 @@ export const canEdit = (caller: MemberLike | undefined | null, owner: MemberLike
     return true;
   }
   if (isTeamLead(caller) || caller.isContentLead || caller.isArtDirector) {
-    if (
-      (caller.creativeDirectorId && owner.creativeDirectorId === caller.creativeDirectorId) ||
-      (caller.clusterLeadId && owner.clusterLeadId === caller.clusterLeadId) ||
-      (caller.role && owner.role === caller.role)
-    ) {
+    const hasClusterScope = Boolean(caller.creativeDirectorId || caller.clusterLeadId);
+    if (hasClusterScope) {
+      if (
+        (caller.creativeDirectorId && owner.creativeDirectorId === caller.creativeDirectorId) ||
+        (caller.clusterLeadId && owner.clusterLeadId === caller.clusterLeadId)
+      ) {
+        return true;
+      }
+      return false;
+    }
+    if (caller.role && owner.role === caller.role) {
       return true;
     }
   }

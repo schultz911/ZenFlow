@@ -8,6 +8,8 @@ coverage/
 !.env.example
 serviceAccountKey*.json
 data/*.tmp.*
+data/store.json
+data/compliance-audit.jsonl
 
 # Private webhook signing registrations and test-only emulator artifacts
 data/.clickup-webhooks.json*

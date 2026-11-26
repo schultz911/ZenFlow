@@ -23,16 +23,10 @@ import { TaskAssignmentModal } from './components/TaskAssignmentModal';
 import { User, Task, TaskStatus } from './types';
 import { getTaskAssigneeIds } from './utils/workload';
 import { UserPlus, FileText, Palette, Search, Trash2, AlertTriangle, X, Loader2 } from 'lucide-react';
-import { testConnection } from './lib/firebase';
 
 const EMPTY_TASKS: Task[] = [];
 
 function DashboardContent() {
-  useEffect(() => {
-    // Validate Firestore connection on boot (as mandated by firebase-skill)
-    testConnection();
-  }, []);
-
   const {
     currentUser,
     isAuthChecking,
@@ -146,8 +140,7 @@ function DashboardContent() {
       const matchesDesc = task.description ? task.description.toLowerCase().includes(trimmed) : false;
       const matchesClient = task.client ? task.client.toLowerCase().includes(trimmed) : false;
       const matchesProject = task.project ? task.project.toLowerCase().includes(trimmed) : false;
-      const userName = userNameMap.get(task.userId);
-      const matchesUser = userName ? userName.includes(trimmed) : false;
+      const matchesUser = getTaskAssigneeIds(task).some(uid => userNameMap.get(uid)?.includes(trimmed));
 
       if (matchesTitle || matchesDesc || matchesClient || matchesProject || matchesUser) {
         map.set(task.id, task);
@@ -665,7 +658,6 @@ function DashboardContent() {
             onOpenAssignmentModal={t => setSelectedTaskForAssignment(t)}
             onEditTask={handleEditTask}
             onDeleteTask={handleRequestDeleteTask}
-            onMoveTask={moveTask}
             onDragTaskStart={handleDragTaskStart}
             onDragTaskEnd={handleDragTaskEnd}
           />

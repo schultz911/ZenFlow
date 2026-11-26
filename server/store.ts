@@ -57,9 +57,8 @@ export interface PersistenceAdapter {
   purgeAllCollections(): Promise<void>;
   loadRecentAuditLogs(limit: number): Promise<AuditLogEntry[]>;
   appendAuditEntry(entry: AuditLogEntry): Promise<void>;
+  getAuditLogFilePath(): string | null;
   readAllAuditLogs(): AuditLogEntry[];
-  loadAnalyticsSnapshots(): any[];
-  saveAnalyticsSnapshot(snapshot: any): Promise<void>;
   getFirestoreStatus(): { connected: boolean; lastError: string | null; hasLocalKey: boolean };
   saveCredentials(serviceAccountJson: Record<string, any>): Promise<{ ok: boolean; error?: string }>;
   getWebhookDb(): any | null;
@@ -326,7 +325,6 @@ export function createMemoryPersistenceAdapter(initial?: Partial<AppStore>): Per
     parentTasks: [...(initial?.parentTasks || [])],
   };
   let auditLogs: AuditLogEntry[] = [];
-  let snapshots: any[] = [];
 
   return {
     async init() {},
@@ -369,16 +367,11 @@ export function createMemoryPersistenceAdapter(initial?: Partial<AppStore>): Per
     async appendAuditEntry(entry) {
       auditLogs.unshift(entry);
     },
+    getAuditLogFilePath() {
+      return null;
+    },
     readAllAuditLogs() {
       return [...auditLogs];
-    },
-    loadAnalyticsSnapshots() {
-      return [...snapshots];
-    },
-    async saveAnalyticsSnapshot(snapshot) {
-      const idx = snapshots.findIndex(s => s.id === snapshot.id);
-      if (idx >= 0) snapshots[idx] = snapshot;
-      else snapshots.push(snapshot);
     },
     getFirestoreStatus() {
       return { connected: false, lastError: null, hasLocalKey: false };
@@ -395,7 +388,6 @@ export function createMemoryPersistenceAdapter(initial?: Partial<AppStore>): Per
 export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceAdapter {
   const dataFile = path.join(dataDir, 'store.json');
   const auditLogFile = path.join(dataDir, 'compliance-audit.jsonl');
-  const analyticsSnapshotFile = path.join(dataDir, 'analytics_snapshots.json');
 
   let adminDb: any = null;
   let firestoreInitialized = false;
@@ -493,70 +485,70 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
   };
 
   const upsertDoc = async (collection: string, id: string, data: Record<string, any>) => {
+    if (!adminDb) await initFirestore();
+    if (!adminDb) return;
     try {
-      if (!adminDb) await initFirestore();
-      if (adminDb) {
-        await adminDb.collection(collection).doc(id).set(cleanDocData(data));
-        firestoreLastError = null;
-      }
+      await adminDb.collection(collection).doc(id).set(cleanDocData(data));
+      firestoreLastError = null;
     } catch (err: any) {
       firestoreLastError = err.message || String(err);
       console.error(`[Firestore Save ${collection} Error]:`, firestoreLastError);
+      throw err;
     }
   };
 
   const deleteDoc = async (collection: string, id: string) => {
+    if (!adminDb) await initFirestore();
+    if (!adminDb) return;
     try {
-      if (!adminDb) await initFirestore();
-      if (adminDb) {
-        await adminDb.collection(collection).doc(id).delete();
-        firestoreLastError = null;
-      }
+      await adminDb.collection(collection).doc(id).delete();
+      firestoreLastError = null;
     } catch (err: any) {
       firestoreLastError = err.message || String(err);
       console.error(`[Firestore Delete ${collection} Error]:`, firestoreLastError);
+      throw err;
     }
   };
 
   const batchUpsertDocs = async (collection: string, items: Array<{ id: string; data: Record<string, any> }>) => {
     if (items.length === 0) return;
+    if (!adminDb) await initFirestore();
+    if (!adminDb) return;
     try {
-      if (!adminDb) await initFirestore();
-      if (adminDb) {
-        for (let i = 0; i < items.length; i += FIRESTORE_CHUNK_SIZE) {
-          const batch = adminDb.batch();
-          const chunk = items.slice(i, i + FIRESTORE_CHUNK_SIZE);
-          for (const item of chunk) {
-            batch.set(adminDb.collection(collection).doc(item.id), cleanDocData(item.data));
-          }
-          await batch.commit();
+      for (let i = 0; i < items.length; i += FIRESTORE_CHUNK_SIZE) {
+        const batch = adminDb.batch();
+        const chunk = items.slice(i, i + FIRESTORE_CHUNK_SIZE);
+        for (const item of chunk) {
+          batch.set(adminDb.collection(collection).doc(item.id), cleanDocData(item.data));
         }
-        firestoreLastError = null;
+        await batch.commit();
       }
+      firestoreLastError = null;
     } catch (err: any) {
       firestoreLastError = err.message || String(err);
       console.error(`[Firestore Batch Save ${collection} Error]:`, firestoreLastError);
+      throw err;
     }
   };
 
   const batchDeleteDocs = async (collection: string, ids: string[]) => {
     if (ids.length === 0) return;
+    if (!adminDb) await initFirestore();
+    if (!adminDb) return;
     try {
-      if (!adminDb) await initFirestore();
-      if (adminDb) {
-        for (let i = 0; i < ids.length; i += FIRESTORE_CHUNK_SIZE) {
-          const batch = adminDb.batch();
-          const chunk = ids.slice(i, i + FIRESTORE_CHUNK_SIZE);
-          for (const id of chunk) {
-            batch.delete(adminDb.collection(collection).doc(id));
-          }
-          await batch.commit();
+      for (let i = 0; i < ids.length; i += FIRESTORE_CHUNK_SIZE) {
+        const batch = adminDb.batch();
+        const chunk = ids.slice(i, i + FIRESTORE_CHUNK_SIZE);
+        for (const id of chunk) {
+          batch.delete(adminDb.collection(collection).doc(id));
         }
-        firestoreLastError = null;
+        await batch.commit();
       }
+      firestoreLastError = null;
     } catch (err: any) {
       firestoreLastError = err.message || String(err);
       console.error(`[Firestore Batch Delete ${collection} Error]:`, firestoreLastError);
+      throw err;
     }
   };
 
@@ -611,7 +603,9 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
         if (!fs.existsSync(dataDir)) {
           fs.mkdirSync(dataDir, { recursive: true });
         }
-        fs.writeFileSync(dataFile, JSON.stringify(dataToWrite, null, 2), { encoding: 'utf-8', mode: 0o600 });
+        const tempPath = `${dataFile}.tmp.${process.pid}.${Date.now()}`;
+        fs.writeFileSync(tempPath, JSON.stringify(dataToWrite, null, 2), { encoding: 'utf-8', mode: 0o600 });
+        fs.renameSync(tempPath, dataFile);
       } catch (err) {
         console.error('[Process] Failed synchronous emergency persistence:', err);
       }
@@ -697,10 +691,13 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
         console.error('[Audit Log Disk Error]:', e);
       }
       if (adminDb) {
-        adminDb.collection('audit_logs').doc(fullEntry.id).set(cleanDocData(fullEntry)).catch((e: any) =>
+        adminDb.collection('compliance_audit_logs').doc(fullEntry.id).set(cleanDocData(fullEntry)).catch((e: any) =>
           console.error('[Audit Log Firestore Error]:', e)
         );
       }
+    },
+    getAuditLogFilePath() {
+      return auditLogFile;
     },
     readAllAuditLogs() {
       if (!fs.existsSync(auditLogFile)) return [];
@@ -721,33 +718,6 @@ export function createCloudDiskPersistenceAdapter(dataDir: string): PersistenceA
           .reverse();
       } catch {
         return [];
-      }
-    },
-    loadAnalyticsSnapshots() {
-      try {
-        if (fs.existsSync(analyticsSnapshotFile)) {
-          const parsed = JSON.parse(fs.readFileSync(analyticsSnapshotFile, 'utf-8'));
-          if (Array.isArray(parsed)) return parsed;
-        }
-      } catch (err) {
-        console.error('Error loading analytics snapshots:', err);
-      }
-      return [];
-    },
-    async saveAnalyticsSnapshot(snapshot) {
-      try {
-        const snapshots = this.loadAnalyticsSnapshots();
-        const existingIndex = snapshots.findIndex((s: any) => s.id === snapshot.id);
-        if (existingIndex >= 0) snapshots[existingIndex] = snapshot;
-        else snapshots.push(snapshot);
-        await fs.promises.mkdir(dataDir, { recursive: true });
-        await fs.promises.writeFile(analyticsSnapshotFile, JSON.stringify(snapshots, null, 2), { encoding: 'utf-8', mode: 0o600 });
-        if (!adminDb) await initFirestore();
-        if (adminDb) {
-          await adminDb.collection('analytics_snapshots').doc(snapshot.id).set(cleanDocData(snapshot), { merge: true });
-        }
-      } catch (err) {
-        console.error('Error saving analytics snapshot:', err);
       }
     },
     getFirestoreStatus() {
@@ -905,9 +875,8 @@ export function createWorkspaceRepository(adapter: PersistenceAdapter) {
       void adapter.appendAuditEntry(fullEntry);
     },
     getRecentAuditLogs: () => recentAuditLogs,
+    getAuditLogFilePath: () => adapter.getAuditLogFilePath(),
     readAllAuditLogs: () => adapter.readAllAuditLogs(),
-    loadAnalyticsSnapshots: () => adapter.loadAnalyticsSnapshots(),
-    saveAnalyticsSnapshot: (snapshot: any) => adapter.saveAnalyticsSnapshot(snapshot),
     getFirestoreStatus: () => adapter.getFirestoreStatus(),
     saveCredentials: (json: Record<string, any>) => adapter.saveCredentials(json),
     getWebhookDb: () => adapter.getWebhookDb(),

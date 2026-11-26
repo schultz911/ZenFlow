@@ -153,7 +153,6 @@ export function createApiSecurity(options: {
       req.body = body;
 
       if (routePath.startsWith('/audit/') && !manager) return denied();
-      if (routePath === '/analytics/snapshots' && req.method === 'POST' && !manager) return denied();
       if (routePath.startsWith('/firestore/') && req.method !== 'GET' && !superadmin) return denied();
       if (routePath === '/clickup/webhook/register' && !superadmin) return denied();
       if (routePath.startsWith('/clickup/webhook/') && req.method === 'DELETE' && !superadmin) return denied();
@@ -161,7 +160,7 @@ export function createApiSecurity(options: {
         return denied();
       }
       if (routePath === '/clickup/sync-user-tasks' && !edit(body.userId)) return denied();
-      if (routePath === '/auth/login' || routePath === '/auth/verify-email') body.email = caller.email;
+      if (routePath === '/auth/verify-email') body.email = caller.email;
 
       if (routePath === '/users/remap-tasks' && !superadmin) return denied();
       if (routePath === '/users' && req.method === 'POST') {

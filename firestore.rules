@@ -1,89 +1,26 @@
-// Prototype policy: all app data is served by the authenticated ZenFlow backend.
-// users/{id}: User profile document.
-// tasks/{id}: Task records, timer fields and 15-entry activity history.
-// compliance_audit_logs/{id}: immutable application audit records.
-// Existing typed validators document the schema. Admin SDK uses IAM and bypasses rules.
+// All app data is served by the authenticated ZenFlow backend via Admin SDK (IAM bypasses rules).
+// Direct client access is denied unconditionally across every collection.
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 128;
-    }
-
-    function incoming() {
-      return request.resource.data;
-    }
-
-    function isValidUser(data) {
-      return data.id is string && isValidId(data.id) &&
-             data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
-             data.email is string && data.email.size() > 0 && data.email.size() <= 150 &&
-             (!('role' in data) || data.role in ['content', 'design', 'account_manager', 'administrator']) &&
-             data.createdAt is string && data.createdAt.size() <= 40 &&
-             (!('avatarColor' in data) || (data.avatarColor is string && data.avatarColor.size() <= 100)) &&
-             (!('isAdministrator' in data) || (data.isAdministrator is bool)) &&
-             (!('isBusinessLead' in data) || (data.isBusinessLead is bool)) &&
-             (!('isCreativeDirector' in data) || (data.isCreativeDirector is bool)) &&
-             (!('isClusterLead' in data) || (data.isClusterLead is bool)) &&
-             (!('isTeamLead' in data) || (data.isTeamLead is bool)) &&
-             (!('isAccountManager' in data) || (data.isAccountManager is bool)) &&
-             (!('isContentLead' in data) || (data.isContentLead is bool)) &&
-             (!('isArtDirector' in data) || (data.isArtDirector is bool)) &&
-             (!('isContentSpecialist' in data) || (data.isContentSpecialist is bool)) &&
-             (!('isBrandDesigner' in data) || (data.isBrandDesigner is bool)) &&
-             (!('designation' in data) || (data.designation is string && data.designation.size() <= 100)) &&
-             (!('creativeDirectorId' in data) || (data.creativeDirectorId is string && data.creativeDirectorId.size() <= 128)) &&
-             (!('clusterLeadId' in data) || (data.clusterLeadId is string && data.clusterLeadId.size() <= 128));
-    }
-
-    function isValidTask(data) {
-      return data.id is string && isValidId(data.id) &&
-             data.userId is string && isValidId(data.userId) &&
-             data.title is string && data.title.size() > 0 && data.title.size() <= 300 &&
-             data.cognitiveLoad in ['low', 'medium', 'high'] &&
-             data.status in ['pipeline', 'retainer', 'todo', 'in_progress', 'in_review', 'done', 'archived'] &&
-             data.order is number &&
-             data.createdAt is string && data.createdAt.size() <= 40 &&
-             data.updatedAt is string && data.updatedAt.size() <= 40 &&
-             (!('description' in data) || (data.description is string && data.description.size() <= 3000)) &&
-             (!('dueDate' in data) || (data.dueDate is string && data.dueDate.size() <= 30)) &&
-             (!('completedAt' in data) || (data.completedAt is string && data.completedAt.size() <= 40)) &&
-             (!('inProgressStartedAt' in data) || (data.inProgressStartedAt is string && data.inProgressStartedAt.size() <= 40)) &&
-             (!('inProgressDurationMs' in data) || (data.inProgressDurationMs is number)) &&
-             (!('activityLog' in data) || (data.activityLog is list)) &&
-             (!('parentTaskId' in data) || (data.parentTaskId is string && data.parentTaskId.size() <= 100)) &&
-             (!('parentTaskTitle' in data) || (data.parentTaskTitle is string && data.parentTaskTitle.size() <= 300)) &&
-             (!('isSubtask' in data) || (data.isSubtask is bool));
-    }
-
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Users collection
     match /users/{userId} {
-      allow get: if false;
-      allow list: if false;
-      allow create: if false && isValidId(userId) && isValidUser(incoming()) && incoming().id == userId;
-      allow update: if false && isValidId(userId) && isValidUser(incoming());
-      allow delete: if false;
+      allow read, write: if false;
     }
 
-    // Tasks collection
     match /tasks/{taskId} {
-      allow get: if false;
-      allow list: if false;
-      allow create: if false && isValidId(taskId) && isValidTask(incoming()) && incoming().id == taskId;
-      allow update: if false && isValidId(taskId) && isValidTask(incoming());
-      allow delete: if false;
+      allow read, write: if false;
     }
 
-    // Compliance Audit Logs collection (SOC2 audit trail)
+    match /parent_tasks/{parentId} {
+      allow read, write: if false;
+    }
+
     match /compliance_audit_logs/{logId} {
-      allow get, list: if false;
-      allow create, update, delete: if false;
+      allow read, write: if false;
     }
   }
 }
-

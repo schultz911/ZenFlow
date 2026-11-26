@@ -6,6 +6,7 @@
   },
   "deploy": {
     "startCommand": "node dist/server.cjs",
+    "numReplicas": 1,
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 100,
     "restartPolicyType": "ON_FAILURE",
