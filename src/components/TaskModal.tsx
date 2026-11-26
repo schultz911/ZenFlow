@@ -112,12 +112,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   // Resolved discipline for this task
   const taskDiscipline = useMemo(() => {
     if (taskToEdit?.team) return taskToEdit.team;
-    if (taskToEdit?.userId) {
-      const owner = users.find(u => u.id === taskToEdit.userId);
-      if (owner?.role) return owner.role;
-    }
-    return 'content';
-  }, [taskToEdit, users]);
+    const ownerId = taskToEdit ? taskToEdit.userId : defaultUserId;
+    return users.find(u => u.id === ownerId)?.role ?? 'content';
+  }, [taskToEdit, defaultUserId, users]);
 
   // Eligible assignees across all teams restricted to matching discipline
   const eligibleUsers = useMemo(() => {

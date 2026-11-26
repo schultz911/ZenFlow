@@ -548,25 +548,52 @@ select::-ms-expand {
 }
 
 /* The Free Pool stays at the viewport edge while the board scrolls. */
+.free-pool-root {
+  --free-pool-ink: #121418;
+  --free-pool-ink-hover: #252c3b;
+}
+:root.dark .free-pool-root {
+  --free-pool-ink: #1a1f2a;
+}
+.free-pool-handle, .free-pool-header {
+  --focus: var(--color-blue-400);
+  background: var(--free-pool-ink);
+  color: white;
+}
 .free-pool-handle {
   position: fixed;
   z-index: 40;
   right: 0;
   top: 50%;
   transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 7px;
   min-height: 44px;
-  padding: 0 14px;
-  border: 1px solid #2a303c;
+  padding: 0 10px;
+  border: 1px solid var(--free-pool-ink-hover);
   border-right: 0;
-  border-radius: 7px 0 0 7px;
-  background: #121418;
-  color: #fff;
+  border-radius: var(--radius-control) 0 0 var(--radius-control);
   font-size: 12px;
   font-weight: 600;
-  cursor: pointer;
 }
-.free-pool-handle:hover { background: #252c3b; }
+.free-pool-handle:hover { background: var(--free-pool-ink-hover); }
+.free-pool-handle:active { background: var(--free-pool-ink); }
+.free-pool-handle:focus-visible { outline-offset: -4px; }
 .free-pool-handle-hidden { visibility: hidden; }
+.free-pool-handle-count {
+  min-width: 22px;
+  padding: 1px 4px;
+  border: 1px solid currentColor;
+  border-color: color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: 4px;
+  color: var(--color-slate-300);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.free-pool-handle[data-available="true"] .free-pool-handle-count {
+  color: var(--color-emerald-300);
+}
 .free-pool-sidebar {
   position: fixed;
   z-index: 40;
@@ -583,9 +610,27 @@ select::-ms-expand {
   padding-bottom: env(safe-area-inset-bottom);
 }
 .free-pool-dock-control { display: none; }
+.free-pool-hours-scale {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.free-pool-hours-scale > span {
+  display: block;
+  width: 13px;
+  height: 4px;
+  border-radius: 1px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--border) 75%, var(--text-secondary));
+}
+.free-pool-hours-scale > span > span {
+  display: block;
+  height: 100%;
+  background: var(--success);
+}
 .free-pool-row-action { min-height: 32px; min-width: 32px; }
 @media (pointer: coarse) {
-  .free-pool-row-action { min-height: 44px; min-width: 44px; }
+  .free-pool-row-action, .free-pool-filters .segmented-item { min-height: 44px; min-width: 44px; }
 }
 @media (min-width: 1280px) {
   .free-pool-dock-control { display: flex; }

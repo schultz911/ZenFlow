@@ -207,10 +207,18 @@ try {
     await page.getByText('Cumulative metrics as of 2026-01-09.').waitFor({ state: 'visible' });
     await page.keyboard.press('Escape');
 
+    await page.locator('#free-pool-trigger').click();
+    const freePool = page.getByRole('complementary', { name: 'Free Pool' });
+    await freePool.getByRole('button', { name: 'Add task for Mia Designer' }).click();
+    const taskDetails = page.getByRole('dialog', { name: 'Task details' });
+    await taskDetails.getByText('design Team', { exact: true }).waitFor();
+    assert.equal(await taskDetails.locator('#task-assignee-select').inputValue(), 'u-design');
+    await taskDetails.getByRole('button', { name: 'Close modal' }).click();
+
     await page.goto(`${PREVIEW_URL}?width=390`, { waitUntil: 'networkidle' });
     const iframe = page.locator('iframe[title="390px responsive preview"]');
     await iframe.waitFor({ state: 'visible' });
-    console.log('Browser UI preview: desktop tabs, compliance, scoped efficiency, historical analytics, and 390px responsive iframe passed.');
+    console.log('Browser UI preview: desktop tabs, compliance, scoped efficiency, historical analytics, Free Pool task handoff, and 390px responsive iframe passed.');
     await context.close();
   }
 

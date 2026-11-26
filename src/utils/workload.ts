@@ -1079,9 +1079,11 @@ export function getUserDailyAssignedHours(user: User, tasks: Task[], onDate = ne
   return getAssignedHoursByDate(tasks, [date], date, new Set([user.id])).get(user.id)?.get(date) ?? 0;
 }
 
+export const DAILY_UTILIZATION_TARGET_HOURS = 3;
+
 export function meetsDailyUtilizationTarget(assignedHours: number): boolean {
   // Absorb floating-point noise from splitting and adding shared hours.
-  return assignedHours >= 3 - 1e-9;
+  return assignedHours >= DAILY_UTILIZATION_TARGET_HOURS - 1e-9;
 }
 
 export function isUserUtilized(user: User, tasks: Task[], onDate = new Date()): boolean {
