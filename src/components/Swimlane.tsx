@@ -1087,7 +1087,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                       className={`board-column-cell flex flex-col transition-colors duration-150 ${
                         isDropActive
                           ? 'bg-blue-50/70 dark:bg-blue-950/25'
-                          : 'bg-[var(--surface-muted)]'
+                          : 'bg-[var(--surface)]'
                       }`}
                     >
                       {/* Status Column Header */}
