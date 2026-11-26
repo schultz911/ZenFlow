@@ -473,7 +473,7 @@ function DashboardContent() {
       userId: string,
       title: string,
       status: TaskStatus,
-      cognitiveLoad: 'low' | 'medium' | 'high',
+      cognitiveLoad?: 'low' | 'medium' | 'high',
       dueDate?: string
     ) => {
       await createTask({

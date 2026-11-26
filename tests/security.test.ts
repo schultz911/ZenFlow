@@ -163,11 +163,40 @@ test('public member fields use strict allowlist', () => {
 });
 test('pipeline and retainer tasks retain deadline and timer behavior', async () => withServer(async server => {
   for (const status of ['pipeline', 'retainer']) {
-    const response = await server.request('/tasks', 'cd', 'POST', { userId: 'alice', title: `Task ${status}`, status, cognitiveLoad: 'medium' });
+    const response = await server.request('/tasks', 'cd', 'POST', {
+      userId: 'alice',
+      title: `Task ${status}`,
+      status,
+      cognitiveLoad: 'high',
+      priority: 'high',
+      estimatedHours: 4,
+      dueDate: '2026-12-01',
+    });
     assert.equal(response.status, 201);
     const task = await response.json();
     assert.equal(task.status, status);
     assert.equal(task.dueDate, undefined);
+    if (status === 'retainer') {
+      assert.equal(task.cognitiveLoad, undefined);
+      assert.equal(task.priority, undefined);
+      assert.equal(task.estimatedHours, undefined);
+      // Subtask duplicated from Ongoing retains explicitly supplied estimate, priority, load, and deadline
+      const dupRes = await server.request(`/tasks/${task.id}/duplicate`, 'cd', 'POST', {
+        targetUserId: 'alice',
+        title: 'Ongoing Subtask',
+        targetStatus: 'todo',
+        targetDueDate: '2026-12-05',
+        targetCognitiveLoad: 'high',
+        targetPriority: 'high',
+        targetEstimatedHours: 3.5,
+      });
+      assert.equal(dupRes.status, 201);
+      const { task: subtask } = await dupRes.json();
+      assert.equal(subtask.cognitiveLoad, 'high');
+      assert.equal(subtask.priority, 'high');
+      assert.equal(subtask.estimatedHours, 3.5);
+      assert.equal(subtask.dueDate, '2026-12-05');
+    }
   }
   server.store.tasks.push(fixtureTask('timer', 'alice'));
   await server.request('/tasks/timer', 'alice', 'PUT', { status: 'in_progress' });

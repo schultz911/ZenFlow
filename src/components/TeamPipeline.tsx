@@ -523,7 +523,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span
                           title={task.dueDate ? `Target Deadline: ${formatDateOnly(task.dueDate)}` : 'No deadline set'}
-                          className={`inline-flex items-center gap-1 text-[11px] tabular-nums ${
+                          className={`inline-flex items-center gap-1 text-[11px] leading-none tabular-nums ${
                             dueDays !== null && dueDays < 0
                               ? 'font-bold text-red-600 dark:text-red-400'
                               : dueDays !== null && dueDays === 0
@@ -540,7 +540,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                             role="img"
                             aria-label={priorityLabel}
                             title={priorityLabel}
-                            className={`inline-flex items-center shrink-0 ${
+                            className={`inline-flex items-center justify-center leading-none shrink-0 ${
                               task.priority === 'high'
                                 ? 'text-red-600 dark:text-red-400'
                                 : task.priority === 'medium'
@@ -550,7 +550,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                           >
                             <Flag
                               aria-hidden="true"
-                              className={`h-3 w-3 ${
+                              className={`h-3 w-3 shrink-0 ${
                                 task.priority === 'high'
                                   ? 'fill-red-500/20'
                                   : task.priority === 'medium'

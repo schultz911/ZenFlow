@@ -164,6 +164,19 @@ export function applyOptimisticTaskUpdate(
         userId: nextAssigneeIds[0] || undefined,
         startDate: nextStartDate,
         dueDate: finalDueDate,
+        cognitiveLoad:
+          nextStatus === 'retainer'
+            ? undefined
+            : updates.cognitiveLoad !== undefined
+            ? updates.cognitiveLoad
+            : t.cognitiveLoad ?? 'medium',
+        priority: nextStatus === 'retainer' ? undefined : updates.priority !== undefined ? updates.priority : t.priority,
+        estimatedHours:
+          nextStatus === 'retainer'
+            ? undefined
+            : updates.estimatedHours !== undefined
+            ? updates.estimatedHours
+            : t.estimatedHours,
         ...timers,
         updatedAt: nowIso,
       };

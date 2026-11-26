@@ -207,7 +207,20 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return { parentTask: { id: pid, title: data.title }, tasks: created };
     },
     createTask: async (data: any) => {
-      const created: Task = { ...data, id: `t-${Date.now()}`, status: data.status || 'todo', order: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+      const status = data.status || 'todo';
+      const isOngoing = status === 'retainer';
+      const created: Task = {
+        ...data,
+        id: `t-${Date.now()}`,
+        status,
+        dueDate: status === 'pipeline' || isOngoing ? undefined : data.dueDate,
+        cognitiveLoad: isOngoing ? undefined : (data.cognitiveLoad || 'medium'),
+        priority: isOngoing ? undefined : data.priority,
+        estimatedHours: isOngoing ? undefined : data.estimatedHours,
+        order: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
       setTasks(prev => [...prev, created]);
       return created;
     },
@@ -231,7 +244,26 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     reassignTaskFromUser: async (id: string) => fixtureTasks.find(t => t.id === id) || fixtureTasks[0],
     moveTask: async () => {},
     reorderTasks: async () => {},
-    duplicateTaskToBoard: async () => ({ task: fixtureTasks[0] }),
+    duplicateTaskToBoard: async (params: any) => {
+      const source = fixtureTasks.find(t => t.id === params.taskId) || fixtureTasks[0];
+      const next: Task = {
+        ...source,
+        id: `t-dup-${Date.now()}`,
+        userId: params.targetUserId,
+        assigneeIds: [params.targetUserId],
+        title: params.title || source.title,
+        status: params.targetStatus || 'todo',
+        dueDate: params.targetDueDate,
+        cognitiveLoad: params.targetCognitiveLoad || source.cognitiveLoad || 'medium',
+        priority: params.targetPriority || source.priority,
+        estimatedHours: params.targetEstimatedHours ?? source.estimatedHours,
+        isSubtask: true,
+        parentTaskId: source.id,
+        parentTaskTitle: source.title,
+      };
+      setTasks(prev => [...prev, next]);
+      return { task: next };
+    },
   };
 
   return <PreviewContext.Provider value={value}>{children}</PreviewContext.Provider>;

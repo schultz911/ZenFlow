@@ -53,7 +53,7 @@ interface SwimlaneProps {
     userId: string,
     title: string,
     status: TaskStatus,
-    cognitiveLoad: 'low' | 'medium' | 'high',
+    cognitiveLoad?: 'low' | 'medium' | 'high',
     dueDate?: string
   ) => Promise<void>;
   onEditTask: (task: Task) => void;
@@ -598,11 +598,10 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   const handleQuickAddRetainer = useCallback(
     async (
       targetUserId: string,
-      title: string,
-      cognitiveLoad: CognitiveLoad
+      title: string
     ) => {
       if (onQuickAddTask) {
-        await onQuickAddTask(targetUserId, title, 'retainer', cognitiveLoad);
+        await onQuickAddTask(targetUserId, title, 'retainer');
       }
     },
     [onQuickAddTask]

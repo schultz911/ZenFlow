@@ -2,8 +2,61 @@ import { useEffect, useRef } from 'react';
 import { motion, type HTMLMotionProps } from 'motion/react';
 
 const panels: HTMLElement[] = [];
-let previousOverflow = '';
-let previousPaddingRight = '';
+let lockedScrollX = 0;
+let lockedScrollY = 0;
+
+function canScrollInContainer(target: EventTarget | null, deltaY: number, deltaX: number): boolean {
+  const topPanel = panels.at(-1);
+  if (!topPanel || !(target instanceof Element)) return false;
+  const scope = topPanel.closest('.dialog-backdrop') ?? topPanel;
+  if (!scope.contains(target)) return false;
+
+  let current: Element | null = target;
+  while (current) {
+    const style = window.getComputedStyle(current);
+    const canScrollY =
+      (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+      current.scrollHeight > current.clientHeight + 1;
+    if (canScrollY) {
+      if (deltaY === 0) return true;
+      if (deltaY < 0 && current.scrollTop > 0) return true;
+      if (deltaY > 0 && current.scrollTop + current.clientHeight < current.scrollHeight - 1) return true;
+    }
+
+    const canScrollX =
+      (style.overflowX === 'auto' || style.overflowX === 'scroll') &&
+      current.scrollWidth > current.clientWidth + 1;
+    if (canScrollX && deltaX !== 0) {
+      if (deltaX < 0 && current.scrollLeft > 0) return true;
+      if (deltaX > 0 && current.scrollLeft + current.clientWidth < current.scrollWidth - 1) return true;
+    }
+
+    if (current === scope) break;
+    current = current.parentElement;
+  }
+  return false;
+}
+
+const preventBackgroundWheel = (event: WheelEvent) => {
+  if (panels.length === 0) return;
+  if (!canScrollInContainer(event.target, event.deltaY, event.deltaX)) {
+    event.preventDefault();
+  }
+};
+
+const preventBackgroundTouchMove = (event: TouchEvent) => {
+  if (panels.length === 0) return;
+  if (!canScrollInContainer(event.target, 0, 0)) {
+    event.preventDefault();
+  }
+};
+
+const holdWindowScroll = () => {
+  if (panels.length === 0) return;
+  if (window.scrollX !== lockedScrollX || window.scrollY !== lockedScrollY) {
+    window.scrollTo(lockedScrollX, lockedScrollY);
+  }
+};
 
 type DialogPanelProps = HTMLMotionProps<'div'> & { onClose?: () => void; busy?: boolean };
 
@@ -36,15 +89,11 @@ export function DialogPanel({ children, className = '', onClose, busy = false, .
           : null;
     const previousFocus = capturedOpener;
     if (panels.length === 0) {
-      previousOverflow = document.body.style.overflow;
-      previousPaddingRight = document.body.style.paddingRight;
-      const clientWidthBefore = document.documentElement.clientWidth;
-      document.body.style.overflow = 'hidden';
-      const scrollbarWidth = document.documentElement.clientWidth - clientWidthBefore;
-      if (scrollbarWidth > 0) {
-        const computedPaddingRight = parseFloat(window.getComputedStyle(document.body).paddingRight) || 0;
-        document.body.style.paddingRight = `${computedPaddingRight + scrollbarWidth}px`;
-      }
+      lockedScrollX = window.scrollX;
+      lockedScrollY = window.scrollY;
+      window.addEventListener('wheel', preventBackgroundWheel, { passive: false });
+      window.addEventListener('touchmove', preventBackgroundTouchMove, { passive: false });
+      window.addEventListener('scroll', holdWindowScroll, { passive: true });
     }
     panels.push(panel);
     const focusable = () => Array.from(panel.querySelectorAll<HTMLElement>(
@@ -79,8 +128,9 @@ export function DialogPanel({ children, className = '', onClose, busy = false, .
       document.removeEventListener('focusin', focusin);
       panels.splice(panels.indexOf(panel), 1);
       if (panels.length === 0) {
-        document.body.style.overflow = previousOverflow;
-        document.body.style.paddingRight = previousPaddingRight;
+        window.removeEventListener('wheel', preventBackgroundWheel);
+        window.removeEventListener('touchmove', preventBackgroundTouchMove);
+        window.removeEventListener('scroll', holdWindowScroll);
       }
       if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
     };

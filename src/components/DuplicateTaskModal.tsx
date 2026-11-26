@@ -2,9 +2,10 @@ import { DialogPanel } from './ui/DialogPanel';
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useBoardUi, useWorkspace } from '../context/DashboardContext';
-import { Task, TaskStatus, User } from '../types';
+import { CognitiveLoad, Task, TaskStatus, User } from '../types';
 import { formatDateOnly, formatTaskStatus, getUserTag } from '../utils/workload';
 import { DateQuickPresets } from './ui/DateQuickPresets';
+import { CognitiveLoadSelector } from './ui/CognitiveLoadSelector';
 import {
   X,
   CopyPlus,
@@ -16,6 +17,7 @@ import {
   UserCheck,
   GitFork,
   ChevronDown,
+  Timer,
 } from 'lucide-react';
 
 interface DuplicateTaskModalProps {
@@ -94,6 +96,9 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
   const [subtaskTitle, setSubtaskTitle] = useState<string>('');
   const [targetStatus, setTargetStatus] = useState<TaskStatus>('todo');
   const [targetDueDate, setTargetDueDate] = useState<string>('');
+  const [targetCognitiveLoad, setTargetCognitiveLoad] = useState<CognitiveLoad>('medium');
+  const [targetPriority, setTargetPriority] = useState<'low' | 'medium' | 'high'>('medium');
+  const [targetEstimatedHours, setTargetEstimatedHours] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: 'success' | 'error';
@@ -143,6 +148,9 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
         : task.status;
     setTargetStatus(resolvedStatus);
     setTargetDueDate(task.dueDate || '');
+    setTargetCognitiveLoad(task.cognitiveLoad || 'medium');
+    setTargetPriority(task.priority || 'medium');
+    setTargetEstimatedHours(task.estimatedHours !== undefined ? String(task.estimatedHours) : '');
     setFeedback(null);
   }, [isOpen, task, sourceBoard, availableBoards, initialTargetUserId, initialTargetStatus, users]);
 
@@ -199,12 +207,18 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
     setFeedback(null);
 
     try {
+      const parsedEstimatedHours = targetEstimatedHours.trim()
+        ? Math.max(0, parseFloat(targetEstimatedHours))
+        : undefined;
       const res = await duplicateTaskToBoard({
         taskId: task.id,
         targetUserId: selectedUserId,
         title: subtaskTitle.trim() || undefined,
         targetStatus,
         targetDueDate: targetDueDate.trim() || undefined,
+        targetCognitiveLoad,
+        targetPriority,
+        targetEstimatedHours: Number.isFinite(parsedEstimatedHours) ? parsedEstimatedHours : undefined,
       });
 
       const targetUserName = selectedTargetUser?.name || 'Selected user';
@@ -295,18 +309,24 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                         {task.title}
                       </h4>
                     </div>
-                    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold capitalize text-[var(--text-secondary)] shrink-0 mt-0.5">
-                      <span
-                        className={`h-1.5 w-1.5 rounded-full ${
-                          task.cognitiveLoad === 'high'
-                            ? 'bg-red-600 dark:bg-red-400'
-                            : task.cognitiveLoad === 'medium'
-                            ? 'bg-amber-600 dark:bg-amber-400'
-                            : 'bg-emerald-600 dark:bg-emerald-400'
-                        }`}
-                      />
-                      <span>{task.cognitiveLoad} load</span>
-                    </span>
+                    {task.status === 'retainer' || !task.cognitiveLoad ? (
+                      <span className="inline-flex items-center gap-1 rounded-[5px] bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5">
+                        Ongoing
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold capitalize text-[var(--text-secondary)] shrink-0 mt-0.5">
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            task.cognitiveLoad === 'high'
+                              ? 'bg-red-600 dark:bg-red-400'
+                              : task.cognitiveLoad === 'medium'
+                              ? 'bg-amber-600 dark:bg-amber-400'
+                              : 'bg-emerald-600 dark:bg-emerald-400'
+                          }`}
+                        />
+                        <span>{task.cognitiveLoad} load</span>
+                      </span>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 divide-x divide-[var(--border-subtle)] text-[11px]">
@@ -468,6 +488,78 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                       />
                     </div>
                   </div>
+
+                  {/* Step 5: Subtask Time Estimate & Priority */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <label className="field-label !mb-0 flex items-center gap-1.5" htmlFor="duplicatetaskmodal-estimated-hours">
+                          <Timer className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
+                          <span>Time Estimated</span>
+                        </label>
+                        <span className="text-[11px] text-[var(--text-muted)]">Split across days</span>
+                      </div>
+                      <div className="relative">
+                        <input
+                          id="duplicatetaskmodal-estimated-hours"
+                          type="number"
+                          step="0.5"
+                          min="0"
+                          max="1000"
+                          value={targetEstimatedHours}
+                          onChange={e => setTargetEstimatedHours(e.target.value)}
+                          disabled={isSubmitting || feedback?.type === 'success'}
+                          placeholder="e.g. 4.0"
+                          className="field-control pr-10 tabular-nums"
+                        />
+                        <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[var(--text-muted)]">
+                          hrs
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="field-label">Priority</label>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {(['low', 'medium', 'high'] as const).map(p => {
+                          const isSelected = targetPriority === p;
+                          return (
+                            <button
+                              key={p}
+                              type="button"
+                              aria-pressed={isSelected}
+                              disabled={isSubmitting || feedback?.type === 'success'}
+                              onClick={() => setTargetPriority(p)}
+                              className={`flex items-center justify-center gap-1.5 py-1.5 rounded-[7px] border text-xs font-semibold capitalize transition-colors cursor-pointer disabled:opacity-50 ${
+                                isSelected
+                                  ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
+                                  : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]'
+                              }`}
+                            >
+                              <span
+                                className={`h-1.5 w-1.5 rounded-full ${
+                                  p === 'high'
+                                    ? 'bg-red-600 dark:bg-red-400'
+                                    : p === 'medium'
+                                    ? 'bg-amber-600 dark:bg-amber-400'
+                                    : 'bg-emerald-600 dark:bg-emerald-400'
+                                }`}
+                              />
+                              <span>{p}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 6: Subtask Cognitive Load */}
+                  <CognitiveLoadSelector
+                    value={targetCognitiveLoad}
+                    onChange={setTargetCognitiveLoad}
+                    role={selectedTargetUser?.role ?? task.team}
+                    disabled={isSubmitting || feedback?.type === 'success'}
+                  />
                 </div>
 
                 {/* Feedback Message */}

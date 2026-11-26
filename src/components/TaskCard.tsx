@@ -644,7 +644,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       {/* Bottom Ruled Metadata Row: Deadline, Priority Flag & Quick Status Stepper */}
       <div className="mt-2 flex items-center justify-between gap-2 border-t border-[var(--border-subtle)] pt-1.5">
         <div className="flex items-center gap-1.5 min-w-0">
-          <div className="relative" ref={snoozeRef}>
+          <div className="relative flex items-center" ref={snoozeRef}>
           {isDoneOrArchived ? (
             <div
               title={
@@ -656,7 +656,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   })}`
                   : 'Completed'
               }
-              className="inline-flex items-center gap-1 text-[11px] font-medium tabular-nums text-[var(--text-secondary)] select-none"
+              className="inline-flex items-center gap-1 text-[11px] leading-none font-medium tabular-nums text-[var(--text-secondary)] select-none"
             >
               <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span>{formatCompletedDate(task.completedAt || task.updatedAt)}</span>
@@ -675,7 +675,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 });
               }}
               title={`${pillInfo.label} — Click to adjust deadline`}
-              className={`mobile-tap-control sm:min-h-0 inline-flex items-center gap-1 text-[11px] tabular-nums transition-colors cursor-pointer ${
+              className={`mobile-tap-control sm:min-h-0 inline-flex items-center gap-1 text-[11px] leading-none tabular-nums transition-colors cursor-pointer ${
                 pillInfo.iconClass.includes('red')
                   ? 'font-bold text-red-600 dark:text-red-400'
                   : pillInfo.iconClass.includes('orange') || pillInfo.iconClass.includes('amber') || pillInfo.iconClass.includes('yellow')
@@ -781,7 +781,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               role="img"
               aria-label={`${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)} priority`}
               title={`${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)} priority`}
-              className={`inline-flex items-center shrink-0 ${
+              className={`inline-flex items-center justify-center leading-none shrink-0 ${
                 task.priority === 'high'
                   ? 'text-red-600 dark:text-red-400'
                   : task.priority === 'medium'
@@ -791,7 +791,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             >
               <Flag
                 aria-hidden="true"
-                className={`h-3 w-3 ${
+                className={`h-3 w-3 shrink-0 ${
                   task.priority === 'high'
                     ? 'fill-red-500/20'
                     : task.priority === 'medium'

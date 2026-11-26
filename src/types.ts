@@ -142,7 +142,7 @@ export interface Task {
   lastSyncedClickupDescHash?: string;
   dueDate?: string; // YYYY-MM-DD
   startDate?: string; // YYYY-MM-DD or ISO timestamp when moved from pipeline to swimlane
-  cognitiveLoad: CognitiveLoad;
+  cognitiveLoad?: CognitiveLoad;
   status: TaskStatus;
   order: number;
   completedAt?: string;

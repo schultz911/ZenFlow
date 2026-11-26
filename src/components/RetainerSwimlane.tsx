@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Task, User, CognitiveLoad } from '../types';
-import { getCognitiveLoadLabel } from '../utils/workload';
+import { Task, User } from '../types';
 import {
   Plus,
   Repeat,
@@ -17,8 +16,7 @@ interface RetainerSwimlaneProps {
   defaultOpenAdd?: boolean;
   onQuickAdd: (
     userId: string,
-    title: string,
-    cognitiveLoad: CognitiveLoad
+    title: string
   ) => Promise<void>;
   onEditTask: (task: Task) => void;
   onUpdateTitle?: (taskId: string, newTitle: string) => void;
@@ -41,7 +39,6 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
     if (defaultOpenAdd) setIsAdding(true);
   }, [defaultOpenAdd]);
   const [newTitle, setNewTitle] = useState('');
-  const [newLoad, setNewLoad] = useState<CognitiveLoad>('medium');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Inline title editing state for a retainer task
@@ -87,7 +84,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
     if (!trimmed || isSubmitting) return;
     setIsSubmitting(true);
     try {
-      await onQuickAdd(user.id, trimmed, newLoad);
+      await onQuickAdd(user.id, trimmed);
       setNewTitle('');
       setIsAdding(false);
     } finally {
@@ -110,7 +107,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
             {tasks.length}
           </span>
           <span className="hidden sm:inline-block text-[11px] text-[var(--text-muted)] truncate">
-            · No deadline · Zero workload
+            · Unscheduled · Create subtasks to schedule
           </span>
         </div>
 
@@ -121,7 +118,6 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
             onClick={() => {
               setIsAdding(prev => !prev);
               setNewTitle('');
-              setNewLoad('medium');
             }}
             title={isAdding ? 'Cancel adding task' : 'Add ongoing task'}
             className={`flex items-center gap-1 rounded-[5px] px-2 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors cursor-pointer ${
@@ -173,29 +169,11 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
           />
 
           <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1">
-              {(['low', 'medium', 'high'] as const).map(load => (
-                <button
-                  key={load}
-                  type="button"
-                  onClick={() => setNewLoad(load)}
-                  className={`rounded-[5px] px-2 py-0.5 text-[11px] font-semibold border capitalize transition-colors cursor-pointer ${
-                    newLoad === load
-                      ? load === 'high'
-                        ? 'bg-red-50 dark:bg-red-500/15 border-red-300 dark:border-red-500/40 text-red-700 dark:text-red-400'
-                        : load === 'medium'
-                        ? 'bg-amber-50 dark:bg-amber-500/15 border-amber-300 dark:border-amber-500/40 text-amber-700 dark:text-amber-400'
-                        : 'bg-emerald-50 dark:bg-emerald-500/15 border-emerald-300 dark:border-emerald-500/40 text-emerald-700 dark:text-emerald-400'
-                      : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                  }`}
-                  style={{ minHeight: 'auto' }}
-                >
-                  {load} load
-                </button>
-              ))}
-            </div>
+            <span className="text-[11px] text-[var(--text-muted)]">
+              Create subtasks from this item to assign load, priority, hours &amp; deadlines
+            </span>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <button
                 type="button"
                 disabled={!newTitle.trim() || isSubmitting}
@@ -215,7 +193,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
         <div className="flex items-center gap-2 overflow-x-auto py-1 px-0.5 scroll-smooth">
           {tasks.map(task => {
             const isEditingThis = editingTaskId === task.id;
-            const cognitiveLabel = getCognitiveLoadLabel(task.cognitiveLoad, user.role);
+            const metaLine = [task.client, task.project].filter(Boolean).join(' · ');
 
             return (
               <motion.div
@@ -285,26 +263,11 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                     </h5>
                   )}
 
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    {/* Cognitive Load Indicator */}
-                    <div className="flex items-center gap-1 shrink-0">
-                      <span
-                        className={`h-1.5 w-1.5 rounded-full shrink-0 ${
-                          task.cognitiveLoad === 'high'
-                            ? 'bg-red-600 dark:bg-red-400'
-                            : task.cognitiveLoad === 'medium'
-                            ? 'bg-amber-600 dark:bg-amber-400'
-                            : 'bg-emerald-600 dark:bg-emerald-400'
-                        }`}
-                      />
-                      <span
-                        title={`Cognitive Load: ${cognitiveLabel}`}
-                        className="text-[11px] text-[var(--text-secondary)] capitalize"
-                      >
-                        {task.cognitiveLoad} load
-                      </span>
-                    </div>
-                  </div>
+                  {metaLine && (
+                    <p className="mt-0.5 text-[11px] text-[var(--text-secondary)] truncate" title={metaLine}>
+                      {metaLine}
+                    </p>
+                  )}
                 </div>
 
                 {/* Quick actions on hover (always visible on touch devices) */}

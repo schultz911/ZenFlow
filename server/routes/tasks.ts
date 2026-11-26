@@ -306,11 +306,14 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
     const validStatus: Task['status'] = ['pipeline', 'retainer', 'todo', 'in_progress', 'in_review', 'done', 'archived'].includes(body.status)
       ? body.status
       : 'pipeline';
-    const validLoad: Task['cognitiveLoad'] = ['low', 'medium', 'high'].includes(body.cognitiveLoad)
+    const isOngoing = validStatus === 'retainer';
+    const validLoad: Task['cognitiveLoad'] = isOngoing
+      ? undefined
+      : ['low', 'medium', 'high'].includes(body.cognitiveLoad)
       ? body.cognitiveLoad
       : 'medium';
     const parsedDueDate =
-      validStatus === 'pipeline' || validStatus === 'retainer'
+      validStatus === 'pipeline' || isOngoing
         ? undefined
         : body.dueDate
         ? sanitizeString(body.dueDate)
@@ -347,10 +350,10 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
       client: body.client ? sanitizeString(body.client) : undefined,
       project: body.project ? sanitizeString(body.project) : undefined,
       estimatedHours:
-        typeof body.estimatedHours === 'number' && !isNaN(body.estimatedHours) && body.estimatedHours >= 0
+        !isOngoing && typeof body.estimatedHours === 'number' && !isNaN(body.estimatedHours) && body.estimatedHours >= 0
           ? Math.round(body.estimatedHours * 10) / 10
           : undefined,
-      priority: ['low', 'medium', 'high'].includes(body.priority) ? body.priority : undefined,
+      priority: !isOngoing && ['low', 'medium', 'high'].includes(body.priority) ? body.priority : undefined,
       attachments: Array.isArray(body.attachments)
         ? body.attachments.filter((a: any) => typeof a === 'string' && a.trim()).map((a: string) => sanitizeString(a.trim()))
         : undefined,
@@ -436,6 +439,19 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
       .filter(t => getTaskAssigneeIds(t).includes(targetUser.id) && t.status === validStatus)
       .reduce((max, t) => Math.max(max, t.order ?? 0), -1);
 
+    const isTargetOngoing = validStatus === 'retainer';
+    const duplicatedEstimatedHours =
+      isTargetOngoing
+        ? undefined
+        : typeof body.targetEstimatedHours === 'number' && !isNaN(body.targetEstimatedHours) && body.targetEstimatedHours >= 0
+        ? Math.round(body.targetEstimatedHours * 10) / 10
+        : sourceTask.estimatedHours;
+    const duplicatedPriority = isTargetOngoing
+      ? undefined
+      : ['low', 'medium', 'high'].includes(body.targetPriority)
+      ? body.targetPriority
+      : sourceTask.priority;
+
     const duplicated: Task = {
       id: `task-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       userId: targetUser.id,
@@ -455,9 +471,11 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
       disciplineMetadata: sourceTask.disciplineMetadata,
       dueDate: parsedDueDate,
       startDate: validStatus === 'pipeline' ? undefined : nowIso.slice(0, 10),
-      cognitiveLoad: ['low', 'medium', 'high'].includes(body.targetCognitiveLoad)
+      cognitiveLoad: isTargetOngoing
+        ? undefined
+        : ['low', 'medium', 'high'].includes(body.targetCognitiveLoad)
         ? body.targetCognitiveLoad
-        : sourceTask.cognitiveLoad,
+        : sourceTask.cognitiveLoad || 'medium',
       status: validStatus,
       order: maxOrder + 1,
       completedAt: timers.completedAt,
@@ -465,8 +483,8 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
       inProgressDurationMs: timers.inProgressDurationMs,
       client: sourceTask.client,
       project: sourceTask.project,
-      estimatedHours: sourceTask.estimatedHours,
-      priority: sourceTask.priority,
+      estimatedHours: duplicatedEstimatedHours,
+      priority: duplicatedPriority,
       isSubtask: true,
       parentTaskId: sourceTask.parentTaskId || sourceTask.id,
       parentTaskTitle: sourceTask.parentTaskTitle || sourceTask.title,
@@ -620,10 +638,10 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
       );
     }
 
-    if (body.cognitiveLoad && body.cognitiveLoad !== currentTask.cognitiveLoad) {
+    if (targetStatus !== 'retainer' && body.cognitiveLoad && body.cognitiveLoad !== currentTask.cognitiveLoad) {
       makeAct(
         'updated',
-        `Cognitive load updated from ${currentTask.cognitiveLoad} to ${body.cognitiveLoad}`,
+        `Cognitive load updated from ${currentTask.cognitiveLoad || 'unset'} to ${body.cognitiveLoad}`,
         currentTask.cognitiveLoad,
         body.cognitiveLoad
       );
@@ -656,8 +674,11 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
           : undefined
         : currentTask.startDate || (currentTask.status === 'pipeline' ? nowIso.slice(0, 10) : undefined);
 
+    const isOngoingTarget = targetStatus === 'retainer';
     const parsedEstimatedHours =
-      body.estimatedHours !== undefined
+      isOngoingTarget
+        ? undefined
+        : body.estimatedHours !== undefined
         ? !isNaN(Number(body.estimatedHours)) && Number(body.estimatedHours) >= 0
           ? Math.round(Number(body.estimatedHours) * 10) / 10
           : undefined
@@ -685,9 +706,11 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
       dueDate: resolvedDueDate,
       startDate: resolvedStartDate,
       cognitiveLoad:
-        body.cognitiveLoad && ['low', 'medium', 'high'].includes(body.cognitiveLoad)
+        isOngoingTarget
+          ? undefined
+          : body.cognitiveLoad && ['low', 'medium', 'high'].includes(body.cognitiveLoad)
           ? body.cognitiveLoad
-          : currentTask.cognitiveLoad,
+          : currentTask.cognitiveLoad || 'medium',
       status: targetStatus,
       userId: nextPrimaryUserId,
       assigneeIds: nextAssigneeIds,
@@ -699,7 +722,9 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
       project: body.project !== undefined ? (body.project ? sanitizeString(body.project) : undefined) : currentTask.project,
       estimatedHours: parsedEstimatedHours,
       priority:
-        body.priority !== undefined && ['low', 'medium', 'high'].includes(body.priority)
+        isOngoingTarget
+          ? undefined
+          : body.priority !== undefined && ['low', 'medium', 'high'].includes(body.priority)
           ? body.priority
           : currentTask.priority,
       attachments:

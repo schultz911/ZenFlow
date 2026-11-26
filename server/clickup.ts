@@ -465,9 +465,14 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
       .filter(id => !isNaN(id));
 
     const clickupStatus = ZENFLOW_TO_CLICKUP_STATUS[task.status] || 'to do';
-    const timeEstimateMs = task.estimatedHours !== undefined && Number.isFinite(task.estimatedHours)
-      ? Math.round(task.estimatedHours * 3600 * 1000)
-      : COGNITIVE_LOAD_ESTIMATES_MS[task.cognitiveLoad] || 24 * 3600 * 1000;
+    const timeEstimateMs =
+      task.status === 'retainer'
+        ? undefined
+        : task.estimatedHours !== undefined && Number.isFinite(task.estimatedHours)
+        ? Math.round(task.estimatedHours * 3600 * 1000)
+        : task.cognitiveLoad
+        ? COGNITIVE_LOAD_ESTIMATES_MS[task.cognitiveLoad] || 24 * 3600 * 1000
+        : undefined;
 
     const safeTaskId = task.clickupTaskId ? sanitizeClickupId(task.clickupTaskId) : null;
     if (safeTaskId) {
@@ -475,8 +480,10 @@ export function createClickUpService(deps: CreateClickUpServiceDeps) {
         const updatePayload: any = {
           name: task.title,
           status: clickupStatus,
-          time_estimate: timeEstimateMs,
         };
+        if (timeEstimateMs !== undefined) {
+          updatePayload.time_estimate = timeEstimateMs;
+        }
         if (task.dueDate) {
           updatePayload.due_date = new Date(task.dueDate + 'T23:59:59').getTime();
         }

@@ -421,8 +421,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
     setIsSubmitting(true);
     setSubmitError(null);
-    const finalDueDate = (status === 'pipeline' || status === 'retainer') ? undefined : (dueDate.trim() || undefined);
-    const parsedEstimated = estimatedHours.trim() ? Math.max(0, parseFloat(estimatedHours)) : undefined;
+    const isOngoing = status === 'retainer';
+    const finalDueDate = (status === 'pipeline' || isOngoing) ? undefined : (dueDate.trim() || undefined);
+    const parsedEstimated = isOngoing
+      ? undefined
+      : (estimatedHours.trim() ? Math.max(0, parseFloat(estimatedHours)) : undefined);
+    const finalCognitiveLoad = isOngoing ? undefined : cognitiveLoad;
+    const finalPriority = isOngoing ? undefined : priority;
 
     try {
       if (taskToEdit) {
@@ -433,12 +438,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           userId: effectiveAssignees[0] || undefined,
           assigneeIds: effectiveAssignees,
           dueDate: finalDueDate,
-          cognitiveLoad,
+          cognitiveLoad: finalCognitiveLoad,
           status,
           client: client.trim() || undefined,
           project: project.trim() || undefined,
           estimatedHours: parsedEstimated,
-          priority,
+          priority: finalPriority,
           contentDocLink: trimmedDocLink || undefined,
           disciplineMetadata: nextDisciplineMetadata ?? ({} as TaskDisciplineMetadata),
         });
@@ -451,12 +456,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
           description: description.trim() || undefined,
           brandGuidelines: trimmedBrandGuidelines || undefined,
           dueDate: finalDueDate,
-          cognitiveLoad,
+          cognitiveLoad: finalCognitiveLoad,
           status,
           client: client.trim() || undefined,
           project: project.trim() || undefined,
           estimatedHours: parsedEstimated,
-          priority,
+          priority: finalPriority,
           disciplineMetadata: nextDisciplineMetadata,
         });
       }
@@ -780,38 +785,42 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                         </dd>
                       </div>
                     </dl>
-                    <dl className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-[var(--border-subtle)]">
+                    <dl className={`grid grid-cols-1 ${status === 'retainer' ? '' : 'sm:grid-cols-2 sm:divide-x'} divide-y sm:divide-y-0 divide-[var(--border-subtle)]`}>
                       <div className="px-4 py-2.5">
                         <dt className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Client · Project</dt>
                         <dd className="mt-0.5 font-medium text-[var(--text-primary)]">
                           {[client, project].filter(Boolean).join(' · ') || '—'}
                         </dd>
                       </div>
-                      <div className="px-4 py-2.5">
-                        <dt className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Deadline</dt>
-                        <dd className="mt-0.5 font-medium tabular-nums text-[var(--text-primary)]">
-                          {dueDate ? formatDateOnly(dueDate) : 'No deadline'}
-                        </dd>
-                      </div>
+                      {status !== 'retainer' && (
+                        <div className="px-4 py-2.5">
+                          <dt className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Deadline</dt>
+                          <dd className="mt-0.5 font-medium tabular-nums text-[var(--text-primary)]">
+                            {dueDate ? formatDateOnly(dueDate) : 'No deadline'}
+                          </dd>
+                        </div>
+                      )}
                     </dl>
-                    <dl className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[var(--border-subtle)]">
-                      <div className="px-4 py-2.5">
-                        <dt className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Priority</dt>
-                        <dd className="mt-0.5 font-semibold capitalize text-[var(--text-primary)]">{priority}</dd>
-                      </div>
-                      <div className="px-4 py-2.5">
-                        <dt className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Cognitive Load</dt>
-                        <dd className="mt-0.5 font-semibold capitalize text-[var(--text-primary)]">
-                          {cognitiveLoad} ({getCognitiveLoadLabel(cognitiveLoad, taskDiscipline as Role)})
-                        </dd>
-                      </div>
-                      <div className="px-4 py-2.5">
-                        <dt className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Estimated</dt>
-                        <dd className="mt-0.5 font-semibold tabular-nums text-[var(--text-primary)]">
-                          {estimatedHours ? `${estimatedHours}h` : '—'}
-                        </dd>
-                      </div>
-                    </dl>
+                    {status !== 'retainer' && (
+                      <dl className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-[var(--border-subtle)]">
+                        <div className="px-4 py-2.5">
+                          <dt className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Priority</dt>
+                          <dd className="mt-0.5 font-semibold capitalize text-[var(--text-primary)]">{priority}</dd>
+                        </div>
+                        <div className="px-4 py-2.5">
+                          <dt className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Cognitive Load</dt>
+                          <dd className="mt-0.5 font-semibold capitalize text-[var(--text-primary)]">
+                            {cognitiveLoad} ({getCognitiveLoadLabel(cognitiveLoad, taskDiscipline as Role)})
+                          </dd>
+                        </div>
+                        <div className="px-4 py-2.5">
+                          <dt className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider">Estimated</dt>
+                          <dd className="mt-0.5 font-semibold tabular-nums text-[var(--text-primary)]">
+                            {estimatedHours ? `${estimatedHours}h` : '—'}
+                          </dd>
+                        </div>
+                      </dl>
+                    )}
                   </div>
                 )}
 
@@ -1001,6 +1010,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   </div>
                 </div>
 
+                {status === 'retainer' ? (
+                  <div className="callout callout-info text-[11px]">
+                    Ongoing tasks do not require time estimates, priority, cognitive load, or deadlines — only subtasks created from them carry those fields.
+                  </div>
+                ) : (
+                  <>
                 {/* Estimated Time & Priority */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -1081,7 +1096,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     <label className="field-label !mb-0 flex items-center gap-1.5" htmlFor="task-due-date-input">
                       <Calendar className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
                       <span>
-                        Deadline {status !== 'pipeline' && status !== 'retainer' && <span className="text-red-600 dark:text-red-400">*</span>}
+                        Deadline {status !== 'pipeline' && <span className="text-red-600 dark:text-red-400">*</span>}
                       </span>
                     </label>
 
@@ -1096,21 +1111,23 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   <input
                     id="task-due-date-input"
                     type="date"
-                    required={status !== 'pipeline' && status !== 'retainer'}
+                    required={status !== 'pipeline'}
                     value={dueDate}
                     onChange={e => setDueDate(e.target.value)}
                     className={`field-control tabular-nums cursor-pointer ${
-                      status !== 'pipeline' && status !== 'retainer' && !dueDate
+                      status !== 'pipeline' && !dueDate
                         ? '!border-amber-600/60 dark:!border-amber-400/50'
                         : ''
                     }`}
                   />
-                  {status !== 'pipeline' && status !== 'retainer' && !dueDate && (
+                  {status !== 'pipeline' && !dueDate && (
                     <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-400">
                       A deadline is required to add tasks directly into active workflow lanes.
                     </p>
                   )}
                 </div>
+                  </>
+                )}
                   </fieldset>
                 )}
 

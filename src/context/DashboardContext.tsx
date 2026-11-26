@@ -177,7 +177,7 @@ export interface WorkspaceContextValue {
     brandGuidelines?: string;
     dueDate?: string;
     startDate?: string;
-    cognitiveLoad: CognitiveLoad;
+    cognitiveLoad?: CognitiveLoad;
     status?: TaskStatus;
     client?: string;
     project?: string;
@@ -228,6 +228,9 @@ export interface WorkspaceContextValue {
     title?: string;
     targetStatus?: TaskStatus;
     targetDueDate?: string;
+    targetCognitiveLoad?: CognitiveLoad;
+    targetPriority?: 'low' | 'medium' | 'high';
+    targetEstimatedHours?: number;
   }) => Promise<{ task: Task; warning?: string; message?: string }>;
 }
 
@@ -916,11 +919,22 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     const memberId = getApiMemberId() || currentUserRef.current?.id;
     if (!memberId) throw new Error('Sign in to create a task');
     const taskId = `task-${memberId}-${crypto.randomUUID()}`;
-    const payload = { ...data, id: taskId };
     const now = new Date();
     const nowIso = now.toISOString();
     const status: TaskStatus = data.status || 'todo';
-    const finalDueDate = status === 'pipeline' || status === 'retainer' ? undefined : data.dueDate;
+    const isOngoing = status === 'retainer';
+    const finalDueDate = status === 'pipeline' || isOngoing ? undefined : data.dueDate;
+    const finalCognitiveLoad = isOngoing ? undefined : (data.cognitiveLoad || 'medium');
+    const finalEstimatedHours = isOngoing ? undefined : data.estimatedHours;
+    const finalPriority = isOngoing ? undefined : data.priority;
+    const payload = {
+      ...data,
+      id: taskId,
+      dueDate: finalDueDate,
+      cognitiveLoad: finalCognitiveLoad,
+      estimatedHours: finalEstimatedHours,
+      priority: finalPriority,
+    };
     const timers = computeStatusTransitionTimers({ status: 'pipeline', inProgressDurationMs: 0 }, status, now);
 
     const existing = tasksRef.current.filter(
@@ -944,7 +958,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       brandGuidelines: data.brandGuidelines,
       dueDate: finalDueDate,
       startDate: status === 'pipeline' ? undefined : data.startDate || nowIso.slice(0, 10),
-      cognitiveLoad: data.cognitiveLoad,
+      cognitiveLoad: finalCognitiveLoad,
       status,
       order: maxOrder + 1,
       completedAt: timers.completedAt,
@@ -952,8 +966,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       inProgressDurationMs: timers.inProgressDurationMs,
       client: data.client,
       project: data.project,
-      estimatedHours: data.estimatedHours,
-      priority: data.priority,
+      estimatedHours: finalEstimatedHours,
+      priority: finalPriority,
       attachments: data.attachments,
       disciplineMetadata: data.disciplineMetadata,
       clickupSpaceId: data.clickupSpaceId,
@@ -1186,6 +1200,9 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         title: params.title,
         targetStatus: params.targetStatus,
         targetDueDate: params.targetDueDate,
+        targetCognitiveLoad: params.targetCognitiveLoad,
+        targetPriority: params.targetPriority,
+        targetEstimatedHours: params.targetEstimatedHours,
       }),
     });
     const data = await res.json();
@@ -1282,8 +1299,19 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         status: newStatus,
         dueDate: resolvedDueDate,
         startDate: resolvedStartDate,
-        estimatedHours: extraUpdates?.estimatedHours !== undefined ? extraUpdates.estimatedHours : task.estimatedHours,
-        cognitiveLoad: extraUpdates?.cognitiveLoad !== undefined ? extraUpdates.cognitiveLoad : task.cognitiveLoad,
+        estimatedHours:
+          newStatus === 'retainer'
+            ? undefined
+            : extraUpdates?.estimatedHours !== undefined
+            ? extraUpdates.estimatedHours
+            : task.estimatedHours,
+        cognitiveLoad:
+          newStatus === 'retainer'
+            ? undefined
+            : extraUpdates?.cognitiveLoad !== undefined
+            ? extraUpdates.cognitiveLoad
+            : task.cognitiveLoad ?? 'medium',
+        priority: newStatus === 'retainer' ? undefined : task.priority,
         contentDocLink: extraUpdates?.contentDocLink !== undefined ? extraUpdates.contentDocLink : task.contentDocLink,
         order: targetOrder,
         ...timers,

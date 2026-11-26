@@ -234,11 +234,11 @@ export function quickWorkloadScore(userTasks: Task[]): number {
     if (t.status === 'pipeline' || t.status === 'retainer' || t.status === 'done' || t.status === 'archived') continue;
     const divisor = getTaskAssigneeCount(t);
     if (t.status === 'in_review') {
-      const rate = IN_REVIEW_HOURLY_RATES[t.cognitiveLoad] ?? 0.15;
+      const rate = IN_REVIEW_HOURLY_RATES[t.cognitiveLoad || 'medium'] ?? 0.15;
       const billableHours = getTaskBillableMs(t) / (1000 * 60 * 60);
       score += (billableHours * rate) / divisor;
     } else {
-      const cw = COGNITIVE_LOAD_WEIGHTS[t.cognitiveLoad] ?? 1.0;
+      const cw = COGNITIVE_LOAD_WEIGHTS[t.cognitiveLoad || 'medium'] ?? 1.0;
       const hasDeadline = Boolean(t.dueDate && t.dueDate.trim() !== '');
       const sw = t.status === 'in_progress' ? 1.0 : (hasDeadline ? 0.75 : 0.50);
       const days = getDaysRemaining(t.dueDate, referenceDate);
@@ -569,7 +569,8 @@ export function calculateUserWorkload(userTasks: Task[], referenceDate = getWork
 
     const hasDeadline = Boolean(task.dueDate && task.dueDate.trim() !== '');
     const daysRemaining = getDaysRemaining(task.dueDate, referenceDate);
-    const cognitiveWeight = COGNITIVE_LOAD_WEIGHTS[task.cognitiveLoad] || 1.0;
+    const taskLoad = task.cognitiveLoad || 'medium';
+    const cognitiveWeight = COGNITIVE_LOAD_WEIGHTS[taskLoad] || 1.0;
 
     let statusWeight = 0;
     let proximityMultiplier = 1.0;
@@ -600,7 +601,7 @@ export function calculateUserWorkload(userTasks: Task[], referenceDate = getWork
       taskScore = (statusWeight * cognitiveWeight * proximityMultiplier) / assigneeCount;
     } else if (task.status === 'in_review') {
       inReviewCount++;
-      const ratePerHour = IN_REVIEW_HOURLY_RATES[task.cognitiveLoad] ?? 0.15;
+      const ratePerHour = IN_REVIEW_HOURLY_RATES[taskLoad] ?? 0.15;
       const billableMs = getTaskBillableMs(task, nowMs);
       billableHours = billableMs / (1000 * 60 * 60);
       taskScore = (billableHours * ratePerHour) / assigneeCount;
@@ -614,12 +615,12 @@ export function calculateUserWorkload(userTasks: Task[], referenceDate = getWork
       taskId: task.id,
       title: task.title,
       status: task.status,
-      cognitiveLoad: task.cognitiveLoad,
+      cognitiveLoad: taskLoad,
       hasDeadline,
       dueDate: task.dueDate,
       daysRemaining: task.status === 'in_review' ? null : daysRemaining,
       statusWeight,
-      cognitiveWeight: task.status === 'in_review' ? (IN_REVIEW_HOURLY_RATES[task.cognitiveLoad] ?? 0.15) : cognitiveWeight,
+      cognitiveWeight: task.status === 'in_review' ? (IN_REVIEW_HOURLY_RATES[taskLoad] ?? 0.15) : cognitiveWeight,
       proximityMultiplier,
       calculatedScore: taskScore,
       billableHours: task.status === 'in_review' ? Math.round(billableHours! * 100) / 100 : undefined,
@@ -891,7 +892,7 @@ export function calculateWeeklyVelocity(userTasks: Task[]): WeeklyVelocityMetric
     if (completionDateStr && daysMap.has(completionDateStr)) {
       const dayEntry = daysMap.get(completionDateStr)!;
       dayEntry.completedCount++;
-      const points = COGNITIVE_LOAD_WEIGHTS[task.cognitiveLoad] || 1.0;
+      const points = COGNITIVE_LOAD_WEIGHTS[task.cognitiveLoad || 'medium'] || 1.0;
       dayEntry.completedPoints += points;
 
       totalCompleted7d++;
