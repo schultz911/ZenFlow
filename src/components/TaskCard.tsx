@@ -553,13 +553,6 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         </div>
       )}
 
-      {/* Optional Context snippet */}
-      {task.description && (
-        <p className="order-5 mt-0.5 text-xs text-[var(--text-secondary)] line-clamp-2 leading-relaxed">
-          {task.description}
-        </p>
-      )}
-
       {/* Quiet External Links Row (replaces competing colored pill badges) */}
       {((task.brandGuidelines && isValidHttpUrl(task.brandGuidelines)) ||
         (task.contentDocLink && isValidHttpUrl(task.contentDocLink)) ||
