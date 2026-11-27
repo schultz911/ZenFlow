@@ -40,7 +40,6 @@ function DashboardContent() {
     canCreatePipelineTask,
     canAssignTask,
     canEditUserTasks,
-    isAdministrator,
   } = useAuth();
   const {
     users,

@@ -612,7 +612,7 @@ try {
     await page.clock.setFixedTime(new Date('2026-11-26T10:00:00.000Z'));
     await page.goto(PREVIEW_URL, { waitUntil: 'networkidle' });
     const brief = page.locator('#team-pipeline-body .task-card').first();
-    await brief.getByText('Article', { exact: true }).waitFor();
+    assert.equal(await brief.getByText('Article', { exact: true }).count(), 0);
     assert.equal(await brief.getByText('Content · Article', { exact: true }).count(), 0);
     const weights = await brief.evaluate(el => {
       const client = [...el.querySelectorAll('span')].find(node => node.textContent === 'Zen');

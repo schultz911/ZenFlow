@@ -807,7 +807,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                     <p className="metric-detail">
                       {efficiencyPercent === null
                         ? 'No measured work'
-                        : <>{formatHours(estimatedHours)} est. / {formatHours(billableHours)} billable · {estimatedHours === billableHours ? 'On estimate' : `${formatHours(Math.abs(estimatedHours - billableHours))} ${estimatedHours > billableHours ? 'under' : 'over'} estimate`}</>}
+                        : <>{formatHours(estimatedHours)} est. / {formatHours(billableHours)} billable · {estimatedHours === billableHours ? 'On estimate' : `${formatHours(Math.abs(estimatedHours - billableHours))} ${estimatedHours > billableHours ? 'under estimate' : 'over est.'}`}</>}
                     </p>
                   </div>
                 </div>

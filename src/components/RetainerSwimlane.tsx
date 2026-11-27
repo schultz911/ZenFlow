@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Task, User } from '../types';
-import { getTaskTypeLabel } from '../utils/taskMetadata';
 import { formatBillableHours, formatDateOnly, getTaskBillableMs } from '../utils/workload';
 import { handleRovingMenuKeyDown, useAnchoredPopover } from '../hooks/useAnchoredPopover';
 import {
@@ -214,7 +213,6 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
         <div className="flex items-center gap-2 overflow-x-auto py-1 px-0.5 scroll-smooth">
           {tasks.map(task => {
             const metaLine = [task.client, task.project].filter(Boolean).join(' · ');
-            const typeLabel = getTaskTypeLabel(task);
             const billedMs = getTaskBillableMs(task);
 
             return (
@@ -247,16 +245,17 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                     )}
                   </div>
                 </div>
-                {typeLabel && <p className="text-[11px] text-[var(--text-secondary)] break-words">{typeLabel}</p>}
+                <div>
                 {metaLine && <p className="text-[11px] text-[var(--text-secondary)] truncate" title={metaLine}>
                   {task.client}{task.client && task.project && ' · '}{task.project && <span className="font-semibold text-[var(--text-primary)]">{task.project}</span>}
                 </p>}
                 <h5 className="text-[13px] font-semibold leading-snug">
                   <button type="button" onClick={() => onEditTask(task)} title={`${task.title} · Click for details`}
-                    className="mobile-tap-control sm:min-h-0 w-full text-left text-[var(--text-primary)] break-words whitespace-normal rounded px-1 -mx-1 py-0.5 hover:bg-[var(--surface-subtle)] hover:text-[#1d4ed8] dark:hover:text-blue-400 cursor-pointer">
+                    className="mobile-tap-control sm:min-h-0 w-full text-left text-[var(--text-primary)] break-words whitespace-normal rounded px-1 -mx-1 py-0 flex items-start hover:bg-[var(--surface-subtle)] hover:text-[#1d4ed8] dark:hover:text-blue-400 cursor-pointer">
                     {task.title}
                   </button>
                 </h5>
+                </div>
                 <div className="flex items-center justify-between gap-2 mt-auto">
                   <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
                     {task.dueDate && <span>{formatDateOnly(task.dueDate)}</span>}

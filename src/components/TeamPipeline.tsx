@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { useAuth, useWorkspace } from '../context/DashboardContext';
 import { Task, User, RoleFilter } from '../types';
 import { formatDateOnly, getCognitiveLoadLabel, getDaysRemaining, getTaskAssigneeIds, getTaskBillableMs, formatBillableHours } from '../utils/workload';
-import { getTaskTypeLabel, isValidHttpUrl } from '../utils/taskMetadata';
+import { isValidHttpUrl } from '../utils/taskMetadata';
 import { handleRovingMenuKeyDown, useAnchoredPopover } from '../hooks/useAnchoredPopover';
 import {
   Inbox,
@@ -429,7 +429,6 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                   task.parentTaskTitle &&
                   !task.title.toLowerCase().startsWith(task.parentTaskTitle.trim().toLowerCase())
                 );
-                const typeLabel = getTaskTypeLabel(task);
                 const billedMs = getTaskBillableMs(task);
                 const priorityLabel = task.priority
                   ? `${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)} priority`
@@ -535,9 +534,8 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                         </div>
                       </div>
 
-                      {typeLabel && <p className="mb-0.5 text-[11px] text-[var(--text-secondary)] break-words">{typeLabel}</p>}
                       {(task.client || task.project) && (
-                        <p className="mb-0.5 text-[11px] text-[var(--text-secondary)] truncate">
+                        <p className="text-[11px] text-[var(--text-secondary)] truncate">
                           {task.client && <span>{task.client}</span>}
                           {task.client && task.project && ' · '}
                           {task.project && <span className="font-semibold text-[var(--text-primary)]">{task.project}</span>}
@@ -550,9 +548,9 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                           type="button"
                           onClick={() => onEditTask(task)}
                           title="Click to inspect brief details"
-                          className="mobile-tap-control sm:min-h-0 w-full text-left cursor-pointer rounded px-1 -mx-1 py-0.5 text-[var(--text-primary)] hover:text-[#1d4ed8] dark:hover:text-blue-400 hover:bg-[var(--surface-subtle)] transition-colors line-clamp-2"
+                          className="mobile-tap-control sm:min-h-0 w-full text-left cursor-pointer rounded px-1 -mx-1 py-0 flex items-start text-[var(--text-primary)] hover:text-[#1d4ed8] dark:hover:text-blue-400 hover:bg-[var(--surface-subtle)] transition-colors"
                         >
-                          {task.title}
+                          <span className="line-clamp-2">{task.title}</span>
                         </button>
                       </h3>
 

@@ -305,7 +305,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
             <p className="metric-detail">
               {teamEfficiency.efficiencyPercent !== null ? (
                 <>
-                  {formatHours(teamEfficiency.estimatedHours)} est. / {formatHours(teamEfficiency.billableHours)} billable · {teamEfficiency.estimatedHours === teamEfficiency.billableHours ? 'On estimate' : `${formatHours(Math.abs(teamEfficiency.estimatedHours - teamEfficiency.billableHours))} ${teamEfficiency.estimatedHours > teamEfficiency.billableHours ? 'under' : 'over'} estimate`}
+                  {formatHours(teamEfficiency.estimatedHours)} est. / {formatHours(teamEfficiency.billableHours)} billable · {teamEfficiency.estimatedHours === teamEfficiency.billableHours ? 'On estimate' : `${formatHours(Math.abs(teamEfficiency.estimatedHours - teamEfficiency.billableHours))} ${teamEfficiency.estimatedHours > teamEfficiency.billableHours ? 'under estimate' : 'over est.'}`}
                 </>
               ) : (
                 'No measured work'

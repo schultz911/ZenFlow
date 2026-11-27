@@ -56,8 +56,3 @@ export function foldLegacyDisciplineMetadata(task?: Task | null): TaskDiscipline
     sourceContentReferences: sourceContentReferences.length > 0 ? sourceContentReferences : undefined,
   };
 }
-
-/** Content or asset type shown on a task card. */
-export function getTaskTypeLabel(task: Task): string {
-  return task.disciplineMetadata?.contentType || task.disciplineMetadata?.assetType || '';
-}

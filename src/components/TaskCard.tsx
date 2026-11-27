@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { Task, TaskStatus, Role } from '../types';
 import { handleRovingMenuKeyDown, useAnchoredPopover } from '../hooks/useAnchoredPopover';
 import { getDuePillInfo, formatDateOnly, formatCompletedDate, getCognitiveLoadLabel, getTaskBillableMs, formatBillableHours, formatBillableDetailed, getLocalOffsetDateKey, getTaskAssigneeCount, formatTaskStatus } from '../utils/workload';
-import { getTaskTypeLabel, isValidHttpUrl } from '../utils/taskMetadata';
+import { isValidHttpUrl } from '../utils/taskMetadata';
 import {
   GripVertical,
   Clock,
@@ -258,7 +258,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             type="button"
             onClick={() => onEdit(task)}
             title="Click to open task details"
-            className={`mobile-tap-control sm:min-h-0 w-full text-left cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-[var(--surface-subtle)] transition-colors group/title flex items-center justify-between gap-1.5 ${task.status === 'done'
+            className={`mobile-tap-control sm:min-h-0 w-full text-left cursor-pointer rounded px-1 -mx-1 py-0 hover:bg-[var(--surface-subtle)] transition-colors group/title flex items-start justify-between gap-1.5 ${task.status === 'done'
               ? 'line-through text-[var(--text-secondary)] font-medium'
               : 'text-[var(--text-primary)] hover:text-[#1d4ed8] dark:hover:text-blue-400'
               }`}
@@ -514,15 +514,9 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         </div>
       </div>
 
-      {getTaskTypeLabel(task) && (
-        <div className="order-2 text-[11px] text-[var(--text-secondary)] break-words">
-          {getTaskTypeLabel(task)}
-        </div>
-      )}
-
       {/* Client & Project Single Line */}
       {(task.client || task.project) && (
-        <div className="order-3 mb-0.5 flex items-center gap-1 text-[11px] text-[var(--text-secondary)] truncate">
+        <div className="order-3 flex items-center gap-1 text-[11px] text-[var(--text-secondary)] truncate">
           {task.client && (
             <span className="truncate">
               {task.client}
