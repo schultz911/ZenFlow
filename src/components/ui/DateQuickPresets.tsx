@@ -8,6 +8,7 @@ interface DateQuickPresetsProps {
   includeToday?: boolean;
   originalDate?: string;
   allowClear?: boolean;
+  compact?: boolean;
   className?: string;
 }
 
@@ -18,6 +19,7 @@ export const DateQuickPresets: React.FC<DateQuickPresetsProps> = ({
   includeToday = false,
   originalDate,
   allowClear = false,
+  compact = false,
   className = '',
 }) => {
   const presets: Array<{ label: string; date: string }> = [
@@ -26,7 +28,7 @@ export const DateQuickPresets: React.FC<DateQuickPresetsProps> = ({
     { label: 'Tomorrow', date: getLocalOffsetDateKey(1) },
     { label: '+3d', date: getLocalOffsetDateKey(3) },
     { label: '+1w', date: getLocalOffsetDateKey(7) },
-    { label: 'EOM', date: getLastDayOfMonth() },
+    ...(!compact ? [{ label: 'EOM', date: getLastDayOfMonth() }] : []),
   ];
 
   return (
@@ -40,7 +42,7 @@ export const DateQuickPresets: React.FC<DateQuickPresetsProps> = ({
             disabled={disabled}
             onClick={() => onSelectDate(preset.date)}
             title={`Set deadline to ${preset.date}`}
-            className={`mobile-tap-control sm:min-h-[24px] rounded-[5px] border px-2 sm:px-1.5 py-0.5 font-medium tabular-nums transition-colors cursor-pointer disabled:opacity-50 ${
+            className={`mobile-tap-control min-w-[44px] sm:min-w-0 sm:min-h-[24px] rounded-[5px] border px-2 sm:px-1.5 py-0.5 font-medium tabular-nums transition-colors cursor-pointer disabled:opacity-50 ${
               isActive
                 ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 font-semibold'
                 : 'border-[var(--border)] bg-[var(--surface-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'

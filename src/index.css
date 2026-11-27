@@ -25,7 +25,7 @@
     --surface-raised: #ffffff;
     --text-primary: #121418;
     --text-secondary: #525d6e;
-    --text-muted: #64748b;
+    --text-muted: #576375;
     --border: #dfe3ea;
     --border-subtle: #eceff4;
     --accent: #1d4ed8;
@@ -534,7 +534,9 @@
   animation: marquee 35s linear infinite;
 }
 
-.animate-marquee:hover {
+.animate-marquee:hover,
+.animate-marquee:focus-within,
+.animate-marquee[data-paused="true"] {
   animation-play-state: paused;
 }
 
@@ -650,6 +652,7 @@ select::-ms-expand {
 }
 @media (max-width: 639px) {
   .free-pool-row-action { min-height: 44px; min-width: 44px; }
+  .field-control { min-height: 44px; }
 }
 @media (pointer: coarse) {
   .free-pool-row-action, .free-pool-filters .segmented-item { min-height: 44px; min-width: 44px; }

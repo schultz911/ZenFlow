@@ -305,7 +305,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
               {teamEfficiency.efficiencyPercent !== null ? (
                 <>
                   <span className="text-xs font-normal text-[var(--text-muted)] mr-1">
-                    {Math.round(teamEfficiency.efficiencyPercent) >= 100 ? 'est / bill · under est' : 'est / bill · over est'}
+                    {Math.round(teamEfficiency.efficiencyPercent) >= 100 ? 'under est · est / bill' : 'over est · est / bill'}
                   </span>
                   <span>{formatHoursRatio(teamEfficiency.estimatedHours, teamEfficiency.billableHours)}</span>
                 </>
@@ -348,8 +348,8 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
       </section>
 
       {/* Compact Toolbar: Search + Team Board + Free Pool + Analytics + Export */}
-      <div className="flex items-center justify-between gap-2.5 flex-wrap">
-        <div className="relative w-full sm:w-80">
+      <div className="flex items-center justify-between gap-2 sm:gap-2.5 flex-wrap">
+        <div className="relative flex-1 min-w-[200px] sm:flex-none sm:w-80">
           <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[var(--text-muted)]">
             {isSearchPending ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin text-[#1d4ed8] dark:text-blue-400" />
@@ -360,10 +360,12 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
           <input
             id="task-search-input"
             aria-label="Search tasks, members, clients, and projects"
+            aria-keyshortcuts="/"
             type="text"
             value={localSearch}
             onChange={e => setLocalSearch(e.target.value)}
-            placeholder="Search tasks, members, clients (/)..."
+            placeholder="Search tasks, members, clients..."
+            title="Search tasks, members, clients, and projects (Shortcut: /)"
             className="mobile-tap-control w-full rounded-[7px] border border-[var(--border)] bg-[var(--surface)] py-1.5 pl-9 pr-9 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none transition-colors"
           />
           {localSearch && (
@@ -381,7 +383,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
           )}
         </div>
 
-        <div className="flex w-full sm:w-auto flex-wrap items-center gap-2">
+        <div className="flex w-auto flex-wrap items-center gap-2">
           {canSwitchBoards && (
             <div className="relative" ref={boardDropdownRef}>
               <button

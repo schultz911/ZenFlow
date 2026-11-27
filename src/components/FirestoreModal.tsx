@@ -762,7 +762,6 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                         type="button"
                         onClick={handleRegisterWebhook}
                         disabled={isRegisteringWebhook || !isClickupConnected || !isSuperadmin}
-                        title={isSuperadmin ? 'Register a signed ClickUp webhook' : 'Only the Superadmin can manage workspace webhooks'}
                         className="button-secondary w-full"
                       >
                         {isRegisteringWebhook ? (
@@ -777,6 +776,11 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                           </>
                         )}
                       </button>
+                      {!isSuperadmin && (
+                        <p className="text-[11px] text-[var(--text-secondary)]">
+                          Only the Superadmin can register or re-sync workspace webhooks.
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

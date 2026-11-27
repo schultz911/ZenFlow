@@ -118,6 +118,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
   const [targetCognitiveLoad, setTargetCognitiveLoad] = useState<CognitiveLoad>('medium');
   const [targetPriority, setTargetPriority] = useState<'low' | 'medium' | 'high'>('medium');
   const [targetEstimatedHours, setTargetEstimatedHours] = useState<string>('');
+  const [showMoreOptions, setShowMoreOptions] = useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: 'success' | 'error';
@@ -426,7 +427,8 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
 
                 {/* Selection Steps */}
                 <div className="space-y-3.5">
-                  {/* Destination Board */}
+                  {/* Destination Board (hidden when only 1 board option exists) */}
+                  {availableBoards.length > 1 && (
                   <div>
                     <label className="field-label flex items-center gap-1.5" htmlFor="duplicatetaskmodal-field-1">
                       <Layers className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
@@ -450,6 +452,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                       <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
                     </div>
                   </div>
+                  )}
 
                   {/* Destination Assignee on that Board */}
                   <div>
@@ -576,33 +579,8 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                     />
                   </div>
 
-                  {/* Step 4: Workflow Initial Status & Due Date */}
+                  {/* Step 4: Deadline & Time Estimate */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="field-label" htmlFor="duplicatetaskmodal-field-4">
-                        Initial Status
-                      </label>
-                      <div className="relative">
-                        <select
-                          value={targetStatus}
-                          onChange={e => setTargetStatus(e.target.value as TaskStatus)}
-                          disabled={isSubmitting || feedback?.type === 'success'}
-                          className="field-control pr-8 cursor-pointer"
-                          id="duplicatetaskmodal-field-4"
-                        >
-                          {(task.status === 'done' || task.status === 'archived') && (
-                            <option value={task.status}>{formatTaskStatus(task.status)} (Original)</option>
-                          )}
-                          {(['pipeline', 'todo', 'in_progress', 'in_review'] as TaskStatus[]).map(s => (
-                            <option key={s} value={s}>
-                              {formatTaskStatus(s)}{task.status === s ? ' (Original)' : ''}
-                            </option>
-                          ))}
-                        </select>
-                        <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
-                      </div>
-                    </div>
-
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
                         <label className="field-label !mb-0" htmlFor="duplicatetaskmodal-field-5">
@@ -637,18 +615,16 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                         onSelectDate={setTargetDueDate}
                         originalDate={task.dueDate || undefined}
                         disabled={isSubmitting || feedback?.type === 'success'}
+                        compact
                         className="mt-1.5"
                       />
                     </div>
-                  </div>
 
-                  {/* Step 5: Subtask Time Estimate & Priority */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <div className="flex items-center justify-between gap-2 mb-1.5">
                         <label className="field-label !mb-0 flex items-center gap-1.5" htmlFor="duplicatetaskmodal-estimated-hours">
                           <Timer className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
-                          <span>Time Estimated</span>
+                          <span>Time Estimate</span>
                         </label>
                         <span className="text-[11px] text-[var(--text-muted)]">Split across days</span>
                       </div>
@@ -670,13 +646,55 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                         </span>
                       </div>
                     </div>
+                  </div>
 
-                    <PrioritySelector
-                      value={targetPriority}
-                      onChange={setTargetPriority}
-                      labelId="duplicatetaskmodal-priority-label"
-                      disabled={isSubmitting || feedback?.type === 'success'}
-                    />
+                  {/* Progressive disclosure for Initial Status & Priority */}
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      aria-expanded={showMoreOptions}
+                      onClick={() => setShowMoreOptions(prev => !prev)}
+                      className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer"
+                    >
+                      <ChevronDown className={`h-3 w-3 transition-transform ${showMoreOptions ? 'rotate-180' : ''}`} />
+                      <span>{showMoreOptions ? 'Hide extra options' : 'More options (Status & Priority)'}</span>
+                    </button>
+
+                    {showMoreOptions && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2.5">
+                        <div>
+                          <label className="field-label" htmlFor="duplicatetaskmodal-field-4">
+                            Initial Status
+                          </label>
+                          <div className="relative">
+                            <select
+                              value={targetStatus}
+                              onChange={e => setTargetStatus(e.target.value as TaskStatus)}
+                              disabled={isSubmitting || feedback?.type === 'success'}
+                              className="field-control pr-8 cursor-pointer"
+                              id="duplicatetaskmodal-field-4"
+                            >
+                              {(task.status === 'done' || task.status === 'archived') && (
+                                <option value={task.status}>{formatTaskStatus(task.status)} (Original)</option>
+                              )}
+                              {(['pipeline', 'todo', 'in_progress', 'in_review'] as TaskStatus[]).map(s => (
+                                <option key={s} value={s}>
+                                  {formatTaskStatus(s)}{task.status === s ? ' (Original)' : ''}
+                                </option>
+                              ))}
+                            </select>
+                            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
+                          </div>
+                        </div>
+
+                        <PrioritySelector
+                          value={targetPriority}
+                          onChange={setTargetPriority}
+                          labelId="duplicatetaskmodal-priority-label"
+                          disabled={isSubmitting || feedback?.type === 'success'}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   {/* Step 6: Subtask Cognitive Load */}

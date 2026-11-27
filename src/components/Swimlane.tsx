@@ -1026,7 +1026,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 >
                   <span className="flex items-center gap-2">
                     <Archive className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
-                    <span>{showArchived ? 'Hide Completed' : 'Show Completed'}</span>
+                    <span>{showArchived ? 'Hide Archived' : 'Show Archived'}</span>
                   </span>
                   <span className="ledger-badge">{archivedTasks.length}</span>
                 </button>
@@ -1301,7 +1301,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                   setQuickAddDueDate(getLocalOffsetDateKey(1));
                                 }}
                                 aria-label={`Add task to ${col.title} for ${user.name}`}
-                                className={`flex w-full h-20 cursor-pointer flex-col items-center justify-center rounded-[7px] p-3 text-center transition-colors ${
+                                className={`flex w-full h-12 cursor-pointer flex-col items-center justify-center rounded-[7px] px-3 py-2 text-center transition-colors ${
                                   isDropActive
                                     ? 'border border-dashed border-[#1d4ed8] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300'
                                     : 'text-[var(--text-muted)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-secondary)]'

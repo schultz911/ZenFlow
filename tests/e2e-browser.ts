@@ -163,11 +163,12 @@ try {
     await checklist.getByRole('button', { name: 'Skip for now' }).click();
     await checklist.waitFor({ state: 'detached' });
 
-    // Mobile (<640px) defers OnboardingChecklist into the Header menu unless opened manually
+    // Mobile (<640px) shows slim #mobile-onboarding-banner while keeping full #workspace-onboarding-checklist collapsed until tapped
     await page.evaluate(() => localStorage.removeItem('zenflow_onboarding_dismissed_v1_cd-1'));
     await page.setViewportSize({ width: 390, height: 844 });
     await page.reload({ waitUntil: 'networkidle' });
-    assert.equal(await checklist.isVisible(), false, 'OnboardingChecklist must stay hidden below sm: unless opened via Workspace Setup');
+    assert.equal(await checklist.isVisible(), false, 'OnboardingChecklist must stay hidden below sm: unless opened via Setup');
+    await page.locator('#mobile-onboarding-banner').waitFor({ state: 'visible' });
 
     console.log('Browser OnboardingChecklist: Step 1->2->3 transitions, <select> styling, Space sync, mobile deferral, and dismiss/reopen passed.');
     await context.close();
@@ -206,7 +207,7 @@ try {
     await analytics.getByLabel('Analytics scope').selectOption('all');
     assert.ok((await analytics.getByText('Est / Bill', { exact: true }).count()) >= 2, 'AnalyticsModal should label Sections 3 & 4 columns as Est / Bill');
     assert.equal(await analytics.getByText('Billable / Est', { exact: true }).count(), 0, 'AnalyticsModal should not mix Billable / Est wording');
-    await page.getByRole('button', { name: 'Calendar Tool' }).click();
+    await page.getByRole('button', { name: 'Date Range' }).click();
     await page.getByLabel('Analytics start date').fill('2026-01-08');
     await page.getByText('No historical snapshot was saved for this period.').waitFor({ state: 'visible' });
     assert.equal(await page.getByText('Total Employees', { exact: true }).count(), 0);
@@ -398,15 +399,29 @@ try {
     await dupDialog.waitFor({ state: 'detached' });
 
     // Standard task delegation excludes Account Managers, prefers non-overloaded teammate, and deduplicates status options (P1-1, P2-3)
-    await page.locator('#task-card-cd-1-t-kiran-2 button[title="Create and assign subtask"]').click({ force: true });
+    await page.locator('#task-card-cd-1-t-kiran-2 button[aria-label^="Actions for"]').click();
+    const desktopCardMenu = page.locator('body > [role="menu"][aria-label^="Actions for"]');
+    await desktopCardMenu.waitFor({ state: 'visible' });
+    await desktopCardMenu.getByRole('menuitem', { name: 'Create Subtask' }).click();
     await dupDialog.waitFor({ state: 'visible' });
     const dupOwnerOptions = await dupDialog.locator('#duplicatetaskmodal-field-2 option').allTextContents();
     assert.equal(dupOwnerOptions.some(t => /Account/i.test(t)), false, 'DuplicateTaskModal must exclude non-delivery Account Managers');
     assert.equal(await dupDialog.locator('#duplicatetaskmodal-field-2').inputValue(), 'u-design', 'Standard task delegation should prefer non-overloaded teammate over overloaded Ava');
+    await dupDialog.getByRole('button', { name: /More options/i }).click();
     const dupStatusValues = await dupDialog.locator('#duplicatetaskmodal-field-4 option').evaluateAll(opts => opts.map(o => (o as HTMLOptionElement).value));
     assert.equal(new Set(dupStatusValues).size, dupStatusValues.length, `DuplicateTaskModal Initial Status should have no duplicate values: ${JSON.stringify(dupStatusValues)}`);
     await page.keyboard.press('Escape');
     await dupDialog.waitFor({ state: 'detached' });
+
+    // P0: Desktop TaskCard title precedes utility/billable controls in DOM order and billable button is never overlapped
+    const cardFocusOrder = await page.locator('#task-card-cd-1-t-kiran-2').evaluate(card => {
+      const focusables = Array.from(card.querySelectorAll<HTMLElement>('button, a'));
+      const titleIdx = focusables.findIndex(el => Boolean(el.closest('h5')));
+      const billableIdx = focusables.findIndex(el => (el.getAttribute('aria-label') || '').includes('billable'));
+      const menuIdx = focusables.findIndex(el => (el.getAttribute('aria-label') || '').startsWith('Actions for'));
+      return { titleIdx, billableIdx, menuIdx };
+    });
+    assert.ok(cardFocusOrder.titleIdx === 0 && cardFocusOrder.menuIdx > cardFocusOrder.titleIdx && cardFocusOrder.billableIdx > cardFocusOrder.titleIdx, `Card Tab order must start at title: ${JSON.stringify(cardFocusOrder)}`);
 
     // TaskCard single-click opens TaskModal instantaneously (0ms, no double-click inline rename) + Co-assign focus transfer (P1-4, P1-5, P3-3)
     await page.locator('#task-card-cd-1-t-kiran-2 h5 button').click();

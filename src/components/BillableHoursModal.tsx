@@ -24,7 +24,6 @@ const REASON_PRESETS = [
   'Client briefing',
   'Review session',
   'Timer overrun',
-  'Off-board research',
 ];
 
 export const BillableHoursModal: React.FC<BillableHoursModalProps> = ({

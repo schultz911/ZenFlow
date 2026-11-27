@@ -182,6 +182,14 @@ const HeaderComponent: React.FC<HeaderProps> = ({
               title={`Database Status: ${syncStatus === 'connected' ? 'Connected (Firestore)' : 'Connecting...'}`}
               className="mobile-tap-control flex items-center justify-center gap-2 min-w-[44px] sm:min-w-0 px-2.5 py-1.5 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-subtle)] text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             >
+              <Database
+                aria-hidden="true"
+                className={`h-3.5 w-3.5 sm:hidden ${
+                  syncStatus === 'connected'
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-amber-600 dark:text-amber-400'
+                }`}
+              />
               <span
                 className={`h-2 w-2 rounded-full ${
                   syncStatus === 'connected'

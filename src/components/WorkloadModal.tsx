@@ -10,6 +10,7 @@ interface WorkloadModalProps {
   tasks: Task[];
   isOpen: boolean;
   onClose: () => void;
+  onSelectTask?: (taskId: string) => void;
 }
 
 export const WorkloadModal: React.FC<WorkloadModalProps> = ({
@@ -17,6 +18,7 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
   tasks,
   isOpen,
   onClose,
+  onSelectTask,
 }) => {
   const [hoveredDate, setHoveredDate] = useState<string | null>(null);
 
@@ -123,7 +125,9 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                   <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-[var(--border-subtle)] border-t sm:border-t-0 sm:border-l border-[var(--border-subtle)] pt-2.5 sm:pt-0 sm:pl-3 gap-y-2 text-xs tabular-nums">
                     <div className="pr-3">
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">In Progress</p>
-                      <p className="font-semibold text-[#1d4ed8] dark:text-blue-400 mt-0.5">{workload.inProgressCount}</p>
+                      <p className={`font-semibold mt-0.5 ${workload.inProgressCount > 2 ? 'text-red-600 dark:text-red-400 font-bold' : 'text-[#1d4ed8] dark:text-blue-400'}`}>
+                        {workload.inProgressCount > 2 ? `${workload.inProgressCount}/2` : workload.inProgressCount}
+                      </p>
                     </div>
                     <div className="px-3">
                       <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">To Do (Dated)</p>
@@ -347,7 +351,21 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                                 title={item.title}
                                 className="py-2 px-3 font-semibold text-[var(--text-primary)] max-w-[240px] truncate"
                               >
-                                {item.title}
+                                {onSelectTask ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      onClose();
+                                      onSelectTask(item.taskId);
+                                    }}
+                                    title={`Open "${item.title}" to edit or reassign`}
+                                    className="text-left font-semibold text-[#1d4ed8] dark:text-blue-400 hover:underline truncate max-w-full block cursor-pointer"
+                                  >
+                                    {item.title}
+                                  </button>
+                                ) : (
+                                  item.title
+                                )}
                               </td>
                               <td className="py-2 px-3 whitespace-nowrap">
                                 <span className="ledger-badge whitespace-nowrap">

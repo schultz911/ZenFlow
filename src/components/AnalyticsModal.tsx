@@ -43,6 +43,7 @@ import {
 interface AnalyticsModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onJumpToMember?: (user: User) => void;
 }
 
 const EMPTY_USERS: User[] = [];
@@ -52,7 +53,7 @@ const projectName = (task: Task) => task.project?.trim() || 'General / Unnamed';
 const formatEstBill = (estimatedHours: number, billableHours: number) =>
   `${formatHours(estimatedHours)} est / ${formatHours(billableHours)} bill`;
 
-export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose }) => {
+export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose, onJumpToMember }) => {
   const workspace = useWorkspace();
   const { fetchAnalyticsSnapshot } = workspace;
   const { date: today } = getAnalyticsClock();
@@ -581,7 +582,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                   onClick={() => setTimeframe('custom')}
                   className={`segmented-item cursor-pointer ${timeframe === 'custom' ? 'segmented-item-active' : ''}`}
                 >
-                  Calendar Tool
+                  Date Range
                 </button>
               </div>
 
@@ -820,7 +821,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <span className="metric-label">Top Accounts</span>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-medium text-[var(--text-muted)]">Est / Bill</span>
+                      <span className="text-[11px] font-medium text-[var(--text-muted)]">Bill / Est</span>
                       <Briefcase className="h-3.5 w-3.5 text-[var(--text-muted)] shrink-0" />
                     </div>
                   </div>
@@ -832,7 +833,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                             {acct.key}
                           </span>
                           <span className="text-[11px] tabular-nums text-[var(--text-secondary)] shrink-0">
-                            {formatHours(acct.estimatedHours)} est / {formatHours(acct.billableHours)} bill
+                            {formatHours(acct.billableHours)} bill / {formatHours(acct.estimatedHours)} est
                           </span>
                         </div>
                         <div className="metric-track !mt-0">
@@ -913,9 +914,23 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                             {item.user.name.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <p className="text-xs font-semibold text-[var(--text-primary)] truncate">
-                              {item.user.name}
-                            </p>
+                            {onJumpToMember ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onClose();
+                                  onJumpToMember(item.user);
+                                }}
+                                title={`Jump to ${item.user.name}'s swimlane`}
+                                className="text-left text-xs font-semibold text-[#1d4ed8] dark:text-blue-400 hover:underline truncate block max-w-full cursor-pointer"
+                              >
+                                {item.user.name}
+                              </button>
+                            ) : (
+                              <p className="text-xs font-semibold text-[var(--text-primary)] truncate">
+                                {item.user.name}
+                              </p>
+                            )}
                             <p className="text-[11px] text-[var(--text-secondary)] truncate">
                               {getUserTag(item.user).label}
                             </p>
@@ -1009,9 +1024,23 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
                             {item.user.name.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0">
-                            <p className="text-xs font-semibold text-[var(--text-primary)] truncate">
-                              {item.user.name}
-                            </p>
+                            {onJumpToMember ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  onClose();
+                                  onJumpToMember(item.user);
+                                }}
+                                title={`Jump to ${item.user.name}'s swimlane`}
+                                className="text-left text-xs font-semibold text-[#1d4ed8] dark:text-blue-400 hover:underline truncate block max-w-full cursor-pointer"
+                              >
+                                {item.user.name}
+                              </button>
+                            ) : (
+                              <p className="text-xs font-semibold text-[var(--text-primary)] truncate">
+                                {item.user.name}
+                              </p>
+                            )}
                             <p className="text-[11px] text-[var(--text-secondary)] truncate">
                               {getUserTag(item.user).label}
                             </p>
@@ -1049,7 +1078,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose 
             </section>
 
             {/* SECTIONS 3 & 4: CONTEXTUAL KEY ACCOUNTS & KEY DELIVERY UNITS */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
               {/* Left Column: Section 3 */}
               <section className="ledger-frame flex flex-col">
                 <div className="ledger-band flex items-center justify-between gap-2 px-4 py-2.5">

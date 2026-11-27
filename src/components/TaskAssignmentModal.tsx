@@ -76,7 +76,8 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
       initialSnapshotRef.current = '';
       return;
     }
-    const initUser = task.userId || initialAssigneeId || '';
+    const rawInitUser = task.userId || initialAssigneeId || '';
+    const initUser = rawInitUser && eligibleUsers.some(u => u.id === rawInitUser) ? rawInitUser : '';
     const initLoad: CognitiveLoad = task.cognitiveLoad || 'medium';
     const initHours = task.estimatedHours !== undefined ? String(task.estimatedHours) : '';
     const initDue = task.dueDate || (initUser ? getLocalOffsetDateKey(1) : '');
@@ -87,7 +88,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
     setKeepInPipeline(false);
     setSubmitError(null);
     initialSnapshotRef.current = JSON.stringify([initUser, initLoad, initHours, initDue, false]);
-  }, [isOpen, task, initialAssigneeId]);
+  }, [isOpen, task, initialAssigneeId, eligibleUsers]);
 
   const isDirty = useMemo(() => {
     if (!isOpen || !task || !initialSnapshotRef.current) return false;
@@ -336,7 +337,8 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                   const selectedDailyHours = getUserDailyAssignedHours(selectedUserObj, currentTasks);
                   const projectedDailyHours = getUserDailyAssignedHours(selectedUserObj, projectedTasks);
                   const dailyHoursChanged = Math.abs(projectedDailyHours - selectedDailyHours) >= 0.05;
-                  const willOverload = projectedLoad >= 12;
+                  const dailyOverbooked = projectedDailyHours > 8;
+                  const willOverload = projectedLoad >= 12 || dailyOverbooked;
                   return (
                     <div
                       className={`mt-2 flex flex-wrap items-center justify-between gap-2 text-xs px-3 py-1.5 rounded-[7px] border tabular-nums ${
@@ -347,7 +349,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                     >
                       <span>Selected: <strong className="text-[var(--text-primary)]">{selectedUserObj.name}</strong></span>
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className={willOverload ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
+                        <span className={projectedLoad >= 12 ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
                           Load:{' '}
                           <strong>
                             {projectedLoad !== selectedLoad
@@ -355,17 +357,18 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                               : selectedLoad}{' '}
                             / 12 pts
                           </strong>
-                          {willOverload && ' · Will overload'}
+                          {projectedLoad >= 12 && ' · Will overload'}
                         </span>
                         <span aria-hidden="true" className="hidden sm:inline text-[var(--text-muted)]">·</span>
-                        <span>
+                        <span className={dailyOverbooked ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
                           Assigned:{' '}
-                          <strong className="text-[#1d4ed8] dark:text-blue-400">
+                          <strong className={dailyOverbooked ? 'text-red-600 dark:text-red-400' : 'text-[#1d4ed8] dark:text-blue-400'}>
                             {dailyHoursChanged
                               ? `${formatHours(selectedDailyHours)} → ${formatHours(projectedDailyHours)}`
                               : formatHours(selectedDailyHours)}
                             /day
                           </strong>
+                          {dailyOverbooked && ' · Over 8h/day'}
                         </span>
                       </div>
                     </div>
@@ -413,6 +416,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                       disabled={!selectedUserId || isSubmitting}
                       includeToday
                       allowClear={keepInPipeline}
+                      compact
                       className="mt-1.5"
                     />
                   </div>
@@ -420,11 +424,11 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                   {/* Time Estimate Specification */}
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <label className="field-label !mb-0" htmlFor="taskassignmentmodal-field-2">
-                        Time Estimate (Hours)
+                      <label className="field-label !mb-0 whitespace-nowrap" htmlFor="taskassignmentmodal-field-2">
+                        Time Estimate
                       </label>
-                      <span className="text-[11px] text-[var(--text-secondary)] truncate">
-                        Per working day
+                      <span className="text-[11px] text-[var(--text-secondary)] whitespace-nowrap">
+                        Split across days
                       </span>
                     </div>
                     <div className="relative">
@@ -463,7 +467,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                 </div>
 
                 <label
-                  className={`flex items-center gap-2 rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1.5 text-xs select-none ${
+                  className={`flex items-center gap-2.5 min-h-[44px] sm:min-h-0 rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1.5 text-xs select-none ${
                     !selectedUserId ? 'opacity-60 cursor-not-allowed text-[var(--text-secondary)]' : 'text-[var(--text-primary)] cursor-pointer'
                   }`}
                 >
@@ -472,7 +476,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                     disabled={!selectedUserId || isSubmitting}
                     checked={keepInPipeline}
                     onChange={e => setKeepInPipeline(e.target.checked)}
-                    className="rounded border-[var(--border)] h-3.5 w-3.5"
+                    className="rounded border-[var(--border)] h-5 w-5 sm:h-3.5 sm:w-3.5 shrink-0"
                   />
                   <span>Keep in Team Pipeline as assigned (don&rsquo;t move to To Do yet)</span>
                 </label>

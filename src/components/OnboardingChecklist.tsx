@@ -33,6 +33,7 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
   const [dismissed, setDismissed] = useState(true);
   const [hasSynced, setHasSynced] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [connectingKey, setConnectingKey] = useState(false);
@@ -273,11 +274,46 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
   }
 
   return (
-    <section
-      id="workspace-onboarding-checklist"
-      aria-label="Workspace Setup"
-      className={`ledger-frame mb-4 ${forceOpen ? 'block' : 'hidden sm:block'}`}
-    >
+    <>
+      {!forceOpen && !mobileOpen && !allComplete && (
+        <div
+          id="mobile-onboarding-banner"
+          className="sm:hidden ledger-frame mb-3 px-3 py-2 flex items-center justify-between gap-2"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="h-2 w-2 rounded-full bg-amber-500 shrink-0" aria-hidden="true" />
+            <span className="text-xs font-semibold text-[var(--text-primary)] truncate">
+              Sync with ClickUp — optional · {completedCount}/{totalSteps}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setMobileOpen(true);
+                setIsExpanded(true);
+              }}
+              className="mobile-tap-control rounded-[5px] px-2.5 py-1 text-xs font-semibold text-[#1d4ed8] dark:text-blue-400 hover:bg-[var(--surface-subtle)] cursor-pointer"
+            >
+              Setup
+            </button>
+            <button
+              type="button"
+              onClick={handleDismiss}
+              aria-label="Skip workspace setup"
+              className="mobile-tap-control inline-flex items-center justify-center rounded-[5px] px-2 py-1 text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] cursor-pointer"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      <section
+        id="workspace-onboarding-checklist"
+        aria-label="Workspace Setup"
+        className={`ledger-frame mb-4 ${forceOpen || mobileOpen ? 'block' : 'hidden sm:block'}`}
+      >
       <div className="ledger-band flex items-center justify-between gap-4 px-4 py-2.5 sm:px-5">
         <div className="flex items-center gap-2.5">
           <p className="text-[13px] font-bold tracking-tight text-[var(--text-primary)]">Workspace Setup</p>
@@ -322,14 +358,14 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 text-xs font-semibold text-[var(--text-primary)]">
                 <KeyRound className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
-                <span>Add personal ClickUp API key</span>
+                <span>Sync with ClickUp (optional)</span>
               </div>
               <p className="text-xs text-[var(--text-secondary)] mt-0.5">
                 {step1Done ? (
                   'Connected and verified against ClickUp.'
                 ) : (
                   <>
-                    Unlocks your ClickUp spaces, member mapping, and task sync. Find your token in ClickUp under{' '}
+                    Connect your ClickUp API token to sync tasks and spaces. Find it under{' '}
                     <strong className="text-[var(--text-primary)] font-semibold">Settings → Apps → API Token → Generate</strong>{' '}
                     <a
                       href="https://app.clickup.com/settings/apps"
@@ -487,5 +523,6 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
         )}
       </div>
     </section>
+    </>
   );
 };

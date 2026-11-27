@@ -658,14 +658,12 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
 
                         {task.priority && priorityLabel && (
                           <span
-                            role="img"
-                            aria-label={priorityLabel}
                             title={priorityLabel}
-                            className={`inline-flex items-center justify-center leading-none shrink-0 ${
+                            className={`inline-flex items-center gap-0.5 leading-none shrink-0 text-[11px] font-semibold capitalize ${
                               task.priority === 'high'
                                 ? 'text-red-600 dark:text-red-400'
                                 : task.priority === 'medium'
-                                ? 'text-amber-600 dark:text-amber-400'
+                                ? 'text-amber-700 dark:text-amber-400'
                                 : 'text-[var(--text-muted)]'
                             }`}
                           >
@@ -679,6 +677,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                                   : ''
                               }`}
                             />
+                            <span>{task.priority === 'medium' ? 'Med' : task.priority}</span>
                           </span>
                         )}
                       </div>

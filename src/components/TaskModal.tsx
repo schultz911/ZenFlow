@@ -596,6 +596,8 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   </button>
                 )}
 
+                <div className="h-4 w-px bg-[var(--border)] mx-1 shrink-0" aria-hidden="true" />
+
                 <button
                   type="button"
                   onClick={requestClose}
@@ -983,8 +985,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                           ref={coAssignToggleRef}
                           type="button"
                           onClick={() => setShowCoAssignPicker(true)}
-                          className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer"
-                          style={{ minHeight: 'auto' }}
+                          className="mt-1.5 inline-flex items-center gap-1 min-h-[44px] sm:min-h-0 px-1 sm:px-0 text-[11px] font-medium text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer"
                         >
                           <Users className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
                           <span>+ Co-assign teammate</span>
@@ -1384,8 +1385,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     </div>
 
                     {activities.length === 0 ? (
-                      <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] p-3 text-center text-[11px] text-[var(--text-secondary)]">
-                        Created {formatActivityTime(taskToEdit.createdAt || '')} · No modifications recorded yet
+                      <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] px-4 py-10 text-center space-y-1">
+                        <p className="text-xs font-semibold text-[var(--text-primary)]">
+                          Created {formatActivityTime(taskToEdit.createdAt || '')}
+                        </p>
+                        <p className="text-[11px] text-[var(--text-secondary)]">
+                          Edits, status changes, reassignments, and logged hours will appear here.
+                        </p>
                       </div>
                     ) : (
                       <div className="max-h-56 overflow-y-auto rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] divide-y divide-[var(--border-subtle)] text-xs">

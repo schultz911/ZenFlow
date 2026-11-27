@@ -898,6 +898,13 @@ function DashboardContent() {
           user={workloadModalUser}
           tasks={tasks}
           onClose={() => setWorkloadModalUser(null)}
+          onSelectTask={taskId => {
+            const target = tasks.find(t => t.id === taskId);
+            if (target) {
+              setTaskToEdit(target);
+              setTaskModalOpen(true);
+            }
+          }}
         />
 
         <DeleteUserModal
@@ -918,6 +925,24 @@ function DashboardContent() {
         <AnalyticsModal
           isOpen={analyticsModalOpen}
           onClose={() => setAnalyticsModalOpen(false)}
+          onJumpToMember={member => {
+            if (member.role === 'content' || member.role === 'design') {
+              setActiveRoleTab(member.role);
+            } else {
+              setActiveRoleTab('all');
+            }
+            if (activeBoardId !== 'all') {
+              const belongsToBoard =
+                member.id === activeBoardId || member.creativeDirectorId === activeBoardId;
+              if (!belongsToBoard) {
+                setActiveBoardId('all');
+              }
+            }
+            requestAnimationFrame(() => {
+              const el = document.getElementById(`swimlane-${member.id}`);
+              el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+          }}
         />
 
         <EditUserModal

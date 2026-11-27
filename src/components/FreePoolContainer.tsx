@@ -45,6 +45,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
 }) => {
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
   const [dragOverUserId, setDragOverUserId] = useState<string | null>(null);
+  const [dropError, setDropError] = useState<string | null>(null);
   const [pickerUserId, setPickerUserId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -177,14 +178,27 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
         <div className="free-pool-filters">
           <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
             <span>Across boards · Under {targetHoursLabel} assigned today</span>
-            {unassignedTotal > 0 && (
-              <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
-                <span aria-hidden="true" className="hidden sm:inline mr-1">·</span>
-                {unassignedTotal} unassigned pipeline brief{unassignedTotal === 1 ? '' : 's'} ready to assign{' '}
-                <span className="hidden sm:inline">(drag here or click Assign brief)</span>
-                <span className="sm:hidden">(tap Assign brief)</span>
-              </span>
-            )}
+            {(() => {
+              const filteredBriefCount =
+                roleFilter === 'content'
+                  ? unassignedByTeam.content.length
+                  : roleFilter === 'design'
+                  ? unassignedByTeam.design.length
+                  : unassignedTotal;
+              if (filteredBriefCount <= 0) return null;
+              const breakdown =
+                roleFilter === 'all' && unassignedByTeam.content.length > 0 && unassignedByTeam.design.length > 0
+                  ? ` (${unassignedByTeam.content.length} Content · ${unassignedByTeam.design.length} Design)`
+                  : '';
+              return (
+                <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
+                  <span aria-hidden="true" className="hidden sm:inline mr-1">·</span>
+                  {filteredBriefCount} unassigned {roleFilter === 'all' ? '' : `${roleLabels[roleFilter]} `}brief{filteredBriefCount === 1 ? '' : 's'} ready{breakdown}{' '}
+                  <span className="hidden sm:inline">(drag matching brief here or click Assign brief)</span>
+                  <span className="sm:hidden">(tap Assign brief)</span>
+                </span>
+              );
+            })()}
           </div>
           <div className="segmented-track" role="group" aria-label="Filter available members by discipline">
             {roleOptions.map(({ role, count }) => (
@@ -200,6 +214,19 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
             ))}
           </div>
         </div>
+
+        {dropError && (
+          <div role="alert" className="mx-3 mt-2 rounded-[6px] border border-[var(--danger-border)] bg-[var(--danger-soft)] px-3 py-1.5 text-xs text-red-700 dark:text-red-300 flex items-center justify-between gap-2">
+            <span>{dropError}</span>
+            <button
+              type="button"
+              onClick={() => setDropError(null)}
+              className="text-[11px] font-semibold underline cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
 
         <div className="free-pool-members" role="list" aria-label="Available members" tabIndex={0}>
           {filteredFreeUsers.length === 0 ? (
@@ -248,6 +275,11 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                     if (!draggedTaskId) draggedTaskId = e.dataTransfer.getData('text/plain');
                     const draggedTask = tasks.find(t => t.id === draggedTaskId);
                     if (draggedTask) {
+                      if (draggedTask.team && user.role && draggedTask.team !== user.role) {
+                        setDropError(`Cannot assign a ${draggedTask.team} brief to ${user.name} (${tagInfo.label}).`);
+                        return;
+                      }
+                      setDropError(null);
                       onExpandedChange(false);
                       onAssignBrief(draggedTask, user.id);
                     }
@@ -377,6 +409,19 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                 </div>
               );
             })
+          )}
+          {filteredFreeUsers.length === 1 && (
+            <div className="hidden md:flex flex-1 items-center justify-between gap-4 px-5 py-3 text-xs text-[var(--text-secondary)]">
+              <span>
+                {(() => {
+                  const onlyUser = filteredFreeUsers[0];
+                  const matching = onlyUser.role === 'design' ? unassignedByTeam.design : unassignedByTeam.content;
+                  return matching.length > 0
+                    ? `${matching.length} matching ${roleLabels[onlyUser.role === 'design' ? 'design' : 'content']} pipeline brief${matching.length === 1 ? '' : 's'} ready to drag or assign.`
+                    : `All ${roleLabels[onlyUser.role === 'design' ? 'design' : 'content']} pipeline briefs are currently assigned.`;
+                })()}
+              </span>
+            </div>
           )}
         </div>
       </aside>

@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { Task, User, RoleFilter } from '../types';
 import { getDaysRemaining, getTaskAssigneeIds } from '../utils/workload';
-import { AlertTriangle, Clock } from 'lucide-react';
+import { AlertTriangle, Clock, Pause, Play } from 'lucide-react';
 
 interface MarqueeRibbonProps {
   tasks: Task[];
@@ -22,6 +22,7 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
   const [shouldScroll, setShouldScroll] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
 
   const { urgentTasks, overdueCount, dueTodayCount } = useMemo(() => {
     const filtered: Array<Task & { days: number }> = [];
@@ -84,9 +85,9 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
       <div className="marquee-ribbon-layout mx-auto max-w-[1400px] py-1.5 [--ribbon-gutter:1rem] sm:[--ribbon-gutter:1.5rem] lg:[--ribbon-gutter:2rem]">
         <div
           id="due-tasks-marquee-ribbon"
-          className="flex flex-col items-stretch sm:flex-row sm:items-center gap-1.5 sm:gap-3 rounded-[10px] border border-red-200 dark:border-red-500/35 bg-[#fef2f2] dark:bg-[#231418] px-2.5 sm:px-3 py-1.5 text-xs overflow-hidden"
+          className="flex flex-row items-center gap-2 sm:gap-3 rounded-[10px] border border-red-200 dark:border-red-500/35 bg-[#fef2f2] dark:bg-[#231418] px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs overflow-hidden"
         >
-          <div className="ledger-alert-badge shrink-0 z-10 select-none self-start sm:self-auto">
+          <div className="ledger-alert-badge shrink-0 z-10 select-none">
             <AlertTriangle aria-hidden="true" className="h-3 w-3 shrink-0" />
             <span className="uppercase tracking-wider">
               {overdueCount > 0 && dueTodayCount > 0
@@ -97,9 +98,10 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
             </span>
           </div>
 
-          <div ref={containerRef} className="min-w-0 w-full sm:flex-1 overflow-hidden relative">
+          <div ref={containerRef} className="min-w-0 flex-1 overflow-hidden relative">
             <div
               ref={contentRef}
+              data-paused={isPaused ? 'true' : undefined}
               className={`${
                 shouldScroll
                   ? 'animate-marquee items-center divide-x divide-red-200/80 dark:divide-red-500/25'
@@ -144,6 +146,19 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
               })}
             </div>
           </div>
+
+          {shouldScroll && (
+            <button
+              type="button"
+              onClick={() => setIsPaused(prev => !prev)}
+              aria-pressed={isPaused}
+              aria-label={isPaused ? 'Resume urgent tasks ticker' : 'Pause urgent tasks ticker'}
+              title={isPaused ? 'Resume ticker' : 'Pause ticker'}
+              className="hidden sm:inline-flex items-center justify-center h-6 w-6 shrink-0 rounded-[5px] border border-red-200 dark:border-red-500/35 bg-[var(--surface)]/80 text-red-700 dark:text-red-300 hover:bg-[var(--surface)] transition-colors cursor-pointer"
+            >
+              {isPaused ? <Play className="h-3 w-3" /> : <Pause className="h-3 w-3" />}
+            </button>
+          )}
         </div>
       </div>
     </div>

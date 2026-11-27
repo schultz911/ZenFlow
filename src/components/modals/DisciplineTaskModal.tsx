@@ -51,6 +51,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
 
   const [needsContent, setNeedsContent] = useState(true);
   const [needsDesign, setNeedsDesign] = useState(false);
+  const [activeTab, setActiveTab] = useState<'brief' | 'specs'>('brief');
   const [showClickupDestination, setShowClickupDestination] = useState(false);
 
   // ClickUp Space / Folder / List state
@@ -534,6 +535,37 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                 </button>
               </div>
             </div>
+
+            {/* 2-Tab Navigation: Brief & Routing vs Discipline Specs */}
+            <div role="tablist" aria-label="Brief sections" className="flex items-center gap-1 border-b border-[var(--border)] bg-[var(--surface-muted)] px-5">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'brief'}
+                onClick={() => setActiveTab('brief')}
+                className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+                  activeTab === 'brief'
+                    ? 'border-[var(--accent)] text-[#1d4ed8] dark:text-blue-400'
+                    : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                Brief &amp; Routing
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={activeTab === 'specs'}
+                disabled={!needsContent && !needsDesign}
+                onClick={() => setActiveTab('specs')}
+                className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                  activeTab === 'specs'
+                    ? 'border-[var(--accent)] text-[#1d4ed8] dark:text-blue-400'
+                    : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                Discipline Specs{selectedDisciplines.length > 0 ? ` (${selectedDisciplines.length})` : ''}
+              </button>
+            </div>
           </div>
 
           {/* Scrollable Form Body */}
@@ -562,6 +594,8 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                 </div>
               )}
 
+              {activeTab === 'brief' && (
+                <>
               {/* Shared Section: Task Basics FIRST */}
               <div className="space-y-4">
                 <div>
@@ -940,7 +974,11 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                   </p>
                 ))}
               </div>
+                </>
+              )}
 
+              {activeTab === 'specs' && (
+                <>
               {/* Content Discipline Fields */}
               {needsContent && (
                 <ContentSpecFields
@@ -965,6 +1003,8 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                   brandAssetsReferences={brandAssetsReferences}
                   onChangeBrandAssetsReferences={setBrandAssetsReferences}
                 />
+              )}
+                </>
               )}
             </div>
 

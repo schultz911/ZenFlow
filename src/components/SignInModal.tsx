@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, AlertCircle, ShieldAlert, Loader2, LogIn, CheckCircle2 } from 'lucide-react';
+import { X, AlertCircle, ShieldAlert, Loader2, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../context/DashboardContext';
 import { getSuperadminEmail } from '../domain/permissions';
 import { DialogPanel } from './ui/DialogPanel';
@@ -64,11 +64,28 @@ export const SignInModal: React.FC<SignInModalProps> = ({ isOpen, onClose, canDi
           >
             <div className="dialog-header">
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-400">
-                  <LogIn className="h-4 w-4" />
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-[#121418] dark:bg-[#1e2430] border border-[#262b36] dark:border-white/10 text-blue-500">
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-4.5 w-4.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M 4.5 7.2 C 8.5 4.8, 14 9.6, 19.5 7 L 4.5 17 C 10 14.4, 15.5 19.2, 19.5 16.8" />
+                  </svg>
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">Sign In to zenFlow</h2>
+                  <h2 className="text-sm font-bold tracking-tight text-[var(--text-primary)] flex items-baseline gap-1">
+                    <span>Sign In to</span>
+                    <span className="inline-flex items-baseline leading-none">
+                      <span>zen</span>
+                      <span className="font-flowy text-base font-bold text-[#1d4ed8] dark:text-blue-400 ml-0.5">Flow</span>
+                    </span>
+                  </h2>
                   <p className="text-[11px] text-[var(--text-secondary)] truncate">
                     Authenticate with your registered Google account.
                   </p>
