@@ -248,7 +248,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         } ${isDragging
           ? 'border-[#1d4ed8] dark:border-blue-400 bg-blue-50/50 dark:bg-blue-950/20 ring-2 ring-blue-500/20'
           : task.status === 'done'
-            ? 'bg-[var(--surface-subtle)] opacity-85 hover:opacity-100'
+            ? 'bg-[var(--surface-subtle)]'
             : ''
         }`}
     >
@@ -258,7 +258,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           {canEdit && (
             <div
               title="Drag to move, reorder, or assign to another team member"
-              className="cursor-grab active:cursor-grabbing text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-colors shrink-0 -ml-1"
+              className="hidden sm:block cursor-grab active:cursor-grabbing text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-colors shrink-0 -ml-1"
             >
               <GripVertical className="h-3.5 w-3.5" />
             </div>
@@ -292,120 +292,124 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           </span>
         </div>
 
-        {/* Top Right: Quick Hover Actions & Mobile Overflow + Tabular Estimate / Billable Duration */}
+        {/* Top Right: Floating Hover Actions (desktop) & Mobile Overflow + Tabular Estimate / Billable Duration */}
         <div className={`flex items-center shrink-0 ${assigneeCount > 1 ? 'gap-1' : 'gap-1.5'}`}>
-          <div className="hidden sm:flex items-center card-actions [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
-            {canDuplicateToBoard && onDuplicateToBoard && (
+          {canEdit && (
+            <div className="hidden sm:flex items-center card-actions absolute right-2 top-2 z-10 rounded-[6px] border border-[var(--border)] bg-[var(--surface)]/95 px-0.5 py-0.5 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:pointer-events-none [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-hover:pointer-events-auto [@media(hover:hover)]:group-focus-within:opacity-100 [@media(hover:hover)]:group-focus-within:pointer-events-auto transition-opacity gap-0.5 shrink-0">
+              {canDuplicateToBoard && onDuplicateToBoard && (
+                <button
+                  type="button"
+                  onClick={e => {
+                    e.stopPropagation();
+                    onDuplicateToBoard(task);
+                  }}
+                  title="Create and assign subtask"
+                  aria-label={`Create subtask from ${task.title}`}
+                  className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[#1d4ed8] dark:hover:text-blue-400 transition-colors cursor-pointer"
+                >
+                  <CopyPlus className="h-3 w-3" />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={e => {
                   e.stopPropagation();
-                  onDuplicateToBoard(task);
+                  onEdit(task);
                 }}
-                title="Create and assign subtask"
-                aria-label={`Create subtask from ${task.title}`}
-                className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[#1d4ed8] dark:hover:text-blue-400 transition-colors cursor-pointer"
+                title="Edit task details"
+                aria-label={`Edit ${task.title}`}
+                className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
               >
-                <CopyPlus className="h-3 w-3" />
+                <Edit2 className="h-3 w-3" />
               </button>
-            )}
-            <button
-              type="button"
-              onClick={e => {
-                e.stopPropagation();
-                onEdit(task);
-              }}
-              title="Edit task details"
-              aria-label={`Edit ${task.title}`}
-              className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
-            >
-              <Edit2 className="h-3 w-3" />
-            </button>
-            <button
-              type="button"
-              onClick={e => {
-                e.stopPropagation();
-                onDelete(task.id);
-              }}
-              title="Delete task"
-              aria-label={`Delete ${task.title}`}
-              className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer"
-            >
-              <Trash2 className="h-3 w-3" />
-            </button>
-          </div>
-
-          <div className="relative sm:hidden card-actions shrink-0">
-            <button
-              ref={mobileCardMenuBtnRef}
-              type="button"
-              aria-haspopup="menu"
-              aria-expanded={showMobileCardMenu}
-              aria-label={`Actions for ${task.title}`}
-              title={`Task actions for ${task.title}`}
-              onClick={e => {
-                e.stopPropagation();
-                setShowMobileCardMenu(prev => !prev);
-              }}
-              className="mobile-tap-square inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </button>
-            {showMobileCardMenu && createPortal(
-              <div
-                ref={mobileCardMenuPopRef}
-                role="menu"
-                aria-label={`Actions for ${task.title}`}
-                style={
-                  mobileCardMenuPos
-                    ? { top: `${mobileCardMenuPos.top}px`, left: `${mobileCardMenuPos.left}px` }
-                    : { top: 0, left: 0, visibility: 'hidden' }
-                }
-                onClick={e => e.stopPropagation()}
-                className="menu-surface fixed z-50 w-44 rounded-[9px] border border-[var(--border)] p-1 text-[var(--text-primary)]"
+              <button
+                type="button"
+                onClick={e => {
+                  e.stopPropagation();
+                  onDelete(task.id);
+                }}
+                title="Delete task"
+                aria-label={`Delete ${task.title}`}
+                className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:bg-red-50 dark:hover:bg-red-500/15 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer"
               >
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setShowMobileCardMenu(false);
-                    onEdit(task);
-                  }}
-                  className="menu-item cursor-pointer"
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+
+          {canEdit && (
+            <div className="relative sm:hidden card-actions shrink-0">
+              <button
+                ref={mobileCardMenuBtnRef}
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={showMobileCardMenu}
+                aria-label={`Actions for ${task.title}`}
+                title={`Task actions for ${task.title}`}
+                onClick={e => {
+                  e.stopPropagation();
+                  setShowMobileCardMenu(prev => !prev);
+                }}
+                className="mobile-tap-square inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+              {showMobileCardMenu && createPortal(
+                <div
+                  ref={mobileCardMenuPopRef}
+                  role="menu"
+                  aria-label={`Actions for ${task.title}`}
+                  style={
+                    mobileCardMenuPos
+                      ? { top: `${mobileCardMenuPos.top}px`, left: `${mobileCardMenuPos.left}px` }
+                      : { top: 0, left: 0, visibility: 'hidden' }
+                  }
+                  onClick={e => e.stopPropagation()}
+                  className="menu-surface fixed z-50 w-44 rounded-[9px] border border-[var(--border)] p-1 text-[var(--text-primary)]"
                 >
-                  <Edit2 className="h-3.5 w-3.5" />
-                  <span>Edit Details</span>
-                </button>
-                {canDuplicateToBoard && onDuplicateToBoard && (
                   <button
                     type="button"
                     role="menuitem"
                     onClick={() => {
                       setShowMobileCardMenu(false);
-                      onDuplicateToBoard(task);
+                      onEdit(task);
                     }}
-                    className="menu-item cursor-pointer text-[#1d4ed8] dark:text-blue-400"
+                    className="menu-item cursor-pointer"
                   >
-                    <CopyPlus className="h-3.5 w-3.5" />
-                    <span>Create Subtask</span>
+                    <Edit2 className="h-3.5 w-3.5" />
+                    <span>Edit Details</span>
                   </button>
-                )}
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setShowMobileCardMenu(false);
-                    onDelete(task.id);
-                  }}
-                  className="menu-item cursor-pointer text-red-600 dark:text-red-400"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  <span>Delete Task</span>
-                </button>
-              </div>,
-              document.body
-            )}
-          </div>
+                  {canDuplicateToBoard && onDuplicateToBoard && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setShowMobileCardMenu(false);
+                        onDuplicateToBoard(task);
+                      }}
+                      className="menu-item cursor-pointer text-[#1d4ed8] dark:text-blue-400"
+                    >
+                      <CopyPlus className="h-3.5 w-3.5" />
+                      <span>Create Subtask</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setShowMobileCardMenu(false);
+                      onDelete(task.id);
+                    }}
+                    className="menu-item cursor-pointer text-red-600 dark:text-red-400"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>Delete Task</span>
+                  </button>
+                </div>,
+                document.body
+              )}
+            </div>
+          )}
 
           {assigneeCount > 1 && (
             <span
@@ -424,41 +428,61 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   ? `Your share: ${sharedEstimatedHours}h (${task.estimatedHours}h total split across ${assigneeCount} assignees)`
                   : `Estimated: ${task.estimatedHours}h`
               }
-              className="text-[11px] font-medium text-[var(--text-muted)] tabular-nums shrink-0"
+              className={`text-[11px] font-medium tabular-nums shrink-0 ${
+                task.status === 'done' ? 'text-[var(--text-secondary)]' : 'text-[var(--text-muted)]'
+              }`}
             >
               {sharedEstimatedHours}h
             </span>
           )}
           {billableMs > 0 || task.status === 'in_progress' ? (
-            <button
-              type="button"
-              onClick={e => {
-                e.stopPropagation();
-                onAdjustBillableHours?.(task);
-              }}
-              aria-label={
-                assigneeCount > 1
-                  ? `Adjust billable duration for ${task.title} (${formatBillableHours(sharedBillableMs)} share of ${formatBillableHours(billableMs)} total)`
-                  : `Adjust billable duration for ${task.title} (${formatBillableHours(sharedBillableMs)})`
-              }
-              title={
-                assigneeCount > 1
-                  ? `Your billable share: ${formatBillableDetailed(sharedBillableMs)} (${formatBillableDetailed(billableMs)} total across ${assigneeCount} assignees) · Click to correct hours`
-                  : `Billable Duration: ${formatBillableDetailed(sharedBillableMs)} · Click to correct hours`
-              }
-              className="mobile-tap-square sm:!min-w-0 sm:min-h-0 -my-2.5 sm:my-0 inline-flex items-center justify-center shrink-0 cursor-pointer group/timer"
-            >
-              <span
-                className={`inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums select-none transition-colors ${task.status === 'in_progress'
-                  ? 'bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 group-hover/timer:bg-blue-100 dark:group-hover/timer:bg-blue-500/25'
-                  : 'text-[var(--text-secondary)] group-hover/timer:bg-[var(--surface-subtle)] group-hover/timer:text-[var(--text-primary)]'
-                  }`}
+            canEdit ? (
+              <button
+                type="button"
+                onClick={e => {
+                  e.stopPropagation();
+                  onAdjustBillableHours?.(task);
+                }}
+                aria-label={
+                  assigneeCount > 1
+                    ? `Adjust billable duration for ${task.title} (${formatBillableHours(sharedBillableMs)} share of ${formatBillableHours(billableMs)} total)`
+                    : `Adjust billable duration for ${task.title} (${formatBillableHours(sharedBillableMs)})`
+                }
+                title={
+                  assigneeCount > 1
+                    ? `Your billable share: ${formatBillableDetailed(sharedBillableMs)} (${formatBillableDetailed(billableMs)} total across ${assigneeCount} assignees) · Click to correct hours`
+                    : `Billable Duration: ${formatBillableDetailed(sharedBillableMs)} · Click to correct hours`
+                }
+                className="mobile-tap-square sm:!min-w-0 sm:min-h-0 -my-2.5 sm:my-0 inline-flex items-center justify-center shrink-0 cursor-pointer group/timer"
               >
-                <Timer className={`h-2.5 w-2.5 ${task.status === 'in_progress' ? 'text-[#1d4ed8] dark:text-blue-400' : 'text-[var(--text-muted)] group-hover/timer:text-[#1d4ed8]'}`} />
+                <span
+                  className={`inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums select-none transition-colors ${task.status === 'in_progress'
+                    ? 'bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 group-hover/timer:bg-blue-100 dark:group-hover/timer:bg-blue-500/25'
+                    : 'text-[var(--text-secondary)] group-hover/timer:bg-[var(--surface-subtle)] group-hover/timer:text-[var(--text-primary)]'
+                    }`}
+                >
+                  <Timer className={`h-2.5 w-2.5 ${task.status === 'in_progress' ? 'text-[#1d4ed8] dark:text-blue-400' : 'text-[var(--text-muted)] group-hover/timer:text-[#1d4ed8]'}`} />
+                  <span>{formatBillableHours(sharedBillableMs)}</span>
+                </span>
+              </button>
+            ) : (
+              <span
+                title={
+                  assigneeCount > 1
+                    ? `Billable share: ${formatBillableDetailed(sharedBillableMs)} (${formatBillableDetailed(billableMs)} total across ${assigneeCount} assignees)`
+                    : `Billable Duration: ${formatBillableDetailed(sharedBillableMs)}`
+                }
+                className={`inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums select-none shrink-0 ${
+                  task.status === 'in_progress'
+                    ? 'bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300'
+                    : 'text-[var(--text-secondary)]'
+                }`}
+              >
+                <Timer className={`h-2.5 w-2.5 ${task.status === 'in_progress' ? 'text-[#1d4ed8] dark:text-blue-400' : 'text-[var(--text-secondary)]'}`} />
                 <span>{formatBillableHours(sharedBillableMs)}</span>
               </span>
-            </button>
-          ) : (
+            )
+          ) : canEdit ? (
             <button
               type="button"
               onClick={e => {
@@ -474,7 +498,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 <span>0h</span>
               </span>
             </button>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -497,7 +521,11 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               {task.client}
             </span>
           )}
-          {task.client && task.project && <span className="text-[var(--text-muted)]">·</span>}
+          {task.client && task.project && (
+            <span className={task.status === 'done' ? 'text-[var(--text-secondary)]' : 'text-[var(--text-muted)]'}>
+              ·
+            </span>
+          )}
           {task.project && (
             <span className="truncate">
               {task.project}
@@ -594,7 +622,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               <CheckCircle2 className="h-3 w-3 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span>{formatCompletedDate(task.completedAt || task.updatedAt)}</span>
             </div>
-          ) : (
+          ) : canEdit ? (
             <button
               ref={snoozeTriggerRef}
               type="button"
@@ -615,10 +643,24 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               <Clock className="h-3 w-3 shrink-0" />
               <span>{formatDateOnly(task.dueDate)}</span>
             </button>
+          ) : (
+            <span
+              title={pillInfo.label}
+              className={`inline-flex items-center gap-1 text-[11px] leading-none tabular-nums select-none ${
+                pillInfo.iconClass.includes('red')
+                  ? 'font-bold text-red-600 dark:text-red-400'
+                  : pillInfo.iconClass.includes('orange') || pillInfo.iconClass.includes('amber') || pillInfo.iconClass.includes('yellow')
+                  ? 'font-semibold text-amber-700 dark:text-amber-400'
+                  : 'font-medium text-[var(--text-secondary)]'
+              }`}
+            >
+              <Clock className="h-3 w-3 shrink-0" />
+              <span>{formatDateOnly(task.dueDate)}</span>
+            </span>
           )}
 
-          {/* Quick Reschedule Snooze Flyout Rendered via React Portal at high z-index (active columns only) */}
-          {!isDoneOrArchived && showSnoozeFlyout && createPortal(
+          {/* Quick Reschedule Snooze Flyout Rendered via React Portal at high z-index (editable active columns only) */}
+          {canEdit && !isDoneOrArchived && showSnoozeFlyout && createPortal(
             <div
               ref={flyoutMenuRef}
               role="dialog"
@@ -629,7 +671,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   : { top: 0, left: 0, visibility: 'hidden' }
               }
               onClick={e => e.stopPropagation()}
-              className="menu-surface fixed z-[9999] w-56 rounded-[9px] border border-[var(--border)] p-1.5 text-[var(--text-primary)]"
+              className="menu-surface fixed z-[9999] w-64 sm:w-56 rounded-[9px] border border-[var(--border)] p-1.5 text-[var(--text-primary)]"
             >
               <div className="px-2 py-1 border-b border-[var(--border-subtle)] text-[11px] font-semibold text-[var(--text-secondary)] uppercase tracking-wider flex items-center justify-between">
                 <span>Quick Reschedule</span>
@@ -745,7 +787,8 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           )}
         </div>
 
-        {/* Quick status stepper button */}
+        {/* Quick status stepper button (hidden for read-only viewers) */}
+        {canEdit && (
         <div className="flex items-center gap-1">
           {prevStatus && (
             <button
@@ -790,6 +833,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             </button>
           ) : null}
         </div>
+        )}
       </div>
     </motion.div>
   );

@@ -13,6 +13,7 @@ import {
 interface RetainerSwimlaneProps {
   user: User;
   tasks: Task[];
+  canEdit?: boolean;
   defaultOpenAdd?: boolean;
   onQuickAdd: (
     userId: string,
@@ -27,6 +28,7 @@ interface RetainerSwimlaneProps {
 const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
   user,
   tasks,
+  canEdit = true,
   defaultOpenAdd = false,
   onQuickAdd,
   onEditTask,
@@ -106,34 +108,36 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
           </span>
         </div>
 
-        <div className="flex items-center gap-1.5 shrink-0">
-          <button
-            ref={toggleBtnRef}
-            type="button"
-            onClick={() => {
-              setIsAdding(prev => !prev);
-              setNewTitle('');
-            }}
-            title={isAdding ? 'Cancel adding task' : 'Add ongoing task'}
-            className={`mobile-tap-control sm:min-h-0 flex items-center gap-1 rounded-[5px] px-2 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors cursor-pointer ${
-              isAdding
-                ? 'bg-[var(--surface-subtle)] text-[var(--text-primary)] border border-[var(--border)]'
-                : 'text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
-            }`}
-          >
-            {isAdding ? (
-              <>
-                <X className="h-3 w-3 shrink-0" />
-                <span>Cancel</span>
-              </>
-            ) : (
-              <>
-                <Plus className="h-3 w-3 shrink-0" />
-                <span>Add to Ongoing</span>
-              </>
-            )}
-          </button>
-        </div>
+        {canEdit && (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button
+              ref={toggleBtnRef}
+              type="button"
+              onClick={() => {
+                setIsAdding(prev => !prev);
+                setNewTitle('');
+              }}
+              title={isAdding ? 'Cancel adding task' : 'Add ongoing task'}
+              className={`mobile-tap-control sm:min-h-0 flex items-center gap-1 rounded-[5px] px-2 py-1 text-[11px] font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                isAdding
+                  ? 'bg-[var(--surface-subtle)] text-[var(--text-primary)] border border-[var(--border)]'
+                  : 'text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
+              }`}
+            >
+              {isAdding ? (
+                <>
+                  <X className="h-3 w-3 shrink-0" />
+                  <span>Cancel</span>
+                </>
+              ) : (
+                <>
+                  <Plus className="h-3 w-3 shrink-0" />
+                  <span>Add to Ongoing</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Inline Quick Add into Retainer */}
@@ -227,49 +231,51 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                   </div>
                 </div>
 
-                {/* Ruled Footer: Prominent Subtask CTA + Edit/Delete */}
-                <div className="pt-1.5 border-t border-[var(--border-subtle)] flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={e => {
-                      e.stopPropagation();
-                      onCreateSubtask(task);
-                    }}
-                    title="Create and schedule a subtask from this ongoing item"
-                    aria-label={`Create subtask from ${task.title}`}
-                    className="mobile-tap-control sm:min-h-0 inline-flex items-center gap-1 rounded-[5px] bg-[var(--accent-soft)] px-2 py-1 text-[11px] font-semibold text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25 transition-colors cursor-pointer"
-                  >
-                    <CopyPlus className="h-3 w-3 shrink-0" />
-                    <span>Subtask</span>
-                  </button>
+                {/* Ruled Footer: Prominent Subtask CTA + Edit/Delete (hidden when read-only) */}
+                {canEdit && (
+                  <div className="pt-1.5 border-t border-[var(--border-subtle)] flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={e => {
+                        e.stopPropagation();
+                        onCreateSubtask(task);
+                      }}
+                      title="Create and schedule a subtask from this ongoing item"
+                      aria-label={`Create subtask from ${task.title}`}
+                      className="mobile-tap-control sm:min-h-0 inline-flex items-center gap-1 rounded-[5px] bg-[var(--accent-soft)] px-2 py-1 text-[11px] font-semibold text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25 transition-colors cursor-pointer"
+                    >
+                      <CopyPlus className="h-3 w-3 shrink-0" />
+                      <span>Subtask</span>
+                    </button>
 
-                  <div className="flex items-center card-actions [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
-                    <button
-                      type="button"
-                      onClick={e => {
-                        e.stopPropagation();
-                        onEditTask(task);
-                      }}
-                      title="Open ongoing task details"
-                      aria-label={`Edit ${task.title}`}
-                      className="mobile-tap-square sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center rounded-[5px] p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
-                    >
-                      <Edit2 className="h-3 w-3" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={e => {
-                        e.stopPropagation();
-                        onDeleteTask(task.id);
-                      }}
-                      title="Delete ongoing task"
-                      aria-label={`Delete ${task.title}`}
-                      className="mobile-tap-square sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center rounded-[5px] p-1 text-[var(--text-secondary)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </button>
+                    <div className="flex items-center card-actions [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={e => {
+                          e.stopPropagation();
+                          onEditTask(task);
+                        }}
+                        title="Open ongoing task details"
+                        aria-label={`Edit ${task.title}`}
+                        className="mobile-tap-square sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center rounded-[5px] p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                      >
+                        <Edit2 className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={e => {
+                          e.stopPropagation();
+                          onDeleteTask(task.id);
+                        }}
+                        title="Delete ongoing task"
+                        aria-label={`Delete ${task.title}`}
+                        className="mobile-tap-square sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center rounded-[5px] p-1 text-[var(--text-secondary)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
               </motion.div>
             );
           })}
@@ -281,6 +287,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
 
 function areRetainerPropsEqual(prev: RetainerSwimlaneProps, next: RetainerSwimlaneProps): boolean {
   if (prev.user !== next.user) return false;
+  if (prev.canEdit !== next.canEdit) return false;
   if (prev.onQuickAdd !== next.onQuickAdd) return false;
   if (prev.onEditTask !== next.onEditTask) return false;
   if (prev.onUpdateTitle !== next.onUpdateTitle) return false;

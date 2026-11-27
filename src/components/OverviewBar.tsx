@@ -1,5 +1,6 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useAuth, useBoardUi, useWorkspace } from '../context/DashboardContext';
+import { handleRovingMenuKeyDown } from '../hooks/useAnchoredPopover';
 import {
   exportWorkspaceXLS,
   exportWorkspaceJSON,
@@ -56,12 +57,56 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const exportMenuPopRef = useRef<HTMLDivElement>(null);
   const [showMobileActionsMenu, setShowMobileActionsMenu] = useState(false);
   const mobileActionsMenuRef = useRef<HTMLDivElement>(null);
+  const mobileActionsMenuPopRef = useRef<HTMLDivElement>(null);
   const [isBoardDropdownOpen, setIsBoardDropdownOpen] = useState(false);
   const boardDropdownRef = useRef<HTMLDivElement>(null);
+  const boardMenuPopRef = useRef<HTMLDivElement>(null);
+  const pendingMenuFocusRef = useRef<{ menu: 'board' | 'mobile' | 'export'; target: 'first' | 'last' } | null>(null);
   const [mobileMetricsExpanded, setMobileMetricsExpanded] = useState(false);
   const isSearchPending = localSearch !== searchQuery;
+
+  useLayoutEffect(() => {
+    const pending = pendingMenuFocusRef.current;
+    if (!pending) return;
+    const container =
+      pending.menu === 'board' && isBoardDropdownOpen
+        ? boardMenuPopRef.current
+        : pending.menu === 'mobile' && showMobileActionsMenu
+          ? mobileActionsMenuPopRef.current
+          : pending.menu === 'export' && showExportMenu
+            ? exportMenuPopRef.current
+            : null;
+    if (!container) return;
+    pendingMenuFocusRef.current = null;
+    const items = Array.from(container.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])'));
+    if (items.length > 0) {
+      (pending.target === 'last' ? items[items.length - 1] : items[0])?.focus();
+    }
+  }, [isBoardDropdownOpen, showMobileActionsMenu, showExportMenu]);
+
+  const handleMenuTriggerKeyDown = (
+    event: React.KeyboardEvent,
+    menu: 'board' | 'mobile' | 'export',
+    isOpen: boolean,
+    setOpen: React.Dispatch<React.SetStateAction<boolean>>,
+    menuEl: HTMLElement | null
+  ) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    const target = event.key === 'ArrowUp' ? 'last' : 'first';
+    if (!isOpen) {
+      pendingMenuFocusRef.current = { menu, target };
+      setOpen(true);
+    } else if (menuEl) {
+      const items = Array.from(menuEl.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])'));
+      if (items.length > 0) {
+        (target === 'last' ? items[items.length - 1] : items[0])?.focus();
+      }
+    }
+  };
 
   useEffect(() => {
     const dismiss = (event: KeyboardEvent) => {
@@ -346,7 +391,13 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                 aria-expanded={isBoardDropdownOpen}
                 aria-controls={isBoardDropdownOpen ? 'board-selector-menu' : undefined}
                 title="Switch active Creative Director board scope"
-                onClick={() => setIsBoardDropdownOpen(prev => !prev)}
+                onClick={e => {
+                  if (!isBoardDropdownOpen && e.detail === 0) {
+                    pendingMenuFocusRef.current = { menu: 'board', target: 'first' };
+                  }
+                  setIsBoardDropdownOpen(prev => !prev);
+                }}
+                onKeyDown={e => handleMenuTriggerKeyDown(e, 'board', isBoardDropdownOpen, setIsBoardDropdownOpen, boardMenuPopRef.current)}
                 className="button-secondary mobile-tap-control"
               >
                 <Users className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
@@ -356,9 +407,11 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
 
               {isBoardDropdownOpen && (
                 <div
+                  ref={boardMenuPopRef}
                   id="board-selector-menu"
                   role="menu"
                   aria-label="Select Team Board"
+                  onKeyDown={e => handleRovingMenuKeyDown(e.nativeEvent, e.currentTarget)}
                   className="menu-surface absolute left-0 mt-1.5 w-56 rounded-[9px] border border-[var(--border)] py-1 z-30"
                 >
                   <div className="px-3 py-1.5 text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider border-b border-[var(--border-subtle)]">
@@ -415,7 +468,13 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
               aria-controls={showMobileActionsMenu ? 'mobile-actions-menu' : undefined}
               aria-label="Analytics and export actions"
               title="Analytics and export actions"
-              onClick={() => setShowMobileActionsMenu(prev => !prev)}
+              onClick={e => {
+                if (!showMobileActionsMenu && e.detail === 0) {
+                  pendingMenuFocusRef.current = { menu: 'mobile', target: 'first' };
+                }
+                setShowMobileActionsMenu(prev => !prev);
+              }}
+              onKeyDown={e => handleMenuTriggerKeyDown(e, 'mobile', showMobileActionsMenu, setShowMobileActionsMenu, mobileActionsMenuPopRef.current)}
               className="button-secondary mobile-tap-control"
             >
               <MoreHorizontal className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
@@ -424,9 +483,11 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
 
             {showMobileActionsMenu && (
               <div
+                ref={mobileActionsMenuPopRef}
                 id="mobile-actions-menu"
                 role="menu"
                 aria-label="Analytics and export actions"
+                onKeyDown={e => handleRovingMenuKeyDown(e.nativeEvent, e.currentTarget)}
                 className="menu-surface absolute right-0 mt-1.5 w-56 max-w-[calc(100vw-2rem)] rounded-[9px] border border-[var(--border)] p-1 z-30"
               >
                 <button
@@ -500,7 +561,13 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
               aria-haspopup="menu"
               aria-expanded={showExportMenu}
               aria-controls={showExportMenu ? 'export-workspace-menu' : undefined}
-              onClick={() => setShowExportMenu(prev => !prev)}
+              onClick={e => {
+                if (!showExportMenu && e.detail === 0) {
+                  pendingMenuFocusRef.current = { menu: 'export', target: 'first' };
+                }
+                setShowExportMenu(prev => !prev);
+              }}
+              onKeyDown={e => handleMenuTriggerKeyDown(e, 'export', showExportMenu, setShowExportMenu, exportMenuPopRef.current)}
               title="Export workspace or audit reports"
               className="button-secondary mobile-tap-control"
             >
@@ -510,9 +577,11 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
 
             {showExportMenu && (
               <div
+                ref={exportMenuPopRef}
                 id="export-workspace-menu"
                 role="menu"
                 aria-label="Export options"
+                onKeyDown={e => handleRovingMenuKeyDown(e.nativeEvent, e.currentTarget)}
                 className="menu-surface absolute right-0 mt-1.5 w-52 rounded-[9px] border border-[var(--border)] p-1 z-20"
               >
                 <button

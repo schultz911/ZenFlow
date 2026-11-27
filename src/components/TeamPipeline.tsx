@@ -1,9 +1,11 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { useAuth, useWorkspace } from '../context/DashboardContext';
 import { Task, User, RoleFilter } from '../types';
 import { formatDateOnly, getCognitiveLoadLabel, getDaysRemaining, getTaskAssigneeIds } from '../utils/workload';
 import { isValidHttpUrl } from '../utils/taskMetadata';
+import { handleRovingMenuKeyDown, useAnchoredPopover } from '../hooks/useAnchoredPopover';
 import {
   Inbox,
   Plus,
@@ -21,6 +23,7 @@ import {
   ChevronDown,
   ChevronUp,
   Flag,
+  MoreHorizontal,
 } from 'lucide-react';
 
 interface TeamPipelineProps {
@@ -61,7 +64,43 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
 
   const [filterMode, setFilterMode] = useState<'all' | 'unassigned' | 'assigned'>('all');
   const [isDragOver, setIsDragOver] = useState(false);
+  const [mobileMenuTask, setMobileMenuTask] = useState<Task | null>(null);
+  const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null);
+  const mobileMenuPopRef = useRef<HTMLDivElement>(null);
   const userToggledCollapseRef = useRef(false);
+  const canManagePipeline = canAssignTask || canCreatePipelineTask;
+  const closeMobileMenu = useCallback(() => setMobileMenuTask(null), []);
+  const { position: mobileMenuPos } = useAnchoredPopover({
+    isOpen: Boolean(mobileMenuTask && canManagePipeline),
+    triggerRef: mobileMenuTriggerRef,
+    popoverRef: mobileMenuPopRef,
+    onClose: closeMobileMenu,
+    align: 'right',
+    gap: 4,
+    fallbackWidth: 168,
+    fallbackHeight: 96,
+    dismissOnOutOfView: true,
+  });
+
+  useEffect(() => {
+    if (!mobileMenuTask) return;
+    const focusTimer = window.setTimeout(() => {
+      const firstItem = mobileMenuPopRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])');
+      firstItem?.focus({ preventScroll: true });
+    }, 0);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Tab') {
+        setMobileMenuTask(null);
+        return;
+      }
+      handleRovingMenuKeyDown(e, mobileMenuPopRef.current);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [mobileMenuTask]);
 
   const userMap = useMemo(() => {
     const map = new Map<string, User>();
@@ -414,8 +453,8 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                     initial={false}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.15 }}
-                    draggable
-                    onDragStartCapture={(e: React.DragEvent) => {
+                    draggable={canManagePipeline}
+                    onDragStartCapture={canManagePipeline ? (e: React.DragEvent) => {
                       const dragPayload = {
                         taskId: task.id,
                         status: 'pipeline',
@@ -429,18 +468,22 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                       e.dataTransfer.setData('text/plain', task.id);
                       e.dataTransfer.effectAllowed = 'move';
                       onDragTaskStart?.(task);
-                    }}
-                    onDragEndCapture={() => onDragTaskEnd?.()}
-                    className="task-card group relative shrink-0 w-[290px] sm:w-[300px] snap-start flex flex-col justify-between p-2.5 select-none cursor-grab active:cursor-grabbing"
+                    } : undefined}
+                    onDragEndCapture={canManagePipeline ? () => onDragTaskEnd?.() : undefined}
+                    className={`task-card group relative shrink-0 w-[290px] sm:w-[300px] snap-start flex flex-col justify-between p-2.5 select-none ${
+                      canManagePipeline ? 'sm:cursor-grab sm:active:cursor-grabbing' : ''
+                    }`}
                   >
                     <div>
                       {/* Top Row: Grip · Cognitive Load + Card Actions · Estimate */}
                       <div className="flex items-center justify-between gap-1.5 mb-1.5">
                         <div className="flex items-center gap-1.5 min-w-0 flex-wrap text-[11px]">
-                          <GripVertical
-                            aria-hidden="true"
-                            className="h-3.5 w-3.5 text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-colors shrink-0 -ml-1"
-                          />
+                          {canManagePipeline && (
+                            <GripVertical
+                              aria-hidden="true"
+                              className="hidden sm:block h-3.5 w-3.5 text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-colors shrink-0 -ml-1"
+                            />
+                          )}
                           <span
                             title={`Cognitive Load: ${cognitiveLabel}`}
                             className="inline-flex items-center gap-1 font-semibold capitalize"
@@ -470,32 +513,53 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                         </div>
 
                         <div className="flex items-center gap-1 shrink-0">
-                          <div className="flex items-center card-actions [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity gap-0.5">
-                            <button
-                              type="button"
-                              onClick={e => {
-                                e.stopPropagation();
-                                onEditTask(task);
-                              }}
-                              title="Edit brief details"
-                              aria-label={`Edit ${task.title}`}
-                              className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
-                            >
-                              <Edit2 className="h-3 w-3" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={e => {
-                                e.stopPropagation();
-                                onDeleteTask(task);
-                              }}
-                              title="Delete pipeline task"
-                              aria-label={`Delete ${task.title}`}
-                              className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
-                          </div>
+                          {canManagePipeline && (
+                            <>
+                              <div className="hidden sm:flex items-center card-actions [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity gap-0.5">
+                                <button
+                                  type="button"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    onEditTask(task);
+                                  }}
+                                  title="Edit brief details"
+                                  aria-label={`Edit ${task.title}`}
+                                  className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
+                                >
+                                  <Edit2 className="h-3 w-3" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    onDeleteTask(task);
+                                  }}
+                                  title="Delete pipeline task"
+                                  aria-label={`Delete ${task.title}`}
+                                  className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              </div>
+
+                              <button
+                                ref={mobileMenuTask?.id === task.id ? mobileMenuTriggerRef : undefined}
+                                type="button"
+                                aria-haspopup="menu"
+                                aria-expanded={mobileMenuTask?.id === task.id}
+                                aria-label={`Actions for ${task.title}`}
+                                title={`Actions for ${task.title}`}
+                                onClick={e => {
+                                  e.stopPropagation();
+                                  mobileMenuTriggerRef.current = e.currentTarget;
+                                  setMobileMenuTask(prev => (prev?.id === task.id ? null : task));
+                                }}
+                                className="sm:hidden mobile-tap-square -my-2 inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
 
                           {task.estimatedHours !== undefined && task.estimatedHours > 0 && (
                             <span
@@ -661,6 +725,49 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
             </div>
           )}
         </div>
+      )}
+
+      {mobileMenuTask && canManagePipeline && createPortal(
+        <div
+          ref={mobileMenuPopRef}
+          role="menu"
+          aria-label={`Actions for ${mobileMenuTask.title}`}
+          style={
+            mobileMenuPos
+              ? { top: `${mobileMenuPos.top}px`, left: `${mobileMenuPos.left}px` }
+              : { top: 0, left: 0, visibility: 'hidden' }
+          }
+          onClick={e => e.stopPropagation()}
+          className="menu-surface fixed z-50 w-44 rounded-[9px] border border-[var(--border)] p-1 text-[var(--text-primary)]"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              const target = mobileMenuTask;
+              setMobileMenuTask(null);
+              onEditTask(target);
+            }}
+            className="menu-item cursor-pointer"
+          >
+            <Edit2 className="h-3.5 w-3.5" />
+            <span>Edit Brief</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              const target = mobileMenuTask;
+              setMobileMenuTask(null);
+              onDeleteTask(target);
+            }}
+            className="menu-item cursor-pointer text-red-600 dark:text-red-400"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            <span>Delete Brief</span>
+          </button>
+        </div>,
+        document.body
       )}
     </section>
   );

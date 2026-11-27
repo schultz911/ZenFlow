@@ -126,11 +126,11 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                       <p className="font-semibold text-[#1d4ed8] dark:text-blue-400 mt-0.5">{workload.inProgressCount}</p>
                     </div>
                     <div className="px-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">Dated</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">To Do (Dated)</p>
                       <p className="font-semibold text-[var(--text-primary)] mt-0.5">{workload.todoWithDeadlineCount}</p>
                     </div>
                     <div className="px-3">
-                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">No Date</p>
+                      <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">To Do (Undated)</p>
                       <p className="font-semibold text-[var(--text-secondary)] mt-0.5">{workload.todoNoDeadlineCount}</p>
                     </div>
                     <div className="pl-3">
@@ -343,7 +343,10 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
 
                           return (
                             <tr key={item.taskId} className="hover:bg-[var(--surface-muted)] transition-colors">
-                              <td className="py-2 px-3 font-semibold text-[var(--text-primary)] max-w-[180px] truncate">
+                              <td
+                                title={item.title}
+                                className="py-2 px-3 font-semibold text-[var(--text-primary)] max-w-[240px] truncate"
+                              >
                                 {item.title}
                               </td>
                               <td className="py-2 px-3 whitespace-nowrap">
@@ -388,6 +391,7 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
             <div className="dialog-footer">
               <button
                 type="button"
+                data-autofocus
                 onClick={onClose}
                 className="button-primary"
               >

@@ -198,7 +198,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
           </div>
 
           <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-            <div className="p-5 overflow-y-auto flex-1 space-y-4">
+            <div className="p-4 overflow-y-auto flex-1 space-y-3.5">
               {showDiscardConfirm && (
                 <div role="alertdialog" aria-label="Discard unsaved assignment" className="callout callout-warning space-y-2">
                   <p className="text-xs font-semibold">Discard unsaved assignment?</p>
@@ -224,7 +224,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
               )}
 
               {/* Task Snapshot */}
-              <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-3 space-y-1">
+              <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2.5 space-y-0.5">
                 <div className="flex items-center justify-between gap-2 text-[11px]">
                   <span className="uppercase font-bold tracking-wider text-[#1d4ed8] dark:text-blue-400">
                     {taskDiscipline} Deliverable
@@ -312,19 +312,30 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                   const currentTasks = tasksByUser.get(selectedUserObj.id) || [];
                   const selectedLoad = quickWorkloadScore(currentTasks);
                   const willSchedule = !keepInPipeline;
+                  const parsedProjectedHours = estimatedHours.trim()
+                    ? Math.max(0, parseFloat(estimatedHours))
+                    : undefined;
+                  const projectedEstimatedHours =
+                    parsedProjectedHours !== undefined && Number.isFinite(parsedProjectedHours)
+                      ? parsedProjectedHours
+                      : undefined;
                   const projectedTask: Task = {
                     ...task,
                     userId: selectedUserObj.id,
                     assigneeIds: [selectedUserObj.id],
                     status: willSchedule ? 'todo' : 'pipeline',
                     dueDate: willSchedule ? (dueDate.trim() || undefined) : task.dueDate,
+                    startDate: task.startDate || formatLocalDateKey(),
                     cognitiveLoad,
+                    estimatedHours: projectedEstimatedHours,
                   };
                   const projectedTasks = currentTasks.some(t => t.id === task.id)
                     ? currentTasks.map(t => (t.id === task.id ? projectedTask : t))
                     : [...currentTasks, projectedTask];
                   const projectedLoad = quickWorkloadScore(projectedTasks);
-                  const selectedDailyHours = getUserDailyAssignedHours(selectedUserObj, tasks);
+                  const selectedDailyHours = getUserDailyAssignedHours(selectedUserObj, currentTasks);
+                  const projectedDailyHours = getUserDailyAssignedHours(selectedUserObj, projectedTasks);
+                  const dailyHoursChanged = Math.abs(projectedDailyHours - selectedDailyHours) >= 0.05;
                   const willOverload = projectedLoad >= 12;
                   return (
                     <div
@@ -347,7 +358,15 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                           {willOverload && ' · Will overload'}
                         </span>
                         <span aria-hidden="true" className="hidden sm:inline text-[var(--text-muted)]">·</span>
-                        <span>Assigned: <strong className="text-[#1d4ed8] dark:text-blue-400">{formatHours(selectedDailyHours)}/day</strong></span>
+                        <span>
+                          Assigned:{' '}
+                          <strong className="text-[#1d4ed8] dark:text-blue-400">
+                            {dailyHoursChanged
+                              ? `${formatHours(selectedDailyHours)} → ${formatHours(projectedDailyHours)}`
+                              : formatHours(selectedDailyHours)}
+                            /day
+                          </strong>
+                        </span>
                       </div>
                     </div>
                   );
@@ -362,43 +381,89 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                 required
               />
 
-              {/* Deadline & Placement (kept visible to avoid mid-form layout jump) */}
+              {/* Deadline & Time Estimate side-by-side to keep modal compact on 700px laptops */}
               <div className="space-y-2.5">
-                <div>
-                  <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
-                    <label className="field-label !mb-0 flex items-center gap-1.5" htmlFor="taskassignmentmodal-deadline">
-                      <Calendar className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
-                      <span>
-                        Deadline {selectedUserId && !keepInPipeline && <span className="text-red-600 dark:text-red-400">*</span>}
-                      </span>
-                    </label>
-                    {!selectedUserId && (
-                      <span className="text-[11px] text-[var(--text-muted)]">
-                        Pick a teammate above to schedule
-                      </span>
-                    )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 items-start">
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <label className="field-label !mb-0 flex items-center gap-1.5" htmlFor="taskassignmentmodal-deadline">
+                        <Calendar className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
+                        <span>
+                          Deadline {selectedUserId && !keepInPipeline && <span className="text-red-600 dark:text-red-400">*</span>}
+                        </span>
+                      </label>
+                      {!selectedUserId && (
+                        <span className="text-[11px] text-[var(--text-muted)] truncate">
+                          Pick member first
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      id="taskassignmentmodal-deadline"
+                      type="date"
+                      disabled={!selectedUserId || isSubmitting}
+                      required={Boolean(selectedUserId && !keepInPipeline)}
+                      value={dueDate}
+                      onChange={e => setDueDate(e.target.value)}
+                      className="field-control tabular-nums cursor-pointer"
+                    />
+                    <DateQuickPresets
+                      value={dueDate}
+                      onSelectDate={setDueDate}
+                      disabled={!selectedUserId || isSubmitting}
+                      includeToday
+                      allowClear={keepInPipeline}
+                      className="mt-1.5"
+                    />
                   </div>
-                  <input
-                    id="taskassignmentmodal-deadline"
-                    type="date"
-                    disabled={!selectedUserId || isSubmitting}
-                    required={Boolean(selectedUserId && !keepInPipeline)}
-                    value={dueDate}
-                    onChange={e => setDueDate(e.target.value)}
-                    className="field-control tabular-nums cursor-pointer"
-                  />
-                  <DateQuickPresets
-                    value={dueDate}
-                    onSelectDate={setDueDate}
-                    disabled={!selectedUserId || isSubmitting}
-                    includeToday
-                    allowClear={keepInPipeline}
-                    className="mt-1.5"
-                  />
+
+                  {/* Time Estimate Specification */}
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-1.5">
+                      <label className="field-label !mb-0" htmlFor="taskassignmentmodal-field-2">
+                        Time Estimate (Hours)
+                      </label>
+                      <span className="text-[11px] text-[var(--text-secondary)] truncate">
+                        Per working day
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        value={estimatedHours}
+                        onChange={e => setEstimatedHours(e.target.value)}
+                        placeholder="e.g. 4, 8, 16.5"
+                        className="field-control pl-8 pr-12 tabular-nums"
+                        id="taskassignmentmodal-field-2"
+                      />
+                      <Clock className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
+                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[var(--text-muted)]">
+                        hours
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-1.5">
+                      {[2, 4, 8, 16].map(h => (
+                        <button
+                          key={h}
+                          type="button"
+                          onClick={() => setEstimatedHours(String(h))}
+                          className={`mobile-tap-control sm:min-h-[28px] flex-1 py-1 rounded-[5px] border text-[11px] font-semibold tabular-nums transition-colors cursor-pointer ${
+                            estimatedHours === String(h)
+                              ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300'
+                              : 'border-[var(--border)] bg-[var(--surface-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                          }`}
+                        >
+                          {h}h
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
                 <label
-                  className={`flex items-center gap-2 rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-xs select-none ${
+                  className={`flex items-center gap-2 rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1.5 text-xs select-none ${
                     !selectedUserId ? 'opacity-60 cursor-not-allowed text-[var(--text-secondary)]' : 'text-[var(--text-primary)] cursor-pointer'
                   }`}
                 >
@@ -411,50 +476,6 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                   />
                   <span>Keep in Team Pipeline as assigned (don&rsquo;t move to To Do yet)</span>
                 </label>
-              </div>
-
-              {/* Time Estimate Specification */}
-              <div>
-                <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <label className="field-label !mb-0" htmlFor="taskassignmentmodal-field-2">
-                    Time Estimate (Hours)
-                  </label>
-                  <span className="text-[11px] text-[var(--text-secondary)]">
-                    Split across working days
-                  </span>
-                </div>
-                <div className="relative">
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="0"
-                    value={estimatedHours}
-                    onChange={e => setEstimatedHours(e.target.value)}
-                    placeholder="e.g. 4, 8, 16.5"
-                    className="field-control pl-8 pr-12 tabular-nums"
-                    id="taskassignmentmodal-field-2"
-                  />
-                  <Clock className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
-                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[var(--text-muted)]">
-                    hours
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 mt-2">
-                  {[2, 4, 8, 16].map(h => (
-                    <button
-                      key={h}
-                      type="button"
-                      onClick={() => setEstimatedHours(String(h))}
-                      className={`mobile-tap-control sm:min-h-[28px] flex-1 py-1 rounded-[5px] border text-[11px] font-semibold tabular-nums transition-colors cursor-pointer ${
-                        estimatedHours === String(h)
-                          ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300'
-                          : 'border-[var(--border)] bg-[var(--surface-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                      }`}
-                    >
-                      {h}h
-                    </button>
-                  ))}
-                </div>
               </div>
             </div>
 

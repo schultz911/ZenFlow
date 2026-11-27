@@ -566,7 +566,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
               <div className="space-y-4">
                 <div>
                   <label className="field-label" htmlFor="disciplinetaskmodal-field-1">
-                    Parent Deliverable Title <span className="text-red-600 dark:text-red-400">*</span>
+                    Deliverable Title <span className="text-red-600 dark:text-red-400">*</span>
                   </label>
                   <input
                     autoFocus
@@ -673,26 +673,13 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                     <label className="field-label" htmlFor="disciplinetaskmodal-field-5">
                       Target Deadline
                     </label>
-                    <div className="flex items-center gap-1.5">
-                      <input
-                        type="date"
-                        value={dueDate}
-                        onChange={e => setDueDate(e.target.value)}
-                        className="field-control flex-1 min-w-0 tabular-nums cursor-pointer"
-                        id="disciplinetaskmodal-field-5"
-                      />
-                      {dueDate && (
-                        <button
-                          type="button"
-                          onClick={() => setDueDate('')}
-                          title="Clear deadline"
-                          aria-label="Clear deadline"
-                          className="icon-button border border-[var(--border)] bg-[var(--surface)] shrink-0"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
+                    <input
+                      type="date"
+                      value={dueDate}
+                      onChange={e => setDueDate(e.target.value)}
+                      className="field-control tabular-nums cursor-pointer"
+                      id="disciplinetaskmodal-field-5"
+                    />
                     <DateQuickPresets
                       value={dueDate}
                       onSelectDate={setDueDate}
@@ -985,9 +972,9 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
             <div className="dialog-footer !justify-between flex-wrap">
               <span className="text-[11px] text-[var(--text-secondary)]">
                 {selectedDisciplines.length === 2
-                  ? 'Creates parent task + Content & Design subtasks in Pipeline.'
+                  ? 'Creates brief with Content & Design deliverables in Pipeline.'
                   : selectedDisciplines.length === 1
-                  ? `Creates parent task + ${selectedDisciplines[0]} subtask in Pipeline.`
+                  ? `Creates ${selectedDisciplines[0]} brief deliverable in Pipeline.`
                   : 'Select at least one requirement type.'}
               </span>
               <div className="flex items-center gap-2">

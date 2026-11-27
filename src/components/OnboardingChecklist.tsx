@@ -15,7 +15,7 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
   onCloseForceOpen,
 }) => {
   const { currentUser, isSuperadmin } = useAuth();
-  const { updateUserProfile } = useWorkspace();
+  const { tasks, updateUserProfile } = useWorkspace();
   const {
     isClickupConnected,
     clickupSpaces,
@@ -94,10 +94,10 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
     }
   }, [selectedClickupSpaceId, clickupSpaces, spaceIdInput]);
 
-  const step1Done = isClickupConnected;
-  const step2Done = step1Done && hasSynced;
   const webhookStatusLoaded = clickupWebhookStatus !== null;
   const webhookRegistered = Boolean(clickupWebhookStatus?.registered);
+  const step1Done = isClickupConnected;
+  const step2Done = step1Done && (hasSynced || webhookRegistered || tasks.some(t => Boolean(t?.clickupTaskId)));
   const step3Done = webhookRegistered;
   const totalSteps = isSuperadmin ? 3 : 2;
   const allComplete = step1Done && step2Done && (!isSuperadmin || step3Done);
@@ -239,7 +239,9 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
       <section
         id="workspace-onboarding-checklist"
         aria-label="Workspace Setup"
-        className="mb-3 rounded-[9px] border border-[var(--border)] bg-[var(--surface)] px-3.5 py-2 flex flex-wrap items-center justify-between gap-2 text-xs"
+        className={`mb-3 rounded-[9px] border border-[var(--border)] bg-[var(--surface)] px-3.5 py-2 flex-wrap items-center justify-between gap-2 text-xs ${
+          forceOpen ? 'flex' : 'hidden sm:flex'
+        }`}
       >
         <div className="flex items-center gap-2 min-w-0">
           <span className="h-2 w-2 rounded-full bg-amber-600 dark:bg-amber-400 shrink-0" />
@@ -274,7 +276,7 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
     <section
       id="workspace-onboarding-checklist"
       aria-label="Workspace Setup"
-      className="ledger-frame mb-4"
+      className={`ledger-frame mb-4 ${forceOpen ? 'block' : 'hidden sm:block'}`}
     >
       <div className="ledger-band flex items-center justify-between gap-4 px-4 py-2.5 sm:px-5">
         <div className="flex items-center gap-2.5">

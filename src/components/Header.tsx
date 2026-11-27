@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { useAuth, useBoardUi, useWorkspace } from '../context/DashboardContext';
+import { useAuth, useBoardUi, useClickUp, useWorkspace } from '../context/DashboardContext';
 import { handleRovingMenuKeyDown } from '../hooks/useAnchoredPopover';
 import {
   Sun,
@@ -39,6 +39,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
     canManageMembers,
   } = useAuth();
   const { users, syncStatus, accessRequests, dismissAccessRequest } = useWorkspace();
+  const { isClickupConnected } = useClickUp();
   const {
     activeRoleTab,
     setActiveRoleTab,
@@ -121,7 +122,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                 <path d="M 4.5 7.2 C 8.5 4.8, 14 9.6, 19.5 7 L 4.5 17 C 10 14.4, 15.5 19.2, 19.5 16.8" />
               </svg>
             </div>
-            <div className="flex items-baseline leading-none" style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}>
+            <div className="flex items-baseline leading-none" style={{ fontFamily: 'var(--font-sans)' }}>
               <span className="text-xl font-bold tracking-tight text-[var(--text-primary)]">
                 zen
               </span>
@@ -273,6 +274,13 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                       {accessRequests.length}
                     </span>
                   )}
+                  {!isClickupConnected && onOpenSetupModal && (
+                    <span
+                      title="ClickUp setup incomplete — open menu to finish Workspace Setup"
+                      aria-hidden="true"
+                      className="sm:hidden h-2 w-2 rounded-full bg-amber-500 shrink-0"
+                    />
+                  )}
                   <ChevronDown className="h-3.5 w-3.5 text-[var(--text-secondary)] shrink-0" />
                 </button>
               ) : (
@@ -382,10 +390,17 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                           setUserDropdownOpen(false);
                           onOpenSetupModal();
                         }}
-                        className="menu-item cursor-pointer"
+                        className="menu-item justify-between cursor-pointer"
                       >
-                        <ListChecks className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
-                        <span>Workspace Setup</span>
+                        <span className="flex items-center gap-2">
+                          <ListChecks className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
+                          <span>Workspace Setup</span>
+                        </span>
+                        {!isClickupConnected && (
+                          <span className="sm:hidden rounded-[4px] bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+                            Setup
+                          </span>
+                        )}
                       </button>
                     )}
 

@@ -6,6 +6,7 @@ import { CognitiveLoad, Task, TaskStatus, User } from '../types';
 import {
   formatDateOnly,
   formatHours,
+  formatLocalDateKey,
   formatTaskStatus,
   getLocalOffsetDateKey,
   getUserDailyAssignedHours,
@@ -481,6 +482,13 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                         {selectedTargetUser && (() => {
                           const currentTasks = tasksByUser.get(selectedTargetUser.id) || [];
                           const currentLoad = quickWorkloadScore(currentTasks);
+                          const parsedProjectedHours = targetEstimatedHours.trim()
+                            ? Math.max(0, parseFloat(targetEstimatedHours))
+                            : undefined;
+                          const projectedEstimatedHours =
+                            parsedProjectedHours !== undefined && Number.isFinite(parsedProjectedHours)
+                              ? parsedProjectedHours
+                              : undefined;
                           const simulatedSubtask: Task = {
                             ...task,
                             id: '__projected_subtask__',
@@ -488,10 +496,15 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                             assigneeIds: [selectedTargetUser.id],
                             status: targetStatus,
                             dueDate: targetDueDate.trim() || undefined,
+                            startDate: formatLocalDateKey(),
                             cognitiveLoad: targetCognitiveLoad,
+                            estimatedHours: projectedEstimatedHours,
                           };
-                          const projectedLoad = quickWorkloadScore([...currentTasks, simulatedSubtask]);
-                          const dailyHours = getUserDailyAssignedHours(selectedTargetUser, tasks);
+                          const projectedTasks = [...currentTasks, simulatedSubtask];
+                          const projectedLoad = quickWorkloadScore(projectedTasks);
+                          const dailyHours = getUserDailyAssignedHours(selectedTargetUser, currentTasks);
+                          const projectedDailyHours = getUserDailyAssignedHours(selectedTargetUser, projectedTasks);
+                          const dailyHoursChanged = Math.abs(projectedDailyHours - dailyHours) >= 0.05;
                           const willOverload = projectedLoad >= 12;
                           return (
                             <div
@@ -511,7 +524,15 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                                   {willOverload && ' · Will overload'}
                                 </span>
                                 <span aria-hidden="true" className="hidden sm:inline text-[var(--text-muted)]">·</span>
-                                <span>Assigned: <strong className="text-[#1d4ed8] dark:text-blue-400">{formatHours(dailyHours)}/day</strong></span>
+                                <span>
+                                  Assigned:{' '}
+                                  <strong className="text-[#1d4ed8] dark:text-blue-400">
+                                    {dailyHoursChanged
+                                      ? `${formatHours(dailyHours)} → ${formatHours(projectedDailyHours)}`
+                                      : formatHours(dailyHours)}
+                                    /day
+                                  </strong>
+                                </span>
                               </div>
                             </div>
                           );

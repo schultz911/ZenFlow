@@ -737,76 +737,117 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
             : ''
         }`}
       >
-        {/* User Identity */}
-        <div className="flex items-center gap-3 min-w-0">
-          {(onMoveUserUp || onMoveUserDown) && !isCurrentUser && (
-            <div className="hidden sm:flex flex-col border border-[var(--border)] rounded-[6px] bg-[var(--surface)] overflow-hidden shrink-0">
-              <button
-                type="button"
-                disabled={!canMoveUp}
-                onClick={() => onMoveUserUp?.(user.id)}
-                title="Move workspace up"
-                aria-label={`Move ${user.name} up`}
-                className="flex items-center justify-center px-1 py-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer"
-              >
-                <ArrowUp className="h-2.5 w-2.5" />
-              </button>
-              <button
-                type="button"
-                disabled={!canMoveDown}
-                onClick={() => onMoveUserDown?.(user.id)}
-                title="Move workspace down"
-                aria-label={`Move ${user.name} down`}
-                className="flex items-center justify-center px-1 py-0.5 border-t border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer"
-              >
-                <ArrowDown className="h-2.5 w-2.5" />
-              </button>
-            </div>
-          )}
+        {/* User Identity + Mobile Top-Right Actions (2 rows max on mobile) */}
+        <div className="flex items-start sm:items-center justify-between gap-2 min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
+            {(onMoveUserUp || onMoveUserDown) && !isCurrentUser && (
+              <div className="hidden sm:flex flex-col border border-[var(--border)] rounded-[6px] bg-[var(--surface)] overflow-hidden shrink-0">
+                <button
+                  type="button"
+                  disabled={!canMoveUp}
+                  onClick={() => onMoveUserUp?.(user.id)}
+                  title="Move workspace up"
+                  aria-label={`Move ${user.name} up`}
+                  className="flex items-center justify-center px-1 py-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                >
+                  <ArrowUp className="h-2.5 w-2.5" />
+                </button>
+                <button
+                  type="button"
+                  disabled={!canMoveDown}
+                  onClick={() => onMoveUserDown?.(user.id)}
+                  title="Move workspace down"
+                  aria-label={`Move ${user.name} down`}
+                  className="flex items-center justify-center px-1 py-0.5 border-t border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                >
+                  <ArrowDown className="h-2.5 w-2.5" />
+                </button>
+              </div>
+            )}
 
-          <div
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-gradient-to-tr ${
-              user.avatarColor || 'from-blue-600 to-indigo-600'
-            } text-white font-semibold text-xs`}
-          >
-            {user.name
-              .split(' ')
-              .map(p => p[0])
-              .join('')
-              .toUpperCase()
-              .slice(0, 2)}
+            <div
+              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-gradient-to-tr ${
+                user.avatarColor || 'from-blue-600 to-indigo-600'
+              } text-white font-semibold text-xs`}
+            >
+              {user.name
+                .split(' ')
+                .map(p => p[0])
+                .join('')
+                .toUpperCase()
+                .slice(0, 2)}
+            </div>
+
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-bold tracking-tight text-[var(--text-primary)] text-sm">
+                  {user.name}
+                </h3>
+                {isCurrentUser && (
+                  <span className="rounded-[4px] bg-[var(--accent-soft)] px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-[#1d4ed8] dark:text-blue-300">
+                    You
+                  </span>
+                )}
+                <span className="text-xs font-medium text-[var(--text-secondary)]">
+                  {getUserTag(user).label}
+                </span>
+
+                {isCollapsed && (
+                  <span className="text-[11px] font-medium text-[var(--text-secondary)] tabular-nums">
+                    · {userTasks.length} tasks · {tasksByColumn.in_progress.length} active
+                  </span>
+                )}
+
+                {isCrossUserDrag && (
+                  <span className="inline-flex items-center gap-1 rounded-[5px] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 px-2 py-0.5 text-[11px] font-semibold">
+                    <UserCheck className="h-3 w-3" />
+                    <span>Drop to reassign</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-[var(--text-secondary)] truncate max-w-xs">
+                {user.email}
+              </p>
+            </div>
           </div>
 
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-bold tracking-tight text-[var(--text-primary)] text-sm">
-                {user.name}
-              </h3>
-              {isCurrentUser && (
-                <span className="rounded-[4px] bg-[var(--accent-soft)] px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-[#1d4ed8] dark:text-blue-300">
-                  You
-                </span>
-              )}
-              <span className="text-xs font-medium text-[var(--text-secondary)]">
-                {getUserTag(user).label}
-              </span>
-
-              {isCollapsed && (
-                <span className="text-[11px] font-medium text-[var(--text-secondary)] tabular-nums">
-                  · {userTasks.length} tasks · {tasksByColumn.in_progress.length} active
-                </span>
-              )}
-
-              {isCrossUserDrag && (
-                <span className="inline-flex items-center gap-1 rounded-[5px] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 px-2 py-0.5 text-[11px] font-semibold">
-                  <UserCheck className="h-3 w-3" />
-                  <span>Drop to reassign</span>
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-[var(--text-secondary)] truncate max-w-xs">
-              {user.email}
-            </p>
+          {/* Mobile Row-1 Right: ... + Collapse buttons (eliminates 3rd header row on <640px) */}
+          <div className="flex sm:hidden items-center gap-1.5 shrink-0">
+            {(
+              (canEdit && tasksByColumn.retainer.length === 0 && !isCollapsed) ||
+              (onEditUser && canManageUser(user)) ||
+              (onDeleteUser && canManageUser(user) && !isCurrentUser) ||
+              archivedTasks.length > 0
+            ) && (
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={memberMenuOpen}
+                aria-controls={`member-actions-menu-${user.id}`}
+                aria-label={`More actions for ${user.name}`}
+                title={`Member options for ${user.name}`}
+                onClick={e => {
+                  memberMenuBtnRef.current = e.currentTarget;
+                  setMemberMenuOpen(prev => !prev);
+                }}
+                className={`icon-button border border-[var(--border)] bg-[var(--surface)] relative ${
+                  showArchived ? 'text-[#1d4ed8] dark:text-blue-400 border-[var(--accent)]' : ''
+                }`}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+            )}
+            <button
+              type="button"
+              aria-expanded={!isCollapsed}
+              aria-controls={`swimlane-body-${user.id}`}
+              onClick={toggleCollapse}
+              title={isCollapsed ? 'Expand workspace' : 'Collapse workspace'}
+              aria-label={isCollapsed ? `Expand ${user.name}'s workspace` : `Collapse ${user.name}'s workspace`}
+              className="icon-button border border-[var(--border)] bg-[var(--surface)]"
+            >
+              {isCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
+            </button>
           </div>
         </div>
 
@@ -889,8 +930,11 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 aria-controls={`member-actions-menu-${user.id}`}
                 aria-label={`More actions for ${user.name}`}
                 title={`Member options for ${user.name}`}
-                onClick={() => setMemberMenuOpen(prev => !prev)}
-                className={`icon-button border border-[var(--border)] bg-[var(--surface)] relative ${
+                onClick={e => {
+                  memberMenuBtnRef.current = e.currentTarget;
+                  setMemberMenuOpen(prev => !prev);
+                }}
+                className={`hidden sm:inline-flex icon-button border border-[var(--border)] bg-[var(--surface)] relative ${
                   showArchived ? 'text-[#1d4ed8] dark:text-blue-400 border-[var(--accent)]' : ''
                 }`}
               >
@@ -906,7 +950,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               onClick={toggleCollapse}
               title={isCollapsed ? 'Expand workspace' : 'Collapse workspace'}
               aria-label={isCollapsed ? `Expand ${user.name}'s workspace` : `Collapse ${user.name}'s workspace`}
-              className="icon-button border border-[var(--border)] bg-[var(--surface)]"
+              className="hidden sm:inline-flex icon-button border border-[var(--border)] bg-[var(--surface)]"
             >
               {isCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
             </button>
@@ -1046,6 +1090,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 <RetainerSwimlane
                   user={user}
                   tasks={tasksByColumn.retainer}
+                  canEdit={canEdit}
                   defaultOpenAdd={showEmptyOngoing && tasksByColumn.retainer.length === 0}
                   onQuickAdd={handleQuickAddRetainer}
                   onEditTask={onEditTask}

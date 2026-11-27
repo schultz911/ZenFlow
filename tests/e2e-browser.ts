@@ -163,7 +163,13 @@ try {
     await checklist.getByRole('button', { name: 'Skip for now' }).click();
     await checklist.waitFor({ state: 'detached' });
 
-    console.log('Browser OnboardingChecklist: Step 1->2->3 transitions, <select> styling, Space sync, and dismiss/reopen passed.');
+    // Mobile (<640px) defers OnboardingChecklist into the Header menu unless opened manually
+    await page.evaluate(() => localStorage.removeItem('zenflow_onboarding_dismissed_v1_cd-1'));
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload({ waitUntil: 'networkidle' });
+    assert.equal(await checklist.isVisible(), false, 'OnboardingChecklist must stay hidden below sm: unless opened via Workspace Setup');
+
+    console.log('Browser OnboardingChecklist: Step 1->2->3 transitions, <select> styling, Space sync, mobile deferral, and dismiss/reopen passed.');
     await context.close();
   }
 
@@ -198,6 +204,8 @@ try {
     await analytics.getByLabel('Analytics member').selectOption('u-content');
     await analytics.getByText('(5h / 3h)', { exact: true }).waitFor();
     await analytics.getByLabel('Analytics scope').selectOption('all');
+    assert.ok((await analytics.getByText('Est / Bill', { exact: true }).count()) >= 2, 'AnalyticsModal should label Sections 3 & 4 columns as Est / Bill');
+    assert.equal(await analytics.getByText('Billable / Est', { exact: true }).count(), 0, 'AnalyticsModal should not mix Billable / Est wording');
     await page.getByRole('button', { name: 'Calendar Tool' }).click();
     await page.getByLabel('Analytics start date').fill('2026-01-08');
     await page.getByText('No historical snapshot was saved for this period.').waitFor({ state: 'visible' });
@@ -205,7 +213,8 @@ try {
     await page.getByLabel('Analytics start date').fill('2026-01-09');
     await page.getByText('Locked snapshot · 2026-01-09').waitFor({ state: 'visible' });
     await page.getByText('Cumulative metrics as of 2026-01-09.').waitFor({ state: 'visible' });
-    await page.keyboard.press('Escape');
+    await analytics.getByRole('button', { name: /^Close$/i }).click();
+    await analytics.waitFor({ state: 'detached' });
 
     const freePoolToggle = page.locator('#free-pool-trigger');
     const freePool = page.getByRole('complementary', { name: 'Free Pool' });
@@ -251,7 +260,7 @@ try {
     await assignDialog.waitFor({ state: 'detached' });
     await page.keyboard.press('Escape');
 
-    // Header profile menu ARIA & ArrowDown entry (P1-6)
+    // Header profile menu & OverviewBar Export menu ARIA + ArrowDown entry (P1-6, P2-5)
     const profileBtn = page.locator('#user-profile-menu-button');
     assert.equal(await profileBtn.getAttribute('aria-haspopup'), 'menu');
     await profileBtn.focus();
@@ -263,6 +272,18 @@ try {
       'ArrowDown on Header profile button should focus first menuitem'
     );
     await page.keyboard.press('Escape');
+
+    const exportBtn = page.locator('#export-workspace-btn');
+    await exportBtn.focus();
+    await page.keyboard.press('ArrowDown');
+    await page.locator('#export-workspace-menu').waitFor({ state: 'visible' });
+    assert.equal(
+      await page.locator('#export-workspace-menu [role="menuitem"]').first().evaluate(el => el === document.activeElement),
+      true,
+      'ArrowDown on Export Report button should focus first menuitem'
+    );
+    await page.keyboard.press('Escape');
+    await page.locator('#export-workspace-menu').waitFor({ state: 'detached' });
 
     // Shared card top-row alignment (P1-3)
     const sharedTopMetrics = await page.locator('#task-card-cd-1-t-kiran-1').evaluate(card => {
@@ -287,6 +308,10 @@ try {
       true,
       'ArrowLeft back to Details & Schedule must keep focus on #task-tab-details'
     );
+    assert.equal(await editDialog.getByRole('button', { name: /^Clear$/i }).count(), 0, 'Active To Do task must not offer deadline Clear');
+    await page.locator('#task-tab-activity').click();
+    const activityPanelHeight = await page.locator('#task-modal-tabpanel').evaluate(el => el.getBoundingClientRect().height);
+    assert.ok(activityPanelHeight >= 339, `Activity tab panel should retain min-h-[340px] (got ${activityPanelHeight}px)`);
     await page.keyboard.press('Escape');
     await editDialog.waitFor({ state: 'detached' });
 
@@ -325,12 +350,20 @@ try {
     assert.ok(kiranOptionText && !kiranOptionText.includes('Independent'), `Creative Director should not be labeled Independent (got ${kiranOptionText})`);
     await assignDialog2.locator('#taskassignmentmodal-field-1').selectOption('u-content');
     assert.ok((await assignDialog2.locator('#taskassignmentmodal-deadline').inputValue()).length > 0, 'Selecting a teammate on a No-deadline brief should auto-fill Tomorrow');
+    await assignDialog2.locator('#taskassignmentmodal-field-2').fill('8');
+    const summaryText = await assignDialog2.locator('form').textContent();
+    assert.match(summaryText || '', /Assigned:\s*[\d.]+h\s*→\s*[\d.]+h\/day/, 'Assign preview should project Assigned daily hours delta');
     const submitVisibility = await assignDialog2.evaluate(dialog => {
       const dr = dialog.getBoundingClientRect();
       const btn = dialog.querySelector('button[type="submit"]')!.getBoundingClientRect();
-      return { inDialog: btn.bottom <= dr.bottom + 1, inViewport: btn.bottom <= window.innerHeight + 1 };
+      const preset16h = Array.from(dialog.querySelectorAll('button')).find(b => b.textContent?.trim() === '16h')?.getBoundingClientRect();
+      return {
+        inDialog: btn.bottom <= dr.bottom + 1,
+        inViewport: btn.bottom <= window.innerHeight + 1,
+        presetVisible: Boolean(preset16h && preset16h.bottom <= dr.bottom + 1 && preset16h.bottom <= window.innerHeight + 1),
+      };
     });
-    assert.deepEqual(submitVisibility, { inDialog: true, inViewport: true }, 'TaskAssignmentModal submit footer must stay visible at 1440x700');
+    assert.deepEqual(submitVisibility, { inDialog: true, inViewport: true, presetVisible: true }, 'TaskAssignmentModal presets & submit footer must stay visible at 1440x700');
     await page.keyboard.press('Escape');
     await assignDialog2.getByRole('button', { name: /^Discard$/i }).click();
     await assignDialog2.waitFor({ state: 'detached' });
@@ -388,6 +421,21 @@ try {
     await page.keyboard.press('Escape');
     await editDialog.waitFor({ state: 'detached' });
 
+    // WorkloadModal labels and Close Breakdown autofocus guard
+    await page.locator('#workload-btn-cd-1').click();
+    const workloadDialog = page.locator('#workload-breakdown-modal');
+    await workloadDialog.waitFor({ state: 'visible' });
+    await workloadDialog.getByText('To Do (Dated)', { exact: true }).waitFor({ state: 'visible' });
+    await workloadDialog.getByText('To Do (Undated)', { exact: true }).waitFor({ state: 'visible' });
+    const closeBreakdownBtn = workloadDialog.getByRole('button', { name: 'Close Breakdown' });
+    assert.equal(
+      await closeBreakdownBtn.evaluate(el => el === document.activeElement),
+      true,
+      'Opening WorkloadModal should focus Close Breakdown button instead of an SVG chart bar'
+    );
+    await closeBreakdownBtn.click();
+    await workloadDialog.waitFor({ state: 'detached' });
+
     // Sort overloaded first -> clicking manual reorder exits pressure sort immediately (P2-4)
     const sortBtn = overview.getByRole('button', { name: /over 12 pts/i });
     await sortBtn.click();
@@ -405,7 +453,7 @@ try {
       false,
       'Desktop inline Move stack should be hidden on 390px mobile'
     );
-    await page.locator('#member-actions-btn-u-content').click();
+    await page.locator('#swimlane-u-content button[aria-label="More actions for Ava Writer"]:visible').click();
     const avaMenu = page.locator('#member-actions-menu-u-content');
     await avaMenu.waitFor({ state: 'visible' });
     const mobileMenuItemHeights = await avaMenu.locator('[role="menuitem"]').evaluateAll(els =>
@@ -420,6 +468,17 @@ try {
     await portaledCardMenu.waitFor({ state: 'visible' });
     await page.keyboard.press('Escape');
     await portaledCardMenu.waitFor({ state: 'detached' });
+    assert.equal(
+      await page.locator('#swimlane-cd-1 .task-card svg.lucide-grip-vertical').first().isVisible(),
+      false,
+      'TaskCard GripVertical drag handles should be hidden on mobile (<640px)'
+    );
+    await page.locator('#free-pool-trigger').click();
+    const mobileFreePoolJumpHeight = await page.getByRole('button', { name: "Jump to Mia Designer's swimlane" }).evaluate(el => el.getBoundingClientRect().height);
+    assert.ok(mobileFreePoolJumpHeight >= 43.5, `Mobile Free Pool jump action should be >= 44px (got ${mobileFreePoolJumpHeight}px)`);
+    await page.getByRole('button', { name: "Jump to Mia Designer's swimlane" }).focus();
+    await page.keyboard.press('Escape');
+    await page.getByRole('complementary', { name: 'Free Pool' }).waitFor({ state: 'hidden' });
     const undersizedControls = await page.evaluate(() => {
       return Array.from(document.querySelectorAll<HTMLElement>('button, a, input, select, [role="button"], [role="tab"]'))
         .filter(el => !el.classList.contains('sr-only') && el.getClientRects().length > 0 && el.offsetParent !== null)

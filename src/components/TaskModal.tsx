@@ -743,7 +743,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 id="task-modal-tabpanel"
                 role="tabpanel"
                 aria-labelledby={`task-tab-${activeTab}`}
-                className={`px-5 py-4 overflow-y-auto flex-1 space-y-4 ${activeTab !== 'activity' ? 'min-h-[340px]' : ''}`}
+                className="px-5 py-4 overflow-y-auto flex-1 space-y-4 min-h-[340px]"
               >
                 {showDiscardConfirm && (
                   <div role="alertdialog" aria-label="Discard unsaved changes" className="callout callout-warning space-y-2">
@@ -972,7 +972,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                                 setShowCoAssignPicker(false);
                                 requestAnimationFrame(() => coAssignToggleRef.current?.focus({ preventScroll: true }));
                               }}
-                              className="icon-button !h-7 !w-7 border border-[var(--border)] bg-[var(--surface)] shrink-0"
+                              className="icon-button sm:!h-7 sm:!w-7 border border-[var(--border)] bg-[var(--surface)] shrink-0"
                             >
                               <X className="h-3 w-3" />
                             </button>
@@ -1170,7 +1170,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   <DateQuickPresets
                     value={dueDate}
                     onSelectDate={setDueDate}
-                    allowClear
+                    allowClear={status === 'pipeline'}
                     className="mt-1.5"
                   />
                   {status !== 'pipeline' && !dueDate && (
