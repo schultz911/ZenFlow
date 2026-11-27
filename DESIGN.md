@@ -187,12 +187,11 @@ components:
     typography: "{typography.card-title}"
     padding: "0 4px"
     height: "{spacing.header-height}"
-  free-pool-dock:
-    backgroundColor: "{colors.ink-obsidian}"
-    textColor: "{colors.paper-white}"
+  free-pool-row:
+    backgroundColor: "{colors.paper-white}"
+    textColor: "{colors.ink-obsidian}"
     typography: "{typography.body}"
-    rounded: "{rounded.control}"
-    padding: "0 14px"
+    padding: "0 16px"
     height: "44px"
   hold-confirm:
     backgroundColor: "{colors.crimson-hold}"

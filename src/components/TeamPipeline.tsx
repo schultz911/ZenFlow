@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { useAuth, useWorkspace } from '../context/DashboardContext';
 import { Task, User, RoleFilter } from '../types';
@@ -61,9 +61,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
 
   const [filterMode, setFilterMode] = useState<'all' | 'unassigned' | 'assigned'>('all');
   const [isDragOver, setIsDragOver] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(() =>
-    typeof window !== 'undefined' ? window.matchMedia('(max-width: 639px)').matches : false
-  );
+  const userToggledCollapseRef = useRef(false);
 
   const userMap = useMemo(() => {
     const map = new Map<string, User>();
@@ -104,6 +102,21 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
     return pipelineTasks.filter(t => getTaskAssigneeIds(t).length === 0).length;
   }, [pipelineTasks]);
   const assignedCount = totalCount - unassignedCount;
+
+  const [isCollapsed, setIsCollapsed] = useState(() =>
+    (typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches) || unassignedCount === 0
+  );
+
+  useEffect(() => {
+    if (userToggledCollapseRef.current) return;
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches) return;
+    setIsCollapsed(unassignedCount === 0);
+  }, [unassignedCount]);
+
+  const handleToggleCollapse = () => {
+    userToggledCollapseRef.current = true;
+    setIsCollapsed(prev => !prev);
+  };
 
   const displayedTasks = useMemo(() => {
     let result = pipelineTasks;
@@ -198,12 +211,12 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
       <div
         onClick={e => {
           if ((e.target as HTMLElement).closest('button, a, input, select')) return;
-          setIsCollapsed(prev => !prev);
+          handleToggleCollapse();
         }}
         title={isCollapsed ? `Click bar to expand ${pipelineHeading}` : `Click bar to collapse ${pipelineHeading}`}
         className={`ledger-band flex items-center justify-between gap-2 px-3.5 py-2.5 sm:px-5 cursor-pointer select-none ${isCollapsed ? 'border-b-0' : ''}`}
       >
-        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-wrap">
+        <div className="flex items-center gap-x-2 gap-y-0.5 sm:gap-2.5 min-w-0 flex-wrap">
           <DisciplineIcon aria-hidden="true" className="h-4 w-4 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
           <h2 className="text-[13px] font-bold tracking-tight text-[var(--text-primary)] whitespace-nowrap">
             {pipelineHeading}
@@ -213,7 +226,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
           </span>
           {unassignedCount > 0 && (
             <>
-              <span aria-hidden="true" className="text-[var(--text-muted)] text-xs">·</span>
+              <span aria-hidden="true" className="hidden sm:inline text-[var(--text-muted)] text-xs">·</span>
               <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 tabular-nums whitespace-nowrap">
                 {unassignedCount} unassigned
               </span>
@@ -291,7 +304,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
             type="button"
             aria-expanded={!isCollapsed}
             aria-controls="team-pipeline-body"
-            onClick={() => setIsCollapsed(prev => !prev)}
+            onClick={handleToggleCollapse}
             title={isCollapsed ? 'Expand pipeline' : 'Collapse pipeline'}
             aria-label={isCollapsed ? 'Expand pipeline' : 'Collapse pipeline'}
             className="icon-button border border-[var(--border)] bg-[var(--surface)] shrink-0"
@@ -525,7 +538,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                               {(task.client || task.project || showDisciplineMeta) && (
                                 <span aria-hidden="true" className="text-[var(--text-muted)]">·</span>
                               )}
-                              <span className="truncate max-w-[95px]">{assetDetail}</span>
+                              <span className="truncate">{assetDetail}</span>
                             </>
                           )}
                         </div>

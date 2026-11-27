@@ -30,7 +30,6 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
   defaultOpenAdd = false,
   onQuickAdd,
   onEditTask,
-  onUpdateTitle,
   onDeleteTask,
   onCreateSubtask,
 }) => {
@@ -40,10 +39,6 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
   }, [defaultOpenAdd]);
   const [newTitle, setNewTitle] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Inline title editing state for a retainer task
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState('');
 
   const inputRef = useRef<HTMLInputElement>(null);
   const quickAddCardRef = useRef<HTMLDivElement>(null);
@@ -190,7 +185,6 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
       {(tasks.length > 0 || isAdding) && (
         <div className="flex items-center gap-2 overflow-x-auto py-1 px-0.5 scroll-smooth">
           {tasks.map(task => {
-            const isEditingThis = editingTaskId === task.id;
             const metaLine = [task.client, task.project].filter(Boolean).join(' · ');
 
             return (
@@ -214,52 +208,16 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
 
                   {/* Full-width Task Title & Optional Client · Project */}
                   <div className="min-w-0 flex-1">
-                    {isEditingThis ? (
-                      <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                        <input
-                          type="text"
-                          autoFocus
-                          value={editingTitle}
-                          onChange={e => setEditingTitle(e.target.value)}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              const trimmed = editingTitle.trim();
-                              if (trimmed && onUpdateTitle) {
-                                onUpdateTitle(task.id, trimmed);
-                              }
-                              setEditingTaskId(null);
-                            } else if (e.key === 'Escape') {
-                              setEditingTaskId(null);
-                            }
-                          }}
-                          onBlur={() => {
-                            const trimmed = editingTitle.trim();
-                            if (trimmed && onUpdateTitle) {
-                              onUpdateTitle(task.id, trimmed);
-                            }
-                            setEditingTaskId(null);
-                          }}
-                          className="w-full rounded-[5px] border border-[var(--accent)] bg-[var(--surface)] px-1.5 py-0.5 text-xs text-[var(--text-primary)] focus:outline-none"
-                        />
-                      </div>
-                    ) : (
-                      <h5 className="text-xs font-semibold leading-snug">
-                        <button
-                          type="button"
-                          onClick={() => onEditTask(task)}
-                          onDoubleClick={e => {
-                            e.stopPropagation();
-                            setEditingTaskId(task.id);
-                            setEditingTitle(task.title);
-                          }}
-                          title={`${task.title} · Click for details, double-click to rename`}
-                          className="mobile-tap-control sm:min-h-0 w-full text-left text-[var(--text-primary)] break-words whitespace-normal rounded px-1 -mx-1 py-0.5 hover:bg-[var(--surface-subtle)] hover:text-[#1d4ed8] dark:hover:text-blue-400 cursor-pointer transition-colors"
-                        >
-                          {task.title}
-                        </button>
-                      </h5>
-                    )}
+                    <h5 className="text-xs font-semibold leading-snug">
+                      <button
+                        type="button"
+                        onClick={() => onEditTask(task)}
+                        title={`${task.title} · Click for details`}
+                        className="mobile-tap-control sm:min-h-0 w-full text-left text-[var(--text-primary)] break-words whitespace-normal rounded px-1 -mx-1 py-0.5 hover:bg-[var(--surface-subtle)] hover:text-[#1d4ed8] dark:hover:text-blue-400 cursor-pointer transition-colors"
+                      >
+                        {task.title}
+                      </button>
+                    </h5>
 
                     {metaLine && (
                       <p className="mt-0.5 text-[11px] text-[var(--text-secondary)] truncate" title={metaLine}>

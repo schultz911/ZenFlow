@@ -295,17 +295,46 @@ try {
     await page.getByRole('button', { name: /All Clusters/i }).waitFor();
     await overview.getByText(/under est/i).waitFor();
 
-    // DisciplineTaskModal focus + discard guard + neutral placeholders (P2-5)
+    // DisciplineTaskModal focus + discard guard + neutral placeholders + aria-pressed/0-selection guard (P2-5, P2-7)
     await page.getByRole('button', { name: /New Brief/i }).first().click();
     const newBriefDialog = page.getByRole('dialog', { name: 'Create pipeline requirement' });
     await newBriefDialog.waitFor({ state: 'visible' });
     assert.equal(await newBriefDialog.locator('#disciplinetaskmodal-field-1').evaluate(el => el === document.activeElement), true, 'New Brief should focus title input, not close button');
     assert.equal(await newBriefDialog.locator('#disciplinetaskmodal-field-3').getAttribute('placeholder'), 'e.g. Acme Corp');
+    const contentToggle = newBriefDialog.getByRole('button', { name: /^Content$/i });
+    const designToggle = newBriefDialog.getByRole('button', { name: /^Design$/i });
+    assert.equal(await contentToggle.getAttribute('aria-pressed'), 'true');
+    await contentToggle.click();
+    if ((await designToggle.getAttribute('aria-pressed')) === 'true') await designToggle.click();
+    assert.equal(await newBriefDialog.locator('button[type="submit"]').isDisabled(), true, '0 selected disciplines must disable submit');
+    await contentToggle.click();
     await newBriefDialog.locator('#disciplinetaskmodal-field-1').fill('Draft Unsaved Campaign');
     await page.locator('.dialog-backdrop').first().click({ position: { x: 10, y: 10 } });
     await newBriefDialog.getByRole('alertdialog', { name: /Discard unsaved/i }).waitFor({ state: 'visible' });
     await newBriefDialog.getByRole('button', { name: /Discard/i }).click();
     await newBriefDialog.waitFor({ state: 'detached' });
+
+    // TaskAssignmentModal P0-1 footer visibility on 700px laptop + P1-3 blank No-deadline + P2-5 CD label
+    await page.setViewportSize({ width: 1440, height: 700 });
+    await page.locator('#team-pipeline-body .task-card').first().getByRole('button', { name: /^Assign$/i }).click();
+    const assignDialog2 = page.getByRole('dialog', { name: 'Assign task' });
+    await assignDialog2.waitFor({ state: 'visible' });
+    assert.equal(await assignDialog2.locator('#taskassignmentmodal-deadline').inputValue(), '', 'Unassigned No-deadline brief should not prefill Tomorrow');
+    assert.equal(await assignDialog2.locator('#taskassignmentmodal-deadline').isDisabled(), true);
+    const kiranOptionText = await assignDialog2.locator('#taskassignmentmodal-field-1 option[value="cd-1"]').textContent();
+    assert.ok(kiranOptionText && !kiranOptionText.includes('Independent'), `Creative Director should not be labeled Independent (got ${kiranOptionText})`);
+    await assignDialog2.locator('#taskassignmentmodal-field-1').selectOption('u-content');
+    assert.ok((await assignDialog2.locator('#taskassignmentmodal-deadline').inputValue()).length > 0, 'Selecting a teammate on a No-deadline brief should auto-fill Tomorrow');
+    const submitVisibility = await assignDialog2.evaluate(dialog => {
+      const dr = dialog.getBoundingClientRect();
+      const btn = dialog.querySelector('button[type="submit"]')!.getBoundingClientRect();
+      return { inDialog: btn.bottom <= dr.bottom + 1, inViewport: btn.bottom <= window.innerHeight + 1 };
+    });
+    assert.deepEqual(submitVisibility, { inDialog: true, inViewport: true }, 'TaskAssignmentModal submit footer must stay visible at 1440x700');
+    await page.keyboard.press('Escape');
+    await assignDialog2.getByRole('button', { name: /^Discard$/i }).click();
+    await assignDialog2.waitFor({ state: 'detached' });
+    await page.setViewportSize({ width: 1440, height: 900 });
 
     // Ongoing card layout + anchored member menu proximity (P1-2) + DuplicateTaskModal defaults
     const memberBtn = page.locator('#member-actions-btn-cd-1');
@@ -335,19 +364,38 @@ try {
     await page.keyboard.press('Escape');
     await dupDialog.waitFor({ state: 'detached' });
 
-    // Standard task delegation prefers another user when single-cluster fallback hits (P3-4)
+    // Standard task delegation excludes Account Managers, prefers non-overloaded teammate, and deduplicates status options (P1-1, P2-3)
     await page.locator('#task-card-cd-1-t-kiran-2 button[title="Create and assign subtask"]').click({ force: true });
     await dupDialog.waitFor({ state: 'visible' });
-    assert.notEqual(await dupDialog.locator('#duplicatetaskmodal-field-2').inputValue(), 'cd-1', 'Standard task delegation should prefer another teammate when available');
+    const dupOwnerOptions = await dupDialog.locator('#duplicatetaskmodal-field-2 option').allTextContents();
+    assert.equal(dupOwnerOptions.some(t => /Account/i.test(t)), false, 'DuplicateTaskModal must exclude non-delivery Account Managers');
+    assert.equal(await dupDialog.locator('#duplicatetaskmodal-field-2').inputValue(), 'u-design', 'Standard task delegation should prefer non-overloaded teammate over overloaded Ava');
+    const dupStatusValues = await dupDialog.locator('#duplicatetaskmodal-field-4 option').evaluateAll(opts => opts.map(o => (o as HTMLOptionElement).value));
+    assert.equal(new Set(dupStatusValues).size, dupStatusValues.length, `DuplicateTaskModal Initial Status should have no duplicate values: ${JSON.stringify(dupStatusValues)}`);
     await page.keyboard.press('Escape');
     await dupDialog.waitFor({ state: 'detached' });
 
-    // TaskCard double-click inline rename
-    await page.locator('#task-card-cd-1-t-kiran-2 h5 button').dblclick();
-    await page.locator('#task-card-cd-1-t-kiran-2 input[type="text"]').waitFor({ state: 'visible' });
+    // TaskCard single-click opens TaskModal instantaneously (0ms, no double-click inline rename) + Co-assign focus transfer (P1-4, P1-5, P3-3)
+    await page.locator('#task-card-cd-1-t-kiran-2 h5 button').click();
+    await editDialog.waitFor({ state: 'visible' });
+    await editDialog.getByRole('button', { name: /\+ Co-assign teammate/i }).click();
+    assert.equal(
+      await editDialog.locator('select[aria-label="Share task with additional member"]').evaluate(el => el === document.activeElement),
+      true,
+      'Clicking + Co-assign teammate must move focus into the newly revealed select'
+    );
+    await editDialog.getByRole('button', { name: 'Hide co-assign selector' }).click();
     await page.keyboard.press('Escape');
+    await editDialog.waitFor({ state: 'detached' });
 
-    // Mobile 390x844 viewport checks (touch targets >= 44x44, move actions inside ... menu, Ongoing not crushed)
+    // Sort overloaded first -> clicking manual reorder exits pressure sort immediately (P2-4)
+    const sortBtn = overview.getByRole('button', { name: /over 12 pts/i });
+    await sortBtn.click();
+    assert.equal(await sortBtn.getAttribute('aria-pressed'), 'true');
+    await page.locator('#swimlane-u-content button[aria-label="Move Ava Writer down"]').click();
+    assert.equal(await sortBtn.getAttribute('aria-pressed'), 'false', 'Manual swimlane reorder should exit Sort overloaded first');
+
+    // Mobile 390x844 viewport checks (touch targets >= 44x44 including menu items, portaled card menu, Ongoing not crushed)
     await page.setViewportSize({ width: 390, height: 844 });
     await page.waitForTimeout(100);
     const mobileOngoingTitleWidth = await ongoingCard.locator('h5 button').evaluate(el => el.getBoundingClientRect().width);
@@ -360,9 +408,18 @@ try {
     await page.locator('#member-actions-btn-u-content').click();
     const avaMenu = page.locator('#member-actions-menu-u-content');
     await avaMenu.waitFor({ state: 'visible' });
-    const mobileMoveItemHeight = await avaMenu.getByRole('menuitem', { name: 'Move Workspace Up' }).evaluate(el => el.getBoundingClientRect().height);
-    assert.ok(mobileMoveItemHeight >= 44, `Mobile Move Workspace Up menuitem should be >= 44px (got ${mobileMoveItemHeight}px)`);
+    const mobileMenuItemHeights = await avaMenu.locator('[role="menuitem"]').evaluateAll(els =>
+      els.map(el => ({ text: el.textContent?.trim(), h: el.getBoundingClientRect().height }))
+    );
+    for (const item of mobileMenuItemHeights) {
+      assert.ok(item.h >= 44, `Mobile member menu item "${item.text}" should be >= 44px (got ${item.h}px)`);
+    }
     await page.keyboard.press('Escape');
+    await page.locator('#task-card-u-content-t-ava-3 button[aria-label^="Actions for"]').click();
+    const portaledCardMenu = page.locator('body > [role="menu"][aria-label^="Actions for"]');
+    await portaledCardMenu.waitFor({ state: 'visible' });
+    await page.keyboard.press('Escape');
+    await portaledCardMenu.waitFor({ state: 'detached' });
     const undersizedControls = await page.evaluate(() => {
       return Array.from(document.querySelectorAll<HTMLElement>('button, a, input, select, [role="button"], [role="tab"]'))
         .filter(el => !el.classList.contains('sr-only') && el.getClientRects().length > 0 && el.offsetParent !== null)

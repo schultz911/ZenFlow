@@ -554,44 +554,44 @@ function DashboardContent() {
 
   const handleMoveUserUp = useCallback((userId: string) => {
     // Current user account is pinned to the top and cannot be reordered
-    if (userId === currentUserRef.current?.id) return;
+    const currentUid = currentUserRef.current?.id;
+    if (userId === currentUid) return;
 
-    setCustomUserOrder(prev => {
-      const currentList = roleFilteredUsersRef.current.map(u => u.id);
-      const idx = currentList.indexOf(userId);
-      const isPinnedTop = currentList[0] === currentUserRef.current?.id;
-      const minIndex = isPinnedTop ? 2 : 1;
-      if (idx < minIndex) return prev;
+    const currentList = roleFilteredUsersRef.current.map(u => u.id);
+    const reorderable = currentList.filter(id => id !== currentUid);
+    const idx = reorderable.indexOf(userId);
+    if (idx <= 0) return;
 
-      const nextList = [...currentList];
-      const temp = nextList[idx - 1];
-      nextList[idx - 1] = nextList[idx];
-      nextList[idx] = temp;
-      try {
-        localStorage.setItem('zenflow_user_order_v1', JSON.stringify(nextList));
-      } catch { }
-      return nextList;
-    });
+    const nextReorderable = [...reorderable];
+    [nextReorderable[idx - 1], nextReorderable[idx]] = [nextReorderable[idx], nextReorderable[idx - 1]];
+    const nextList = currentUid && currentList.includes(currentUid) ? [currentUid, ...nextReorderable] : nextReorderable;
+
+    setSortByPressure(false);
+    setCustomUserOrder(nextList);
+    try {
+      localStorage.setItem('zenflow_user_order_v1', JSON.stringify(nextList));
+    } catch { }
   }, []);
 
   const handleMoveUserDown = useCallback((userId: string) => {
     // Current user account is pinned to the top and cannot be reordered
-    if (userId === currentUserRef.current?.id) return;
+    const currentUid = currentUserRef.current?.id;
+    if (userId === currentUid) return;
 
-    setCustomUserOrder(prev => {
-      const currentList = roleFilteredUsersRef.current.map(u => u.id);
-      const idx = currentList.indexOf(userId);
-      if (idx === -1 || idx >= currentList.length - 1) return prev;
+    const currentList = roleFilteredUsersRef.current.map(u => u.id);
+    const reorderable = currentList.filter(id => id !== currentUid);
+    const idx = reorderable.indexOf(userId);
+    if (idx === -1 || idx >= reorderable.length - 1) return;
 
-      const nextList = [...currentList];
-      const temp = nextList[idx + 1];
-      nextList[idx + 1] = nextList[idx];
-      nextList[idx] = temp;
-      try {
-        localStorage.setItem('zenflow_user_order_v1', JSON.stringify(nextList));
-      } catch { }
-      return nextList;
-    });
+    const nextReorderable = [...reorderable];
+    [nextReorderable[idx + 1], nextReorderable[idx]] = [nextReorderable[idx], nextReorderable[idx + 1]];
+    const nextList = currentUid && currentList.includes(currentUid) ? [currentUid, ...nextReorderable] : nextReorderable;
+
+    setSortByPressure(false);
+    setCustomUserOrder(nextList);
+    try {
+      localStorage.setItem('zenflow_user_order_v1', JSON.stringify(nextList));
+    } catch { }
   }, []);
 
   if (isAuthChecking) {

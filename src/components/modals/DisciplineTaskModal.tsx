@@ -345,7 +345,14 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
   }, [needsContent, needsDesign]);
 
   const creationId = useRef<string | undefined>(undefined);
+  const formBodyRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (!isOpen) creationId.current = undefined; }, [isOpen]);
+
+  useEffect(() => {
+    if (submitError) {
+      formBodyRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [submitError]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -482,6 +489,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  aria-pressed={needsContent}
                   onClick={() => setNeedsContent(prev => !prev)}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-[7px] text-xs font-semibold border transition-colors cursor-pointer ${
                     needsContent
@@ -504,6 +512,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
 
                 <button
                   type="button"
+                  aria-pressed={needsDesign}
                   onClick={() => setNeedsDesign(prev => !prev)}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-[7px] text-xs font-semibold border transition-colors cursor-pointer ${
                     needsDesign
@@ -529,7 +538,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
 
           {/* Scrollable Form Body */}
           <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
-            <div className="flex-1 overflow-y-auto p-5 space-y-5">
+            <div ref={formBodyRef} className="flex-1 overflow-y-auto p-5 space-y-5">
               {showDiscardConfirm && (
                 <div role="alertdialog" aria-label="Discard unsaved brief" className="callout callout-warning space-y-2">
                   <p className="text-xs font-semibold">Discard unsaved brief?</p>
@@ -991,7 +1000,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting || !canCreatePipelineTask}
+                  disabled={isSubmitting || !canCreatePipelineTask || selectedDisciplines.length === 0}
                   className="button-primary"
                 >
                   {isSubmitting

@@ -275,10 +275,9 @@ A disciplined cool-neutral ledger palette in both light and dark modes, punctuat
 zenFlow centers its operational workspace inside a `1400px` max-width container (`max-w-[1400px]`) with responsive horizontal gutters (`16px` mobile, `24px` at `640px`, `32px` at `1024px`) and `32px` bottom padding (`pb-8`).
 
 - **Sticky Chrome & Urgent Ticker:** A `55px` (`3.4375rem`, including `1px` bottom border) sticky header anchors at `top: 0` on desktop (`>=1280px`); below `1280px`, a `44px` (`2.75rem`) horizontal sub-header strip adds team navigation for a combined `99px` (`6.1875rem`) `--header-height`. The urgent `MarqueeRibbon` pins directly beneath at `top: var(--header-height)` on `>=640px` whenever overdue or due-today tasks exist, and scrolls inline on `<640px` to preserve above-the-fold canvas space.
-- **Single-Frame KPI Ledger:** `OverviewBar` renders one `.ledger-frame` containing a `.ledger-band` header and a hairline-divided `.ledger-kpi-grid` (`5` equal columns at `>=1024px`, `3` columns at `>=640px`, collapsing cleanly on `<640px` so active work leads above the fold). Directly beneath sits a unified toolbar row (`search input` + `Select Team Board` + `Free Pool` + `View Analytics` + `Export Report`, with `View Analytics`/`Export Report` folding into a mobile overflow menu below `640px`).
-- **Centralized Pipeline Triage Strip:** `TeamPipeline` uses a `.ledger-frame` with a ruled `1`-, `2`-, or `3`-column responsive grid (`divide-y md:divide-y-0 md:divide-x`) depending on item count, avoiding nested cards inside the pipeline container.
+- **Single-Frame KPI Ledger & Inline Free Pool:** `OverviewBar` renders one `.ledger-frame` containing a `.ledger-band` header, a hairline-divided `.ledger-kpi-grid` (`5` equal columns at `>=1024px`, `3` columns at `>=640px`, collapsing cleanly on `<640px` so active work leads above the fold), and an inline bottom-ruled collapsible `FreePoolContainer` row (`44px` trigger expanding a horizontal `.free-pool-members` roster with 3-segment `.free-pool-hours-scale` meters, `Assign brief` portaled pickers, and `+ Task` actions). Directly beneath sits a unified toolbar row (`search input` + `Select Team Board` + `View Analytics` + `Export Report`, with `View Analytics`/`Export Report` folding into a mobile overflow menu below `640px`).
+- **Centralized Pipeline Triage Strip:** `TeamPipeline` uses a `.ledger-frame` with a horizontal swimlane-style card strip (`md+` inline filter pills in its header bar; auto-collapsed on desktop when `unassignedCount === 0`).
 - **Ruled Swimlane Grids:** Each member workspace is a collapsible `.ledger-frame` whose body divides cleanly into `4` status columns (`repeat(4, minmax(195px, 1fr))`), expanding to `5` columns (`repeat(5, minmax(185px, 1fr))`) when `Completed` is toggled open. Column cells use `1px solid var(--border-subtle)` right dividers, `10px 12px` padding, a `200px` min-height, and a `385px` internal scroll ceiling. Below `640px`, the horizontal scroll wrapper snaps cleanly across `min(80vw, 300px)` columns and dialog inputs bump to `16px` to prevent mobile zoom.
-- **Toolbar Capacity Popover:** `FreePoolContainer` renders an obsidian pill trigger directly in the `OverviewBar` toolbar (`Free Pool · N <3h/d`) that opens a right-anchored popover roster without occluding lower swimlane headers.
 
 ### Named Rules
 **The Hairline Partition Rule.** Separate adjacent KPI cells, pipeline entries, and swimlane status columns with 1px structural rules (`--border` / `--border-subtle`) inside a shared `.ledger-frame` rather than wrapping every sub-region in nested rounded cards.
@@ -306,8 +305,8 @@ The form language is architectural and crisp, using a tight concentric radius la
 - **Inner micro-chips (`5px`):** Inline status steppers, active timer chips, `You` label, active segmented filter pills, and inline rename inputs.
 - **Alert badges & small toggles (`6px`):** `.ledger-alert-badge`, Free Pool filter chips, and reorder control groups.
 - **Interactive controls & cards (`7px`):** `--radius-control` and `--radius-card` unify buttons, inputs, task cards, icon buttons, and the header logo mark.
-- **Floating menus (`9px`):** Dropdown menus. The Free Pool handle uses 7px rounded corners on its exposed edge.
-- **Structural frames & modals (`10px`):** `--radius-panel` defines outer `.ledger-frame` containers, `.dialog-panel` and the `MarqueeRibbon`. The Free Pool sidebar meets the viewport edge.
+- **Floating menus (`9px`):** Dropdown menus and portaled brief/action pickers.
+- **Structural frames & modals (`10px`):** `--radius-panel` defines outer `.ledger-frame` containers, `.dialog-panel` and the `MarqueeRibbon`.
 - **Circular indicators (`9999px`):** `6px` (`h-1.5 w-1.5`) cognitive-load dots, `8px` (`h-2 w-2`) sync/Free Pool status dots, `3px` metric tracks, and `6px` custom scrollbars.
 
 ### Named Rules
@@ -347,7 +346,7 @@ Controls feel crisp, immediate, and tactile—with `150ms` `cubic-bezier(0.2, 0.
 ### Signature Components
 - **Centralized `TeamPipeline` Triage Strip:** Collapsible `.ledger-frame` uniting unassigned and assigned discipline deliverables in a ruled multi-column strip (`1`/`2`/`3` columns via `divide-x`) with inline rename, cognitive-load dot, tabular estimate, and right-aligned `Assign` action.
 - **Urgent `MarqueeRibbon`:** `10px` radius crimson-tinted alert strip led by a solid vermilion `.ledger-alert-badge` and hairline-divided clickable overdue/due-today task items scrolling smoothly over `35s` (paused on hover, horizontal scroll fallback under `prefers-reduced-motion`). Pinned beneath the sticky header on `>=640px`, inline on `<640px`.
-- **`Free Pool` Capacity Popover:** Compact obsidian pill (`bg-[#121418] dark:bg-[#1e2430]`) inside the `OverviewBar` toolbar displaying live count (`<3h/d`) and opening a right-anchored popover with a dark header band, discipline filters, daily assigned hours, swimlane links, and `+ Task` allocation without obstructing swimlane headers.
+- **Inline `Free Pool` Ledger Row:** Bottom-ruled collapsible bar integrated inside the `OverviewBar` `.ledger-frame` (`44px` trigger displaying live `<3h/d` count), expanding a hairline-divided `.free-pool-members` roster with 3-segment `.free-pool-hours-scale` bars, discipline filters, swimlane jump links, portaled `Assign brief` pickers, drag-drop handoff, and `+ Task` creation without obstructing swimlane headers.
 
 ## Do's and Don'ts
 

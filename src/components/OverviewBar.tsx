@@ -173,21 +173,39 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
     <div className="mb-3 space-y-2.5">
       {/* Pure Typographic Single-Frame Ruled Swiss KPI Ledger */}
       <section className="ledger-frame" aria-label="Team overview">
-        <div className="ledger-band flex flex-wrap items-center justify-between gap-2 px-4 py-1.5 sm:px-5">
-          <div className="flex items-baseline gap-2.5">
-            <h1 className="text-lg font-bold tracking-tight text-[var(--text-primary)]">
-              {activeRoleTab === 'all' ? 'All Teams' : activeRoleTab === 'content' ? 'Content' : 'Design'}
-            </h1>
-            <span className="text-xs font-medium text-[var(--text-secondary)] tabular-nums">
-              {displayedUsers.length} {displayedUsers.length === 1 ? 'member' : 'members'}
-            </span>
+        <div className="ledger-band flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between px-4 py-1.5 sm:px-5">
+          <div className="flex items-center justify-between gap-2 min-w-0">
+            <div className="flex items-baseline gap-2.5 min-w-0">
+              <h1 className="text-lg font-bold tracking-tight text-[var(--text-primary)] whitespace-nowrap">
+                {activeRoleTab === 'all' ? 'All Teams' : activeRoleTab === 'content' ? 'Content' : 'Design'}
+              </h1>
+              <span className="text-xs font-medium text-[var(--text-secondary)] tabular-nums whitespace-nowrap">
+                {displayedUsers.length} {displayedUsers.length === 1 ? 'member' : 'members'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMobileMetricsExpanded(prev => !prev)}
+              aria-expanded={mobileMetricsExpanded}
+              className="sm:hidden mobile-tap-control inline-flex items-center gap-1 rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-semibold text-[var(--text-secondary)] tabular-nums cursor-pointer shrink-0"
+            >
+              <span>
+                {teamUtilization.utilizationPercent}% util · {avgWorkload} pts
+              </span>
+              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${mobileMetricsExpanded ? 'rotate-180' : ''}`} />
+            </button>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {overloadedMembersCount > 0 && (
+          {overloadedMembersCount > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
                 aria-pressed={sortByPressure}
+                aria-label={
+                  sortByPressure
+                    ? `${overloadedMembersCount} ${overloadedMembersCount === 1 ? 'member' : 'members'} over 12 pts — Sorted`
+                    : `${overloadedMembersCount} ${overloadedMembersCount === 1 ? 'member' : 'members'} over 12 pts — Sort overloaded first`
+                }
                 onClick={onToggleSortByPressure}
                 title={
                   sortByPressure
@@ -199,26 +217,19 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                 }`}
               >
                 <AlertTriangle aria-hidden="true" className="h-3 w-3 shrink-0" />
-                <span>
+                <span className="hidden sm:inline">
                   {overloadedMembersCount} {overloadedMembersCount === 1 ? 'member over' : 'members over'} 12 pts
+                </span>
+                <span className="sm:hidden">
+                  {overloadedMembersCount} over 12 pts
                 </span>
                 <span aria-hidden="true" className="opacity-75">·</span>
                 <ArrowUpDown aria-hidden="true" className="h-3 w-3 shrink-0" />
-                <span>{sortByPressure ? 'Sorted' : 'Sort overloaded first'}</span>
+                <span className="hidden sm:inline">{sortByPressure ? 'Sorted' : 'Sort overloaded first'}</span>
+                <span className="sm:hidden">{sortByPressure ? 'Sorted' : 'Sort'}</span>
               </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setMobileMetricsExpanded(prev => !prev)}
-              aria-expanded={mobileMetricsExpanded}
-              className="sm:hidden mobile-tap-control inline-flex items-center gap-1 rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-semibold text-[var(--text-secondary)] tabular-nums cursor-pointer"
-            >
-              <span>
-                {teamUtilization.utilizationPercent}% util · {avgWorkload} pts
-              </span>
-              <ChevronDown className={`h-3.5 w-3.5 transition-transform ${mobileMetricsExpanded ? 'rotate-180' : ''}`} />
-            </button>
-          </div>
+            </div>
+          )}
         </div>
 
         <div className={`${mobileMetricsExpanded ? 'grid' : 'hidden sm:grid'} ledger-kpi-grid`}>

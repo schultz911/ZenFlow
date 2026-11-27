@@ -32,6 +32,7 @@ interface ContentSpecFieldsProps {
   sourceContentReferences: string[];
   onChangeSourceContentReferences: (links: string[]) => void;
   readOnly?: boolean;
+  heading?: string;
 }
 
 export const ContentSpecFields: React.FC<ContentSpecFieldsProps> = ({
@@ -43,11 +44,12 @@ export const ContentSpecFields: React.FC<ContentSpecFieldsProps> = ({
   sourceContentReferences,
   onChangeSourceContentReferences,
   readOnly = false,
+  heading = 'Content Subtask Specifications',
 }) => (
   <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] overflow-hidden">
     <div className="flex items-center gap-2 px-3.5 py-2 border-b border-[var(--border-subtle)] text-[11px] font-bold text-[#1d4ed8] dark:text-blue-400 uppercase tracking-wider">
       <FileText className="h-3.5 w-3.5 shrink-0" />
-      <span>Content Subtask Specifications</span>
+      <span>{heading}</span>
     </div>
 
     <div className="p-3.5 space-y-3">
@@ -109,6 +111,7 @@ interface DesignSpecFieldsProps {
   brandAssetsReferences: string[];
   onChangeBrandAssetsReferences: (links: string[]) => void;
   readOnly?: boolean;
+  heading?: string;
 }
 
 export const DesignSpecFields: React.FC<DesignSpecFieldsProps> = ({
@@ -120,11 +123,12 @@ export const DesignSpecFields: React.FC<DesignSpecFieldsProps> = ({
   brandAssetsReferences,
   onChangeBrandAssetsReferences,
   readOnly = false,
+  heading = 'Design Subtask Specifications',
 }) => (
   <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] overflow-hidden">
     <div className="flex items-center gap-2 px-3.5 py-2 border-b border-[var(--border-subtle)] text-[11px] font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider">
       <Palette className="h-3.5 w-3.5 shrink-0" />
-      <span>Design Subtask Specifications</span>
+      <span>{heading}</span>
     </div>
 
     <div className="p-3.5 space-y-3">

@@ -79,7 +79,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
     const initUser = task.userId || initialAssigneeId || '';
     const initLoad: CognitiveLoad = task.cognitiveLoad || 'medium';
     const initHours = task.estimatedHours !== undefined ? String(task.estimatedHours) : '';
-    const initDue = task.dueDate || getLocalOffsetDateKey(1);
+    const initDue = task.dueDate || (initUser ? getLocalOffsetDateKey(1) : '');
     setSelectedUserId(initUser);
     setCognitiveLoad(initLoad);
     setEstimatedHours(initHours);
@@ -141,7 +141,11 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
         userId: selectedUserId || undefined,
         assigneeIds: selectedUserId ? [selectedUserId] : [],
         status: willMoveToTodo ? 'todo' : 'pipeline',
-        dueDate: willMoveToTodo ? dueDate.trim() : (dueDate.trim() || undefined),
+        dueDate: willMoveToTodo
+          ? dueDate.trim()
+          : selectedUserId
+            ? (dueDate.trim() || undefined)
+            : (task.dueDate || undefined),
         startDate: selectedUserId ? (task.startDate || todayIso) : undefined,
         cognitiveLoad,
         estimatedHours: parsedHours,
@@ -193,8 +197,8 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
             </button>
           </div>
 
-          <form onSubmit={handleSubmit}>
-            <div className="p-5 space-y-4">
+          <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+            <div className="p-5 overflow-y-auto flex-1 space-y-4">
               {showDiscardConfirm && (
                 <div role="alertdialog" aria-label="Discard unsaved assignment" className="callout callout-warning space-y-2">
                   <p className="text-xs font-semibold">Discard unsaved assignment?</p>
@@ -269,21 +273,33 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                   <div className="relative">
                     <select
                       value={selectedUserId}
-                      onChange={e => setSelectedUserId(e.target.value)}
+                      onChange={e => {
+                        const nextUserId = e.target.value;
+                        setSelectedUserId(nextUserId);
+                        if (nextUserId && !dueDate.trim()) {
+                          setDueDate(getLocalOffsetDateKey(1));
+                        } else if (!nextUserId && !task.dueDate) {
+                          setDueDate('');
+                        }
+                      }}
                       className="field-control pr-8 cursor-pointer"
                       id="taskassignmentmodal-field-1"
                     >
                       <option value="">-- Leave Unassigned in Pipeline --</option>
                       {eligibleUsers.map(user => {
-                        const cdName = user.creativeDirectorId
-                          ? creativeDirectors.find(c => c.id === user.creativeDirectorId)?.name || 'Team'
-                          : 'Independent';
+                        const cdSuffix = user.isCreativeDirector
+                          ? ''
+                          : ` — ${
+                              user.creativeDirectorId
+                                ? creativeDirectors.find(c => c.id === user.creativeDirectorId)?.name || 'Team'
+                                : 'Independent'
+                            }`;
                         const dailyHours = getUserDailyAssignedHours(user, tasks);
                         const loadScore = quickWorkloadScore(tasksByUser.get(user.id) || []);
                         const tag = getUserTag(user);
                         return (
                           <option key={user.id} value={user.id}>
-                            {user.name} ({tag.label || user.designation || 'Member'}) — {cdName} · {loadScore}/12 pts · {formatHours(dailyHours)}/d
+                            {user.name} ({tag.label || user.designation || 'Member'}){cdSuffix} · {loadScore}/12 pts · {formatHours(dailyHours)}/d
                           </option>
                         );
                       })}
@@ -330,7 +346,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                           </strong>
                           {willOverload && ' · Will overload'}
                         </span>
-                        <span className="text-[var(--text-muted)]">·</span>
+                        <span aria-hidden="true" className="hidden sm:inline text-[var(--text-muted)]">·</span>
                         <span>Assigned: <strong className="text-[#1d4ed8] dark:text-blue-400">{formatHours(selectedDailyHours)}/day</strong></span>
                       </div>
                     </div>

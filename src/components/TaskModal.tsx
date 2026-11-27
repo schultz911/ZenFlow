@@ -109,7 +109,15 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [showCoAssignPicker, setShowCoAssignPicker] = useState(false);
+  const coAssignSelectRef = useRef<HTMLSelectElement>(null);
+  const coAssignToggleRef = useRef<HTMLButtonElement>(null);
   const [activeTab, setActiveTab] = useState<'details' | 'specs' | 'activity'>('details');
+
+  useLayoutEffect(() => {
+    if (showCoAssignPicker) {
+      coAssignSelectRef.current?.focus({ preventScroll: true });
+    }
+  }, [showCoAssignPicker]);
 
   // Resolved discipline for this task
   const taskDiscipline = useMemo(() => {
@@ -691,7 +699,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   onClick={() => setActiveTab('details')}
                   className={`segmented-item flex-1 cursor-pointer gap-1.5 ${activeTab === 'details' ? 'segmented-item-active' : ''}`}
                 >
-                  <span>Details &amp; Schedule</span>
+                  <span>{status === 'retainer' ? 'Details' : 'Details & Schedule'}</span>
                   {detailsIncomplete && (
                     <span
                       title="Required field incomplete"
@@ -933,6 +941,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                           <Users className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
                           <div className="relative flex-1 min-w-0">
                             <select
+                              ref={coAssignSelectRef}
                               aria-label="Share task with additional member"
                               value=""
                               onChange={e => {
@@ -954,9 +963,24 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                             </select>
                             <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-[var(--text-muted)]" />
                           </div>
+                          {assigneeIds.length <= 1 && (
+                            <button
+                              type="button"
+                              aria-label="Hide co-assign selector"
+                              title="Hide co-assign selector"
+                              onClick={() => {
+                                setShowCoAssignPicker(false);
+                                requestAnimationFrame(() => coAssignToggleRef.current?.focus({ preventScroll: true }));
+                              }}
+                              className="icon-button !h-7 !w-7 border border-[var(--border)] bg-[var(--surface)] shrink-0"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
                         </div>
                       ) : (
                         <button
+                          ref={coAssignToggleRef}
                           type="button"
                           onClick={() => setShowCoAssignPicker(true)}
                           className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer"
@@ -1174,6 +1198,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       brandAssetsReferences={brandAssetsReferences}
                       onChangeBrandAssetsReferences={setBrandAssetsReferences}
                       readOnly={!canEdit}
+                      heading={taskToEdit?.isSubtask ? 'Design Subtask Specifications' : 'Design Specifications'}
                     />
                   ) : (
                     <ContentSpecFields
@@ -1185,6 +1210,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       sourceContentReferences={sourceContentReferences}
                       onChangeSourceContentReferences={setSourceContentReferences}
                       readOnly={!canEdit}
+                      heading={taskToEdit?.isSubtask ? 'Content Subtask Specifications' : 'Content Specifications'}
                     />
                   )
                 )}

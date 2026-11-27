@@ -179,7 +179,10 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
             <span>Across boards · Under {targetHoursLabel} assigned today</span>
             {unassignedTotal > 0 && (
               <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400">
-                · {unassignedTotal} unassigned pipeline brief{unassignedTotal === 1 ? '' : 's'} ready to assign (drag here or click Assign brief)
+                <span aria-hidden="true" className="hidden sm:inline mr-1">·</span>
+                {unassignedTotal} unassigned pipeline brief{unassignedTotal === 1 ? '' : 's'} ready to assign{' '}
+                <span className="hidden sm:inline">(drag here or click Assign brief)</span>
+                <span className="sm:hidden">(tap Assign brief)</span>
               </span>
             )}
           </div>

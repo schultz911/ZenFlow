@@ -3,7 +3,16 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useBoardUi, useWorkspace } from '../context/DashboardContext';
 import { CognitiveLoad, Task, TaskStatus, User } from '../types';
-import { formatDateOnly, formatTaskStatus, getLocalOffsetDateKey, getUserTag } from '../utils/workload';
+import {
+  formatDateOnly,
+  formatHours,
+  formatTaskStatus,
+  getLocalOffsetDateKey,
+  getUserDailyAssignedHours,
+  getUserTag,
+  groupTasksByAssignee,
+  quickWorkloadScore,
+} from '../utils/workload';
 import { DateQuickPresets } from './ui/DateQuickPresets';
 import { CognitiveLoadSelector } from './ui/CognitiveLoadSelector';
 import { PrioritySelector } from './ui/PrioritySelector';
@@ -42,9 +51,16 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
   const { setActiveBoardId } = useBoardUi();
   const {
     users,
+    tasks,
     creativeDirectors,
     duplicateTaskToBoard,
   } = useWorkspace();
+
+  const deliveryUsers = useMemo(
+    () => users.filter(u => u.role === 'content' || u.role === 'design'),
+    [users]
+  );
+  const tasksByUser = useMemo(() => groupTasksByAssignee(tasks), [tasks]);
 
   // Find source user and board
   const sourceUser = useMemo(() => {
@@ -61,12 +77,12 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
     );
   }, [sourceUser, creativeDirectors]);
 
-  // Destination Boards list
+  // Destination Boards list (delivery members only — excludes Accounts who have no swimlane)
   const availableBoards = useMemo(() => {
     const list: Array<{ id: string; name: string; memberCount: number }> = [];
 
     for (const cd of creativeDirectors) {
-      const count = users.filter(u => u.id === cd.id || u.creativeDirectorId === cd.id).length;
+      const count = deliveryUsers.filter(u => u.id === cd.id || u.creativeDirectorId === cd.id).length;
       list.push({
         id: cd.id,
         name: `${cd.name}'s Team`,
@@ -74,7 +90,7 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
       });
     }
 
-    const independentCount = users.filter(u => !u.creativeDirectorId && !u.isCreativeDirector).length;
+    const independentCount = deliveryUsers.filter(u => !u.creativeDirectorId && !u.isCreativeDirector).length;
     if (independentCount > 0) {
       list.push({
         id: 'independent',
@@ -86,11 +102,11 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
     list.push({
       id: 'all',
       name: 'All Workspace Members',
-      memberCount: users.length,
+      memberCount: deliveryUsers.length,
     });
 
     return list;
-  }, [creativeDirectors, users]);
+  }, [creativeDirectors, deliveryUsers]);
 
   // Selection states
   const [selectedBoardId, setSelectedBoardId] = useState<string>('');
@@ -193,37 +209,40 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
     onClose
   );
 
-  // Compute members belonging to the selected board
+  // Compute eligible delivery members belonging to the selected board
   const availableUsers = useMemo(() => {
     if (!task) return [];
     let boardUsers: User[] = [];
 
     if (selectedBoardId === 'all') {
-      boardUsers = users;
+      boardUsers = deliveryUsers;
     } else if (selectedBoardId === 'independent') {
-      boardUsers = users.filter(u => !u.creativeDirectorId && !u.isCreativeDirector);
+      boardUsers = deliveryUsers.filter(u => !u.creativeDirectorId && !u.isCreativeDirector);
     } else {
-      boardUsers = users.filter(u => u.id === selectedBoardId || u.creativeDirectorId === selectedBoardId);
+      boardUsers = deliveryUsers.filter(u => u.id === selectedBoardId || u.creativeDirectorId === selectedBoardId);
     }
 
-    // Return all eligible members on the board
     return boardUsers;
-  }, [users, selectedBoardId, task]);
+  }, [deliveryUsers, selectedBoardId, task]);
 
-  // Synchronize selected user when available users list changes
+  // Synchronize selected user when available users list changes (prefer non-overloaded teammates for standard tasks)
   useEffect(() => {
     if (availableUsers.length > 0) {
       if (!availableUsers.some(u => u.id === selectedUserId)) {
         const preferred =
           task?.status !== 'retainer'
-            ? availableUsers.find(u => u.id !== sourceUser?.id) || availableUsers[0]
+            ? availableUsers.find(
+                u => u.id !== sourceUser?.id && quickWorkloadScore(tasksByUser.get(u.id) || []) < 12
+              ) ||
+              availableUsers.find(u => u.id !== sourceUser?.id) ||
+              availableUsers[0]
             : availableUsers[0];
         setSelectedUserId(preferred.id);
       }
     } else {
       setSelectedUserId('');
     }
-  }, [availableUsers, selectedUserId, task?.status, sourceUser?.id]);
+  }, [availableUsers, selectedUserId, task?.status, sourceUser?.id, tasksByUser]);
 
   const selectedTargetUser = useMemo(() => {
     return users.find(u => u.id === selectedUserId) || null;
@@ -447,14 +466,56 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                             className="field-control pr-8 cursor-pointer"
                             id="duplicatetaskmodal-field-2"
                           >
-                            {availableUsers.map(u => (
-                              <option key={u.id} value={u.id}>
-                                {u.name} ({getUserTag(u).label}) — {u.email}
-                              </option>
-                            ))}
+                            {availableUsers.map(u => {
+                              const loadScore = quickWorkloadScore(tasksByUser.get(u.id) || []);
+                              const dailyHours = getUserDailyAssignedHours(u, tasks);
+                              return (
+                                <option key={u.id} value={u.id}>
+                                  {u.name} ({getUserTag(u).label}) · {loadScore}/12 pts · {formatHours(dailyHours)}/d
+                                </option>
+                              );
+                            })}
                           </select>
                           <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
                         </div>
+                        {selectedTargetUser && (() => {
+                          const currentTasks = tasksByUser.get(selectedTargetUser.id) || [];
+                          const currentLoad = quickWorkloadScore(currentTasks);
+                          const simulatedSubtask: Task = {
+                            ...task,
+                            id: '__projected_subtask__',
+                            userId: selectedTargetUser.id,
+                            assigneeIds: [selectedTargetUser.id],
+                            status: targetStatus,
+                            dueDate: targetDueDate.trim() || undefined,
+                            cognitiveLoad: targetCognitiveLoad,
+                          };
+                          const projectedLoad = quickWorkloadScore([...currentTasks, simulatedSubtask]);
+                          const dailyHours = getUserDailyAssignedHours(selectedTargetUser, tasks);
+                          const willOverload = projectedLoad >= 12;
+                          return (
+                            <div
+                              className={`flex flex-wrap items-center justify-between gap-2 text-xs px-3 py-1.5 rounded-[7px] border tabular-nums ${
+                                willOverload
+                                  ? 'border-[var(--danger-border)] bg-[var(--danger-soft)] text-[var(--text-primary)]'
+                                  : 'border-[var(--border)] bg-[var(--surface-muted)] text-[var(--text-secondary)]'
+                              }`}
+                            >
+                              <span>Selected: <strong className="text-[var(--text-primary)]">{selectedTargetUser.name}</strong></span>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className={willOverload ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
+                                  Load:{' '}
+                                  <strong>
+                                    {projectedLoad !== currentLoad ? `${currentLoad} → ${projectedLoad}` : currentLoad} / 12 pts
+                                  </strong>
+                                  {willOverload && ' · Will overload'}
+                                </span>
+                                <span aria-hidden="true" className="hidden sm:inline text-[var(--text-muted)]">·</span>
+                                <span>Assigned: <strong className="text-[#1d4ed8] dark:text-blue-400">{formatHours(dailyHours)}/day</strong></span>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     ) : (
                       <div className="callout callout-warning flex items-center gap-2">
@@ -508,13 +569,14 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                           className="field-control pr-8 cursor-pointer"
                           id="duplicatetaskmodal-field-4"
                         >
-                          {task.status !== 'retainer' && (
-                            <option value={task.status}>Keep Original ({formatTaskStatus(task.status)})</option>
+                          {(task.status === 'done' || task.status === 'archived') && (
+                            <option value={task.status}>{formatTaskStatus(task.status)} (Original)</option>
                           )}
-                          <option value="pipeline">Pipeline</option>
-                          <option value="todo">To Do</option>
-                          <option value="in_progress">In Progress</option>
-                          <option value="in_review">In Review</option>
+                          {(['pipeline', 'todo', 'in_progress', 'in_review'] as TaskStatus[]).map(s => (
+                            <option key={s} value={s}>
+                              {formatTaskStatus(s)}{task.status === s ? ' (Original)' : ''}
+                            </option>
+                          ))}
                         </select>
                         <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
                       </div>

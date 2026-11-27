@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Task, TaskStatus, Role } from '../types';
-import { useAnchoredPopover } from '../hooks/useAnchoredPopover';
+import { handleRovingMenuKeyDown, useAnchoredPopover } from '../hooks/useAnchoredPopover';
 import { getDuePillInfo, formatDateOnly, formatCompletedDate, getCognitiveLoadLabel, getTaskBillableMs, formatBillableHours, formatBillableDetailed, getLastDayOfMonth, getLocalOffsetDateKey, getTaskAssigneeCount } from '../utils/workload';
 import { isValidHttpUrl } from '../utils/taskMetadata';
 import {
@@ -48,7 +48,6 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   userRole = 'content',
   swimlaneUserId,
   onEdit,
-  onUpdateTitle,
   onDelete,
   onMoveStatus,
   onReschedule,
@@ -74,7 +73,6 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   const snoozeRef = useRef<HTMLDivElement>(null);
   const snoozeTriggerRef = useRef<HTMLButtonElement>(null);
   const flyoutMenuRef = useRef<HTMLDivElement>(null);
-  const titleClickTimerRef = useRef<number | null>(null);
   const closeSnoozeFlyout = useCallback(() => setShowSnoozeFlyout(false), []);
   const { position: flyoutPosition } = useAnchoredPopover({
     isOpen: showSnoozeFlyout && task.status !== 'done' && task.status !== 'archived',
@@ -88,14 +86,6 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
     dismissOnOutOfView: true,
   });
 
-  useEffect(() => {
-    return () => {
-      if (titleClickTimerRef.current !== null) {
-        window.clearTimeout(titleClickTimerRef.current);
-      }
-    };
-  }, []);
-
   // Synchronize draft date when flyout opens or task dueDate updates
   useEffect(() => {
     if (showSnoozeFlyout) {
@@ -103,31 +93,40 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
     }
   }, [showSnoozeFlyout, task.dueDate]);
 
-  // Inline Title Editing & mobile card overflow menu state
-  const [isEditingTitle, setIsEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(task.title);
+  // Portaled mobile card overflow menu state
   const [showMobileCardMenu, setShowMobileCardMenu] = useState(false);
-  const titleInputRef = useRef<HTMLInputElement>(null);
-  const mobileCardMenuRef = useRef<HTMLDivElement>(null);
+  const mobileCardMenuBtnRef = useRef<HTMLButtonElement>(null);
+  const mobileCardMenuPopRef = useRef<HTMLDivElement>(null);
+  const closeMobileCardMenu = useCallback(() => setShowMobileCardMenu(false), []);
+  const { position: mobileCardMenuPos } = useAnchoredPopover({
+    isOpen: showMobileCardMenu,
+    triggerRef: mobileCardMenuBtnRef,
+    popoverRef: mobileCardMenuPopRef,
+    onClose: closeMobileCardMenu,
+    align: 'right',
+    gap: 4,
+    fallbackWidth: 176,
+    fallbackHeight: 132,
+    dismissOnOutOfView: true,
+  });
 
   useEffect(() => {
     if (!showMobileCardMenu) return;
-    const closeOutside = (e: MouseEvent) => {
-      if (mobileCardMenuRef.current && !mobileCardMenuRef.current.contains(e.target as Node)) {
+    const focusTimer = window.setTimeout(() => {
+      const firstItem = mobileCardMenuPopRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])');
+      firstItem?.focus({ preventScroll: true });
+    }, 0);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Tab') {
         setShowMobileCardMenu(false);
+        return;
       }
+      handleRovingMenuKeyDown(e, mobileCardMenuPopRef.current);
     };
-    const closeEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setShowMobileCardMenu(false);
-      }
-    };
-    document.addEventListener('mousedown', closeOutside);
-    document.addEventListener('keydown', closeEsc);
+    window.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener('mousedown', closeOutside);
-      document.removeEventListener('keydown', closeEsc);
+      window.clearTimeout(focusTimer);
+      window.removeEventListener('keydown', onKey);
     };
   }, [showMobileCardMenu]);
 
@@ -142,38 +141,6 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 
   const billableMs = getTaskBillableMs(task, now);
   const sharedBillableMs = assigneeCount > 1 ? Math.round(billableMs / assigneeCount) : billableMs;
-
-  useEffect(() => {
-    if (!isEditingTitle) {
-      setTitleDraft(task.title);
-    }
-  }, [task.title, isEditingTitle]);
-
-  useEffect(() => {
-    if (isEditingTitle && titleInputRef.current) {
-      titleInputRef.current.focus();
-      titleInputRef.current.select();
-    }
-  }, [isEditingTitle]);
-
-  const handleCommitTitle = useCallback(() => {
-    const trimmed = titleDraft.trim();
-    if (trimmed && trimmed !== task.title) {
-      if (onUpdateTitle) {
-        onUpdateTitle(task.id, trimmed);
-      } else {
-        onEdit({ ...task, title: trimmed });
-      }
-    } else {
-      setTitleDraft(task.title);
-    }
-    setIsEditingTitle(false);
-  }, [titleDraft, task, onUpdateTitle, onEdit]);
-
-  const handleCancelTitle = useCallback(() => {
-    setTitleDraft(task.title);
-    setIsEditingTitle(false);
-  }, [task.title]);
 
   // Focus first control and trap Tab inside Quick Reschedule popover
   useEffect(() => {
@@ -242,10 +209,6 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   const prevStatus = currentIdx > 0 ? STATUS_SEQUENCE[currentIdx - 1] : null;
 
   const handleDragStart = (e: React.DragEvent) => {
-    if (isEditingTitle) {
-      e.preventDefault();
-      return;
-    }
     setIsDragging(true);
     const dragPayload = {
       taskId: task.id,
@@ -278,20 +241,20 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         scale: isDragging ? 0.985 : 1,
       }}
       transition={{ duration: 0.14, ease: [0.2, 0.7, 0.2, 1] }}
-      draggable={effectivelyDraggable && !isEditingTitle}
+      draggable={effectivelyDraggable}
       onDragStartCapture={handleDragStart}
       onDragEndCapture={handleDragEnd}
       className={`task-card group relative p-2.5 select-none transform-gpu ${showSnoozeFlyout || showMobileCardMenu ? 'z-40' : 'z-0'
         } ${isDragging
           ? 'border-[#1d4ed8] dark:border-blue-400 bg-blue-50/50 dark:bg-blue-950/20 ring-2 ring-blue-500/20'
           : task.status === 'done'
-            ? 'bg-[var(--surface-muted)]'
+            ? 'bg-[var(--surface-subtle)] opacity-85 hover:opacity-100'
             : ''
         }`}
     >
       {/* Top row: Drag grip, explicit load + priority, shared ratio, and right-aligned tabular hours + centered actions */}
-      <div className="flex items-center justify-between gap-1.5 mb-1.5">
-        <div className="flex items-center gap-1.5 min-w-0 flex-nowrap whitespace-nowrap text-[11px]">
+      <div className={`flex items-center justify-between mb-1.5 ${assigneeCount > 1 ? 'gap-1' : 'gap-1.5'}`}>
+        <div className={`flex items-center min-w-0 flex-nowrap whitespace-nowrap text-[11px] ${assigneeCount > 1 ? 'gap-1' : 'gap-1.5'}`}>
           {canEdit && (
             <div
               title="Drag to move, reorder, or assign to another team member"
@@ -330,7 +293,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         </div>
 
         {/* Top Right: Quick Hover Actions & Mobile Overflow + Tabular Estimate / Billable Duration */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className={`flex items-center shrink-0 ${assigneeCount > 1 ? 'gap-1' : 'gap-1.5'}`}>
           <div className="hidden sm:flex items-center card-actions [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
             {canDuplicateToBoard && onDuplicateToBoard && (
               <button
@@ -372,8 +335,9 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             </button>
           </div>
 
-          <div className="relative sm:hidden card-actions shrink-0" ref={mobileCardMenuRef}>
+          <div className="relative sm:hidden card-actions shrink-0">
             <button
+              ref={mobileCardMenuBtnRef}
               type="button"
               aria-haspopup="menu"
               aria-expanded={showMobileCardMenu}
@@ -387,12 +351,18 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             >
               <MoreHorizontal className="h-4 w-4" />
             </button>
-            {showMobileCardMenu && (
+            {showMobileCardMenu && createPortal(
               <div
+                ref={mobileCardMenuPopRef}
                 role="menu"
                 aria-label={`Actions for ${task.title}`}
+                style={
+                  mobileCardMenuPos
+                    ? { top: `${mobileCardMenuPos.top}px`, left: `${mobileCardMenuPos.left}px` }
+                    : { top: 0, left: 0, visibility: 'hidden' }
+                }
                 onClick={e => e.stopPropagation()}
-                className="menu-surface absolute right-0 top-full mt-1 w-44 rounded-[9px] border border-[var(--border)] p-1 z-40"
+                className="menu-surface fixed z-50 w-44 rounded-[9px] border border-[var(--border)] p-1 text-[var(--text-primary)]"
               >
                 <button
                   type="button"
@@ -432,7 +402,8 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   <Trash2 className="h-3.5 w-3.5" />
                   <span>Delete Task</span>
                 </button>
-              </div>
+              </div>,
+              document.body
             )}
           </div>
 
@@ -535,68 +506,20 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         </div>
       )}
 
-      {/* Task Title (Click opens details modal; double-click renames inline) */}
-      {isEditingTitle ? (
-        <div className="my-1" onClick={e => e.stopPropagation()}>
-          <input
-            ref={titleInputRef}
-            type="text"
-            value={titleDraft}
-            onChange={e => setTitleDraft(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                handleCommitTitle();
-              } else if (e.key === 'Escape') {
-                e.preventDefault();
-                handleCancelTitle();
-              }
-            }}
-            onBlur={handleCommitTitle}
-            className="w-full text-[13px] font-semibold leading-snug rounded-[5px] border border-[var(--accent)] bg-[var(--surface)] px-2 py-1 text-[var(--text-primary)] focus:outline-none"
-          />
-          <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)] mt-1 px-0.5 select-none">
-            <span>Enter to save</span>
-            <span>Esc to cancel</span>
-          </div>
-        </div>
-      ) : (
-        <h5 className="text-[13px] font-semibold leading-snug">
-          <button
-            type="button"
-            onClick={() => {
-              if (!canEdit) {
-                onEdit(task);
-                return;
-              }
-              if (titleClickTimerRef.current !== null) {
-                window.clearTimeout(titleClickTimerRef.current);
-              }
-              titleClickTimerRef.current = window.setTimeout(() => {
-                titleClickTimerRef.current = null;
-                onEdit(task);
-              }, 185);
-            }}
-            onDoubleClick={e => {
-              if (!canEdit) return;
-              e.stopPropagation();
-              if (titleClickTimerRef.current !== null) {
-                window.clearTimeout(titleClickTimerRef.current);
-                titleClickTimerRef.current = null;
-              }
-              setTitleDraft(task.title);
-              setIsEditingTitle(true);
-            }}
-            title={canEdit ? 'Click for task details, double-click to rename' : 'Click to open task details'}
-            className={`mobile-tap-control sm:min-h-0 w-full text-left cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-[var(--surface-subtle)] transition-colors group/title flex items-center justify-between gap-1.5 ${task.status === 'done'
-              ? 'line-through text-[var(--text-secondary)] font-medium'
-              : 'text-[var(--text-primary)] hover:text-[#1d4ed8] dark:hover:text-blue-400'
-              }`}
-          >
-            <span className="break-words">{task.title}</span>
-          </button>
-        </h5>
-      )}
+      {/* Task Title — opens TaskModal immediately (0ms delay) */}
+      <h5 className="text-[13px] font-semibold leading-snug">
+        <button
+          type="button"
+          onClick={() => onEdit(task)}
+          title="Click to open task details"
+          className={`mobile-tap-control sm:min-h-0 w-full text-left cursor-pointer rounded px-1 -mx-1 py-0.5 hover:bg-[var(--surface-subtle)] transition-colors group/title flex items-center justify-between gap-1.5 ${task.status === 'done'
+            ? 'line-through text-[var(--text-secondary)] font-medium'
+            : 'text-[var(--text-primary)] hover:text-[#1d4ed8] dark:hover:text-blue-400'
+            }`}
+        >
+          <span className="break-words">{task.title}</span>
+        </button>
+      </h5>
 
       {/* Optional Context snippet */}
       {task.description && (
