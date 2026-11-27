@@ -103,9 +103,9 @@ const HeaderComponent: React.FC<HeaderProps> = ({
   return (
     <header className="app-header sticky top-0 z-30 w-full border-b border-[var(--border)] bg-[var(--surface)]/92 backdrop-blur-md transition-colors">
       <div className="mx-auto max-w-[1400px] px-4 sm:px-6 lg:px-8">
-        <div className="flex h-[54px] items-center justify-between gap-4">
+        <div className="flex h-[54px] items-center justify-between gap-1 sm:gap-4">
           {/* Preserved Logo & Brand: zenFlow */}
-          <div className="flex items-center gap-2.5 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-2.5 shrink-0">
             <div
               id="zenflow-logo"
               className="flex h-8 w-8 items-center justify-center rounded-[7px] bg-[#121418] dark:bg-[#1e2430] border border-[#262b36] dark:border-white/10 text-blue-500 shrink-0"
@@ -178,8 +178,8 @@ const HeaderComponent: React.FC<HeaderProps> = ({
               id="connection-status-button"
               type="button"
               onClick={onOpenFirestoreModal}
-              aria-label={`Database status: ${syncStatus === 'connected' ? 'Connected' : 'Syncing'}`}
-              title={`Database Status: ${syncStatus === 'connected' ? 'Connected (Firestore)' : 'Connecting...'}`}
+              aria-label={`Database status: ${syncStatus === 'connected' ? 'Connected' : syncStatus === 'offline' ? 'Offline' : 'Syncing'}`}
+              title={`Database Status: ${syncStatus === 'connected' ? 'Connected' : syncStatus === 'offline' ? 'Offline' : 'Connecting...'}`}
               className="mobile-tap-control flex items-center justify-center gap-2 min-w-[44px] sm:min-w-0 px-2.5 py-1.5 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-subtle)] text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             >
               <Database
@@ -198,7 +198,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                 }`}
               />
               <span className="hidden sm:inline text-[11px] tracking-tight">
-                {syncStatus === 'connected' ? 'Connected' : 'Syncing...'}
+                {syncStatus === 'connected' ? 'Connected' : syncStatus === 'offline' ? 'Offline' : 'Syncing...'}
               </span>
             </button>
 

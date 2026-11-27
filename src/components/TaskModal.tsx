@@ -757,7 +757,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     </p>
                     <div className="flex gap-2 pt-1">
                       <button
-                        type="button"
+                        type="button" autoFocus
                         onClick={() => setShowDiscardConfirm(false)}
                         className="button-secondary"
                       >

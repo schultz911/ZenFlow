@@ -340,7 +340,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       </div>
 
       {/* Top row: Drag grip, explicit load, shared ratio, and right-aligned tabular hours */}
-      <div className={`order-1 flex items-center justify-between mb-1.5 ${assigneeCount > 1 ? 'gap-1' : 'gap-1.5'}`}>
+      <div className={`order-1 flex flex-wrap items-center justify-between gap-y-1 mb-1.5 ${assigneeCount > 1 ? 'gap-1' : 'gap-1.5'}`}>
         <div className={`flex items-center min-w-0 flex-nowrap whitespace-nowrap text-[11px] ${assigneeCount > 1 ? 'gap-1' : 'gap-1.5'}`}>
           {canEdit && (
             <div
@@ -505,28 +505,6 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         </div>
       )}
 
-      {/* Client / Project quiet inline metadata */}
-      {(task.client || task.project) && (
-        <div
-          className={`order-1 flex items-center gap-1 mb-1 text-[11px] truncate ${
-            task.status === 'done' ? 'text-[var(--text-secondary)]' : 'text-[var(--text-muted)]'
-          }`}
-        >
-          {task.client && (
-            <span className="font-medium text-[var(--text-secondary)] truncate">
-              {task.client}
-            </span>
-          )}
-          {task.client && task.project && (
-            <span aria-hidden="true" className={task.status === 'done' ? 'text-[var(--text-secondary)]' : 'text-[var(--text-muted)]'}>·</span>
-          )}
-          {task.project && (
-            <span className="truncate">
-              {task.project}
-            </span>
-          )}
-        </div>
-      )}
 
       {/* Optional Context snippet */}
       {task.description && (

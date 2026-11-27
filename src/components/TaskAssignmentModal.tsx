@@ -10,7 +10,6 @@ import {
   getUserDailyAssignedHours,
   formatHours,
   formatLocalDateKey,
-  getLocalOffsetDateKey,
   groupTasksByAssignee,
   quickWorkloadScore,
   getUserTag,
@@ -30,6 +29,7 @@ interface TaskAssignmentModalProps {
   task: Task | null;
   initialAssigneeId?: string;
   onClose: () => void;
+  onAssigned: (taskId: string, member: string, destination: string) => void;
 }
 
 export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
@@ -37,6 +37,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
   task,
   initialAssigneeId,
   onClose,
+  onAssigned,
 }) => {
   const { canAssignTask } = useAuth();
   const {
@@ -52,6 +53,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
   const [dueDate, setDueDate] = useState<string>('');
   const [keepInPipeline, setKeepInPipeline] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [confirmOverload, setConfirmOverload] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const initialSnapshotRef = useRef<string>('');
 
@@ -80,7 +82,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
     const initUser = rawInitUser && eligibleUsers.some(u => u.id === rawInitUser) ? rawInitUser : '';
     const initLoad: CognitiveLoad = task.cognitiveLoad || 'medium';
     const initHours = task.estimatedHours !== undefined ? String(task.estimatedHours) : '';
-    const initDue = task.dueDate || (initUser ? getLocalOffsetDateKey(1) : '');
+    const initDue = task.dueDate || '';
     setSelectedUserId(initUser);
     setCognitiveLoad(initLoad);
     setEstimatedHours(initHours);
@@ -108,6 +110,29 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
 
   const tasksByUser = useMemo(() => groupTasksByAssignee(tasks), [tasks]);
 
+  const projected = useMemo(() => {
+    if (!task || !selectedUserObj) return null;
+    const currentTasks = tasksByUser.get(selectedUserObj.id) || [];
+    const hours = estimatedHours.trim() ? Number(estimatedHours) : undefined;
+    const projectedTask: Task = { ...task, userId: selectedUserObj.id, assigneeIds: [selectedUserObj.id],
+      status: keepInPipeline ? 'pipeline' : 'todo', dueDate: dueDate || undefined,
+      startDate: task.startDate || formatLocalDateKey(), cognitiveLoad,
+      estimatedHours: hours !== undefined && Number.isFinite(hours) ? Math.max(0, hours) : undefined };
+    const projectedTasks = currentTasks.some(item => item.id === task.id)
+      ? currentTasks.map(item => item.id === task.id ? projectedTask : item)
+      : [...currentTasks, projectedTask];
+    return {
+      selectedLoad: quickWorkloadScore(currentTasks), projectedLoad: quickWorkloadScore(projectedTasks),
+      selectedDailyHours: getUserDailyAssignedHours(selectedUserObj, currentTasks),
+      projectedDailyHours: getUserDailyAssignedHours(selectedUserObj, projectedTasks),
+    };
+  }, [task, selectedUserObj, tasksByUser, estimatedHours, keepInPipeline, dueDate, cognitiveLoad]);
+  const willOverload = Boolean(projected && (projected.projectedLoad >= 12 || projected.projectedDailyHours > 8));
+  useEffect(() => {
+    setConfirmOverload(false);
+  }, [isOpen, task?.id, selectedUserId, cognitiveLoad, estimatedHours, dueDate, keepInPipeline,
+    projected?.projectedLoad, projected?.projectedDailyHours]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!task || isSubmitting) return;
@@ -131,6 +156,10 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
       return;
     }
 
+    if (willOverload && !confirmOverload) {
+      setSubmitError('Confirm the workload impact before assigning this task.');
+      return;
+    }
     setIsSubmitting(true);
     setSubmitError(null);
 
@@ -151,6 +180,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
         cognitiveLoad,
         estimatedHours: parsedHours,
       });
+      onAssigned(task.id, selectedUserObj?.name || 'Unassigned', willMoveToTodo ? 'To Do' : 'Team Pipeline');
       onClose();
     } catch (err: any) {
       console.error(err);
@@ -207,7 +237,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                     You have unsubmitted assignment or estimate changes that will be lost if you close now.
                   </p>
                   <div className="flex gap-2 pt-1">
-                    <button type="button" onClick={resetDiscardConfirm} className="button-secondary">
+                    <button type="button" autoFocus onClick={resetDiscardConfirm} className="button-secondary">
                       Keep Editing
                     </button>
                     <button type="button" onClick={confirmDiscard} className="button-danger-outline">
@@ -277,9 +307,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                       onChange={e => {
                         const nextUserId = e.target.value;
                         setSelectedUserId(nextUserId);
-                        if (nextUserId && !dueDate.trim()) {
-                          setDueDate(getLocalOffsetDateKey(1));
-                        } else if (!nextUserId && !task.dueDate) {
+                        if (!nextUserId && !task.dueDate) {
                           setDueDate('');
                         }
                       }}
@@ -309,36 +337,10 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                   </div>
                 )}
 
-                {selectedUserObj && (() => {
-                  const currentTasks = tasksByUser.get(selectedUserObj.id) || [];
-                  const selectedLoad = quickWorkloadScore(currentTasks);
-                  const willSchedule = !keepInPipeline;
-                  const parsedProjectedHours = estimatedHours.trim()
-                    ? Math.max(0, parseFloat(estimatedHours))
-                    : undefined;
-                  const projectedEstimatedHours =
-                    parsedProjectedHours !== undefined && Number.isFinite(parsedProjectedHours)
-                      ? parsedProjectedHours
-                      : undefined;
-                  const projectedTask: Task = {
-                    ...task,
-                    userId: selectedUserObj.id,
-                    assigneeIds: [selectedUserObj.id],
-                    status: willSchedule ? 'todo' : 'pipeline',
-                    dueDate: willSchedule ? (dueDate.trim() || undefined) : task.dueDate,
-                    startDate: task.startDate || formatLocalDateKey(),
-                    cognitiveLoad,
-                    estimatedHours: projectedEstimatedHours,
-                  };
-                  const projectedTasks = currentTasks.some(t => t.id === task.id)
-                    ? currentTasks.map(t => (t.id === task.id ? projectedTask : t))
-                    : [...currentTasks, projectedTask];
-                  const projectedLoad = quickWorkloadScore(projectedTasks);
-                  const selectedDailyHours = getUserDailyAssignedHours(selectedUserObj, currentTasks);
-                  const projectedDailyHours = getUserDailyAssignedHours(selectedUserObj, projectedTasks);
+                {selectedUserObj && projected && (() => {
+                  const { selectedLoad, projectedLoad, selectedDailyHours, projectedDailyHours } = projected;
                   const dailyHoursChanged = Math.abs(projectedDailyHours - selectedDailyHours) >= 0.05;
                   const dailyOverbooked = projectedDailyHours > 8;
-                  const willOverload = projectedLoad >= 12 || dailyOverbooked;
                   return (
                     <div
                       className={`mt-2 flex flex-wrap items-center justify-between gap-2 text-xs px-3 py-1.5 rounded-[7px] border tabular-nums ${
@@ -376,6 +378,13 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                 })()}
               </div>
 
+              {willOverload && (
+                <label className="callout callout-warning flex items-start gap-2 text-xs">
+                  <input type="checkbox" checked={confirmOverload} onChange={event => setConfirmOverload(event.target.checked)} />
+                  <span>I understand the projected workload and want to assign this task.</span>
+                </label>
+              )}
+              {selectedUserObj && <p className="text-xs text-[var(--text-secondary)]">Destination: {selectedUserObj.name} · {keepInPipeline ? 'Team Pipeline' : 'To Do'}{dueDate ? ` · ${dueDate}` : ''}</p>}
               {/* Cognitive Load Specification */}
               <CognitiveLoadSelector
                 value={cognitiveLoad}

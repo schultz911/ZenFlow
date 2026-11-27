@@ -1,4 +1,4 @@
-import { apiFetch as fetch, clearApiSession, getApiMemberId } from '../lib/api';
+import { apiFetch as fetch, clearApiSession, getApiMemberId, UnregisteredMemberError } from '../lib/api';
 import { reconcileSnapshot } from '../lib/reconcile';
 import {
   enqueueMutation,
@@ -673,7 +673,8 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
         }
       } catch (e: any) {
         console.warn('[Auth] Server verify-email failed:', e);
-        sessionError = e?.message || 'Unable to verify Google session with server';
+        if (e instanceof UnregisteredMemberError) notRegistered = true;
+        else sessionError = e?.message || 'Unable to verify Google session with server';
       }
 
       if (!isMounted || revision !== authRevision || isManualLoginRef.current) return;
@@ -715,11 +716,20 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
       const cleanEmail = googleUser.email.trim().toLowerCase();
       const fbAuth = await getFirebaseAuth();
       const idToken = await fbAuth?.currentUser?.getIdToken().catch(() => undefined);
-      const response = await fetch('/api/auth/verify-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: cleanEmail }),
-      });
+      let response: Response;
+      try {
+        response = await fetch('/api/auth/verify-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: cleanEmail }),
+        });
+      } catch (error) {
+        if (!(error instanceof UnregisteredMemberError) || !idToken) throw error;
+        const result = await submitAccessRequestWithToken(idToken, cleanEmail, googleUser.name);
+        await signOutFirebase();
+        if (!result.allowed) throw new Error(result.error);
+        throw Object.assign(new Error('Access request submitted.'), { isAccessRequestSubmitted: true });
+      }
       const existing: User | undefined = response.ok ? (await response.json()).user : undefined;
       if (!existing) {
         if ((response.status === 403 || response.status === 404) && idToken) {

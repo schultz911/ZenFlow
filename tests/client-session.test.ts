@@ -34,6 +34,14 @@ test('client deduplicates session exchange and strips identity assertions from A
   assert.equal(request.options.headers.get('x-zenflow-request'), '1');
   assert.equal(request.options.credentials, 'same-origin');
 });
+test('only an unregistered session response triggers the access request path', async () => {
+  const missing = clientFixture({}, async () => Response.json({ error: 'Account not registered in ZenFlow' }, { status: 403 }));
+  await assert.rejects(missing.api.ensureApiSession(), (error: any) => error instanceof missing.api.UnregisteredMemberError);
+
+  const denied = clientFixture({}, async () => Response.json({ error: 'Invalid request origin' }, { status: 403 }));
+  await assert.rejects(denied.api.ensureApiSession(), (error: any) =>
+    !(error instanceof denied.api.UnregisteredMemberError) && error.message === 'Invalid request origin');
+});
 test('cached profiles cannot authenticate requests and offline queue migration preserves pending work', async () => {
   const fixture = clientFixture({ team_dash_current_user_v1: JSON.stringify({ id: 'alice' }),
     zenflow_mutation_queue_v1: JSON.stringify([{ type: 'update_task', payload: { title: 'Keep my edit' } }]) });

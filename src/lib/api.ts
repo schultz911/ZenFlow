@@ -11,6 +11,8 @@ export function getRateLimitRetryMs(response: Response): number {
   return Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds, 3600) * 1000 : 60_000;
 }
 
+export class UnregisteredMemberError extends Error {}
+
 export class ApiSessionRateLimitError extends Error {
   constructor(readonly retryAfterMs: number) {
     super('Google session exchange was rate limited');
@@ -44,6 +46,11 @@ export async function ensureApiSession(): Promise<void> {
       method: 'POST', credentials: 'same-origin',
       headers: { Authorization: `Bearer ${token}`, 'x-zenflow-request': '1' },
     });
+    if (response.status === 403) {
+      const data = await response.json().catch(() => ({}));
+      if (data.error === 'Account not registered in ZenFlow') throw new UnregisteredMemberError(data.error);
+      throw new Error(data.error || 'Google session rejected');
+    }
     if (response.status === 429) throw new ApiSessionRateLimitError(getRateLimitRetryMs(response));
     if (!response.ok) throw new Error((await response.json()).error || 'Google session rejected');
     const data = await response.json();

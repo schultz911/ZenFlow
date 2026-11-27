@@ -458,8 +458,8 @@
   @media (max-width: 639px) {
     .metric-card { padding: 10px 12px; }
     .board-columns-scroll { scroll-snap-type: x proximity; scroll-padding-inline: 12px; }
-    .board-columns { display: flex; gap: 0; }
-    .board-columns > div { flex: 0 0 min(80vw, 300px); scroll-snap-align: start; }
+    .board-columns { display: block; }
+    .board-columns > div { width: 100%; }
     .card-actions button { min-width: 44px; min-height: 44px; }
     .button-secondary, .button-danger-outline, .button-primary, .button-danger, .button-emerald { min-height: 44px; }
     .segmented-item { min-height: 44px; }

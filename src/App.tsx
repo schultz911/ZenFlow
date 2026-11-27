@@ -35,6 +35,8 @@ function DashboardContent() {
     isAuthChecking,
     canManageMembers,
     canCreatePipelineTask,
+    canAssignTask,
+    canEditUserTasks,
   } = useAuth();
   const {
     users,
@@ -45,6 +47,7 @@ function DashboardContent() {
     createTask,
     updateTask,
     adjustBillableHours,
+    syncStatus,
   } = useWorkspace();
   const {
     activeRoleTab,
@@ -81,6 +84,7 @@ function DashboardContent() {
   const [disciplineModalOpen, setDisciplineModalOpen] = useState(false);
   const [selectedTaskForAssignment, setSelectedTaskForAssignment] = useState<Task | null>(null);
   const [assignmentPresetUserId, setAssignmentPresetUserId] = useState<string | undefined>(undefined);
+  const [assignmentNotice, setAssignmentNotice] = useState<{ taskId: string; member: string; destination: string } | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [undoToast, setUndoToast] = useState<{
     message: string;
@@ -156,9 +160,10 @@ function DashboardContent() {
       const matchesDesc = task.description ? task.description.toLowerCase().includes(trimmed) : false;
       const matchesClient = task.client ? task.client.toLowerCase().includes(trimmed) : false;
       const matchesProject = task.project ? task.project.toLowerCase().includes(trimmed) : false;
+      const matchesParent = task.parentTaskTitle?.toLowerCase().includes(trimmed) || false;
       const matchesUser = getTaskAssigneeIds(task).some(uid => userNameMap.get(uid)?.includes(trimmed));
 
-      if (matchesTitle || matchesDesc || matchesClient || matchesProject || matchesUser) {
+      if (matchesTitle || matchesDesc || matchesClient || matchesProject || matchesParent || matchesUser) {
         map.set(task.id, task);
       }
     }
@@ -281,6 +286,14 @@ function DashboardContent() {
     return pinnedUser ? [pinnedUser, ...sortedReorderable] : sortedReorderable;
   }, [users, activeRoleTab, customUserOrder, currentUser, activeBoardId, searchQuery, filteredTasks, sortByPressure, allTasksByUserId]);
 
+  const scopedSearchTasks = useMemo(() => filteredTasks.filter(task => {
+    const firstId = getTaskAssigneeIds(task)[0];
+    const team = task.team || users.find(user => user.id === firstId)?.role || 'content';
+    return (activeRoleTab === 'all' ? team === 'content' || team === 'design' : team === activeRoleTab);
+  }), [filteredTasks, users, activeRoleTab]);
+  const matchingPipelineCount = scopedSearchTasks.filter(task => task.status === 'pipeline').length;
+  const matchingAssignedCount = scopedSearchTasks.filter(task => task.status !== 'pipeline' && task.status !== 'archived').length;
+
   const roleFilteredUsersRef = useRef(roleFilteredUsers);
   roleFilteredUsersRef.current = roleFilteredUsers;
 
@@ -308,6 +321,13 @@ function DashboardContent() {
     prevTasksByUserIdRef.current = stablePartitioned;
     return stablePartitioned;
   }, [allTasksByUserId, filteredTasks, tasks]);
+
+  const priorityMembers = useMemo(() => roleFilteredUsers.map(user => ({
+    user, score: quickWorkloadScore(allTasksByUserId.get(user.id) || []),
+  })).filter(item => item.score >= 12).sort((a, b) => b.score - a.score), [roleFilteredUsers, allTasksByUserId]);
+  const myActiveTasks = useMemo(() => currentUser ? (allTasksByUserId.get(currentUser.id) || [])
+    .filter(task => task.status === 'in_progress' || task.status === 'todo')
+    .sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999')).slice(0, 3) : [], [currentUser, allTasksByUserId]);
 
   // Global keyboard shortcuts (non-hijacking single-key shortcuts outside inputs)
   useEffect(() => {
@@ -665,12 +685,24 @@ function DashboardContent() {
           className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 lg:px-8 pb-8"
         >
 
-          {/* Onboarding Checklist */}
-          <OnboardingChecklist
-            forceOpen={setupChecklistOpen}
-            onCloseForceOpen={() => setSetupChecklistOpen(false)}
-          />
-
+          {!searchQuery.trim() && canAssignTask && priorityMembers.length > 0 && (
+            <section aria-label="Workload exceptions" className="ledger-frame mb-3 px-4 py-3">
+              <h2 className="text-xs font-bold text-[var(--text-primary)]">Workload exceptions</h2>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {priorityMembers.map(({ user, score }) => <button key={user.id} type="button" onClick={() => setWorkloadModalUser(user)} className="button-secondary text-xs">
+                  {user.name} · {score} / 12 pts · View workload
+                </button>)}
+              </div>
+            </section>
+          )}
+          {!searchQuery.trim() && !canAssignTask && currentUser && (currentUser.role === 'content' || currentUser.role === 'design') && (
+            <section aria-label="Your work" className="ledger-frame mb-3 px-4 py-3">
+              <h2 className="text-xs font-bold text-[var(--text-primary)]">Your current and upcoming work</h2>
+              {myActiveTasks.length ? <div className="mt-2 flex flex-wrap gap-2">{myActiveTasks.map(task => (
+                <button key={task.id} type="button" className="button-secondary text-xs" onClick={() => handleEditTask(task)}>{task.title} · {task.status === 'in_progress' ? 'In Progress' : 'To Do'}{task.dueDate ? ` · ${task.dueDate}` : ''}</button>
+              ))}</div> : <p className="mt-1 text-xs text-[var(--text-secondary)]">No current or upcoming tasks.</p>}
+            </section>
+          )}
           {/* Overview Bar */}
           <OverviewBar
             searchQuery={searchQuery}
@@ -698,15 +730,22 @@ function DashboardContent() {
                 tasks={tasks}
                 activeRoleTab={activeRoleTab}
                 onAddTask={handleOpenAddTask}
-                onAssignBrief={(brief, targetUserId) => {
+                onAssignBrief={canAssignTask ? (brief, targetUserId) => {
                   setAssignmentPresetUserId(targetUserId);
                   setSelectedTaskForAssignment(brief);
-                }}
+                } : undefined}
+                canAddTask={canEditUserTasks}
                 onSelectUser={handleSelectFreeResource}
                 isExpanded={freePoolOpen}
                 onExpandedChange={setFreePoolOpen}
               />
             }
+          />
+
+          {/* Onboarding Checklist */}
+          <OnboardingChecklist
+            forceOpen={setupChecklistOpen}
+            onCloseForceOpen={() => setSetupChecklistOpen(false)}
           />
 
           {/* Search Results Summary & Cross-Tab Navigation Ribbon */}
@@ -716,8 +755,8 @@ function DashboardContent() {
                 <Search className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
                 <span className="tabular-nums">
                   Results for &ldquo;<span className="font-semibold text-[var(--text-primary)]">{searchQuery.trim()}</span>&rdquo;:{' '}
-                  <span className="font-semibold text-[#1d4ed8] dark:text-blue-400">{filteredTasks.length} task{filteredTasks.length === 1 ? '' : 's'}</span> across{' '}
-                  <span className="font-semibold text-[#1d4ed8] dark:text-blue-400">{roleFilteredUsers.length} member{roleFilteredUsers.length === 1 ? '' : 's'}</span>.
+                  <span className="font-semibold text-[#1d4ed8] dark:text-blue-400">{matchingPipelineCount} pipeline brief{matchingPipelineCount === 1 ? '' : 's'}</span> ·{' '}
+                  <span className="font-semibold text-[#1d4ed8] dark:text-blue-400">{matchingAssignedCount} assigned task{matchingAssignedCount === 1 ? '' : 's'}</span> · {roleFilteredUsers.length} member{roleFilteredUsers.length === 1 ? '' : 's'}.
                 </span>
               </div>
 
@@ -774,7 +813,7 @@ function DashboardContent() {
           {/* Centralized Pipeline */}
           <TeamPipeline
             roleFilter={activeRoleTab}
-            tasks={tasks}
+            tasks={searchQuery.trim() ? scopedSearchTasks : tasks}
             users={users}
             globalSearch={searchQuery}
             onOpenCreateModal={() => setDisciplineModalOpen(true)}
@@ -786,7 +825,7 @@ function DashboardContent() {
           />
 
           {/* User Swimlanes List */}
-          {roleFilteredUsers.length === 0 ? (
+          {roleFilteredUsers.length === 0 && (!searchQuery.trim() || matchingPipelineCount === 0) ? (
             <div className="ledger-frame flex flex-col items-center justify-center p-12 text-center">
               <div className="flex h-10 w-10 items-center justify-center rounded-[7px] bg-[var(--surface-subtle)] border border-[var(--border)] text-[var(--text-secondary)] mb-3">
                 {searchQuery.trim() ? (
@@ -830,7 +869,7 @@ function DashboardContent() {
                 </button>
               )}
             </div>
-          ) : (
+          ) : roleFilteredUsers.length > 0 ? (
             <div className="space-y-4">
               <h2 className="sr-only">Team Swimlanes</h2>
               {roleFilteredUsers.map((user, index) => {
@@ -870,7 +909,7 @@ function DashboardContent() {
                 );
               })}
             </div>
-          )}
+          ) : null}
         </main>
 
 
@@ -978,12 +1017,27 @@ function DashboardContent() {
           isOpen={Boolean(selectedTaskForAssignment)}
           task={selectedTaskForAssignment}
           initialAssigneeId={assignmentPresetUserId}
+          onAssigned={(taskId, member, destination) => {
+            setAssignmentNotice({ taskId, member, destination });
+            window.setTimeout(() => document.getElementById('assignment-result')?.focus(), 150);
+          }}
           onClose={() => {
             setSelectedTaskForAssignment(null);
             setAssignmentPresetUserId(undefined);
           }}
         />
 
+        {assignmentNotice && (
+          <div id="assignment-result" tabIndex={-1} role="status" aria-live="polite" className="free-pool-panel fixed bottom-4 left-4 z-40 flex flex-wrap items-center gap-3 rounded-[9px] border border-[var(--border)] bg-[var(--surface-raised)] p-3 text-xs text-[var(--text-primary)]">
+            <span>{syncStatus === 'offline' ? 'Saved locally, pending sync' : assignmentNotice.member === 'Unassigned' ? 'Estimates saved' : 'Assignment saved'} · {assignmentNotice.member} · {assignmentNotice.destination}</span>
+            <button type="button" className="button-secondary" onClick={() => {
+              const task = tasks.find(item => item.id === assignmentNotice.taskId);
+              if (task) handleEditTask(task);
+              setAssignmentNotice(null);
+            }}>View task</button>
+            <button type="button" aria-label="Dismiss assignment confirmation" onClick={() => setAssignmentNotice(null)} className="icon-button"><X className="h-4 w-4" /></button>
+          </div>
+        )}
         {/* Undo Toast */}
         {undoToast && !activeDragInfo && (
           <div

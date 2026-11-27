@@ -152,6 +152,13 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
     setIsCollapsed(unassignedCount === 0);
   }, [unassignedCount]);
 
+  useEffect(() => {
+    if (globalSearch.trim()) {
+      setIsCollapsed(false);
+      setFilterMode('all');
+    }
+  }, [globalSearch]);
+
   const handleToggleCollapse = () => {
     userToggledCollapseRef.current = true;
     setIsCollapsed(prev => !prev);
@@ -166,21 +173,6 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
       result = result.filter(t => getTaskAssigneeIds(t).length > 0);
     }
 
-    const query = globalSearch.trim().toLowerCase();
-    if (query) {
-      result = result.filter(t => {
-        const matchesTitle = t.title.toLowerCase().includes(query);
-        const matchesDesc = t.description ? t.description.toLowerCase().includes(query) : false;
-        const matchesClient = t.client ? t.client.toLowerCase().includes(query) : false;
-        const matchesProject = t.project ? t.project.toLowerCase().includes(query) : false;
-        const matchesParent = t.parentTaskTitle ? t.parentTaskTitle.toLowerCase().includes(query) : false;
-        const assigneeNames = getTaskAssigneeIds(t)
-          .map(id => userMap.get(id)?.name.toLowerCase() || '')
-          .join(' ');
-        const matchesAssignee = assigneeNames.includes(query);
-        return matchesTitle || matchesDesc || matchesClient || matchesProject || matchesParent || matchesAssignee;
-      });
-    }
 
     return result;
   }, [pipelineTasks, filterMode, globalSearch, userMap]);
@@ -632,7 +624,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                             className="mobile-tap-control sm:min-h-0 inline-flex items-center gap-0.5 font-medium text-[#1d4ed8] dark:text-blue-400 hover:underline"
                           >
                             <Link2 className="h-2.5 w-2.5 shrink-0" />
-                            <span>Brief</span>
+                            <span>Brand Guidelines</span>
                             <ExternalLink className="h-2.5 w-2.5 shrink-0" />
                           </a>
                         </div>

@@ -350,7 +350,9 @@ try {
     const kiranOptionText = await assignDialog2.locator('#taskassignmentmodal-field-1 option[value="cd-1"]').textContent();
     assert.ok(kiranOptionText && !kiranOptionText.includes('Independent'), `Creative Director should not be labeled Independent (got ${kiranOptionText})`);
     await assignDialog2.locator('#taskassignmentmodal-field-1').selectOption('u-content');
-    assert.ok((await assignDialog2.locator('#taskassignmentmodal-deadline').inputValue()).length > 0, 'Selecting a teammate on a No-deadline brief should auto-fill Tomorrow');
+    assert.equal(await assignDialog2.locator('#taskassignmentmodal-deadline').inputValue(), '', 'Selecting a teammate must leave the deadline for the lead to choose');
+    await assignDialog2.getByRole('button', { name: 'Tomorrow', exact: true }).click();
+    assert.ok((await assignDialog2.locator('#taskassignmentmodal-deadline').inputValue()).length > 0, 'A deadline preset should set the selected date');
     await assignDialog2.locator('#taskassignmentmodal-field-2').fill('8');
     const summaryText = await assignDialog2.locator('form').textContent();
     assert.match(summaryText || '', /Assigned:\s*[\d.]+h\s*→\s*[\d.]+h\/day/, 'Assign preview should project Assigned daily hours delta');
@@ -478,6 +480,7 @@ try {
       assert.ok(item.h >= 44, `Mobile member menu item "${item.text}" should be >= 44px (got ${item.h}px)`);
     }
     await page.keyboard.press('Escape');
+    await page.getByRole('group', { name: 'Ava Writer task stages' }).getByRole('button', { name: /To Do/ }).click();
     await page.locator('#task-card-u-content-t-ava-3 button[aria-label^="Actions for"]').click();
     const portaledCardMenu = page.locator('body > [role="menu"][aria-label^="Actions for"]');
     await portaledCardMenu.waitFor({ state: 'visible' });
@@ -509,6 +512,37 @@ try {
     const iframe = page.locator('iframe[title="390px responsive preview"]');
     await iframe.waitFor({ state: 'visible' });
     console.log('Browser UI preview: desktop tabs, compliance, scoped efficiency, historical analytics, Free Pool task handoff, and 390px responsive iframe passed.');
+    await context.close();
+  }
+
+  // Search, assignment and narrow-screen regression checks use a fresh fixture.
+  {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
+    attachErrorListeners(page, 'search-and-assignment');
+    await page.goto(PREVIEW_URL, { waitUntil: 'networkidle' });
+    await page.locator('#task-search-input').fill('Q4 Brand Narrative');
+    await page.getByText(/2 pipeline briefs · 0 assigned tasks/).waitFor();
+    assert.equal(await page.getByText('Q4 Brand Narrative (Content)', { exact: true }).first().isVisible(), true);
+    assert.equal(await page.getByText(/No matching tasks, clients/).count(), 0);
+    await page.getByRole('button', { name: 'Design (1)', exact: true }).click();
+    await page.getByText(/1 pipeline brief · 0 assigned tasks/).waitFor();
+    await page.getByRole('button', { name: 'Content (1)', exact: true }).click();
+    await page.locator('#task-search-input').fill('');
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(200);
+    await page.getByRole('button', { name: 'Assign', exact: true }).first().click();
+    const assignment = page.getByRole('dialog', { name: 'Assign task' });
+    await assignment.locator('#taskassignmentmodal-field-1').selectOption('u-content');
+    assert.equal(await assignment.locator('#taskassignmentmodal-deadline').inputValue(), '');
+    await assignment.getByRole('button', { name: 'Tomorrow', exact: true }).click();
+    await assignment.getByRole('button', { name: 'Assign & Move to To Do' }).click();
+    await assignment.getByText('Confirm the workload impact before assigning this task.').waitFor();
+    await assignment.getByRole('checkbox', { name: /projected workload/ }).check();
+    await assignment.getByRole('button', { name: 'Assign & Move to To Do' }).click();
+    await page.locator('#assignment-result').getByText(/Assignment saved/).waitFor();
+    await page.locator('#assignment-result').getByRole('button', { name: 'View task' }).click();
+    await page.getByRole('dialog', { name: 'Task details' }).waitFor();
     await context.close();
   }
 

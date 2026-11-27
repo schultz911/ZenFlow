@@ -85,9 +85,9 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
       <div className="marquee-ribbon-layout mx-auto max-w-[1400px] py-1.5 [--ribbon-gutter:1rem] sm:[--ribbon-gutter:1.5rem] lg:[--ribbon-gutter:2rem]">
         <div
           id="due-tasks-marquee-ribbon"
-          className="flex flex-row items-center gap-2 sm:gap-3 rounded-[10px] border border-red-200 dark:border-red-500/35 bg-[#fef2f2] dark:bg-[#231418] px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs overflow-hidden"
+          className="flex flex-col items-stretch sm:flex-row sm:items-center gap-2 sm:gap-3 rounded-[10px] border border-red-200 dark:border-red-500/35 bg-[#fef2f2] dark:bg-[#231418] px-2.5 sm:px-3 py-1 sm:py-1.5 text-xs overflow-hidden"
         >
-          <div className="ledger-alert-badge shrink-0 z-10 select-none">
+          <div className="ledger-alert-badge self-start shrink-0 z-10 select-none">
             <AlertTriangle aria-hidden="true" className="h-3 w-3 shrink-0" />
             <span className="uppercase tracking-wider">
               {overdueCount > 0 && dueTodayCount > 0
@@ -98,7 +98,7 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
             </span>
           </div>
 
-          <div ref={containerRef} className="min-w-0 flex-1 overflow-hidden relative">
+          <div ref={containerRef} className="min-w-0 flex-1 overflow-x-auto relative">
             <div
               ref={contentRef}
               data-paused={isPaused ? 'true' : undefined}

@@ -587,8 +587,10 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
               </div>
 
               {timeframe === 'custom' && (
-                <div className="flex items-center gap-2 bg-[var(--surface)] px-2.5 py-1 rounded-[7px] border border-[var(--border)] text-xs tabular-nums">
+                <div className="flex flex-wrap items-center gap-2 bg-[var(--surface)] px-2.5 py-1 rounded-[7px] border border-[var(--border)] text-xs tabular-nums min-w-0 max-w-full">
                   <Calendar className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
+                  <label className="flex flex-col gap-1 text-[var(--text-secondary)]">
+                    <span>Start date</span>
                   <input
                     type="date"
                     aria-label="Analytics start date"
@@ -597,9 +599,11 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                     className="bg-transparent text-xs text-[var(--text-primary)] focus:outline-none cursor-pointer"
                     style={{ minHeight: '26px' }}
                   />
+                  </label>
                   {isRangeMode ? (
                     <>
-                      <span className="text-[var(--text-muted)]">to</span>
+                      <label className="flex flex-col gap-1 text-[var(--text-secondary)]">
+                        <span>End date</span>
                       <input
                         type="date"
                         aria-label="Analytics end date"
@@ -608,6 +612,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                         className="bg-transparent text-xs text-[var(--text-primary)] focus:outline-none cursor-pointer"
                         style={{ minHeight: '26px' }}
                       />
+                      </label>
                     </>
                   ) : null}
                   <button

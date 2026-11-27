@@ -14,7 +14,7 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
   forceOpen,
   onCloseForceOpen,
 }) => {
-  const { currentUser, isSuperadmin } = useAuth();
+  const { currentUser, isSuperadmin, canAssignTask, canCreatePipelineTask } = useAuth();
   const { tasks, updateUserProfile } = useWorkspace();
   const {
     isClickupConnected,
@@ -342,6 +342,9 @@ export const OnboardingChecklist: React.FC<OnboardingChecklistProps> = ({
         </div>
       </div>
 
+      <p className="px-4 sm:px-5 py-2 text-xs text-[var(--text-secondary)]">
+        {canAssignTask ? 'Start by reviewing workload exceptions and assigning briefs from the team pipeline.' : canCreatePipelineTask ? 'Start by creating a brief in the team pipeline.' : 'Start with your current and upcoming work above.'} ClickUp sync is optional.
+      </p>
       <div className="divide-y divide-[var(--border-subtle)]">
         {/* Step 1 */}
         <div className="px-4 sm:px-5 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">

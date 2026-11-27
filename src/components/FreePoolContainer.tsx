@@ -28,6 +28,7 @@ interface FreePoolContainerProps {
   activeRoleTab?: RoleFilter;
   onAddTask: (userId: string, status?: TaskStatus) => void;
   onAssignBrief?: (task: Task, targetUserId: string) => void;
+  canAddTask?: (userId: string) => boolean;
   onSelectUser?: (user: User) => void;
   isExpanded: boolean;
   onExpandedChange: (expanded: boolean) => void;
@@ -39,6 +40,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
   activeRoleTab = 'all',
   onAddTask,
   onAssignBrief,
+  canAddTask,
   onSelectUser,
   isExpanded,
   onExpandedChange,
@@ -393,7 +395,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                       </>
                     )}
 
-                    <button
+                    {(!canAddTask || canAddTask(user.id)) && <button
                       type="button"
                       onClick={() => {
                         onExpandedChange(false);
@@ -404,7 +406,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                     >
                       <Plus aria-hidden="true" className="size-3" />
                       Task
-                    </button>
+                    </button>}
                   </div>
                 </div>
               );

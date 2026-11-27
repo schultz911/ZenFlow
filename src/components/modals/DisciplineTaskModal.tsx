@@ -537,11 +537,20 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
             </div>
 
             {/* 2-Tab Navigation: Brief & Routing vs Discipline Specs */}
-            <div role="tablist" aria-label="Brief sections" className="flex items-center gap-1 border-b border-[var(--border)] bg-[var(--surface-muted)] px-5">
+            <div role="tablist" aria-label="Brief sections" onKeyDown={event => {
+              const tabs = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="tab"]:not(:disabled)'));
+              const index = tabs.indexOf(document.activeElement as HTMLButtonElement);
+              if (index < 0 || !['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
+              event.preventDefault();
+              const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+              tabs[next].focus();
+              tabs[next].click();
+            }} className="flex items-center gap-1 border-b border-[var(--border)] bg-[var(--surface-muted)] px-5">
               <button
                 type="button"
                 role="tab"
                 aria-selected={activeTab === 'brief'}
+                tabIndex={activeTab === 'brief' ? 0 : -1}
                 onClick={() => setActiveTab('brief')}
                 className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
                   activeTab === 'brief'
@@ -555,6 +564,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                 type="button"
                 role="tab"
                 aria-selected={activeTab === 'specs'}
+                tabIndex={activeTab === 'specs' ? 0 : -1}
                 disabled={!needsContent && !needsDesign}
                 onClick={() => setActiveTab('specs')}
                 className={`px-3 py-2 text-xs font-semibold border-b-2 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
@@ -578,7 +588,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                     You have unsubmitted brief details that will be lost if you close now.
                   </p>
                   <div className="flex gap-2 pt-1">
-                    <button type="button" onClick={resetDiscardConfirm} className="button-secondary">
+                    <button type="button" autoFocus onClick={resetDiscardConfirm} className="button-secondary">
                       Keep Editing
                     </button>
                     <button type="button" onClick={confirmDiscard} className="button-danger-outline">

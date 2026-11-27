@@ -216,6 +216,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   const canEdit = useMemo(() => canEditUserTasks(user.id), [canEditUserTasks, user.id]);
 
   const [showArchived, setShowArchived] = useState(false);
+  const [mobileStage, setMobileStage] = useState<TaskStatus>('in_progress');
   const [showEmptyOngoing, setShowEmptyOngoing] = useState(false);
   const [memberMenuOpen, setMemberMenuOpen] = useState(false);
   const memberMenuBtnRef = useRef<HTMLButtonElement>(null);
@@ -1101,6 +1102,15 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               </div>
             )}
 
+            <div className="sm:hidden flex overflow-x-auto border-b border-[var(--border-subtle)] px-2" role="group" aria-label={`${user.name} task stages`}>
+              {COLUMNS.map(column => (
+                <button key={column.status} type="button" aria-pressed={mobileStage === column.status}
+                  onClick={() => setMobileStage(column.status)}
+                  className={`mobile-tap-control shrink-0 px-2 text-xs font-semibold ${mobileStage === column.status ? 'text-[var(--accent)] border-b-2 border-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}>
+                  {column.title} <span className="tabular-nums">{tasksByColumn[column.status]?.length || 0}</span>
+                </button>
+              ))}
+            </div>
             {/* Ruled 4/5-Column Ledger Grid (no nested rounded boxes) */}
             <div className="board-columns-scroll overflow-x-auto bg-[var(--surface)]">
               <div
@@ -1118,7 +1128,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                       onDragOver={e => handleDragOverColumn(e, col.status)}
                       onDragLeave={handleDragLeaveColumn}
                       onDrop={e => handleDropOnColumn(e, col.status)}
-                      className={`board-column-cell flex flex-col transition-colors duration-150 ${
+                      className={`board-column-cell ${mobileStage === col.status ? 'flex' : 'hidden sm:flex'} flex-col transition-colors duration-150 ${
                         isDropActive
                           ? 'bg-blue-50/70 dark:bg-blue-950/25'
                           : 'bg-[var(--surface)]'
