@@ -710,6 +710,8 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   return (
     <motion.div
       id={`swimlane-${user.id}`}
+      tabIndex={-1}
+      aria-label={`${user.name} workspace`}
       layout="position"
       initial={false}
       animate={{ opacity: 1 }}
@@ -1106,7 +1108,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               {COLUMNS.map(column => (
                 <button key={column.status} type="button" aria-pressed={mobileStage === column.status}
                   onClick={() => setMobileStage(column.status)}
-                  className={`mobile-tap-control shrink-0 px-2 text-xs font-semibold ${mobileStage === column.status ? 'text-[var(--accent)] border-b-2 border-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}>
+                  className={`mobile-tap-control shrink-0 px-2 text-xs font-semibold ${mobileStage === column.status ? 'text-[#1d4ed8] dark:text-blue-300 border-b-2 border-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}>
                   {column.title} <span className="tabular-nums">{tasksByColumn[column.status]?.length || 0}</span>
                 </button>
               ))}

@@ -149,6 +149,7 @@ export interface WorkspaceContextValue {
   downloadAuditLogs: () => void;
   createPipelineBundle: (data: {
     requestId?: string;
+    owningClusterId: string;
     title: string;
     description?: string;
     brandGuidelines?: string;

@@ -23,6 +23,7 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
   const contentRef = useRef<HTMLDivElement>(null);
   const [shouldScroll, setShouldScroll] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const [showMobileTasks, setShowMobileTasks] = useState(false);
 
   const { urgentTasks, overdueCount, dueTodayCount } = useMemo(() => {
     const filtered: Array<Task & { days: number }> = [];
@@ -98,7 +99,10 @@ export const MarqueeRibbon: React.FC<MarqueeRibbonProps> = React.memo(({
             </span>
           </div>
 
-          <div ref={containerRef} className="min-w-0 flex-1 overflow-x-auto relative">
+          <button type="button" className="sm:hidden min-h-[44px] text-left text-xs font-semibold" aria-expanded={showMobileTasks} aria-controls="urgent-task-list" onClick={() => setShowMobileTasks(value => !value)}>
+            {showMobileTasks ? 'Hide urgent tasks' : 'View urgent tasks'}
+          </button>
+          <div id="urgent-task-list" ref={containerRef} className={`min-w-0 flex-1 overflow-x-auto relative ${showMobileTasks ? 'block' : 'hidden sm:block'}`}>
             <div
               ref={contentRef}
               data-paused={isPaused ? 'true' : undefined}

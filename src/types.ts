@@ -133,6 +133,7 @@ export interface ParentTask {
 
 export interface Task {
   id: string;
+  owningClusterId?: string;
   userId?: string;
   assigneeIds?: string[];
   team?: Role;

@@ -68,6 +68,7 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [isLoadingAudit, setIsLoadingAudit] = useState(false);
   const [showAuditFeed, setShowAuditFeed] = useState(false);
+  const [auditError, setAuditError] = useState<string | null>(null);
 
   // ClickUp states
   const [apiKeyInput, setApiKeyInput] = useState('');
@@ -248,18 +249,20 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
   };
 
   const handleToggleAuditFeed = async () => {
-    if (!showAuditFeed && auditLogs.length === 0) {
+    if ((!showAuditFeed || auditError) && auditLogs.length === 0) {
+      setAuditError(null);
       setIsLoadingAudit(true);
       try {
         const logs = await fetchAuditLogs(50);
         setAuditLogs(logs);
       } catch (err) {
         console.error('Failed to load audit logs:', err);
+        setAuditError('Could not load the audit log. Try again.');
       } finally {
         setIsLoadingAudit(false);
       }
     }
-    setShowAuditFeed(prev => !prev);
+    setShowAuditFeed(true);
   };
 
   const isConnected = Boolean(firestoreStatus?.connected);
@@ -847,7 +850,7 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
 
                         <button
                           type="button"
-                          onClick={handleToggleAuditFeed}
+                          onClick={() => showAuditFeed ? setShowAuditFeed(false) : void handleToggleAuditFeed()}
                           disabled={isLoadingAudit || !canManageMembers}
                           className="button-secondary shrink-0"
                         >
@@ -869,7 +872,9 @@ export const FirestoreModal: React.FC<FirestoreModalProps> = ({ isOpen, onClose 
                             <span>Recent Audit Events ({auditLogs.length})</span>
                             <span>Immutable Stream</span>
                           </div>
-                          {auditLogs.length === 0 ? (
+                          {auditError ? (
+                            <div role="alert" className="text-xs">{auditError} <button type="button" className="underline" onClick={handleToggleAuditFeed}>Retry</button></div>
+                          ) : auditLogs.length === 0 ? (
                             <div className="text-[var(--text-muted)] py-3 text-center font-sans text-xs">No audit records logged yet.</div>
                           ) : (
                             auditLogs.slice(0, 20).map(entry => (

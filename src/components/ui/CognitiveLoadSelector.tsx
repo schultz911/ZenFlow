@@ -32,8 +32,8 @@ export const CognitiveLoadSelector: React.FC<CognitiveLoadSelectorProps> = ({
             {label} {required && <span className="text-red-600 dark:text-red-400">*</span>}
           </span>
         </span>
-        <span className="text-[11px] text-[var(--text-muted)]">
-          Capacity weight multiplier
+        <span className="text-xs text-[var(--text-secondary)]">
+          Low 1 · Medium 1.5 · High 2 points
         </span>
       </div>
       <div className="grid grid-cols-3 gap-2" role="group" aria-label={label}>

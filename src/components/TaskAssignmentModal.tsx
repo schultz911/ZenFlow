@@ -337,54 +337,19 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                   </div>
                 )}
 
-                {selectedUserObj && projected && (() => {
-                  const { selectedLoad, projectedLoad, selectedDailyHours, projectedDailyHours } = projected;
-                  const dailyHoursChanged = Math.abs(projectedDailyHours - selectedDailyHours) >= 0.05;
-                  const dailyOverbooked = projectedDailyHours > 8;
-                  return (
-                    <div
-                      className={`mt-2 flex flex-wrap items-center justify-between gap-2 text-xs px-3 py-1.5 rounded-[7px] border tabular-nums ${
-                        willOverload
-                          ? 'border-[var(--danger-border)] bg-[var(--danger-soft)] text-[var(--text-primary)]'
-                          : 'border-[var(--border)] bg-[var(--surface-muted)] text-[var(--text-secondary)]'
-                      }`}
-                    >
-                      <span>Selected: <strong className="text-[var(--text-primary)]">{selectedUserObj.name}</strong></span>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={projectedLoad >= 12 ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
-                          Load:{' '}
-                          <strong>
-                            {projectedLoad !== selectedLoad
-                              ? `${selectedLoad} → ${projectedLoad}`
-                              : selectedLoad}{' '}
-                            / 12 pts
-                          </strong>
-                          {projectedLoad >= 12 && ' · Will overload'}
-                        </span>
-                        <span aria-hidden="true" className="hidden sm:inline text-[var(--text-muted)]">·</span>
-                        <span className={dailyOverbooked ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
-                          Assigned:{' '}
-                          <strong className={dailyOverbooked ? 'text-red-600 dark:text-red-400' : 'text-[#1d4ed8] dark:text-blue-400'}>
-                            {dailyHoursChanged
-                              ? `${formatHours(selectedDailyHours)} → ${formatHours(projectedDailyHours)}`
-                              : formatHours(selectedDailyHours)}
-                            /day
-                          </strong>
-                          {dailyOverbooked && ' · Over 8h/day'}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })()}
               </div>
 
-              {willOverload && (
-                <label className="callout callout-warning flex items-start gap-2 text-xs">
-                  <input type="checkbox" checked={confirmOverload} onChange={event => setConfirmOverload(event.target.checked)} />
-                  <span>I understand the projected workload and want to assign this task.</span>
+              <fieldset className="space-y-2" disabled={!selectedUserId || isSubmitting}>
+                <legend className="field-label">Destination</legend>
+                <label className="flex items-center gap-2 text-xs min-h-[44px]">
+                  <input type="radio" name="assignment-destination" checked={!keepInPipeline} onChange={() => setKeepInPipeline(false)} />
+                  Move to To Do
                 </label>
-              )}
-              {selectedUserObj && <p className="text-xs text-[var(--text-secondary)]">Destination: {selectedUserObj.name} · {keepInPipeline ? 'Team Pipeline' : 'To Do'}{dueDate ? ` · ${dueDate}` : ''}</p>}
+                <label className="flex items-center gap-2 text-xs min-h-[44px]">
+                  <input type="radio" name="assignment-destination" checked={keepInPipeline} onChange={() => setKeepInPipeline(true)} />
+                  Keep assigned in Team Pipeline
+                </label>
+              </fieldset>
               {/* Cognitive Load Specification */}
               <CognitiveLoadSelector
                 value={cognitiveLoad}
@@ -475,21 +440,55 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                   </div>
                 </div>
 
-                <label
-                  className={`flex items-center gap-2.5 min-h-[44px] sm:min-h-0 rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-1.5 text-xs select-none ${
-                    !selectedUserId ? 'opacity-60 cursor-not-allowed text-[var(--text-secondary)]' : 'text-[var(--text-primary)] cursor-pointer'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    disabled={!selectedUserId || isSubmitting}
-                    checked={keepInPipeline}
-                    onChange={e => setKeepInPipeline(e.target.checked)}
-                    className="rounded border-[var(--border)] h-5 w-5 sm:h-3.5 sm:w-3.5 shrink-0"
-                  />
-                  <span>Keep in Team Pipeline as assigned (don&rsquo;t move to To Do yet)</span>
-                </label>
+
               </div>
+                {selectedUserObj && projected && (() => {
+                  const { selectedLoad, projectedLoad, selectedDailyHours, projectedDailyHours } = projected;
+                  const dailyHoursChanged = Math.abs(projectedDailyHours - selectedDailyHours) >= 0.05;
+                  const dailyOverbooked = projectedDailyHours > 8;
+                  return (
+                    <div
+                      className={`mt-2 flex flex-wrap items-center justify-between gap-2 text-xs px-3 py-1.5 rounded-[7px] border tabular-nums ${
+                        willOverload
+                          ? 'border-[var(--danger-border)] bg-[var(--danger-soft)] text-[var(--text-primary)]'
+                          : 'border-[var(--border)] bg-[var(--surface-muted)] text-[var(--text-secondary)]'
+                      }`}
+                    >
+                      <span>Selected: <strong className="text-[var(--text-primary)]">{selectedUserObj.name}</strong></span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={projectedLoad >= 12 ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
+                          Load:{' '}
+                          <strong>
+                            {projectedLoad !== selectedLoad
+                              ? `${selectedLoad} → ${projectedLoad}`
+                              : selectedLoad}{' '}
+                            / 12 pts
+                          </strong>
+                          {projectedLoad >= 12 && ' · Will overload'}
+                        </span>
+                        <span aria-hidden="true" className="hidden sm:inline text-[var(--text-muted)]">·</span>
+                        <span className={dailyOverbooked ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
+                          Assigned:{' '}
+                          <strong className={dailyOverbooked ? 'text-red-600 dark:text-red-400' : 'text-[#1d4ed8] dark:text-blue-400'}>
+                            {dailyHoursChanged
+                              ? `${formatHours(selectedDailyHours)} → ${formatHours(projectedDailyHours)}`
+                              : formatHours(selectedDailyHours)}
+                            /day
+                          </strong>
+                          {dailyOverbooked && ' · Over 8h/day'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              {willOverload && (
+                <label className="callout callout-warning flex items-start gap-2 text-xs">
+                  <input type="checkbox" checked={confirmOverload} onChange={event => setConfirmOverload(event.target.checked)} />
+                  <span>I understand the projected workload and want to assign this task.</span>
+                </label>
+              )}
+              {selectedUserObj && <p className="text-xs text-[var(--text-secondary)]">Destination: {selectedUserObj.name} · {keepInPipeline ? 'Team Pipeline' : 'To Do'}{dueDate ? ` · ${dueDate}` : ''}</p>}
+
             </div>
 
             {/* Footer */}

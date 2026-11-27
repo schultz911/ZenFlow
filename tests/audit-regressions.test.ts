@@ -117,7 +117,7 @@ test('pipeline local commit precedes ClickUp and retries reuse confirmed parents
   } });
   try {
     server.store.users.find(user => user.id === 'cd').clickupApiKey = 'pk_personal_fixture';
-    const request = { requestId: randomUUID(), title: 'Bundle', disciplines: ['content', 'design'], clickupListId: 'list-1' };
+    const request = { owningClusterId: 'cd', requestId: randomUUID(), title: 'Bundle', disciplines: ['content', 'design'], clickupListId: 'list-1' };
     const saveBundle = server.repo.savePipelineBundle;
     server.repo.savePipelineBundle = async () => { throw new Error('Storage failure'); };
     assert.equal((await server.request('/tasks/pipeline-bundle', 'cd', 'POST', request)).status, 503);
@@ -211,4 +211,25 @@ test('batched analytics allocations match the daily calculation for shared work'
   } finally {
     await server.close();
   }
+});
+
+test('legacy brief ownership is inferred only from a unique creator in a known cluster', async () => {
+  const now = new Date().toISOString();
+  const adapter = createMemoryPersistenceAdapter({
+    users: [
+      { id: 'cd', name: 'Director', email: 'cd@example.com', createdAt: now, isCreativeDirector: true },
+      { id: 'one', name: 'Unique Writer', email: 'one@example.com', createdAt: now, creativeDirectorId: 'cd' },
+      { id: 'two', name: 'Same Name', email: 'two@example.com', createdAt: now, creativeDirectorId: 'cd' },
+      { id: 'three', name: 'Same Name', email: 'three@example.com', createdAt: now, creativeDirectorId: 'cd' },
+    ],
+    tasks: [
+      fixtureTask('unique', undefined, { status: 'pipeline', parentTaskId: 'p', activityLog: [{ id: 'a', timestamp: now, action: 'created', actorName: 'Unique Writer' }] }),
+      fixtureTask('ambiguous', undefined, { status: 'pipeline', parentTaskId: 'q', activityLog: [{ id: 'b', timestamp: now, action: 'created', actorName: 'Same Name' }] }),
+    ],
+  });
+  const repo = createWorkspaceRepository(adapter);
+  await repo.init();
+  assert.equal(repo.getTasks().find(task => task.id === 'unique')?.owningClusterId, 'cd');
+  assert.equal(repo.getTasks().find(task => task.id === 'ambiguous')?.owningClusterId, undefined);
+  assert.equal(adapter.loadInitialStore().tasks.find(task => task.id === 'unique')?.owningClusterId, 'cd');
 });

@@ -22,7 +22,7 @@ import { DisciplineTaskModal } from './components/modals/DisciplineTaskModal';
 import { TaskAssignmentModal } from './components/TaskAssignmentModal';
 import { OnboardingChecklist } from './components/OnboardingChecklist';
 import { User, Task, TaskStatus } from './types';
-import { getTaskAssigneeIds, groupTasksByAssignee, formatTaskStatus, quickWorkloadScore } from './utils/workload';
+import { getTaskAssigneeIds, groupTasksByAssignee, formatTaskStatus, formatDateOnly, quickWorkloadScore } from './utils/workload';
 import { UserPlus, FileText, Palette, Search, Trash2, AlertTriangle, X, Loader2, RotateCcw, Keyboard } from 'lucide-react';
 import { DialogPanel } from './components/ui/DialogPanel';
 import { AnimatePresence } from 'motion/react';
@@ -37,6 +37,7 @@ function DashboardContent() {
     canCreatePipelineTask,
     canAssignTask,
     canEditUserTasks,
+    isAdministrator,
   } = useAuth();
   const {
     users,
@@ -109,6 +110,7 @@ function DashboardContent() {
 
   // Free pool resource jump and highlight handler
   const handleSelectFreeResource = useCallback((user: User) => {
+    setSearchQuery('');
     if (activeRoleTab !== 'all' && (user.role === 'content' || user.role === 'design') && user.role !== activeRoleTab) {
       setActiveRoleTab(user.role);
     }
@@ -122,12 +124,14 @@ function DashboardContent() {
       const el = document.getElementById(`swimlane-${user.id}`);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.focus({ preventScroll: true });
       }
     }, 120);
   }, [activeRoleTab, setActiveRoleTab, activeBoardId, setActiveBoardId]);
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
+  const [unassignedClusterOnly, setUnassignedClusterOnly] = useState(false);
 
   // User workspace ordering with persistent localStorage storage
   const [customUserOrder, setCustomUserOrder] = useState<string[]>(() => {
@@ -156,6 +160,15 @@ function DashboardContent() {
     const map = new Map<string, Task>();
     for (const task of tasks) {
       if (!task || !task.id) continue;
+      if (activeBoardId !== 'all') {
+        const assignees = getTaskAssigneeIds(task);
+        const belongs = task.owningClusterId ? task.owningClusterId === activeBoardId
+          : assignees.some(id => {
+            const user = users.find(member => member.id === id);
+            return user?.id === activeBoardId || user?.creativeDirectorId === activeBoardId;
+          });
+        if (!belongs) continue;
+      }
       const matchesTitle = task.title.toLowerCase().includes(trimmed);
       const matchesDesc = task.description ? task.description.toLowerCase().includes(trimmed) : false;
       const matchesClient = task.client ? task.client.toLowerCase().includes(trimmed) : false;
@@ -168,7 +181,7 @@ function DashboardContent() {
       }
     }
     return Array.from(map.values());
-  }, [tasks, searchQuery, userNameMap]);
+  }, [tasks, searchQuery, userNameMap, activeBoardId, users]);
 
   // Cross-role search result counts for global navigation (Content & Design)
   const searchRoleMatches = useMemo(() => {
@@ -196,9 +209,10 @@ function DashboardContent() {
 
     for (const u of users) {
       if (
+        (activeBoardId === 'all' || u.id === activeBoardId || u.creativeDirectorId === activeBoardId) && (
         u.name.toLowerCase().includes(trimmed) ||
         u.email.toLowerCase().includes(trimmed) ||
-        (u.designation && u.designation.toLowerCase().includes(trimmed))
+        (u.designation && u.designation.toLowerCase().includes(trimmed)))
       ) {
         if (u.role && counts[u.role] !== undefined) {
           counts[u.role]++;
@@ -207,7 +221,7 @@ function DashboardContent() {
     }
 
     return counts;
-  }, [searchQuery, filteredTasks, tasks, users]);
+  }, [searchQuery, filteredTasks, tasks, users, activeBoardId]);
 
   const allTasksByUserId = useMemo(() => groupTasksByAssignee(tasks), [tasks]);
 
@@ -218,7 +232,7 @@ function DashboardContent() {
     let boardUsers = users;
 
     // When searching, allow finding members across boards in the active role tab
-    if (activeBoardId !== 'all' && !trimmed) {
+    if (activeBoardId !== 'all') {
       boardUsers = users.filter(u => u.id === activeBoardId || u.creativeDirectorId === activeBoardId);
     }
 
@@ -670,6 +684,7 @@ function DashboardContent() {
         />
 
         {/* Pinned Marquee Ribbon (renders its own sticky frosted container only when urgent tasks exist) */}
+        <div className={!canAssignTask && !canCreatePipelineTask ? 'hidden sm:block' : ''}>
         <MarqueeRibbon
           tasks={tasks}
           users={users}
@@ -677,6 +692,7 @@ function DashboardContent() {
           activeBoardId={activeBoardId}
           onTaskClick={handleEditTask}
         />
+        </div>
 
         {/* Main Workspace Container */}
         <main
@@ -693,13 +709,23 @@ function DashboardContent() {
                   {user.name} · {score} / 12 pts · View workload
                 </button>)}
               </div>
+              <button type="button" className="button-secondary text-xs mt-2" onClick={() => {
+                setFreePoolOpen(true);
+                document.getElementById('free-pool-trigger')?.focus();
+              }}>View available capacity</button>
+            </section>
+          )}
+          {!searchQuery.trim() && canCreatePipelineTask && !canAssignTask && (
+            <section className="ledger-frame mb-3 px-4 py-3 sm:hidden" aria-label="Brief intake">
+              <h2 className="text-sm font-semibold">Brief intake</h2>
+              <button type="button" className="button-primary mt-2" onClick={() => setDisciplineModalOpen(true)}>New Brief</button>
             </section>
           )}
           {!searchQuery.trim() && !canAssignTask && currentUser && (currentUser.role === 'content' || currentUser.role === 'design') && (
             <section aria-label="Your work" className="ledger-frame mb-3 px-4 py-3">
               <h2 className="text-xs font-bold text-[var(--text-primary)]">Your current and upcoming work</h2>
               {myActiveTasks.length ? <div className="mt-2 flex flex-wrap gap-2">{myActiveTasks.map(task => (
-                <button key={task.id} type="button" className="button-secondary text-xs" onClick={() => handleEditTask(task)}>{task.title} · {task.status === 'in_progress' ? 'In Progress' : 'To Do'}{task.dueDate ? ` · ${task.dueDate}` : ''}</button>
+                <button key={task.id} type="button" className="button-secondary text-xs text-left justify-start break-words" onClick={() => handleEditTask(task)}>{task.title} · {task.status === 'in_progress' ? 'In Progress' : 'To Do'}{task.dueDate ? ` · Due ${formatDateOnly(task.dueDate)}` : ''}</button>
               ))}</div> : <p className="mt-1 text-xs text-[var(--text-secondary)]">No current or upcoming tasks.</p>}
             </section>
           )}
@@ -754,7 +780,7 @@ function DashboardContent() {
               <div className="flex items-center gap-2 text-[var(--text-secondary)]">
                 <Search className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
                 <span className="tabular-nums">
-                  Results for &ldquo;<span className="font-semibold text-[var(--text-primary)]">{searchQuery.trim()}</span>&rdquo;:{' '}
+                  {activeBoardId === 'all' ? 'All clusters' : 'Selected cluster'} · Results for &ldquo;<span className="font-semibold text-[var(--text-primary)]">{searchQuery.trim()}</span>&rdquo;:{' '}
                   <span className="font-semibold text-[#1d4ed8] dark:text-blue-400">{matchingPipelineCount} pipeline brief{matchingPipelineCount === 1 ? '' : 's'}</span> ·{' '}
                   <span className="font-semibold text-[#1d4ed8] dark:text-blue-400">{matchingAssignedCount} assigned task{matchingAssignedCount === 1 ? '' : 's'}</span> · {roleFilteredUsers.length} member{roleFilteredUsers.length === 1 ? '' : 's'}.
                 </span>
@@ -783,7 +809,7 @@ function DashboardContent() {
                         }`}
                         style={{ minHeight: 'auto' }}
                       >
-                        {roleLabel} ({count})
+                        {roleLabel} ({count} {count === 1 ? 'match' : 'matches'})
                       </button>
                     );
                   })}
@@ -811,9 +837,17 @@ function DashboardContent() {
           )}
 
           {/* Centralized Pipeline */}
+          {isAdministrator && activeBoardId === 'all' && (
+            <button type="button" className="button-secondary text-xs mb-2" aria-pressed={unassignedClusterOnly} onClick={() => setUnassignedClusterOnly(value => !value)}>
+              {unassignedClusterOnly ? 'Showing unassigned clusters' : 'Show briefs with unassigned cluster'}
+            </button>
+          )}
+          {searchQuery.trim() && activeBoardId !== 'all' && matchingPipelineCount === 0 && (
+            <p className="text-xs mb-2">No briefs match in this cluster. <button type="button" className="underline" onClick={() => setActiveBoardId('all')}>Search all clusters</button></p>
+          )}
           <TeamPipeline
             roleFilter={activeRoleTab}
-            tasks={searchQuery.trim() ? scopedSearchTasks : tasks}
+            tasks={(searchQuery.trim() ? scopedSearchTasks : tasks).filter(task => activeBoardId !== 'all' || !unassignedClusterOnly || Boolean(task.status === 'pipeline' && !task.owningClusterId))}
             users={users}
             globalSearch={searchQuery}
             onOpenCreateModal={() => setDisciplineModalOpen(true)}

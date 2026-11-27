@@ -190,6 +190,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const created: Task[] = data.disciplines.map((disc: 'content' | 'design', i: number) => ({
         id: `t-${Date.now()}-${disc}-${i}`,
         team: disc,
+        owningClusterId: data.owningClusterId,
         title: data.disciplines.length > 1 ? `${data.title} (${disc === 'content' ? 'Content' : 'Design'})` : data.title,
         description: data.description,
         brandGuidelines: data.brandGuidelines,

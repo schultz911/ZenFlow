@@ -166,6 +166,7 @@ test('pipeline-bundle creates linked Content & Design subtasks under a ClickUp p
   try {
     // 1. Account manager creates Content + Design bundle
     const bundleRes = await server.request('/tasks/pipeline-bundle', 'acct', 'POST', {
+      owningClusterId: 'cd',
       title: 'Q4 Campaign Launch',
       description: 'Full launch pack',
       client: 'Acme',
@@ -405,6 +406,7 @@ test('ParentTask collection, sibling Brief/BrandGuidelines sync, conflict-safe C
   try {
     // 1. Invalid URLs must be rejected with 400
     const badBrandRes = await server.request('/tasks/pipeline-bundle', 'acct', 'POST', {
+      owningClusterId: 'cd',
       title: 'Bad URL Test',
       brandGuidelines: 'ftp://invalid.example.com',
       disciplines: ['content'],
@@ -412,6 +414,7 @@ test('ParentTask collection, sibling Brief/BrandGuidelines sync, conflict-safe C
     assert.equal(badBrandRes.status, 400);
 
     const badRefRes = await server.request('/tasks/pipeline-bundle', 'acct', 'POST', {
+      owningClusterId: 'cd',
       title: 'Bad Ref Test',
       disciplines: ['design'],
       disciplineSpecs: { design: { brandAssetsReferences: ['not-a-url'] } },
@@ -420,6 +423,7 @@ test('ParentTask collection, sibling Brief/BrandGuidelines sync, conflict-safe C
 
     // 2. Create Content + Design bundle with Brief + Brand Guidelines
     const bundleRes = await server.request('/tasks/pipeline-bundle', 'acct', 'POST', {
+      owningClusterId: 'cd',
       title: 'Q1 Brand Campaign',
       description: 'Long campaign brief across both teams.',
       brandGuidelines: 'https://brand.example.com/guidelines',
@@ -671,4 +675,25 @@ test('Non-destructive legacy task migration folds old metadata & attachments ide
   // Second run is strictly idempotent
   const secondRun = server.hydrateSubtasksFromParents();
   assert.equal(secondRun, false);
+}));
+
+test('brief ownership requires a cluster and only administrators can change it', async () => withServer(async server => {
+  const invalid = await server.request('/tasks/pipeline-bundle', 'acct', 'POST', {
+    title: 'Missing cluster', disciplines: ['content'],
+  });
+  assert.equal(invalid.status, 400);
+
+  const created = await server.request('/tasks/pipeline-bundle', 'acct', 'POST', {
+    title: 'Owned brief', disciplines: ['content', 'design'], owningClusterId: 'cd',
+  });
+  assert.equal(created.status, 201);
+  const payload = await created.json();
+  const id = payload.tasks[0].id;
+  assert.equal(payload.tasks[0].owningClusterId, 'cd');
+  assert.equal((await server.request(`/tasks/${id}`, 'acct', 'PUT', { owningClusterId: 'cd2' })).status, 403);
+  assert.equal((await server.request(`/tasks/${id}`, 'root', 'PUT', { owningClusterId: 'invalid' })).status, 400);
+  const updated = await server.request(`/tasks/${id}`, 'root', 'PUT', { owningClusterId: 'cd2' });
+  assert.equal(updated.status, 200);
+  assert.equal((await updated.json()).owningClusterId, 'cd2');
+  assert.equal(server.store.tasks.find(task => task.id === payload.tasks[1].id)?.owningClusterId, 'cd2');
 }));

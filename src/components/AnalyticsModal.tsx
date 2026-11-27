@@ -579,7 +579,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                 <button
                   type="button"
                   aria-pressed={timeframe === 'custom'}
-                  onClick={() => setTimeframe('custom')}
+                  onClick={() => { setTimeframe('custom'); setIsRangeMode(true); }}
                   className={`segmented-item cursor-pointer ${timeframe === 'custom' ? 'segmented-item-active' : ''}`}
                 >
                   Date Range
@@ -739,7 +739,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
             )}
             {!snapshot && requestedDates.length > 1 && (
               <p className="text-xs text-[var(--text-secondary)] tabular-nums">
-                Time totals and efficiency as of {reportDate}.
+                Headline utilization, time totals and efficiency are as of {reportDate}. The utilization exceptions below cover remaining selected dates.
               </p>
             )}
 
@@ -777,7 +777,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                       </span>
                     </div>
                     <MetricBar label="Workspace utilization" value={topMetrics.totalUtilization} tone="green" detail={`${topMetrics.totalUtilizedCount} of ${topMetrics.totalEmployees} members assigned at least 3 hours per day`} />
-                    <p className="metric-detail">Assigned at least 3h/day</p>
+                    <p className="metric-detail">Members assigned at least 3h on {reportDate}</p>
                   </div>
                 </div>
 
@@ -816,7 +816,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                       className="metric-detail"
                       title="Efficiency = Estimated Hours / Billable Hours (>100% means delivered faster than estimate)"
                     >
-                      Est / Bill · &gt;100% = under est
+                      Est / Bill · &gt;100% = under est {efficiencyPercent !== null && `· ${estimatedHours === billableHours ? 'On estimate' : `${formatHours(Math.abs(estimatedHours - billableHours))} ${estimatedHours > billableHours ? 'under' : 'over'} estimate`}`}
                     </p>
                   </div>
                 </div>
@@ -826,7 +826,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <span className="metric-label">Top Accounts</span>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-medium text-[var(--text-muted)]">Bill / Est</span>
+                      <span className="text-xs font-medium text-[var(--text-muted)]">Bill / Est · bar shows billed hours</span>
                       <Briefcase className="h-3.5 w-3.5 text-[var(--text-muted)] shrink-0" />
                     </div>
                   </div>
@@ -1093,7 +1093,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                       {sections3And4Data.section3Title}
                     </h3>
                   </div>
-                  <span className="text-[11px] font-medium text-[var(--text-muted)] shrink-0">Est / Bill</span>
+                  <span className="text-xs font-medium text-[var(--text-muted)] shrink-0">Est / Bill</span>
                 </div>
 
                 <div className="divide-y divide-[var(--border-subtle)] max-h-72 overflow-y-auto bg-[var(--surface)]">
@@ -1164,7 +1164,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                       {sections3And4Data.section4Title}
                     </h3>
                   </div>
-                  <span className="text-[11px] font-medium text-[var(--text-muted)] shrink-0">Est / Bill</span>
+                  <span className="text-xs font-medium text-[var(--text-muted)] shrink-0">Est / Bill</span>
                 </div>
 
                 <div className="divide-y divide-[var(--border-subtle)] max-h-72 overflow-y-auto bg-[var(--surface)]">

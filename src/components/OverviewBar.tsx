@@ -46,7 +46,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
   sortByPressure = false,
   onToggleSortByPressure,
 }) => {
-  const { canSwitchBoards, isSuperadmin } = useAuth();
+  const { canSwitchBoards, isSuperadmin, canManageMembers } = useAuth();
   const { activeRoleTab, activeBoardId, setActiveBoardId } = useBoardUi();
   const {
     users,
@@ -248,8 +248,8 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                 aria-pressed={sortByPressure}
                 aria-label={
                   sortByPressure
-                    ? `${overloadedMembersCount} ${overloadedMembersCount === 1 ? 'member' : 'members'} over 12 pts — Sorted`
-                    : `${overloadedMembersCount} ${overloadedMembersCount === 1 ? 'member' : 'members'} over 12 pts — Sort overloaded first`
+                    ? `${overloadedMembersCount} ${overloadedMembersCount === 1 ? 'member' : 'members'} at least 12 pts — Sorted`
+                    : `${overloadedMembersCount} ${overloadedMembersCount === 1 ? 'member' : 'members'} at least 12 pts — Sort overloaded first`
                 }
                 onClick={onToggleSortByPressure}
                 title={
@@ -263,10 +263,10 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
               >
                 <AlertTriangle aria-hidden="true" className="h-3 w-3 shrink-0" />
                 <span className="hidden sm:inline">
-                  {overloadedMembersCount} {overloadedMembersCount === 1 ? 'member over' : 'members over'} 12 pts
+                  {overloadedMembersCount} {overloadedMembersCount === 1 ? 'member at' : 'members at'} 12 pts or more
                 </span>
                 <span className="sm:hidden">
-                  {overloadedMembersCount} over 12 pts
+                  {overloadedMembersCount} at least 12 pts
                 </span>
                 <span aria-hidden="true" className="opacity-75">·</span>
                 <ArrowUpDown aria-hidden="true" className="h-3 w-3 shrink-0" />
@@ -285,7 +285,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
               <span className="text-sm font-semibold tracking-normal">%</span>
             </p>
             <p className="metric-detail">
-              {teamUtilization.utilizedCount} of {teamUtilization.totalCount} at 3h/day or more
+              {teamUtilization.utilizedCount} of {teamUtilization.totalCount} assigned 3h or more today
             </p>
           </div>
 
@@ -307,7 +307,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                   <span className="text-xs font-normal text-[var(--text-muted)] mr-1">
                     {Math.round(teamEfficiency.efficiencyPercent) >= 100 ? 'under est · est / bill' : 'over est · est / bill'}
                   </span>
-                  <span>{formatHoursRatio(teamEfficiency.estimatedHours, teamEfficiency.billableHours)}</span>
+                  <span>{formatHoursRatio(teamEfficiency.estimatedHours, teamEfficiency.billableHours)}</span><span> · {teamEfficiency.estimatedHours === teamEfficiency.billableHours ? 'On estimate' : `${Math.abs(teamEfficiency.estimatedHours - teamEfficiency.billableHours).toFixed(1)}h ${teamEfficiency.estimatedHours > teamEfficiency.billableHours ? 'under' : 'over'} estimate`}</span>
                 </>
               ) : (
                 'No measured work'
@@ -497,6 +497,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                   role="menuitem"
                   onClick={() => {
                     setShowMobileActionsMenu(false);
+                    document.getElementById('mobile-actions-menu-btn')?.focus();
                     onOpenAnalytics();
                   }}
                   className="menu-item cursor-pointer"
@@ -529,7 +530,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                   <FileCode className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
                   <span>Export JSON Audit</span>
                 </button>
-                <button
+                {canManageMembers && (<button
                   type="button"
                   role="menuitem"
                   onClick={() => {
@@ -540,7 +541,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                 >
                   <ShieldCheck className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
                   <span>Download SOC2 Audit (.ndjson)</span>
-                </button>
+                </button>)}
               </div>
             )}
           </div>
@@ -610,7 +611,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                   <FileCode className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
                   <span>Export JSON Audit</span>
                 </button>
-                <button
+                {canManageMembers && (<button
                   id="export-audit-ndjson-btn"
                   type="button"
                   role="menuitem"
@@ -622,7 +623,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                 >
                   <ShieldCheck className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
                   <span>Download SOC2 Audit (.ndjson)</span>
-                </button>
+                </button>)}
               </div>
             )}
           </div>

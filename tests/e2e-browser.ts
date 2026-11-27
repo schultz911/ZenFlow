@@ -209,8 +209,10 @@ try {
     assert.equal(await analytics.getByText('Billable / Est', { exact: true }).count(), 0, 'AnalyticsModal should not mix Billable / Est wording');
     await page.getByRole('button', { name: 'Date Range' }).click();
     await page.getByLabel('Analytics start date').fill('2026-01-08');
+    await page.getByLabel('Analytics end date').fill('2026-01-08');
     await page.getByText('No historical snapshot was saved for this period.').waitFor({ state: 'visible' });
     assert.equal(await page.getByText('Total Employees', { exact: true }).count(), 0);
+    await page.getByLabel('Analytics end date').fill('2026-01-09');
     await page.getByLabel('Analytics start date').fill('2026-01-09');
     await page.getByText('Locked snapshot · 2026-01-09').waitFor({ state: 'visible' });
     await page.getByText('Cumulative metrics as of 2026-01-09.').waitFor({ state: 'visible' });
@@ -319,7 +321,7 @@ try {
     // OverviewBar polish: Sort overloaded action cue, All Clusters dropdown label, standardized Eff cue
     await overview.getByRole('button', { name: /Sort overloaded first/i }).waitFor();
     await page.getByRole('button', { name: /All Clusters/i }).waitFor();
-    await overview.getByText(/under est/i).waitFor();
+    await overview.getByText(/under est · est \/ bill/i).waitFor();
 
     // DisciplineTaskModal focus + discard guard + neutral placeholders + aria-pressed/0-selection guard (P2-5, P2-7)
     await page.getByRole('button', { name: /New Brief/i }).first().click();
@@ -334,6 +336,9 @@ try {
     if ((await designToggle.getAttribute('aria-pressed')) === 'true') await designToggle.click();
     assert.equal(await newBriefDialog.locator('button[type="submit"]').isDisabled(), true, '0 selected disciplines must disable submit');
     await contentToggle.click();
+    assert.equal(await newBriefDialog.locator('button[type="submit"]').isDisabled(), true, 'A cluster is required');
+    await newBriefDialog.getByLabel('Owning cluster').selectOption('cd-1');
+    assert.equal(await newBriefDialog.locator('button[type="submit"]').isDisabled(), false);
     await newBriefDialog.locator('#disciplinetaskmodal-field-1').fill('Draft Unsaved Campaign');
     await page.locator('.dialog-backdrop').first().click({ position: { x: 10, y: 10 } });
     await newBriefDialog.getByRole('alertdialog', { name: /Discard unsaved/i }).waitFor({ state: 'visible' });
@@ -454,7 +459,7 @@ try {
     await workloadDialog.waitFor({ state: 'detached' });
 
     // Sort overloaded first -> clicking manual reorder exits pressure sort immediately (P2-4)
-    const sortBtn = overview.getByRole('button', { name: /over 12 pts/i });
+    const sortBtn = overview.getByRole('button', { name: /at least 12 pts/i });
     await sortBtn.click();
     assert.equal(await sortBtn.getAttribute('aria-pressed'), 'true');
     await page.locator('#swimlane-u-content button[aria-label="Move Ava Writer down"]').click();
@@ -525,9 +530,9 @@ try {
     await page.getByText(/2 pipeline briefs · 0 assigned tasks/).waitFor();
     assert.equal(await page.getByText('Q4 Brand Narrative (Content)', { exact: true }).first().isVisible(), true);
     assert.equal(await page.getByText(/No matching tasks, clients/).count(), 0);
-    await page.getByRole('button', { name: 'Design (1)', exact: true }).click();
+    await page.getByRole('button', { name: 'Design (1 match)', exact: true }).click();
     await page.getByText(/1 pipeline brief · 0 assigned tasks/).waitFor();
-    await page.getByRole('button', { name: 'Content (1)', exact: true }).click();
+    await page.getByRole('button', { name: 'Content (1 match)', exact: true }).click();
     await page.locator('#task-search-input').fill('');
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForTimeout(200);

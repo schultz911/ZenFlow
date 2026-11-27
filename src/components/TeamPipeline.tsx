@@ -143,14 +143,13 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
   const assignedCount = totalCount - unassignedCount;
 
   const [isCollapsed, setIsCollapsed] = useState(() =>
-    (typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches) || unassignedCount === 0
+    unassignedCount === 0 && !canCreatePipelineTask
   );
 
   useEffect(() => {
     if (userToggledCollapseRef.current) return;
-    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches) return;
-    setIsCollapsed(unassignedCount === 0);
-  }, [unassignedCount]);
+    setIsCollapsed(unassignedCount === 0 && !canCreatePipelineTask);
+  }, [unassignedCount, canCreatePipelineTask]);
 
   useEffect(() => {
     if (globalSearch.trim()) {

@@ -951,6 +951,27 @@ export function createWorkspaceRepository(adapter: PersistenceAdapter) {
     async init() {
       await adapter.init();
       await this.syncRemote();
+      const migratedTasks = store.tasks.filter(task => {
+        if (task.owningClusterId || (task.status !== 'pipeline' && !task.parentTaskId)) return false;
+        const creator = task.activityLog?.find(entry => entry.action === 'created')?.actorName?.trim().toLowerCase();
+        if (!creator) return false;
+        const matches = store.users.filter(user => user.name.trim().toLowerCase() === creator);
+        if (matches.length !== 1) return false;
+        const member = matches[0];
+        const clusterId = member.isCreativeDirector ? member.id : member.creativeDirectorId;
+        if (!clusterId || !store.users.some(user => user.id === clusterId && user.isCreativeDirector)) return false;
+        task.owningClusterId = clusterId;
+        return true;
+      });
+      if (migratedTasks.length) {
+        try {
+          await adapter.batchSaveTasks(migratedTasks);
+          this.saveLocal();
+        } catch (error) {
+          for (const task of migratedTasks) delete task.owningClusterId;
+          console.error('[Cluster migration] Could not save ownership:', error);
+        }
+      }
       await this.archiveExpiredDoneTasks();
       recentAuditLogs = await adapter.loadRecentAuditLogs(MAX_RECENT_AUDIT_LOGS);
     },

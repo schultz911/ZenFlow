@@ -48,6 +48,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
   } = useBoardUi();
 
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [dismissError, setDismissError] = useState<string | null>(null);
   const userDropdownRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const pendingMenuFocusRef = useRef<'first' | 'last' | null>(null);
@@ -337,6 +338,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                           <span>Pending Access</span>
                           <span className="tabular-nums text-[#1d4ed8] dark:text-blue-400">{accessRequests.length}</span>
                         </div>
+                        {dismissError && <p role="alert" className="text-xs text-red-600 px-2">{dismissError}</p>}
                         <div className="max-h-48 overflow-y-auto space-y-1 px-1">
                           {accessRequests.map(reqItem => (
                             <div
@@ -352,7 +354,8 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                                   type="button"
                                   onClick={() => {
                                     setUserDropdownOpen(false);
-                                    onOpenNewUserModal({ name: reqItem.name, email: reqItem.email });
+                                    document.getElementById('user-profile-menu-button')?.focus();
+                          onOpenNewUserModal({ name: reqItem.name, email: reqItem.email });
                                   }}
                                   className="rounded-[5px] bg-[var(--accent)] px-2 py-1 text-[11px] font-medium text-white hover:bg-[var(--accent-hover)] cursor-pointer"
                                 >
@@ -362,7 +365,8 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                                   type="button"
                                   aria-label={`Dismiss request for ${reqItem.email}`}
                                   onClick={() => {
-                                    dismissAccessRequest(reqItem.id).catch(() => {});
+                                    setDismissError(null);
+                                    dismissAccessRequest(reqItem.id).catch(() => setDismissError('Could not dismiss the request. Try again.'));
                                   }}
                                   className="rounded-[5px] border border-[var(--border)] px-1.5 py-1 text-[11px] font-medium text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] cursor-pointer"
                                 >
@@ -381,6 +385,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                         role="menuitem"
                         onClick={() => {
                           setUserDropdownOpen(false);
+                          document.getElementById('user-profile-menu-button')?.focus();
                           onOpenNewUserModal(null);
                         }}
                         className="menu-item"
@@ -396,6 +401,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                         role="menuitem"
                         onClick={() => {
                           setUserDropdownOpen(false);
+                          document.getElementById('user-profile-menu-button')?.focus();
                           onOpenSetupModal();
                         }}
                         className="menu-item justify-between cursor-pointer"
@@ -417,6 +423,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                       role="menuitem"
                       onClick={() => {
                         setUserDropdownOpen(false);
+                        document.getElementById('user-profile-menu-button')?.focus();
                         onOpenFirestoreModal();
                       }}
                       className="menu-item cursor-pointer"
@@ -431,6 +438,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                         role="menuitem"
                         onClick={() => {
                           setUserDropdownOpen(false);
+                          document.getElementById('user-profile-menu-button')?.focus();
                           onOpenShortcutsModal();
                         }}
                         className="menu-item justify-between cursor-pointer"

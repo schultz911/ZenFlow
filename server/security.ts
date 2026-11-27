@@ -105,7 +105,7 @@ const CLICKUP_SELF_EDIT_KEYS = new Set([
 ]);
 
 export function createApiSecurity(options: {
-  getStore: () => { users: Member[]; tasks: { id: string; userId?: string; assigneeIds?: string[]; team?: string; status?: string }[] };
+  getStore: () => { users: Member[]; tasks: { id: string; owningClusterId?: string; userId?: string; assigneeIds?: string[]; team?: string; status?: string }[] };
   verify: (token: string) => Promise<Identity>;
   ensureSuperadmin?: () => Member | undefined;
 }) {
@@ -236,6 +236,7 @@ export function createApiSecurity(options: {
           }
         }
         if (req.method === 'PUT') {
+          if (body.owningClusterId !== undefined && body.owningClusterId !== task?.owningClusterId && !superadmin && !isAdminMember(caller)) return denied();
           const requestedAssignees = extractRequestedAssignees(body);
           const existingAssignees = new Set(getTaskAssigneeIds(task));
           for (const uid of requestedAssignees) {

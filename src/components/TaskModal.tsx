@@ -68,10 +68,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
   const {
     currentUser,
     canEditUserTasks,
+    canAssignTask,
+    isAdministrator,
   } = useAuth();
   const {
     tasks,
     users,
+    creativeDirectors,
     createTask,
     updateTask,
     deleteTask,
@@ -86,6 +89,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     return Array.isArray(tasks) ? tasks.filter(t => t && t.parentTaskId === taskToEdit.id) : [];
   }, [tasks, taskToEdit]);
 
+  const [owningClusterId, setOwningClusterId] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [brandGuidelines, setBrandGuidelines] = useState('');
@@ -235,6 +239,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
         designSpecifications: folded.designSpecifications || '',
         brandAssetsReferences: folded.brandAssetsReferences || [],
       };
+      setOwningClusterId(taskToEdit.owningClusterId || '');
       setTitle(init.title);
       setDescription(init.description);
       setBrandGuidelines(init.brandGuidelines);
@@ -328,9 +333,9 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       assetType,
       designSpecifications,
       brandAssetsReferences,
-    }) !== initialSnapshotRef.current;
+    }) !== initialSnapshotRef.current || (isAdministrator && Boolean(taskToEdit) && owningClusterId !== (taskToEdit?.owningClusterId || ''));
   }, [
-    isOpen, title, description, brandGuidelines, assigneeIds, userId, dueDate,
+    isOpen, isAdministrator, taskToEdit, owningClusterId, title, description, brandGuidelines, assigneeIds, userId, dueDate,
     cognitiveLoad, status, client, project, estimatedHours, priority, contentDocLink,
     contentType, contentSpecifications, sourceContentReferences, assetType,
     designSpecifications, brandAssetsReferences,
@@ -464,6 +469,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     try {
       if (taskToEdit) {
         await updateTask(taskToEdit.id, {
+          ...(isAdministrator && owningClusterId && owningClusterId !== taskToEdit.owningClusterId ? { owningClusterId } : {}),
           title: title.trim(),
           description: description.trim(),
           brandGuidelines: trimmedBrandGuidelines,
@@ -902,7 +908,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 {/* Assignee & Status */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {/* Assignee Selection */}
-                  <div>
+                  {(canAssignTask || taskToEdit?.status !== 'pipeline') && <div>
                     <div className="flex items-center justify-between mb-1.5">
                       <label className="field-label !mb-0" htmlFor="task-assignee-select">
                         Assignee {status !== 'pipeline' && <span className="text-red-600 dark:text-red-400">*</span>}
@@ -1025,7 +1031,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                         })}
                       </div>
                     )}
-                  </div>
+                  </div>}
 
                   {/* Workflow Status */}
                   <div>
@@ -1035,6 +1041,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     <div className="relative">
                       <select
                         id="task-status-select"
+                        disabled={!canAssignTask && taskToEdit?.status === 'pipeline'}
                         value={status}
                         onChange={e => setStatus(e.target.value as TaskStatus)}
                         className="field-control pr-8 cursor-pointer"
@@ -1051,6 +1058,15 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     </div>
                   </div>
                 </div>
+
+                {taskToEdit && (taskToEdit.parentTaskId || taskToEdit.status === 'pipeline') && <div>
+                  <label className="field-label" htmlFor="task-owning-cluster">Owning cluster</label>
+                  <select id="task-owning-cluster" className="field-control" value={owningClusterId} disabled={!isAdministrator} onChange={event => setOwningClusterId(event.target.value)}>
+                    <option value="">Unassigned cluster</option>
+                    {creativeDirectors.map(user => <option key={user.id} value={user.id}>{user.name}’s Team</option>)}
+                  </select>
+                  {!isAdministrator && <p className="text-xs text-[var(--text-secondary)] mt-1">An administrator can change the owning cluster.</p>}
+                </div>}
 
                 {/* Client & Project */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

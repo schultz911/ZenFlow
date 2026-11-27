@@ -34,8 +34,8 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
   initialDiscipline = 'all',
 }) => {
   const { canCreatePipelineTask } = useAuth();
-  const { activeRoleTab } = useBoardUi();
-  const { tasks, createPipelineBundle } = useWorkspace();
+  const { activeRoleTab, activeBoardId } = useBoardUi();
+  const { tasks, creativeDirectors, createPipelineBundle } = useWorkspace();
   const {
     isClickupConnected,
     clickupSpaces,
@@ -71,6 +71,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
   const [clickupActionError, setClickupActionError] = useState<string | null>(null);
 
   // Shared Fields (linked to parent task)
+  const [owningClusterId, setOwningClusterId] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [brandGuidelines, setBrandGuidelines] = useState('');
@@ -161,6 +162,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
     setNewListName('');
     setClickupActionError(null);
 
+    setOwningClusterId(creativeDirectors.some(user => user.id === activeBoardId) ? activeBoardId : '');
     setTitle('');
     setDescription('');
     setBrandGuidelines('');
@@ -364,6 +366,11 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
       return;
     }
 
+    if (!creativeDirectors.some(user => user.id === owningClusterId)) {
+      setSubmitError('Choose a cluster before creating a brief. An administrator must create a Creative Director cluster if none exists.');
+      return;
+    }
+
     if (!canCreatePipelineTask) {
       setSubmitError('Only Accounts team members and authorized special roles can create tasks in team pipelines.');
       return;
@@ -403,6 +410,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
       creationId.current ??= crypto.randomUUID();
       await createPipelineBundle({
         requestId: creationId.current,
+        owningClusterId,
         title: title.trim(),
         description: description.trim() || undefined,
         brandGuidelines: trimmedBrandGuidelines || undefined,
@@ -466,7 +474,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                 <h2 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
                   New Pipeline Brief
                 </h2>
-                <p className="text-[11px] text-[var(--text-secondary)] truncate">
+                <p className="text-xs text-[var(--text-secondary)] truncate">
                   Creates a parent deliverable and unassigned discipline subtasks.
                 </p>
               </div>
@@ -609,11 +617,20 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
               {/* Shared Section: Task Basics FIRST */}
               <div className="space-y-4">
                 <div>
+                  <label className="field-label" htmlFor="brief-owning-cluster">Owning cluster <span className="text-red-600">*</span></label>
+                  <select id="brief-owning-cluster" className="field-control" required value={owningClusterId} onChange={event => setOwningClusterId(event.target.value)}>
+                    <option value="">{creativeDirectors.length ? 'Select a cluster' : 'No cluster available'}</option>
+                    {creativeDirectors.map(user => <option key={user.id} value={user.id}>{user.name}’s Team</option>)}
+                  </select>
+                  {creativeDirectors.length === 0 && <p className="text-xs text-[var(--text-secondary)] mt-1">Ask an administrator to create a Creative Director cluster before creating a brief.</p>}
+                </div>
+                <div>
                   <label className="field-label" htmlFor="disciplinetaskmodal-field-1">
                     Deliverable Title <span className="text-red-600 dark:text-red-400">*</span>
                   </label>
                   <input
                     autoFocus
+                    data-autofocus
                     type="text"
                     required
                     value={title}
@@ -1020,7 +1037,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
 
             {/* Footer Buttons */}
             <div className="dialog-footer !justify-between flex-wrap">
-              <span className="text-[11px] text-[var(--text-secondary)]">
+              <span className="text-xs text-[var(--text-secondary)]">
                 {selectedDisciplines.length === 2
                   ? 'Creates brief with Content & Design deliverables in Pipeline.'
                   : selectedDisciplines.length === 1
@@ -1037,7 +1054,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting || !canCreatePipelineTask || selectedDisciplines.length === 0}
+                  disabled={isSubmitting || !canCreatePipelineTask || selectedDisciplines.length === 0 || !owningClusterId}
                   className="button-primary"
                 >
                   {isSubmitting

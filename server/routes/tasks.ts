@@ -42,6 +42,10 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
     }
 
     const body = req.body || {};
+    const owningClusterId = typeof body.owningClusterId === 'string' ? body.owningClusterId : '';
+    if (!repo.getUsers().some(user => user.id === owningClusterId && user.isCreativeDirector)) {
+      return res.status(400).json({ error: 'Choose an existing Creative Director cluster before creating a brief.' });
+    }
     const cleanTitle = sanitizeString(body.title);
     if (!cleanTitle) return res.status(400).json({ error: 'Task title is required' });
 
@@ -111,6 +115,7 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
       const discMeta = sanitizedDisciplineSpecs[disc];
       createdTasks.push({
         id: subtaskId,
+        owningClusterId,
         userId: undefined,
         assigneeIds: [],
         team: disc,
@@ -535,6 +540,9 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
     const caller: User | undefined = res.locals.caller;
     const now = new Date();
     const nowIso = now.toISOString();
+    if (body.owningClusterId !== undefined && !store.users.some(user => user.id === body.owningClusterId && user.isCreativeDirector)) {
+      return res.status(400).json({ error: 'Choose an existing Creative Director cluster.' });
+    }
 
     const currentAssigneeIds = getTaskAssigneeIds(currentTask);
     let nextAssigneeIds = currentAssigneeIds;
@@ -605,6 +613,12 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
         details,
       });
     };
+
+    if (body.owningClusterId !== undefined && body.owningClusterId !== currentTask.owningClusterId) {
+      const previous = store.users.find(user => user.id === currentTask.owningClusterId)?.name || 'Unassigned';
+      const next = store.users.find(user => user.id === body.owningClusterId)?.name || 'Unknown';
+      makeAct('updated', `Owning cluster changed from ${previous} to ${next}`, previous, next);
+    }
 
     if (parsedDurationMs !== undefined && parsedDurationMs !== previousBillableMs) {
       const fromStr = formatBillableHours(previousBillableMs);
@@ -699,6 +713,7 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
 
     const updatedTask: Task = {
       ...currentTask,
+      owningClusterId: body.owningClusterId ?? currentTask.owningClusterId,
       team: resolvedTeam,
       title: body.title !== undefined ? sanitizeString(body.title) : currentTask.title,
       description: nextDescription,
@@ -847,6 +862,16 @@ export function registerTaskRoutes(app: Express, deps: RouteDeps) {
         });
         sib.activityLog = sib.activityLog.slice(0, 15);
         siblingBroadcasts.push(sib);
+      }
+    }
+
+    if (body.owningClusterId !== undefined && body.owningClusterId !== currentTask.owningClusterId && hasCanonicalParent) {
+      for (const sibling of store.tasks) {
+        if (sibling.id === updatedTask.id || sibling.parentTaskId !== updatedTask.parentTaskId) continue;
+        snapshotSibling(sibling);
+        sibling.owningClusterId = body.owningClusterId;
+        sibling.updatedAt = nowIso;
+        if (!siblingBroadcasts.includes(sibling)) siblingBroadcasts.push(sibling);
       }
     }
 
