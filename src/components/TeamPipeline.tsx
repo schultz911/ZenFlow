@@ -274,7 +274,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                 aria-pressed={filterMode === 'all'}
                 title="Show all deliverables in pipeline"
                 onClick={() => setFilterMode('all')}
-                className={`px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
+                className={`min-h-0 px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
                   filterMode === 'all'
                     ? 'bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border)]'
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
@@ -287,7 +287,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                 aria-pressed={filterMode === 'unassigned'}
                 title="Filter to unassigned deliverables"
                 onClick={() => setFilterMode('unassigned')}
-                className={`px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
+                className={`min-h-0 px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
                   filterMode === 'unassigned'
                     ? 'bg-[var(--surface)] text-amber-700 dark:text-amber-400 border border-[var(--border)]'
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
@@ -300,7 +300,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                 aria-pressed={filterMode === 'assigned'}
                 title="Filter to assigned deliverables waiting in pipeline"
                 onClick={() => setFilterMode('assigned')}
-                className={`px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
+                className={`min-h-0 px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
                   filterMode === 'assigned'
                     ? 'bg-[var(--surface)] text-[#1d4ed8] dark:text-blue-400 border border-[var(--border)]'
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
