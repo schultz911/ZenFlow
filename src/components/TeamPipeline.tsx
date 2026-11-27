@@ -31,6 +31,8 @@ interface TeamPipelineProps {
   tasks: Task[];
   users: User[];
   globalSearch?: string;
+  unassignedClusterOnly?: boolean;
+  onToggleUnassignedCluster?: () => void;
   onOpenCreateModal: () => void;
   onOpenAssignmentModal: (task: Task) => void;
   onEditTask: (task: Task) => void;
@@ -49,6 +51,8 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
   tasks,
   users,
   globalSearch = '',
+  unassignedClusterOnly = false,
+  onToggleUnassignedCluster,
   onOpenCreateModal,
   onOpenAssignmentModal,
   onEditTask,
@@ -164,7 +168,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
   };
 
   const displayedTasks = useMemo(() => {
-    let result = pipelineTasks;
+    let result = unassignedClusterOnly ? pipelineTasks.filter(t => !t.owningClusterId) : pipelineTasks;
 
     if (filterMode === 'unassigned') {
       result = result.filter(t => getTaskAssigneeIds(t).length === 0);
@@ -174,7 +178,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
 
 
     return result;
-  }, [pipelineTasks, filterMode, globalSearch, userMap]);
+  }, [pipelineTasks, filterMode, globalSearch, userMap, unassignedClusterOnly]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -390,16 +394,17 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
               </button>
             </div>
           </div>
+          {onToggleUnassignedCluster && <div className="px-3 sm:px-5 pt-2"><button type="button" className="button-secondary text-xs" aria-pressed={unassignedClusterOnly} onClick={onToggleUnassignedCluster}>{unassignedClusterOnly ? 'Showing unassigned clusters' : 'Unassigned cluster only'}</button></div>}
           {displayedTasks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
               <Inbox className="h-4 w-4 text-[var(--text-muted)] mb-1.5" />
               <p className="text-xs font-semibold text-[var(--text-primary)]">
-                {globalSearch.trim() || filterMode !== 'all'
+                {globalSearch.trim() || filterMode !== 'all' || unassignedClusterOnly
                   ? 'No matching tasks in pipeline'
                   : `${pipelineHeading} is currently empty`}
               </p>
               <p className="text-xs text-[var(--text-secondary)] max-w-sm mt-0.5">
-                {globalSearch.trim() || filterMode !== 'all'
+                {globalSearch.trim() || filterMode !== 'all' || unassignedClusterOnly
                   ? 'Try clearing the workspace search or changing the filter mode.'
                   : canCreatePipelineTask
                   ? 'Create deliverables using New Brief to generate Content or Design pipeline tasks.'

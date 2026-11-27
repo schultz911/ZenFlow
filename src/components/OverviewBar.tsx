@@ -235,21 +235,21 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
               className="sm:hidden mobile-tap-control inline-flex items-center gap-1 rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-semibold text-[var(--text-secondary)] tabular-nums cursor-pointer shrink-0"
             >
               <span>
-                {teamUtilization.utilizationPercent}% util · {avgWorkload} pts
+                {teamUtilization.utilizationPercent}% utilization · {avgWorkload} points
               </span>
               <ChevronDown className={`h-3.5 w-3.5 transition-transform ${mobileMetricsExpanded ? 'rotate-180' : ''}`} />
             </button>
           </div>
 
           {overloadedMembersCount > 0 && (
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="hidden sm:flex items-center gap-2 flex-wrap">
               <button
                 type="button"
                 aria-pressed={sortByPressure}
                 aria-label={
                   sortByPressure
-                    ? `${overloadedMembersCount} ${overloadedMembersCount === 1 ? 'member' : 'members'} at least 12 pts — Sorted`
-                    : `${overloadedMembersCount} ${overloadedMembersCount === 1 ? 'member' : 'members'} at least 12 pts — Sort overloaded first`
+                    ? `${overloadedMembersCount} ${overloadedMembersCount === 1 ? 'member' : 'members'} at least 12 points — Sorted`
+                    : `${overloadedMembersCount} ${overloadedMembersCount === 1 ? 'member' : 'members'} at least 12 points — Sort overloaded first`
                 }
                 onClick={onToggleSortByPressure}
                 title={
@@ -263,10 +263,10 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
               >
                 <AlertTriangle aria-hidden="true" className="h-3 w-3 shrink-0" />
                 <span className="hidden sm:inline">
-                  {overloadedMembersCount} {overloadedMembersCount === 1 ? 'member at' : 'members at'} 12 pts or more
+                  {overloadedMembersCount} {overloadedMembersCount === 1 ? 'member at' : 'members at'} 12 points or more
                 </span>
                 <span className="sm:hidden">
-                  {overloadedMembersCount} at least 12 pts
+                  {overloadedMembersCount} at least 12 points
                 </span>
                 <span aria-hidden="true" className="opacity-75">·</span>
                 <ArrowUpDown aria-hidden="true" className="h-3 w-3 shrink-0" />
@@ -305,7 +305,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
               {teamEfficiency.efficiencyPercent !== null ? (
                 <>
                   <span className="text-xs font-normal text-[var(--text-muted)] mr-1">
-                    {Math.round(teamEfficiency.efficiencyPercent) >= 100 ? 'under est · est / bill' : 'over est · est / bill'}
+                    Estimated / billable hours
                   </span>
                   <span>{formatHoursRatio(teamEfficiency.estimatedHours, teamEfficiency.billableHours)}</span><span> · {teamEfficiency.estimatedHours === teamEfficiency.billableHours ? 'On estimate' : `${Math.abs(teamEfficiency.estimatedHours - teamEfficiency.billableHours).toFixed(1)}h ${teamEfficiency.estimatedHours > teamEfficiency.billableHours ? 'under' : 'over'} estimate`}</span>
                 </>
@@ -327,9 +327,9 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
               }`}
             >
               {avgWorkload}
-              <span className="text-xs font-medium tracking-normal text-[var(--text-secondary)]"> pts</span>
+              <span className="text-xs font-medium tracking-normal text-[var(--text-secondary)]"> points</span>
             </p>
-            <p className="metric-detail">Cap 12 pts</p>
+            <p className="metric-detail">Cap 12 points</p>
           </div>
 
           <div className="metric-card col-span-2 sm:col-span-1 border-r border-[var(--border-subtle)]">

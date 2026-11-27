@@ -321,7 +321,7 @@ try {
     // OverviewBar polish: Sort overloaded action cue, All Clusters dropdown label, standardized Eff cue
     await overview.getByRole('button', { name: /Sort overloaded first/i }).waitFor();
     await page.getByRole('button', { name: /All Clusters/i }).waitFor();
-    await overview.getByText(/under est · est \/ bill/i).waitFor();
+    await overview.getByText(/estimated \/ billable hours/i).waitFor();
 
     // DisciplineTaskModal focus + discard guard + neutral placeholders + aria-pressed/0-selection guard (P2-5, P2-7)
     await page.getByRole('button', { name: /New Brief/i }).first().click();
@@ -459,7 +459,7 @@ try {
     await workloadDialog.waitFor({ state: 'detached' });
 
     // Sort overloaded first -> clicking manual reorder exits pressure sort immediately (P2-4)
-    const sortBtn = overview.getByRole('button', { name: /at least 12 pts/i });
+    const sortBtn = overview.getByRole('button', { name: /at least 12 points/i });
     await sortBtn.click();
     assert.equal(await sortBtn.getAttribute('aria-pressed'), 'true');
     await page.locator('#swimlane-u-content button[aria-label="Move Ava Writer down"]').click();
@@ -548,6 +548,24 @@ try {
     await page.locator('#assignment-result').getByText(/Assignment saved/).waitFor();
     await page.locator('#assignment-result').getByRole('button', { name: 'View task' }).click();
     await page.getByRole('dialog', { name: 'Task details' }).waitFor();
+    await context.close();
+  }
+
+  // Specialist queue: all tasks remain accessible and board safeguards apply.
+  {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const page = await context.newPage();
+    attachErrorListeners(page, 'specialist-queue');
+    await page.goto(`${PREVIEW_URL}?role=specialist`, { waitUntil: 'networkidle' });
+    const queue = page.getByRole('region', { name: 'Your work' });
+    await queue.getByRole('button', { name: /View all my tasks/ }).click();
+    await queue.getByRole('button', { name: /Start Product Architecture Blog Series/ }).click();
+    await page.getByRole('dialog', { name: 'Work in progress limit' }).waitFor();
+    await page.keyboard.press('Escape');
+    await queue.getByRole('button', { name: /Complete Homepage Narrative Rewrite/ }).click();
+    await page.getByRole('dialog', { name: 'Attach content document link' }).waitFor();
+    await page.keyboard.press('Escape');
+    await queue.getByRole('button', { name: 'Show fewer tasks' }).click();
     await context.close();
   }
 

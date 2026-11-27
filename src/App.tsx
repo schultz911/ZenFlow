@@ -20,9 +20,12 @@ import { AnalyticsModal } from './components/AnalyticsModal';
 import { TeamPipeline } from './components/TeamPipeline';
 import { DisciplineTaskModal } from './components/modals/DisciplineTaskModal';
 import { TaskAssignmentModal } from './components/TaskAssignmentModal';
+import { ContentLinkPromptModal } from './components/ContentLinkPromptModal';
+import { DeadlineDemandModal } from './components/DeadlineDemandModal';
+import { WipLimitModal } from './components/WipLimitModal';
 import { OnboardingChecklist } from './components/OnboardingChecklist';
 import { User, Task, TaskStatus } from './types';
-import { getTaskAssigneeIds, groupTasksByAssignee, formatTaskStatus, formatDateOnly, quickWorkloadScore } from './utils/workload';
+import { getTaskAssigneeIds, groupTasksByAssignee, formatTaskStatus, formatDateOnly, quickWorkloadScore, getDaysRemaining } from './utils/workload';
 import { UserPlus, FileText, Palette, Search, Trash2, AlertTriangle, X, Loader2, RotateCcw, Keyboard } from 'lucide-react';
 import { DialogPanel } from './components/ui/DialogPanel';
 import { AnimatePresence } from 'motion/react';
@@ -87,6 +90,10 @@ function DashboardContent() {
   const [assignmentPresetUserId, setAssignmentPresetUserId] = useState<string | undefined>(undefined);
   const [assignmentNotice, setAssignmentNotice] = useState<{ taskId: string; member: string; destination: string } | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [showAllMyTasks, setShowAllMyTasks] = useState(false);
+  const [queuePrompt, setQueuePrompt] = useState<{ task: Task; kind: 'link' | 'deadline' | 'wip'; status: TaskStatus } | null>(null);
+  const [queueBusy, setQueueBusy] = useState(false);
+  const [queueError, setQueueError] = useState<string | null>(null);
   const [undoToast, setUndoToast] = useState<{
     message: string;
     undo: () => Promise<void>;
@@ -339,9 +346,19 @@ function DashboardContent() {
   const priorityMembers = useMemo(() => roleFilteredUsers.map(user => ({
     user, score: quickWorkloadScore(allTasksByUserId.get(user.id) || []),
   })).filter(item => item.score >= 12).sort((a, b) => b.score - a.score), [roleFilteredUsers, allTasksByUserId]);
+  const urgentTasks = useMemo(() => tasks.filter(task => {
+    if (!['todo', 'in_progress'].includes(task.status)) return false;
+    const days = getDaysRemaining(task.dueDate);
+    if (days === null || days > 0) return false;
+    if (activeRoleTab !== 'all' && task.team && task.team !== activeRoleTab) return false;
+    return activeBoardId === 'all' || getTaskAssigneeIds(task).some(id => {
+      const member = users.find(user => user.id === id);
+      return member && (member.id === activeBoardId || member.creativeDirectorId === activeBoardId);
+    });
+  }), [tasks, users, activeRoleTab, activeBoardId]);
   const myActiveTasks = useMemo(() => currentUser ? (allTasksByUserId.get(currentUser.id) || [])
     .filter(task => task.status === 'in_progress' || task.status === 'todo')
-    .sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999')).slice(0, 3) : [], [currentUser, allTasksByUserId]);
+    .sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999')) : [], [currentUser, allTasksByUserId]);
 
   // Global keyboard shortcuts (non-hijacking single-key shortcuts outside inputs)
   useEffect(() => {
@@ -579,6 +596,34 @@ function DashboardContent() {
     [tasks, moveTask, updateTask]
   );
 
+  const moveQueueTask = async (task: Task, status: TaskStatus, dueDate?: string, contentDocLink?: string) => {
+    if (!currentUser) return;
+    setQueueBusy(true);
+    setQueueError(null);
+    try {
+      await handleMoveTaskWithUndo(task.id, currentUser.id, status, undefined, dueDate, contentDocLink ? { contentDocLink } : undefined);
+      setQueuePrompt(null);
+    } catch (error) {
+      setQueueError(error instanceof Error ? error.message : 'Could not update the task. Please try again.');
+      setQueuePrompt(null);
+    } finally {
+      setQueueBusy(false);
+    }
+  };
+  const handleQueueAction = (task: Task) => {
+    if (!currentUser || queueBusy || !canEditUserTasks(currentUser.id)) return;
+    const status: TaskStatus = task.status === 'todo' ? 'in_progress' : 'done';
+    if (status === 'done' && (task.team ? task.team === 'content' : currentUser.role === 'content')) {
+      setQueuePrompt({ task, status, kind: 'link' });
+    } else if (!task.dueDate?.trim()) {
+      setQueuePrompt({ task, status, kind: 'deadline' });
+    } else if (status === 'in_progress' && myActiveTasks.filter(item => item.status === 'in_progress' && item.id !== task.id).length >= 2) {
+      setQueuePrompt({ task, status, kind: 'wip' });
+    } else {
+      void moveQueueTask(task, status);
+    }
+  };
+
   const handleUpdateTaskTitle = useCallback(
     async (taskId: string, newTitle: string) => {
       await updateTask(taskId, { title: newTitle });
@@ -684,7 +729,7 @@ function DashboardContent() {
         />
 
         {/* Pinned Marquee Ribbon (renders its own sticky frosted container only when urgent tasks exist) */}
-        <div className={!canAssignTask && !canCreatePipelineTask ? 'hidden sm:block' : ''}>
+        <div className={canAssignTask || (!canAssignTask && !canCreatePipelineTask) ? 'hidden sm:block' : ''}>
         <MarqueeRibbon
           tasks={tasks}
           users={users}
@@ -701,14 +746,16 @@ function DashboardContent() {
           className="mx-auto max-w-[1400px] px-4 py-4 sm:px-6 lg:px-8 pb-8"
         >
 
-          {!searchQuery.trim() && canAssignTask && priorityMembers.length > 0 && (
-            <section aria-label="Workload exceptions" className="ledger-frame mb-3 px-4 py-3">
+          {!searchQuery.trim() && canAssignTask && (
+            <section aria-label="Workload exceptions" className="ledger-frame mb-3 px-4 py-3 sm:hidden">
               <h2 className="text-xs font-bold text-[var(--text-primary)]">Workload exceptions</h2>
               <div className="mt-2 flex flex-wrap gap-2">
                 {priorityMembers.map(({ user, score }) => <button key={user.id} type="button" onClick={() => setWorkloadModalUser(user)} className="button-secondary text-xs">
-                  {user.name} · {score} / 12 pts · View workload
+                  {user.name} · {score} / 12 points · View workload
                 </button>)}
               </div>
+              {urgentTasks.map(task => <button key={task.id} type="button" className="button-secondary text-xs mt-2 mr-2" onClick={() => handleEditTask(task)}>{task.title} · {getDaysRemaining(task.dueDate)! < 0 ? 'Overdue' : 'Due today'}</button>)}
+              {priorityMembers.length === 0 && urgentTasks.length === 0 && <p className="mt-2 text-xs text-[var(--text-secondary)]">No workload or deadline exceptions need attention.</p>}
               <button type="button" className="button-secondary text-xs mt-2" onClick={() => {
                 setFreePoolOpen(true);
                 document.getElementById('free-pool-trigger')?.focus();
@@ -722,11 +769,15 @@ function DashboardContent() {
             </section>
           )}
           {!searchQuery.trim() && !canAssignTask && currentUser && (currentUser.role === 'content' || currentUser.role === 'design') && (
-            <section aria-label="Your work" className="ledger-frame mb-3 px-4 py-3">
+            <section aria-label="Your work" className="ledger-frame mb-3 px-4 py-3 sm:hidden">
               <h2 className="text-xs font-bold text-[var(--text-primary)]">Your current and upcoming work</h2>
-              {myActiveTasks.length ? <div className="mt-2 flex flex-wrap gap-2">{myActiveTasks.map(task => (
-                <button key={task.id} type="button" className="button-secondary text-xs text-left justify-start break-words" onClick={() => handleEditTask(task)}>{task.title} · {task.status === 'in_progress' ? 'In Progress' : 'To Do'}{task.dueDate ? ` · Due ${formatDateOnly(task.dueDate)}` : ''}</button>
-              ))}</div> : <p className="mt-1 text-xs text-[var(--text-secondary)]">No current or upcoming tasks.</p>}
+              {myActiveTasks.length ? <div className="mt-2 space-y-2">{(showAllMyTasks ? myActiveTasks : myActiveTasks.slice(0, 3)).map(task => (
+                <div key={task.id} className="flex flex-wrap items-center gap-2">
+                  <button type="button" className="button-secondary text-xs text-left justify-start break-words flex-1" onClick={() => handleEditTask(task)}>{task.title} · {task.status === 'in_progress' ? 'In Progress' : 'To Do'}{task.dueDate ? ` · Due ${formatDateOnly(task.dueDate)}` : ''}</button>
+                  {canEditUserTasks(currentUser.id) && <button type="button" className="button-secondary text-xs" disabled={queueBusy} aria-label={`${task.status === 'todo' ? 'Start' : 'Complete'} ${task.title}`} onClick={() => handleQueueAction(task)}>{task.status === 'todo' ? 'Start' : 'Complete'}</button>}
+                </div>
+              ))}{myActiveTasks.length > 3 && <button type="button" className="button-secondary text-xs" aria-expanded={showAllMyTasks} onClick={() => setShowAllMyTasks(value => !value)}>{showAllMyTasks ? 'Show fewer tasks' : `View all my tasks (${myActiveTasks.length})`}</button>}</div> : <p className="mt-1 text-xs text-[var(--text-secondary)]">No current or upcoming tasks.</p>}
+              {queueError && <p role="alert" className="mt-2 text-xs text-red-700 dark:text-red-300">{queueError} Try the action again.</p>}
             </section>
           )}
           {/* Overview Bar */}
@@ -837,19 +888,16 @@ function DashboardContent() {
           )}
 
           {/* Centralized Pipeline */}
-          {isAdministrator && activeBoardId === 'all' && (
-            <button type="button" className="button-secondary text-xs mb-2" aria-pressed={unassignedClusterOnly} onClick={() => setUnassignedClusterOnly(value => !value)}>
-              {unassignedClusterOnly ? 'Showing unassigned clusters' : 'Show briefs with unassigned cluster'}
-            </button>
-          )}
           {searchQuery.trim() && activeBoardId !== 'all' && matchingPipelineCount === 0 && (
             <p className="text-xs mb-2">No briefs match in this cluster. <button type="button" className="underline" onClick={() => setActiveBoardId('all')}>Search all clusters</button></p>
           )}
           <TeamPipeline
             roleFilter={activeRoleTab}
-            tasks={(searchQuery.trim() ? scopedSearchTasks : tasks).filter(task => activeBoardId !== 'all' || !unassignedClusterOnly || Boolean(task.status === 'pipeline' && !task.owningClusterId))}
+            tasks={searchQuery.trim() ? scopedSearchTasks : tasks}
             users={users}
             globalSearch={searchQuery}
+            unassignedClusterOnly={unassignedClusterOnly && activeBoardId === 'all'}
+            onToggleUnassignedCluster={isAdministrator && activeBoardId === 'all' ? () => setUnassignedClusterOnly(value => !value) : undefined}
             onOpenCreateModal={() => setDisciplineModalOpen(true)}
             onOpenAssignmentModal={t => setSelectedTaskForAssignment(t)}
             onEditTask={handleEditTask}
@@ -1047,6 +1095,9 @@ function DashboardContent() {
           initialDiscipline={activeRoleTab}
         />
 
+        <ContentLinkPromptModal isOpen={queuePrompt?.kind === 'link'} task={queuePrompt?.task || null} onClose={() => setQueuePrompt(null)} hasSiblingDesignTask={Boolean(queuePrompt?.task.parentTaskId && tasks.some(t => t.id !== queuePrompt.task.id && t.parentTaskId === queuePrompt.task.parentTaskId && t.team === 'design'))} onConfirm={link => { if (queuePrompt) void moveQueueTask(queuePrompt.task, queuePrompt.status, undefined, link); }} />
+        <DeadlineDemandModal isOpen={queuePrompt?.kind === 'deadline'} task={queuePrompt?.task || null} targetStatus={queuePrompt?.status || null} targetUserName={currentUser?.name} onCancel={() => setQueuePrompt(null)} onConfirm={(_id, date) => { if (!queuePrompt) return; if (queuePrompt.status === 'in_progress' && myActiveTasks.filter(item => item.status === 'in_progress' && item.id !== queuePrompt.task.id).length >= 2) { setQueuePrompt({ ...queuePrompt, kind: 'wip' }); return; } void moveQueueTask(queuePrompt.task, queuePrompt.status, date); }} />
+        <WipLimitModal isOpen={queuePrompt?.kind === 'wip'} user={currentUser} inProgressTasks={myActiveTasks.filter(task => task.status === 'in_progress')} onClose={() => setQueuePrompt(null)} />
         <TaskAssignmentModal
           isOpen={Boolean(selectedTaskForAssignment)}
           task={selectedTaskForAssignment}

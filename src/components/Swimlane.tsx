@@ -867,7 +867,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               {workload.level === 'overloaded' ? (
                 <span className="ledger-alert-badge">
                   <Activity aria-hidden="true" className="h-3 w-3 shrink-0" />
-                  <span>{workload.totalScore} / 12 pts · Overload</span>
+                  <span>{workload.totalScore} / 12 points · Overload</span>
                   <HelpCircle aria-hidden="true" className="h-3 w-3 shrink-0 ml-0.5 opacity-90" />
                 </span>
               ) : (
@@ -891,7 +891,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
               className="flex items-center gap-1.5 pl-3 select-none tabular-nums whitespace-nowrap"
             >
               <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-muted)]">
-                Eff
+                Efficiency
               </span>
               <span className={`text-xs font-bold ${getEfficiencyToneClass(userEfficiency.efficiencyPercent)}`}>
                 {userEfficiency.efficiencyPercent !== null ? `${Math.round(userEfficiency.efficiencyPercent)}%` : '—'}

@@ -110,7 +110,7 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                       <span className="metric-value text-[var(--text-primary)]">
                         {workload.totalScore}
                       </span>
-                      <span className="text-xs text-[var(--text-secondary)]">pts</span>
+                      <span className="text-xs text-[var(--text-secondary)]">points</span>
                       {workload.level === 'overloaded' ? (
                         <span className="ledger-alert-badge ml-1">{workload.levelLabel}</span>
                       ) : (
@@ -182,7 +182,7 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                     <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
                       <CheckCircle2 className="h-3 w-3" />
                       <span>{velocity.totalCompleted7d} {velocity.totalCompleted7d === 1 ? 'task' : 'tasks'} cleared</span>
-                      <span className="text-[var(--text-muted)] font-medium">({velocity.totalPointsCleared7d} pts)</span>
+                      <span className="text-[var(--text-muted)] font-medium">({velocity.totalPointsCleared7d} points)</span>
                     </span>
                     {velocity.avgLeadTimeStr && (
                       <span
@@ -294,7 +294,7 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                         <span className="font-semibold text-[var(--text-primary)]">{activeHoverDay.displayDate} ({activeHoverDay.dayLabel}):</span>{' '}
                         {activeHoverDay.completedCount > 0 ? (
                           <span className="text-emerald-700 dark:text-emerald-400 font-semibold">
-                            {activeHoverDay.completedCount} {activeHoverDay.completedCount === 1 ? 'task' : 'tasks'} completed ({activeHoverDay.completedPoints} pts)
+                            {activeHoverDay.completedCount} {activeHoverDay.completedCount === 1 ? 'task' : 'tasks'} completed ({activeHoverDay.completedPoints} points)
                           </span>
                         ) : (
                           <span>No completed tasks</span>
@@ -320,7 +320,7 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                     Active Tasks ({workload.items.length})
                   </h3>
                   <span className="text-[11px] text-[var(--text-muted)]">
-                    Score = Cognitive load weight × Deadline proximity (12 pts cap)
+                    Score = Cognitive load weight × Deadline proximity (12 points cap)
                   </span>
                 </div>
                 {workload.items.length === 0 ? (
@@ -381,7 +381,7 @@ export const WorkloadModal: React.FC<WorkloadModalProps> = ({
                                 </span>
                               </td>
                               <td className="py-2 px-3 whitespace-nowrap tabular-nums font-bold text-[var(--text-primary)]">
-                                {itemPoints} pts
+                                {itemPoints} points
                               </td>
                               <td className="py-2 px-3 tabular-nums text-[var(--text-secondary)]">
                                 {item.status === 'in_review' ? (

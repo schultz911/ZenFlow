@@ -56,7 +56,8 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [clickupWebhookStatus, setClickupWebhookStatus] = useState<ClickupWebhookStatus | null>(
     isFreshOnboarding ? null : { listening: true, registered: true, webhookId: 'wh-1', totalEventsCount: 0, endpointUrl: '/api/clickup/webhook' }
   );
-  const currentUser = users[0];
+  const specialistPreview = new URLSearchParams(window.location.search).get('role') === 'specialist';
+  const currentUser = users[specialistPreview ? 1 : 0];
   const yes = () => true;
   const noopAsync = useCallback(async () => ({}), []);
 
@@ -143,19 +144,19 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     updateUserProfile,
     remapUserTasks: async () => ({ success: true, remappedCount: 0 }),
     deleteUser: noopAsync,
-    isSuperadmin: true,
-    isAdministrator: true,
-    isBusinessLead: true,
-    isCreativeDirector: true,
+    isSuperadmin: !specialistPreview,
+    isAdministrator: !specialistPreview,
+    isBusinessLead: !specialistPreview,
+    isCreativeDirector: !specialistPreview,
     isClusterLead: false,
-    isTeamLead: true,
-    isAccountManager: true,
-    canManageMembers: true,
-    canCreatePipelineTask: true,
-    canAssignTask: true,
+    isTeamLead: !specialistPreview,
+    isAccountManager: !specialistPreview,
+    canManageMembers: !specialistPreview,
+    canCreatePipelineTask: !specialistPreview,
+    canAssignTask: !specialistPreview,
     canManageUser: yes,
     canEditUserTasks: yes,
-    canSwitchBoards: true,
+    canSwitchBoards: !specialistPreview,
     isZensciencesUser: true,
     isClickupConnected,
     clickupMembers,
@@ -243,7 +244,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     removeAssigneeOrDeleteTask: async (id: string) => setTasks(prev => prev.filter(t => t.id !== id)),
     shareTaskWithUser: async (id: string) => fixtureTasks.find(t => t.id === id) || fixtureTasks[0],
     reassignTaskFromUser: async (id: string) => fixtureTasks.find(t => t.id === id) || fixtureTasks[0],
-    moveTask: async () => {},
+    moveTask: async (id: string, _userId: string, status: Task['status']) => { setTasks(prev => prev.map(task => task.id === id ? { ...task, status } : task)); },
     reorderTasks: async () => {},
     duplicateTaskToBoard: async (params: any) => {
       const source = fixtureTasks.find(t => t.id === params.taskId) || fixtureTasks[0];

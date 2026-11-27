@@ -803,7 +803,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                           className="inline-flex items-baseline gap-1 text-xs tabular-nums text-[var(--text-muted)]"
                         >
                           <span>{formatHoursRatio(estimatedHours, billableHours)}</span>
-                          <span className="text-[11px]">est / bill</span>
+                          <span className="text-[11px]">estimated / billable hours</span>
                         </span>
                       )}
                     </div>
@@ -816,7 +816,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                       className="metric-detail"
                       title="Efficiency = Estimated Hours / Billable Hours (>100% means delivered faster than estimate)"
                     >
-                      Est / Bill · &gt;100% = under est {efficiencyPercent !== null && `· ${estimatedHours === billableHours ? 'On estimate' : `${formatHours(Math.abs(estimatedHours - billableHours))} ${estimatedHours > billableHours ? 'under' : 'over'} estimate`}`}
+                      Estimated / billable hours · &gt;100% = under estimate {efficiencyPercent !== null && `· ${estimatedHours === billableHours ? 'On estimate' : `${formatHours(Math.abs(estimatedHours - billableHours))} ${estimatedHours > billableHours ? 'under' : 'over'} estimate`}`}
                     </p>
                   </div>
                 </div>
@@ -1298,7 +1298,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                                 <p className="font-semibold text-[var(--text-primary)] truncate">{item.unit.name}</p>
                                 <div className="flex items-baseline gap-1.5 mt-1 tabular-nums">
                                   <span className={`text-base font-bold ${item.avgScore >= 12 ? 'text-red-600 dark:text-red-400' : item.avgScore >= 8 ? 'text-amber-700 dark:text-amber-400' : 'text-[var(--text-primary)]'}`}>
-                                    {item.avgScore} pts
+                                    {item.avgScore} points
                                   </span>
                                   <span className="text-[11px] text-[var(--text-muted)]">avg</span>
                                 </div>
@@ -1359,7 +1359,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                             </div>
                             {item.score >= 12 ? (
                               <span className="ledger-alert-badge shrink-0">
-                                {item.score} pts
+                                {item.score} points
                               </span>
                             ) : (
                               <span className={`font-bold tabular-nums text-xs shrink-0 ${
@@ -1367,7 +1367,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                                   ? 'text-amber-700 dark:text-amber-400'
                                   : 'text-[#1d4ed8] dark:text-blue-400'
                               }`}>
-                                {item.score} pts
+                                {item.score} points
                               </span>
                             )}
                           </div>
@@ -1376,7 +1376,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                               {item.topProjects.slice(0, 2).map(p => (
                                 <div key={p.project} className="flex justify-between items-center gap-2">
                                   <span className="truncate">{p.project}</span>
-                                  <span className="font-semibold text-[var(--text-primary)] shrink-0">{p.score} pts</span>
+                                  <span className="font-semibold text-[var(--text-primary)] shrink-0">{p.score} points</span>
                                 </div>
                               ))}
                             </div>
@@ -1402,7 +1402,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                         </p>
                       </div>
                       <span className="font-bold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">
-                        {Math.round(pt.calculatedScore * 100) / 100} pts
+                        {Math.round(pt.calculatedScore * 100) / 100} points
                       </span>
                     </div>
                   ))}
@@ -1424,7 +1424,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                         </p>
                       </div>
                       <span className="font-bold tabular-nums text-[#1d4ed8] dark:text-blue-400 shrink-0">
-                        {Math.round(ut.calculatedScore * 100) / 100} pts
+                        {Math.round(ut.calculatedScore * 100) / 100} points
                       </span>
                     </div>
                   ))}
