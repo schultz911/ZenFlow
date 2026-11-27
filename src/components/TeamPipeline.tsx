@@ -245,7 +245,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
           handleToggleCollapse();
         }}
         title={isCollapsed ? `Click bar to expand ${pipelineHeading}` : `Click bar to collapse ${pipelineHeading}`}
-        className={`ledger-band flex items-center justify-between gap-2 px-3.5 py-2.5 sm:px-5 cursor-pointer select-none ${isCollapsed ? 'border-b-0' : ''}`}
+        className={`ledger-band flex items-center justify-between gap-2 px-3.5 py-2.5 sm:px-5 cursor-pointer select-none ${isCollapsed ? 'border-b-transparent' : ''}`}
       >
         <div className="flex items-center gap-x-2 gap-y-0.5 sm:gap-2.5 min-w-0 flex-wrap">
           <DisciplineIcon aria-hidden="true" className="h-4 w-4 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
