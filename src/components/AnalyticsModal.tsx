@@ -11,6 +11,7 @@ import {
   formatHoursRatio,
   formatTaskStatus,
   meetsDailyUtilizationTarget,
+  DAILY_UTILIZATION_TARGET_HOURS,
   rankTaskHours,
   getDeliveryUnits,
   calculateUserWorkload,
@@ -776,8 +777,8 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                         ({topMetrics.totalUtilizedCount}/{topMetrics.totalEmployees})
                       </span>
                     </div>
-                    <MetricBar label="Workspace utilization" value={topMetrics.totalUtilization} tone="green" detail={`${topMetrics.totalUtilizedCount} of ${topMetrics.totalEmployees} members assigned at least 3 hours per day`} />
-                    <p className="metric-detail">Members assigned at least 3h on {reportDate}</p>
+                    <MetricBar label="Workspace utilization" value={topMetrics.totalUtilization} tone="green" detail={`${topMetrics.totalUtilizedCount} of ${topMetrics.totalEmployees} members assigned at least ${DAILY_UTILIZATION_TARGET_HOURS} hours on ${reportDate}`} />
+                    <p className="metric-detail">Assigned {DAILY_UTILIZATION_TARGET_HOURS}h+ on <time dateTime={reportDate} className="whitespace-nowrap">{reportDate}</time></p>
                   </div>
                 </div>
 
@@ -798,12 +799,8 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                         )}
                       </span>
                       {efficiencyPercent !== null && (
-                        <span
-                          title="Estimated / billable hours on completed work"
-                          className="inline-flex items-baseline gap-1 text-xs tabular-nums text-[var(--text-muted)]"
-                        >
-                          <span>{formatHoursRatio(estimatedHours, billableHours)}</span>
-                          <span className="text-[11px]">estimated / billable hours</span>
+                        <span className="text-xs tabular-nums text-[var(--text-secondary)]">
+                          {formatHoursRatio(estimatedHours, billableHours)}
                         </span>
                       )}
                     </div>
@@ -812,11 +809,10 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                         tone={efficiencyPercent >= 100 ? 'green' : efficiencyPercent >= 50 ? 'blue' : 'red'}
                         detail={`${Math.round(efficiencyPercent)} percent, with 100 percent on estimate`} />
                     )}
-                    <p
-                      className="metric-detail"
-                      title="Efficiency = Estimated Hours / Billable Hours (>100% means delivered faster than estimate)"
-                    >
-                      Estimated / billable hours · &gt;100% = under estimate {efficiencyPercent !== null && `· ${estimatedHours === billableHours ? 'On estimate' : `${formatHours(Math.abs(estimatedHours - billableHours))} ${estimatedHours > billableHours ? 'under' : 'over'} estimate`}`}
+                    <p className="metric-detail">
+                      {efficiencyPercent === null
+                        ? 'No measured work'
+                        : <>Est. ÷ billable · completed work<br />{estimatedHours === billableHours ? 'On estimate' : `${formatHours(Math.abs(estimatedHours - billableHours))} ${estimatedHours > billableHours ? 'under' : 'over'} estimate`}</>}
                     </p>
                   </div>
                 </div>

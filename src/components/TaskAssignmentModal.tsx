@@ -4,10 +4,12 @@ import { DateQuickPresets } from './ui/DateQuickPresets';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { useAuth, useWorkspace } from '../context/DashboardContext';
+import { getAnalyticsClock } from '../domain/analyticsDate';
 import { useDiscardGuard } from '../hooks/useDiscardGuard';
 import { Task, CognitiveLoad, Role } from '../types';
 import {
   getUserDailyAssignedHours,
+  getAssignedHoursByMemberAndDate,
   formatHours,
   formatLocalDateKey,
   groupTasksByAssignee,
@@ -21,7 +23,6 @@ import {
   Calendar,
   AlertCircle,
   ShieldAlert,
-  ChevronDown,
 } from 'lucide-react';
 
 interface TaskAssignmentModalProps {
@@ -109,6 +110,17 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
   }, [selectedUserId, eligibleUsers]);
 
   const tasksByUser = useMemo(() => groupTasksByAssignee(tasks), [tasks]);
+  const today = getAnalyticsClock().date;
+  const memberChoices = useMemo(() => {
+    if (!isOpen) return [];
+    const hoursByMember = getAssignedHoursByMemberAndDate(tasks, [today], today);
+    return eligibleUsers.map(user => ({
+      user,
+      hours: hoursByMember.get(user.id)?.get(today) ?? 0,
+      load: quickWorkloadScore(tasksByUser.get(user.id) ?? []),
+    })).sort((a, b) => a.hours - b.hours || a.load - b.load || a.user.name.localeCompare(b.user.name));
+  }, [isOpen, eligibleUsers, tasks, tasksByUser, today]);
+
 
   const projected = useMemo(() => {
     if (!task || !selectedUserObj) return null;
@@ -247,13 +259,6 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                 </div>
               )}
 
-              {submitError && (
-                <div role="alert" className="callout callout-danger flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>{submitError}</span>
-                </div>
-              )}
-
               {/* Task Snapshot */}
               <div className="rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] px-3.5 py-2.5 space-y-0.5">
                 <div className="flex items-center justify-between gap-2 text-[11px]">
@@ -284,82 +289,84 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                 )}
               </div>
 
-              {/* Assignee Selection (Cross-Team Discipline Members Only) */}
-              <div>
-                <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <label className="field-label !mb-0" htmlFor="taskassignmentmodal-field-1">
-                    Assign To ({taskDiscipline.charAt(0).toUpperCase() + taskDiscipline.slice(1)})
-                  </label>
-                  <span className="text-[11px] tabular-nums text-[var(--text-secondary)]">
-                    {eligibleUsers.length} eligible member{eligibleUsers.length === 1 ? '' : 's'}
-                  </span>
-                </div>
-
-                {eligibleUsers.length === 0 ? (
+              <fieldset className="min-w-0" disabled={isSubmitting}>
+                <legend className="field-label">Member</legend>
+                {memberChoices.length === 0 ? (
                   <div className="callout callout-warning flex items-center gap-2">
                     <ShieldAlert className="h-4 w-4 shrink-0" />
-                    <span>No members found with role &ldquo;{taskDiscipline}&rdquo;. Please provision a member first.</span>
+                    <span>No eligible members in this discipline. You can save estimates in the pipeline.</span>
                   </div>
                 ) : (
-                  <div className="relative">
-                    <select
-                      value={selectedUserId}
-                      onChange={e => {
-                        const nextUserId = e.target.value;
-                        setSelectedUserId(nextUserId);
-                        if (!nextUserId && !task.dueDate) {
-                          setDueDate('');
-                        }
-                      }}
-                      className="field-control pr-8 cursor-pointer"
-                      id="taskassignmentmodal-field-1"
-                    >
-                      <option value="">-- Leave Unassigned in Pipeline --</option>
-                      {eligibleUsers.map(user => {
-                        const cdSuffix = user.isCreativeDirector
-                          ? ''
-                          : ` — ${
-                              user.creativeDirectorId
-                                ? creativeDirectors.find(c => c.id === user.creativeDirectorId)?.name || 'Team'
-                                : 'Independent'
-                            }`;
-                        const dailyHours = getUserDailyAssignedHours(user, tasks);
-                        const loadScore = quickWorkloadScore(tasksByUser.get(user.id) || []);
-                        const tag = getUserTag(user);
+                  <>
+                    <div className="grid grid-cols-[minmax(0,1fr)_5.5rem_3.5rem] gap-2 px-2 pb-1 text-xs text-[var(--text-secondary)]">
+                      <span>{memberChoices.length} eligible</span>
+                      <span className="text-right">Assigned today</span>
+                      <span className="text-right">Load</span>
+                    </div>
+                    <div className="max-h-36 overflow-y-auto border-y border-[var(--border-subtle)] divide-y divide-[var(--border-subtle)]">
+                      {memberChoices.map(({ user, hours, load }) => {
+                        const lead = user.isCreativeDirector ? null : user.creativeDirectorId
+                          ? creativeDirectors.find(director => director.id === user.creativeDirectorId)?.name || 'Team'
+                          : 'Independent';
+                        const nameId = `assignment-member-${user.id}-name`;
+                        const capacityId = `assignment-member-${user.id}-capacity`;
                         return (
-                          <option key={user.id} value={user.id}>
-                            {user.name} ({tag.label || user.designation || 'Member'}){cdSuffix} · {loadScore}/12 pts · {formatHours(dailyHours)}/d
-                          </option>
+                          <label key={user.id} className="grid grid-cols-[minmax(0,1fr)_5.5rem_3.5rem] items-center gap-2 min-h-11 px-2 py-1 cursor-pointer has-checked:bg-[var(--accent-soft)] hover:bg-[var(--surface-subtle)]">
+                            <span className="min-w-0 flex items-center gap-2">
+                              <input type="radio" name="assignment-member" value={user.id}
+                                checked={selectedUserId === user.id} onChange={() => setSelectedUserId(user.id)}
+                                data-autofocus={selectedUserId === user.id ? '' : undefined}
+                                aria-labelledby={`${nameId} ${capacityId}`} className="shrink-0" />
+                              <span id={nameId} className="min-w-0 break-words text-sm font-medium">
+                                {user.name}
+                                <span className="block text-xs font-normal text-[var(--text-secondary)]">
+                                  {[getUserTag(user).label, lead].filter(Boolean).join(' · ')}
+                                </span>
+                              </span>
+                            </span>
+                            <span className="text-right text-sm font-semibold tabular-nums" aria-hidden="true">{formatHours(hours)}</span>
+                            <span className="text-right text-xs tabular-nums text-[var(--text-secondary)]" aria-hidden="true">{load} pts</span>
+                            <span id={capacityId} className="sr-only">{formatHours(hours)} assigned today, {load} load points.</span>
+                          </label>
                         );
                       })}
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
-                  </div>
+                    </div>
+                    <label className="flex items-center gap-2 min-h-11 px-2 text-sm cursor-pointer">
+                      <input type="radio" name="assignment-member" value="" checked={!selectedUserId}
+                        data-autofocus={!selectedUserId ? '' : undefined}
+                        onChange={() => {
+                          setSelectedUserId('');
+                          if (!task.dueDate) setDueDate('');
+                        }} />
+                      Leave unassigned in pipeline
+                    </label>
+                  </>
                 )}
-
-              </div>
-
-              <fieldset className="space-y-2" disabled={!selectedUserId || isSubmitting}>
-                <legend className="field-label">Destination</legend>
-                <label className="flex items-center gap-2 text-xs min-h-[44px]">
-                  <input type="radio" name="assignment-destination" checked={!keepInPipeline} onChange={() => setKeepInPipeline(false)} />
-                  Move to To Do
-                </label>
-                <label className="flex items-center gap-2 text-xs min-h-[44px]">
-                  <input type="radio" name="assignment-destination" checked={keepInPipeline} onChange={() => setKeepInPipeline(true)} />
-                  Keep assigned in Team Pipeline
-                </label>
               </fieldset>
-              {/* Cognitive Load Specification */}
-              <CognitiveLoadSelector
-                value={cognitiveLoad}
-                onChange={setCognitiveLoad}
-                role={(selectedUserObj?.role || taskDiscipline) as Role}
-                required
-              />
 
-              {/* Deadline & Time Estimate side-by-side to keep modal compact on 700px laptops */}
-              <div className="space-y-2.5">
+              <fieldset disabled={!selectedUserId || isSubmitting}>
+                <legend className="field-label">Destination</legend>
+                <div className="grid sm:grid-cols-2 sm:gap-2">
+                  <label className="flex items-center gap-2 text-xs min-h-11 sm:min-h-8">
+                    <input type="radio" name="assignment-destination" checked={!keepInPipeline} onChange={() => setKeepInPipeline(false)} />
+                    Move to To Do
+                  </label>
+                  <label className="flex items-center gap-2 text-xs min-h-11 sm:min-h-8">
+                    <input type="radio" name="assignment-destination" checked={keepInPipeline} onChange={() => setKeepInPipeline(true)} />
+                    Keep assigned in Team Pipeline
+                  </label>
+                </div>
+              </fieldset>
+              <fieldset className="min-w-0 space-y-2.5 border-t border-[var(--border-subtle)] pt-2" disabled={isSubmitting}>
+                <legend className="field-label pr-2">Schedule</legend>
+                <CognitiveLoadSelector
+                  value={cognitiveLoad}
+                  onChange={setCognitiveLoad}
+                  role={(selectedUserObj?.role || taskDiscipline) as Role}
+                  required
+                />
+
+                {/* Deadline & Time Estimate side-by-side to keep modal compact on 700px laptops */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 items-start">
                   <div>
                     <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -439,57 +446,66 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                     </div>
                   </div>
                 </div>
-
-
-              </div>
-                {selectedUserObj && projected && (() => {
-                  const { selectedLoad, projectedLoad, selectedDailyHours, projectedDailyHours } = projected;
-                  const dailyHoursChanged = Math.abs(projectedDailyHours - selectedDailyHours) >= 0.05;
-                  const dailyOverbooked = projectedDailyHours > 8;
-                  return (
-                    <div
-                      className={`mt-2 flex flex-wrap items-center justify-between gap-2 text-xs px-3 py-1.5 rounded-[7px] border tabular-nums ${
-                        willOverload
-                          ? 'border-[var(--danger-border)] bg-[var(--danger-soft)] text-[var(--text-primary)]'
-                          : 'border-[var(--border)] bg-[var(--surface-muted)] text-[var(--text-secondary)]'
-                      }`}
-                    >
-                      <span>Selected: <strong className="text-[var(--text-primary)]">{selectedUserObj.name}</strong></span>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className={projectedLoad >= 12 ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
-                          Load:{' '}
-                          <strong>
-                            {projectedLoad !== selectedLoad
-                              ? `${selectedLoad} → ${projectedLoad}`
-                              : selectedLoad}{' '}
-                            / 12 pts
-                          </strong>
-                          {projectedLoad >= 12 && ' · Will overload'}
-                        </span>
-                        <span aria-hidden="true" className="hidden sm:inline text-[var(--text-muted)]">·</span>
-                        <span className={dailyOverbooked ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
-                          Assigned:{' '}
-                          <strong className={dailyOverbooked ? 'text-red-600 dark:text-red-400' : 'text-[#1d4ed8] dark:text-blue-400'}>
-                            {dailyHoursChanged
-                              ? `${formatHours(selectedDailyHours)} → ${formatHours(projectedDailyHours)}`
-                              : formatHours(selectedDailyHours)}
-                            /day
-                          </strong>
-                          {dailyOverbooked && ' · Over 8h/day'}
-                        </span>
+              </fieldset>
+              {selectedUserObj && projected && (
+                <section aria-labelledby="assignment-review-heading" className="space-y-2 border-t border-[var(--border-subtle)] pt-2">
+                  <h3 id="assignment-review-heading" className="field-label">Review</h3>
+                  {(() => {
+                    const { selectedLoad, projectedLoad, selectedDailyHours, projectedDailyHours } = projected;
+                    const dailyHoursChanged = Math.abs(projectedDailyHours - selectedDailyHours) >= 0.05;
+                    const dailyOverbooked = projectedDailyHours > 8;
+                    return (
+                      <div
+                        className={`mt-2 flex flex-wrap items-center justify-between gap-2 text-xs px-3 py-1.5 rounded-[7px] border tabular-nums ${
+                          willOverload
+                            ? 'border-[var(--danger-border)] bg-[var(--danger-soft)] text-[var(--text-primary)]'
+                            : 'border-[var(--border)] bg-[var(--surface-muted)] text-[var(--text-secondary)]'
+                        }`}
+                      >
+                        <span>Selected: <strong className="text-[var(--text-primary)]">{selectedUserObj.name}</strong></span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className={dailyOverbooked ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
+                            Assigned today:{' '}
+                            <strong className={dailyOverbooked ? 'text-red-600 dark:text-red-400' : 'text-[#1d4ed8] dark:text-blue-400'}>
+                              {dailyHoursChanged
+                                ? `${formatHours(selectedDailyHours)} → ${formatHours(projectedDailyHours)}`
+                                : formatHours(selectedDailyHours)}
+                              </strong>
+                            {dailyOverbooked && ' · Over 8h/day'}
+                          </span>
+                          <span aria-hidden="true" className="hidden sm:inline text-[var(--text-muted)]">·</span>
+                          <span className={projectedLoad >= 12 ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
+                            Load:{' '}
+                            <strong>
+                              {projectedLoad !== selectedLoad
+                                ? `${selectedLoad} → ${projectedLoad}`
+                                : selectedLoad}{' '}
+                              / 12 pts
+                            </strong>
+                            {projectedLoad >= 12 && ' · Will overload'}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })()}
-              {willOverload && (
-                <label className="callout callout-warning flex items-start gap-2 text-xs">
-                  <input type="checkbox" checked={confirmOverload} onChange={event => setConfirmOverload(event.target.checked)} />
-                  <span>I understand the projected workload and want to assign this task.</span>
-                </label>
+                    );
+                  })()}
+                  {willOverload && (
+                    <label className="callout callout-warning flex items-start gap-2 text-xs">
+                      <input type="checkbox" checked={confirmOverload} onChange={event => setConfirmOverload(event.target.checked)} />
+                      <span>I understand the projected workload and want to assign this task.</span>
+                    </label>
+                  )}
+                  <p className="text-xs text-[var(--text-secondary)]">Destination: {selectedUserObj.name} · {keepInPipeline ? 'Team Pipeline' : 'To Do'}{dueDate ? ` · ${dueDate}` : ''}</p>
+                </section>
               )}
-              {selectedUserObj && <p className="text-xs text-[var(--text-secondary)]">Destination: {selectedUserObj.name} · {keepInPipeline ? 'Team Pipeline' : 'To Do'}{dueDate ? ` · ${dueDate}` : ''}</p>}
 
             </div>
+
+            {submitError && (
+              <div role="alert" className="callout callout-danger mx-4 my-2 shrink-0 flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{submitError}</span>
+              </div>
+            )}
 
             {/* Footer */}
             <div className="dialog-footer">

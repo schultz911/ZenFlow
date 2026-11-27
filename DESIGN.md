@@ -228,3 +228,11 @@ Don't:
 - Don't use `Dancing Script` anywhere outside the `Flow` portion of the `zenFlow` brand wordmark.
 - Don't ship hardcoded hex surfaces without matching `:root.dark` tokens or bypass the global `2px solid var(--focus)` keyboard focus ring.
 Full: .impeccable/design-full.md (read a section when you need its detail)
+
+## Components
+
+- **Capacity language.** Keep the Free Pool name. Show the cutoff in the trigger and today's assigned hours beside each person. The pool describes recorded assignments under 3 hours today and cannot establish leave or availability. Include the assigned hours in each member action's accessible name.
+- **Headline metric definitions.** Keep Utilization and Efficiency on the dashboard and in Analytics. Use concise inline copy: “2 of 3 assigned 3h+ today” on the dashboard and “Assigned 3h+ on [date]” in Analytics. For measured efficiency, use “Est. ÷ billable · completed work” with the hours ratio and under/over estimate result. Use “No measured work” when unavailable. Utilization is the share of members with at least 3 hours assigned on the displayed day. Efficiency is estimated hours divided by billable hours for completed work with both measures, cumulative through the displayed date. Above 100% means under estimate. Keep compact metric displays in tabs and member rows.
+- **Assignment.** Use one dialog with Member, Destination, Schedule and Review, in that order. Compare eligible members in a compact selectable list. Put today's assigned hours before load points and sort by fewest hours, then lowest load. Include both values in each choice's accessible name. Keep the selected member, destination and projected impact visible in Review. Preserve overload acknowledgement and draft recovery.
+- **Task movement.** Offer Move in each editable board task's actions menu, with direct destinations among To Do, In Progress, In Review and Sent. Use the same safeguards as other moves. Keep quick previous and next controls and the separate Archive action.
+- **Board grouping.** Use spacing for card footer groups when the outer card edge already establishes the boundary. Keep actionable card edges and focus states. Preserve current dashboard density, pipeline disclosure and the local “Add or drop” cue in each status column.

@@ -161,13 +161,13 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
         type="button"
         aria-expanded={isExpanded}
         aria-controls="free-pool-popover"
-        title="Show cross-board team capacity with under 3 hours/day assigned (Shortcut: f)"
+        title="Free Pool shortcut: F"
         onClick={() => onExpandedChange(!isExpanded)}
         className="free-pool-trigger"
       >
         <UsersRound aria-hidden="true" className="size-3.5 shrink-0" />
         <span>Free Pool</span>
-        <span className="free-pool-count">{freeUsers.length} available</span>
+        <span className="free-pool-count">{freeUsers.length} under {targetHoursLabel} today</span>
         {activeRoleTab !== 'all' && (
           <span className="hidden sm:inline text-[11px] font-medium text-[var(--text-secondary)]">
             · Cross-board ({activeRoleTab === 'content' ? contentCount : designCount} {roleLabels[activeRoleTab]})
@@ -179,7 +179,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
       <aside id="free-pool-popover" aria-label="Free Pool" hidden={!isExpanded}>
         <div className="free-pool-filters">
           <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
-            <span>Across boards · Under {targetHoursLabel} assigned today</span>
+            <span>Assigned hours today across boards</span>
             {(() => {
               const filteredBriefCount =
                 roleFilter === 'content'
@@ -202,7 +202,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
               );
             })()}
           </div>
-          <div className="segmented-track" role="group" aria-label="Filter available members by discipline">
+          <div className="segmented-track" role="group" aria-label="Filter Free Pool members by discipline">
             {roleOptions.map(({ role, count }) => (
               <button
                 key={role}
@@ -230,12 +230,12 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
           </div>
         )}
 
-        <div className="free-pool-members" role="list" aria-label="Available members" tabIndex={0}>
+        <div className="free-pool-members" role="list" aria-label="Free Pool members" tabIndex={0}>
           {filteredFreeUsers.length === 0 ? (
             <p className="px-4 py-6 text-center text-xs text-[var(--text-secondary)]">
               {freeUsers.length === 0
-                ? 'No members available today.'
-                : `No ${roleLabels[roleFilter]} members available today.`}
+                ? `No members have under ${targetHoursLabel} assigned today.`
+                : `No ${roleLabels[roleFilter]} members have under ${targetHoursLabel} assigned today.`}
             </p>
           ) : (
             filteredFreeUsers.map(user => {
@@ -244,6 +244,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
               const assignedHours = stats?.assignedHours ?? 0;
               const roundedHours = formatHours(assignedHours);
               const assignedHoursLabel = roundedHours === targetHoursLabel ? `<${targetHoursLabel}` : roundedHours;
+              const jumpId = `free-pool-${user.id}-jump`;
               const hoursId = `free-pool-${user.id}-hours`;
               const matchingBriefs = user.role === 'design' ? unassignedByTeam.design : unassignedByTeam.content;
               const isDropTarget = dragOverUserId === user.id;
@@ -294,10 +295,10 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                       onExpandedChange(false);
                       onSelectUser?.(user);
                     }}
-                    aria-label={`Jump to ${user.name}'s swimlane`}
-                    aria-describedby={hoursId}
+                    aria-labelledby={`${jumpId} ${hoursId}`}
                     className="free-pool-row-action group flex flex-1 items-center gap-2.5 min-w-0 rounded-[6px] text-left"
                   >
+                    <span id={jumpId} className="sr-only">Jump to {user.name}&apos;s swimlane</span>
                     <span
                       aria-hidden="true"
                       className={`flex size-7 shrink-0 items-center justify-center rounded-[6px] bg-gradient-to-br text-xs font-semibold text-white ${
@@ -323,7 +324,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                             </span>
                           ))}
                         </span>
-                        <span className="whitespace-nowrap">{tagInfo.label} · {assignedHoursLabel} assigned</span>
+                        <span className="whitespace-nowrap">{tagInfo.label} · {assignedHoursLabel} assigned today</span>
                         {stats && stats.inReview > 0 ? (
                           <span className="whitespace-nowrap">· {stats.inReview} in review</span>
                         ) : stats && stats.pipeline > 0 ? (

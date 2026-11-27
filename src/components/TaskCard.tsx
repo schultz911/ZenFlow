@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Task, TaskStatus, Role } from '../types';
 import { handleRovingMenuKeyDown, useAnchoredPopover } from '../hooks/useAnchoredPopover';
-import { getDuePillInfo, formatDateOnly, formatCompletedDate, getCognitiveLoadLabel, getTaskBillableMs, formatBillableHours, formatBillableDetailed, getLocalOffsetDateKey, getTaskAssigneeCount } from '../utils/workload';
+import { getDuePillInfo, formatDateOnly, formatCompletedDate, getCognitiveLoadLabel, getTaskBillableMs, formatBillableHours, formatBillableDetailed, getLocalOffsetDateKey, getTaskAssigneeCount, formatTaskStatus } from '../utils/workload';
 import { isValidHttpUrl } from '../utils/taskMetadata';
 import {
   GripVertical,
@@ -22,6 +22,7 @@ import {
   Users,
   MoreHorizontal,
   Flag,
+  ArrowRight,
 } from 'lucide-react';
 
 interface TaskCardProps {
@@ -94,11 +95,12 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   }, [showSnoozeFlyout, task.dueDate]);
 
   // Portaled mobile card overflow menu state
-  const [showMobileCardMenu, setShowMobileCardMenu] = useState(false);
+  const [cardMenu, setCardMenu] = useState<'actions' | 'move' | null>(null);
+  const showMobileCardMenu = cardMenu !== null;
   const mobileCardMenuBtnRef = useRef<HTMLButtonElement>(null);
   const mobileCardMenuPopRef = useRef<HTMLDivElement>(null);
-  const closeMobileCardMenu = useCallback(() => setShowMobileCardMenu(false), []);
-  const { position: mobileCardMenuPos } = useAnchoredPopover({
+  const closeMobileCardMenu = useCallback(() => setCardMenu(null), []);
+  const { position: mobileCardMenuPos, updatePosition: updateCardMenuPosition } = useAnchoredPopover({
     isOpen: showMobileCardMenu,
     triggerRef: mobileCardMenuBtnRef,
     popoverRef: mobileCardMenuPopRef,
@@ -111,14 +113,15 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
   });
 
   useEffect(() => {
-    if (!showMobileCardMenu) return;
+    if (!cardMenu) return;
+    updateCardMenuPosition();
     const focusTimer = window.setTimeout(() => {
       const firstItem = mobileCardMenuPopRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])');
       firstItem?.focus({ preventScroll: true });
     }, 0);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Tab') {
-        setShowMobileCardMenu(false);
+        setCardMenu(null);
         return;
       }
       handleRovingMenuKeyDown(e, mobileCardMenuPopRef.current);
@@ -128,7 +131,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       window.clearTimeout(focusTimer);
       window.removeEventListener('keydown', onKey);
     };
-  }, [showMobileCardMenu]);
+  }, [cardMenu, updateCardMenuPosition]);
 
   // Live timer for in_progress billable hours
   const [now, setNow] = useState(() => Date.now());
@@ -275,7 +278,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               title={`Task actions for ${task.title}`}
               onClick={e => {
                 e.stopPropagation();
-                setShowMobileCardMenu(prev => !prev);
+                setCardMenu(prev => prev ? null : 'actions');
               }}
               className="mobile-tap-square sm:!min-w-0 sm:!min-h-0 inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             >
@@ -285,7 +288,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               <div
                 ref={mobileCardMenuPopRef}
                 role="menu"
-                aria-label={`Actions for ${task.title}`}
+                aria-label={`${cardMenu === 'move' ? 'Move' : 'Actions for'} ${task.title}`}
                 style={
                   mobileCardMenuPos
                     ? { top: `${mobileCardMenuPos.top}px`, left: `${mobileCardMenuPos.left}px` }
@@ -294,44 +297,82 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 onClick={e => e.stopPropagation()}
                 className="menu-surface fixed z-50 w-44 rounded-[9px] border border-[var(--border)] p-1 text-[var(--text-primary)]"
               >
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setShowMobileCardMenu(false);
-                    onEdit(task);
-                  }}
-                  className="menu-item cursor-pointer"
-                >
-                  <Edit2 className="h-3.5 w-3.5" />
-                  <span>Edit Details</span>
-                </button>
-                {canDuplicateToBoard && onDuplicateToBoard && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setShowMobileCardMenu(false);
-                      onDuplicateToBoard(task);
-                    }}
-                    className="menu-item cursor-pointer text-[#1d4ed8] dark:text-blue-400"
-                  >
-                    <CopyPlus className="h-3.5 w-3.5" />
-                    <span>Create Subtask</span>
-                  </button>
+                {cardMenu === 'move' ? (
+                  <>
+                    <button type="button" role="menuitem" className="menu-item cursor-pointer" onClick={() => setCardMenu('actions')}>
+                      <ChevronLeft aria-hidden="true" className="h-3.5 w-3.5" />
+                      Back to actions
+                    </button>
+                    {STATUS_SEQUENCE.filter(status => status !== task.status).map(status => (
+                      <button key={status} type="button" role="menuitem" className="menu-item cursor-pointer"
+                        onClick={() => {
+                          const trigger = mobileCardMenuBtnRef.current;
+                          const card = trigger?.closest<HTMLElement>('.task-card');
+                          const lane = card?.closest<HTMLElement>('[id^="swimlane-"]');
+                          trigger?.focus({ preventScroll: true });
+                          setCardMenu(null);
+                          onMoveStatus(task.id, status);
+                          requestAnimationFrame(() => {
+                            if (document.activeElement !== trigger && document.activeElement !== document.body) return;
+                            const movedCard = card && Array.from(lane?.querySelectorAll<HTMLElement>(`#${CSS.escape(card.id)}`) ?? [])
+                              .find(candidate => candidate !== card);
+                            if (movedCard?.getClientRects().length) {
+                              movedCard.querySelector<HTMLElement>('.card-actions button')?.focus();
+                            } else if (movedCard || !trigger?.isConnected) {
+                              lane?.focus({ preventScroll: true });
+                            }
+                          });
+                        }}>
+                        {formatTaskStatus(status)}
+                      </button>
+                    ))}
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setCardMenu(null);
+                        onEdit(task);
+                      }}
+                      className="menu-item cursor-pointer"
+                    >
+                      <Edit2 className="h-3.5 w-3.5" />
+                      <span>Edit Details</span>
+                    </button>
+                    <button type="button" role="menuitem" className="menu-item cursor-pointer" onClick={() => setCardMenu('move')}>
+                      <ArrowRight aria-hidden="true" className="h-3.5 w-3.5" />
+                      <span>Move</span>
+                    </button>
+                    {canDuplicateToBoard && onDuplicateToBoard && (
+                      <button
+                        type="button"
+                        role="menuitem"
+                        onClick={() => {
+                          setCardMenu(null);
+                          onDuplicateToBoard(task);
+                        }}
+                        className="menu-item cursor-pointer text-[#1d4ed8] dark:text-blue-400"
+                      >
+                        <CopyPlus className="h-3.5 w-3.5" />
+                        <span>Create Subtask</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setCardMenu(null);
+                        onDelete(task.id);
+                      }}
+                      className="menu-item cursor-pointer text-red-600 dark:text-red-400"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      <span>Delete Task</span>
+                    </button>
+                  </>
                 )}
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setShowMobileCardMenu(false);
-                    onDelete(task.id);
-                  }}
-                  className="menu-item cursor-pointer text-red-600 dark:text-red-400"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  <span>Delete Task</span>
-                </button>
               </div>,
               document.body
             )}
@@ -560,7 +601,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       )}
 
       {/* Bottom Ruled Metadata Row: Deadline, Priority Flag & Quick Status Stepper */}
-      <div className="order-3 mt-2 flex items-center justify-between gap-2 border-t border-[var(--border-subtle)] pt-1.5">
+      <div className="order-3 mt-2 flex items-center justify-between gap-2 pt-1.5">
         <div className="flex items-center gap-1.5 min-w-0">
           <div className="relative flex items-center" ref={snoozeRef}>
           {isDoneOrArchived ? (

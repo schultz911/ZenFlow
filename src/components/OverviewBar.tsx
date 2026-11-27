@@ -8,6 +8,7 @@ import {
   calculateTeamUtilization,
   calculateTasksEfficiency,
   formatHoursRatio,
+  DAILY_UTILIZATION_TARGET_HOURS,
   getTaskAssigneeIds,
   groupTasksByAssignee,
   getEfficiencyToneClass,
@@ -285,7 +286,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
               <span className="text-sm font-semibold tracking-normal">%</span>
             </p>
             <p className="metric-detail">
-              {teamUtilization.utilizedCount} of {teamUtilization.totalCount} assigned 3h or more today
+              {teamUtilization.utilizedCount} of {teamUtilization.totalCount} assigned {DAILY_UTILIZATION_TARGET_HOURS}h+ today
             </p>
           </div>
 
@@ -301,12 +302,10 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                 '—'
               )}
             </p>
-            <p className="metric-detail" title="Estimated vs. billable hours on completed work">
+            <p className="metric-detail">
               {teamEfficiency.efficiencyPercent !== null ? (
                 <>
-                  <span className="text-xs font-normal text-[var(--text-muted)] mr-1">
-                    Estimated / billable hours
-                  </span>
+                  Est. ÷ billable · completed work<br />
                   <span>{formatHoursRatio(teamEfficiency.estimatedHours, teamEfficiency.billableHours)}</span><span> · {teamEfficiency.estimatedHours === teamEfficiency.billableHours ? 'On estimate' : `${Math.abs(teamEfficiency.estimatedHours - teamEfficiency.billableHours).toFixed(1)}h ${teamEfficiency.estimatedHours > teamEfficiency.billableHours ? 'under' : 'over'} estimate`}</span>
                 </>
               ) : (

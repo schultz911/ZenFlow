@@ -179,6 +179,7 @@ try {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
     const page = await context.newPage();
     attachErrorListeners(page, 'ui-preview');
+    await page.clock.setFixedTime(new Date('2026-11-26T10:00:00.000Z'));
     await page.goto(PREVIEW_URL, { waitUntil: 'networkidle' });
     await page.waitForSelector('#zenflow-logo');
     await page.click('#tab-content');
@@ -190,6 +191,8 @@ try {
 
     const overview = page.getByRole('region', { name: 'Team overview' });
     await overview.getByText('(10h / 6h)', { exact: true }).waitFor();
+    await overview.getByText(/2 of 3 assigned 3h\+ today/).waitFor();
+    await overview.getByText(/Est\. ÷ billable · completed work/).waitFor();
     const ava = page.locator('#swimlane-u-content');
     await ava.getByText('(5h / 3h)', { exact: true }).waitFor();
     await page.locator('#task-search-input').fill('Homepage Narrative Rewrite');
@@ -199,6 +202,8 @@ try {
 
     await page.getByRole('button', { name: 'View Analytics' }).click();
     const analytics = page.getByRole('dialog', { name: 'Workspace analytics' });
+    await analytics.getByText(/Assigned 3h\+ on 2026-11-26/).waitFor();
+    await analytics.getByText(/Est\. ÷ billable · completed work/).waitFor();
     const efficiency = analytics.getByRole('meter', { name: 'Workspace efficiency' });
     assert.match(await efficiency.getAttribute('aria-valuetext') ?? '', /^167 percent/);
     await analytics.getByLabel('Analytics scope').selectOption('user');
@@ -221,6 +226,7 @@ try {
 
     const freePoolToggle = page.locator('#free-pool-trigger');
     const freePool = page.getByRole('complementary', { name: 'Free Pool' });
+    assert.match(await freePoolToggle.innerText(), /under 3h today/);
     await freePoolToggle.focus();
     await page.keyboard.press('Enter');
     await freePool.waitFor();
@@ -228,7 +234,7 @@ try {
     assert.equal(await freePoolToggle.evaluate(el => document.activeElement === el), true);
     assert.equal(await freePoolToggle.evaluate(el => Boolean(el.closest('[aria-label="Team overview"]'))), true);
     await freePool.getByRole('button', { name: 'Content (0)' }).click();
-    await freePool.getByText('No Content members available today.').waitFor();
+    await freePool.getByText('No Content members have under 3h assigned today.').waitFor();
     await freePool.getByRole('button', { name: 'All (1)' }).click();
     await page.locator('#task-search-input').click();
     assert.equal(await freePoolToggle.getAttribute('aria-expanded'), 'true');
@@ -252,9 +258,9 @@ try {
     await assignBriefBtn.click();
     const assignDialog = page.getByRole('dialog', { name: 'Assign task' });
     await assignDialog.waitFor({ state: 'visible' });
-    assert.equal(await assignDialog.locator('#taskassignmentmodal-field-1').inputValue(), 'u-design');
+    assert.equal(await assignDialog.locator('input[name="assignment-member"]:checked').inputValue(), 'u-design');
     // P2-3 / P2-4: reserved deadline visible upfront, H3 heading (no H4 skip), discard guard
-    assert.equal(await assignDialog.locator('h3').count(), 1, 'TaskAssignmentModal should use h3 under h2');
+    await assignDialog.getByRole('heading', { level: 3, name: 'Review' }).waitFor();
     assert.equal(await assignDialog.locator('#taskassignmentmodal-deadline').isDisabled(), false);
     await assignDialog.locator('#taskassignmentmodal-field-2').fill('10');
     await page.keyboard.press('Escape');
@@ -321,7 +327,7 @@ try {
     // OverviewBar polish: Sort overloaded action cue, All Clusters dropdown label, standardized Eff cue
     await overview.getByRole('button', { name: /Sort overloaded first/i }).waitFor();
     await page.getByRole('button', { name: /All Clusters/i }).waitFor();
-    await overview.getByText(/estimated \/ billable hours/i).waitFor();
+    await overview.getByText(/Est\. ÷ billable · completed work/i).waitFor();
 
     // DisciplineTaskModal focus + discard guard + neutral placeholders + aria-pressed/0-selection guard (P2-5, P2-7)
     await page.getByRole('button', { name: /New Brief/i }).first().click();
@@ -352,15 +358,22 @@ try {
     await assignDialog2.waitFor({ state: 'visible' });
     assert.equal(await assignDialog2.locator('#taskassignmentmodal-deadline').inputValue(), '', 'Unassigned No-deadline brief should not prefill Tomorrow');
     assert.equal(await assignDialog2.locator('#taskassignmentmodal-deadline').isDisabled(), true);
-    const kiranOptionText = await assignDialog2.locator('#taskassignmentmodal-field-1 option[value="cd-1"]').textContent();
+    const kiranOptionText = await assignDialog2.locator('#assignment-member-cd-1-name').textContent();
     assert.ok(kiranOptionText && !kiranOptionText.includes('Independent'), `Creative Director should not be labeled Independent (got ${kiranOptionText})`);
-    await assignDialog2.locator('#taskassignmentmodal-field-1').selectOption('u-content');
+    const sortedMembers = await assignDialog2.getByRole('group', { name: 'Member', exact: true }).getByRole('radio').all();
+    assert.match(await sortedMembers[0].ariaSnapshot(), /Kiran S/);
+    assert.match(await sortedMembers[1].ariaSnapshot(), /Ava Writer/);
+    assert.match(await sortedMembers[2].ariaSnapshot(), /Leave unassigned in pipeline.*checked/);
+    await sortedMembers[2].focus();
+    await page.keyboard.press('ArrowUp');
+    assert.equal(await sortedMembers[1].isChecked(), true);
+    assert.match(await sortedMembers[1].ariaSnapshot(), /10.2h assigned today, 12.8 load points/);
     assert.equal(await assignDialog2.locator('#taskassignmentmodal-deadline').inputValue(), '', 'Selecting a teammate must leave the deadline for the lead to choose');
     await assignDialog2.getByRole('button', { name: 'Tomorrow', exact: true }).click();
     assert.ok((await assignDialog2.locator('#taskassignmentmodal-deadline').inputValue()).length > 0, 'A deadline preset should set the selected date');
     await assignDialog2.locator('#taskassignmentmodal-field-2').fill('8');
     const summaryText = await assignDialog2.locator('form').textContent();
-    assert.match(summaryText || '', /Assigned:\s*[\d.]+h\s*→\s*[\d.]+h\/day/, 'Assign preview should project Assigned daily hours delta');
+    assert.match(summaryText || '', /Assigned today:\s*[\d.]+h\s*→\s*[\d.]+h/, 'Assign preview should project Assigned daily hours delta');
     const submitVisibility = await assignDialog2.evaluate(dialog => {
       const dr = dialog.getBoundingClientRect();
       const btn = dialog.querySelector('button[type="submit"]')!.getBoundingClientRect();
@@ -489,17 +502,32 @@ try {
     await page.locator('#task-card-u-content-t-ava-3 button[aria-label^="Actions for"]').click();
     const portaledCardMenu = page.locator('body > [role="menu"][aria-label^="Actions for"]');
     await portaledCardMenu.waitFor({ state: 'visible' });
+    await page.keyboard.press('Home');
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('Enter');
+    const moveMenu = page.getByRole('menu', { name: 'Move Product Architecture Blog Series' });
+    await moveMenu.locator('[role="menuitem"]:focus').getByText('Back to actions', { exact: true }).waitFor();
+    await page.keyboard.press('ArrowDown');
+    assert.equal(await moveMenu.getByRole('menuitem', { name: 'In Progress' }).evaluate(el => el === document.activeElement), true);
+    await page.keyboard.press('Enter');
+    await page.getByRole('dialog', { name: 'Work in progress limit' }).waitFor();
     await page.keyboard.press('Escape');
-    await portaledCardMenu.waitFor({ state: 'detached' });
+    await page.getByRole('dialog', { name: 'Work in progress limit' }).waitFor({ state: 'detached' });
+    await page.getByRole('button', { name: 'Actions for Product Architecture Blog Series' }).click();
+    await portaledCardMenu.getByRole('menuitem', { name: 'Move', exact: true }).click();
+    await moveMenu.getByRole('menuitem', { name: 'Sent' }).click();
+    await page.getByRole('dialog', { name: 'Attach content document link' }).waitFor();
+    await page.keyboard.press('Escape');
+    await page.getByRole('dialog', { name: 'Attach content document link' }).waitFor({ state: 'detached' });
     assert.equal(
       await page.locator('#swimlane-cd-1 .task-card svg.lucide-grip-vertical').first().isVisible(),
       false,
       'TaskCard GripVertical drag handles should be hidden on mobile (<640px)'
     );
     await page.locator('#free-pool-trigger').click();
-    const mobileFreePoolJumpHeight = await page.getByRole('button', { name: "Jump to Mia Designer's swimlane" }).evaluate(el => el.getBoundingClientRect().height);
+    const mobileFreePoolJumpHeight = await page.getByRole('button', { name: /Jump to Mia Designer's swimlane.*0h assigned today/ }).evaluate(el => el.getBoundingClientRect().height);
     assert.ok(mobileFreePoolJumpHeight >= 43.5, `Mobile Free Pool jump action should be >= 44px (got ${mobileFreePoolJumpHeight}px)`);
-    await page.getByRole('button', { name: "Jump to Mia Designer's swimlane" }).focus();
+    await page.getByRole('button', { name: /Jump to Mia Designer's swimlane.*0h assigned today/ }).focus();
     await page.keyboard.press('Escape');
     await page.getByRole('complementary', { name: 'Free Pool' }).waitFor({ state: 'hidden' });
     const undersizedControls = await page.evaluate(() => {
@@ -525,6 +553,7 @@ try {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     const page = await context.newPage();
     attachErrorListeners(page, 'search-and-assignment');
+    await page.clock.setFixedTime(new Date('2026-11-26T10:00:00.000Z'));
     await page.goto(PREVIEW_URL, { waitUntil: 'networkidle' });
     await page.locator('#task-search-input').fill('Q4 Brand Narrative');
     await page.getByText(/2 pipeline briefs · 0 assigned tasks/).waitFor();
@@ -538,7 +567,7 @@ try {
     await page.waitForTimeout(200);
     await page.getByRole('button', { name: 'Assign', exact: true }).first().click();
     const assignment = page.getByRole('dialog', { name: 'Assign task' });
-    await assignment.locator('#taskassignmentmodal-field-1').selectOption('u-content');
+    await assignment.locator('input[name="assignment-member"][value="u-content"]').check();
     assert.equal(await assignment.locator('#taskassignmentmodal-deadline').inputValue(), '');
     await assignment.getByRole('button', { name: 'Tomorrow', exact: true }).click();
     await assignment.getByRole('button', { name: 'Assign & Move to To Do' }).click();
