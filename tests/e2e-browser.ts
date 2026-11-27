@@ -406,6 +406,13 @@ try {
     await page.getByRole('button', { name: /^Add Ongoing$/i }).click();
     const ongoingCard = page.locator('#swimlane-cd-1 .task-card', { hasText: 'Ongoing Weekly Newsletter' });
     await ongoingCard.waitFor({ state: 'visible' });
+    const ongoingActions = ongoingCard.getByRole('button', { name: 'Actions for Ongoing Weekly Newsletter' });
+    await ongoingActions.click();
+    const ongoingMenu = page.getByRole('menu', { name: 'Actions for Ongoing Weekly Newsletter' });
+    await ongoingMenu.getByRole('menuitem', { name: 'Edit Details' }).waitFor();
+    await ongoingMenu.getByRole('menuitem', { name: 'Delete Task' }).waitFor();
+    await page.keyboard.press('Escape');
+    assert.equal(await ongoingActions.evaluate(el => el === document.activeElement), true, 'Escape restores focus to ongoing card menu');
     const ongoingTitleWidth = await ongoingCard.locator('h5 button').evaluate(el => el.getBoundingClientRect().width);
     assert.ok(ongoingTitleWidth > 120, `Ongoing title should not be crushed (got ${ongoingTitleWidth}px)`);
     await ongoingCard.getByRole('button', { name: /Subtask/i }).click();

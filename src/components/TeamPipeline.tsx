@@ -3,8 +3,8 @@ import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { useAuth, useWorkspace } from '../context/DashboardContext';
 import { Task, User, RoleFilter } from '../types';
-import { formatDateOnly, getCognitiveLoadLabel, getDaysRemaining, getTaskAssigneeIds } from '../utils/workload';
-import { isValidHttpUrl } from '../utils/taskMetadata';
+import { formatDateOnly, getCognitiveLoadLabel, getDaysRemaining, getTaskAssigneeIds, getTaskBillableMs, formatBillableHours } from '../utils/workload';
+import { getTaskTypeLabel, isValidHttpUrl } from '../utils/taskMetadata';
 import { handleRovingMenuKeyDown, useAnchoredPopover } from '../hooks/useAnchoredPopover';
 import {
   Inbox,
@@ -428,16 +428,14 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                 const assigneeIds = getTaskAssigneeIds(task);
                 const assignee = assigneeIds[0] ? userMap.get(assigneeIds[0]) : null;
                 const cognitiveLabel = getCognitiveLoadLabel(task.cognitiveLoad, taskDiscipline);
-                const metadata = task.disciplineMetadata;
                 const dueDays = getDaysRemaining(task.dueDate);
                 const showParentBreadcrumb = Boolean(
                   task.isSubtask &&
                   task.parentTaskTitle &&
                   !task.title.toLowerCase().startsWith(task.parentTaskTitle.trim().toLowerCase())
                 );
-                const disciplineLabel = taskDiscipline === 'design' ? 'Design' : 'Content';
-                const showDisciplineMeta = !task.title.toLowerCase().includes(taskDiscipline);
-                const assetDetail = metadata?.contentType || metadata?.assetType;
+                const typeLabel = getTaskTypeLabel(task, taskDiscipline);
+                const billedMs = getTaskBillableMs(task);
                 const priorityLabel = task.priority
                   ? `${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)} priority`
                   : undefined;
@@ -509,35 +507,17 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                         </div>
 
                         <div className="flex items-center gap-1 shrink-0">
+                          {task.estimatedHours !== undefined && task.estimatedHours > 0 && (
+                            <span
+                              title={`Estimated Effort: ${task.estimatedHours} hours`}
+                              className="text-[11px] tabular-nums font-medium text-[var(--text-muted)] shrink-0"
+                            >
+                              {task.estimatedHours}h est
+                            </span>
+                          )}
+                          {billedMs > 0 && <span className="text-[11px] tabular-nums text-[var(--text-muted)]">{formatBillableHours(billedMs)} billed</span>}
                           {canManagePipeline && (
                             <>
-                              <div className="hidden sm:flex items-center card-actions [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity gap-0.5">
-                                <button
-                                  type="button"
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    onEditTask(task);
-                                  }}
-                                  title="Edit brief details"
-                                  aria-label={`Edit ${task.title}`}
-                                  className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
-                                >
-                                  <Edit2 className="h-3 w-3" />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    onDeleteTask(task);
-                                  }}
-                                  title="Delete pipeline task"
-                                  aria-label={`Delete ${task.title}`}
-                                  className="inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </button>
-                              </div>
-
                               <button
                                 ref={mobileMenuTask?.id === task.id ? mobileMenuTriggerRef : undefined}
                                 type="button"
@@ -550,21 +530,13 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                                   mobileMenuTriggerRef.current = e.currentTarget;
                                   setMobileMenuTask(prev => (prev?.id === task.id ? null : task));
                                 }}
-                                className="sm:hidden mobile-tap-square -my-2 inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+                                className="mobile-tap-square sm:!min-w-0 sm:!min-h-0 -my-2 inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
                               >
                                 <MoreHorizontal className="h-4 w-4" />
                               </button>
                             </>
                           )}
 
-                          {task.estimatedHours !== undefined && task.estimatedHours > 0 && (
-                            <span
-                              title={`Estimated Effort: ${task.estimatedHours} hours`}
-                              className="text-[11px] tabular-nums font-medium text-[var(--text-muted)] shrink-0"
-                            >
-                              {task.estimatedHours}h
-                            </span>
-                          )}
                         </div>
                       </div>
 
@@ -578,30 +550,13 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                         </div>
                       )}
 
-                      {(task.client || task.project || showDisciplineMeta || assetDetail) && (
-                        <div className="mb-0.5 flex items-center gap-1 text-[11px] text-[var(--text-secondary)] truncate">
-                          {task.client && (
-                            <span className="font-semibold text-[var(--text-primary)] truncate">
-                              {task.client}
-                            </span>
-                          )}
-                          {task.client && task.project && <span aria-hidden="true" className="text-[var(--text-muted)]">·</span>}
-                          {task.project && <span className="truncate">{task.project}</span>}
-                          {(task.client || task.project) && showDisciplineMeta && (
-                            <span aria-hidden="true" className="text-[var(--text-muted)]">·</span>
-                          )}
-                          {showDisciplineMeta && (
-                            <span className="shrink-0 font-medium">{disciplineLabel}</span>
-                          )}
-                          {assetDetail && assetDetail.toLowerCase() !== taskDiscipline && (
-                            <>
-                              {(task.client || task.project || showDisciplineMeta) && (
-                                <span aria-hidden="true" className="text-[var(--text-muted)]">·</span>
-                              )}
-                              <span className="truncate">{assetDetail}</span>
-                            </>
-                          )}
-                        </div>
+                      {typeLabel && <p className="mb-0.5 text-[11px] text-[var(--text-secondary)] break-words">{typeLabel}</p>}
+                      {(task.client || task.project) && (
+                        <p className="mb-0.5 text-[11px] text-[var(--text-secondary)] truncate">
+                          {task.client && <span className="font-semibold text-[var(--text-primary)]">{task.client}</span>}
+                          {task.client && task.project && ' · '}
+                          {task.project}
+                        </p>
                       )}
 
                       {/* Title opens modal immediately (0ms delay) */}

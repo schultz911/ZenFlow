@@ -56,3 +56,11 @@ export function foldLegacyDisciplineMetadata(task?: Task | null): TaskDiscipline
     sourceContentReferences: sourceContentReferences.length > 0 ? sourceContentReferences : undefined,
   };
 }
+
+/** Short discipline and content/asset type for task-card context. */
+export function getTaskTypeLabel(task: Task, fallbackRole?: string): string {
+  const team = task.team || fallbackRole;
+  const discipline = team === 'content' ? 'Content' : team === 'design' ? 'Design' : '';
+  const type = task.disciplineMetadata?.contentType || task.disciplineMetadata?.assetType;
+  return [discipline, type && type.toLowerCase() !== discipline.toLowerCase() ? type : ''].filter(Boolean).join(' · ');
+}

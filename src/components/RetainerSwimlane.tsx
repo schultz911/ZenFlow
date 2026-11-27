@@ -1,6 +1,10 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Task, User } from '../types';
+import { getTaskTypeLabel } from '../utils/taskMetadata';
+import { formatBillableHours, formatDateOnly, getTaskBillableMs } from '../utils/workload';
+import { handleRovingMenuKeyDown, useAnchoredPopover } from '../hooks/useAnchoredPopover';
 import {
   Plus,
   Repeat,
@@ -8,6 +12,8 @@ import {
   Trash2,
   X,
   CopyPlus,
+  MoreHorizontal,
+  Flag,
 } from 'lucide-react';
 
 interface RetainerSwimlaneProps {
@@ -39,6 +45,24 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
   useEffect(() => {
     if (defaultOpenAdd) setIsAdding(true);
   }, [defaultOpenAdd]);
+  const [menuTask, setMenuTask] = useState<Task | null>(null);
+  const menuTriggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const closeMenu = useCallback(() => setMenuTask(null), []);
+  const { position: menuPosition } = useAnchoredPopover({
+    isOpen: Boolean(menuTask), triggerRef: menuTriggerRef, popoverRef: menuRef,
+    onClose: closeMenu, align: 'right', gap: 4, dismissOnOutOfView: true,
+  });
+  useEffect(() => {
+    if (!menuTask) return;
+    const timer = window.setTimeout(() => menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus(), 0);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Tab') setMenuTask(null);
+      else handleRovingMenuKeyDown(event, menuRef.current);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => { window.clearTimeout(timer); window.removeEventListener('keydown', onKey); };
+  }, [menuTask]);
   const [newTitle, setNewTitle] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -190,6 +214,8 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
         <div className="flex items-center gap-2 overflow-x-auto py-1 px-0.5 scroll-smooth">
           {tasks.map(task => {
             const metaLine = [task.client, task.project].filter(Boolean).join(' · ');
+            const typeLabel = getTaskTypeLabel(task, user.role);
+            const billedMs = getTaskBillableMs(task);
 
             return (
               <motion.div
@@ -199,87 +225,66 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.96 }}
                 transition={{ duration: 0.15 }}
-                className="task-card group relative flex flex-col justify-between gap-2 shrink-0 p-2.5 select-none w-56 sm:w-60"
+                className="task-card group relative flex flex-col gap-1 shrink-0 p-2.5 select-none w-56 sm:w-60"
               >
-                <div className="flex items-start gap-2 min-w-0">
-                  {/* Fixed Retainer Indicator */}
-                  <div
-                    title="Ongoing task"
-                    className="flex h-5 w-5 items-center justify-center rounded-[5px] bg-emerald-600/10 text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5"
-                  >
-                    <Repeat className="h-3 w-3" />
-                  </div>
-
-                  {/* Full-width Task Title & Optional Client · Project */}
-                  <div className="min-w-0 flex-1">
-                    <h5 className="text-xs font-semibold leading-snug">
-                      <button
-                        type="button"
-                        onClick={() => onEditTask(task)}
-                        title={`${task.title} · Click for details`}
-                        className="mobile-tap-control sm:min-h-0 w-full text-left text-[var(--text-primary)] break-words whitespace-normal rounded px-1 -mx-1 py-0.5 hover:bg-[var(--surface-subtle)] hover:text-[#1d4ed8] dark:hover:text-blue-400 cursor-pointer transition-colors"
-                      >
-                        {task.title}
+                <div className="flex items-center justify-between gap-1">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                    <Repeat aria-hidden="true" className="h-3 w-3" /> Ongoing
+                  </span>
+                  <div className="flex items-center gap-1 text-[11px] text-[var(--text-secondary)] tabular-nums">
+                    {task.estimatedHours !== undefined && task.estimatedHours > 0 && <span>{task.estimatedHours}h est</span>}
+                    {billedMs > 0 && <span>{formatBillableHours(billedMs)} billed</span>}
+                    {canEdit && (
+                      <button type="button" aria-haspopup="menu" aria-expanded={menuTask?.id === task.id}
+                        aria-label={`Actions for ${task.title}`}
+                        onClick={event => {
+                          menuTriggerRef.current = event.currentTarget;
+                          setMenuTask(previous => previous?.id === task.id ? null : task);
+                        }}
+                        className="mobile-tap-square sm:!min-w-0 sm:!min-h-0 inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] cursor-pointer">
+                        <MoreHorizontal className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
                       </button>
-                    </h5>
-
-                    {metaLine && (
-                      <p className="mt-0.5 text-[11px] text-[var(--text-secondary)] truncate" title={metaLine}>
-                        {metaLine}
-                      </p>
                     )}
                   </div>
                 </div>
-
-                {/* Ruled Footer: Prominent Subtask CTA + Edit/Delete (hidden when read-only) */}
-                {canEdit && (
-                  <div className="pt-1.5 border-t border-[var(--border-subtle)] flex items-center justify-between gap-2">
-                    <button
-                      type="button"
-                      onClick={e => {
-                        e.stopPropagation();
-                        onCreateSubtask(task);
-                      }}
+                {typeLabel && <p className="text-[11px] text-[var(--text-secondary)] break-words">{typeLabel}</p>}
+                {metaLine && <p className="text-[11px] text-[var(--text-secondary)] truncate" title={metaLine}>{metaLine}</p>}
+                <h5 className="text-[13px] font-semibold leading-snug">
+                  <button type="button" onClick={() => onEditTask(task)} title={`${task.title} · Click for details`}
+                    className="mobile-tap-control sm:min-h-0 w-full text-left text-[var(--text-primary)] break-words whitespace-normal rounded px-1 -mx-1 py-0.5 hover:bg-[var(--surface-subtle)] hover:text-[#1d4ed8] dark:hover:text-blue-400 cursor-pointer">
+                    {task.title}
+                  </button>
+                </h5>
+                <div className="flex items-center justify-between gap-2 mt-auto">
+                  <div className="flex items-center gap-1.5 text-[11px] text-[var(--text-secondary)]">
+                    {task.dueDate && <span>{formatDateOnly(task.dueDate)}</span>}
+                    {task.priority && <span className="inline-flex items-center gap-0.5 capitalize"><Flag aria-hidden="true" className="h-3 w-3" />{task.priority}</span>}
+                  </div>
+                  {canEdit && (
+                    <button type="button" onClick={() => onCreateSubtask(task)}
                       title="Create and schedule a subtask from this ongoing item"
                       aria-label={`Create subtask from ${task.title}`}
-                      className="mobile-tap-control sm:min-h-0 inline-flex items-center gap-1 rounded-[5px] bg-[var(--accent-soft)] px-2 py-1 text-[11px] font-semibold text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25 transition-colors cursor-pointer"
-                    >
-                      <CopyPlus className="h-3 w-3 shrink-0" />
-                      <span>Subtask</span>
+                      className="mobile-tap-control sm:min-h-0 inline-flex items-center gap-1 rounded-[5px] bg-[var(--accent-soft)] px-2 py-1 text-[11px] font-semibold text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25 cursor-pointer">
+                      <CopyPlus className="h-3 w-3 shrink-0" /> Subtask
                     </button>
-
-                    <div className="flex items-center card-actions [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 [@media(hover:hover)]:group-focus-within:opacity-100 transition-opacity gap-0.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={e => {
-                          e.stopPropagation();
-                          onEditTask(task);
-                        }}
-                        title="Open ongoing task details"
-                        aria-label={`Edit ${task.title}`}
-                        className="mobile-tap-square sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center rounded-[5px] p-1 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] transition-colors cursor-pointer"
-                      >
-                        <Edit2 className="h-3 w-3" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={e => {
-                          e.stopPropagation();
-                          onDeleteTask(task.id);
-                        }}
-                        title="Delete ongoing task"
-                        aria-label={`Delete ${task.title}`}
-                        className="mobile-tap-square sm:min-w-0 sm:min-h-0 inline-flex items-center justify-center rounded-[5px] p-1 text-[var(--text-secondary)] hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/15 transition-colors cursor-pointer"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </motion.div>
             );
           })}
         </div>
+      )}
+      {menuTask && createPortal(
+        <div ref={menuRef} role="menu" aria-label={`Actions for ${menuTask.title}`}
+          style={menuPosition ? { top: menuPosition.top, left: menuPosition.left } : { top: 0, left: 0, visibility: 'hidden' }}
+          className="menu-surface fixed z-50 w-44 rounded-[9px] border border-[var(--border)] p-1 text-[var(--text-primary)]">
+          <button type="button" role="menuitem" className="menu-item cursor-pointer" onClick={() => { const task = menuTask; closeMenu(); onEditTask(task); }}>
+            <Edit2 className="h-3.5 w-3.5" /> Edit Details
+          </button>
+          <button type="button" role="menuitem" className="menu-item cursor-pointer text-red-600 dark:text-red-400" onClick={() => { const task = menuTask; closeMenu(); onDeleteTask(task.id); }}>
+            <Trash2 className="h-3.5 w-3.5" /> Delete Task
+          </button>
+        </div>, document.body
       )}
     </div>
   );
