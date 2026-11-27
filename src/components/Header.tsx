@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { useAuth, useBoardUi, useWorkspace } from '../context/DashboardContext';
+import { handleRovingMenuKeyDown } from '../hooks/useAnchoredPopover';
 import {
   Sun,
   Moon,
@@ -47,6 +48,20 @@ const HeaderComponent: React.FC<HeaderProps> = ({
 
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const userDropdownRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const pendingMenuFocusRef = useRef<'first' | 'last' | null>(null);
+
+  useLayoutEffect(() => {
+    if (!userDropdownOpen || !pendingMenuFocusRef.current) return;
+    const target = pendingMenuFocusRef.current;
+    pendingMenuFocusRef.current = null;
+    const items = Array.from(
+      userMenuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])') || []
+    );
+    if (items.length > 0) {
+      (target === 'last' ? items[items.length - 1] : items[0])?.focus();
+    }
+  }, [userDropdownOpen]);
 
   useEffect(() => {
     if (!userDropdownOpen) return;
@@ -57,7 +72,9 @@ const HeaderComponent: React.FC<HeaderProps> = ({
       }
     };
     document.addEventListener('keydown', dismiss);
-    return () => document.removeEventListener('keydown', dismiss);
+    return () => {
+      document.removeEventListener('keydown', dismiss);
+    };
   }, [userDropdownOpen]);
 
   useEffect(() => {
@@ -162,7 +179,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
               onClick={onOpenFirestoreModal}
               aria-label={`Database status: ${syncStatus === 'connected' ? 'Connected' : 'Syncing'}`}
               title={`Database Status: ${syncStatus === 'connected' ? 'Connected (Firestore)' : 'Connecting...'}`}
-              className="mobile-tap-control flex items-center justify-center gap-2 min-w-[40px] sm:min-w-0 px-2.5 py-1.5 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-subtle)] text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+              className="mobile-tap-control flex items-center justify-center gap-2 min-w-[44px] sm:min-w-0 px-2.5 py-1.5 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-subtle)] text-xs font-semibold text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
             >
               <span
                 className={`h-2 w-2 rounded-full ${
@@ -194,9 +211,32 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                 <button
                   id="user-profile-menu-button"
                   type="button"
+                  aria-haspopup="menu"
                   aria-expanded={userDropdownOpen}
                   aria-controls="user-profile-menu"
-                  onClick={() => setUserDropdownOpen(prev => !prev)}
+                  onClick={e => {
+                    if (!userDropdownOpen && e.detail === 0) {
+                      pendingMenuFocusRef.current = 'first';
+                    }
+                    setUserDropdownOpen(prev => !prev);
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                      e.preventDefault();
+                      const target = e.key === 'ArrowUp' ? 'last' : 'first';
+                      if (!userDropdownOpen) {
+                        pendingMenuFocusRef.current = target;
+                        setUserDropdownOpen(true);
+                      } else {
+                        const items = Array.from(
+                          userMenuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])') || []
+                        );
+                        if (items.length > 0) {
+                          (target === 'last' ? items[items.length - 1] : items[0])?.focus();
+                        }
+                      }
+                    }
+                  }}
                   className="mobile-tap-control flex items-center gap-2 rounded-[7px] border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-subtle)] py-1 px-2.5 text-left text-xs transition-colors"
                 >
                   <div
@@ -249,28 +289,12 @@ const HeaderComponent: React.FC<HeaderProps> = ({
               {/* Dropdown Menu */}
               {userDropdownOpen && (
                 <div
+                  ref={userMenuRef}
                   id="user-profile-menu"
                   role="menu"
                   aria-label="User menu"
                   onKeyDown={e => {
-                    const items = Array.from(
-                      e.currentTarget.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])')
-                    );
-                    if (items.length === 0) return;
-                    const idx = items.indexOf(document.activeElement as HTMLElement);
-                    if (e.key === 'ArrowDown') {
-                      e.preventDefault();
-                      items[(idx + 1) % items.length].focus();
-                    } else if (e.key === 'ArrowUp') {
-                      e.preventDefault();
-                      items[(idx - 1 + items.length) % items.length].focus();
-                    } else if (e.key === 'Home') {
-                      e.preventDefault();
-                      items[0].focus();
-                    } else if (e.key === 'End') {
-                      e.preventDefault();
-                      items[items.length - 1].focus();
-                    }
+                    handleRovingMenuKeyDown(e.nativeEvent, e.currentTarget);
                   }}
                   className="menu-surface absolute right-0 mt-1.5 w-72 rounded-[9px] border border-[var(--border)] p-1.5 z-50 text-[var(--text-primary)]"
                 >

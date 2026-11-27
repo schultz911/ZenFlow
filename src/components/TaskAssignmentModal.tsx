@@ -1,9 +1,10 @@
 import { DialogPanel } from './ui/DialogPanel';
 import { CognitiveLoadSelector } from './ui/CognitiveLoadSelector';
 import { DateQuickPresets } from './ui/DateQuickPresets';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { useAuth, useWorkspace } from '../context/DashboardContext';
+import { useDiscardGuard } from '../hooks/useDiscardGuard';
 import { Task, CognitiveLoad, Role } from '../types';
 import {
   getUserDailyAssignedHours,
@@ -52,6 +53,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
   const [keepInPipeline, setKeepInPipeline] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const initialSnapshotRef = useRef<string>('');
 
   // Resolved discipline for this task
   const taskDiscipline = useMemo(() => {
@@ -70,15 +72,33 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
   }, [users, taskDiscipline]);
 
   useEffect(() => {
-    if (task) {
-      setSelectedUserId(task.userId || initialAssigneeId || '');
-      setCognitiveLoad(task.cognitiveLoad || 'medium');
-      setEstimatedHours(task.estimatedHours !== undefined ? String(task.estimatedHours) : '');
-      setDueDate(task.dueDate || getLocalOffsetDateKey(1));
-      setKeepInPipeline(false);
-      setSubmitError(null);
+    if (!isOpen || !task) {
+      initialSnapshotRef.current = '';
+      return;
     }
-  }, [task, initialAssigneeId]);
+    const initUser = task.userId || initialAssigneeId || '';
+    const initLoad: CognitiveLoad = task.cognitiveLoad || 'medium';
+    const initHours = task.estimatedHours !== undefined ? String(task.estimatedHours) : '';
+    const initDue = task.dueDate || getLocalOffsetDateKey(1);
+    setSelectedUserId(initUser);
+    setCognitiveLoad(initLoad);
+    setEstimatedHours(initHours);
+    setDueDate(initDue);
+    setKeepInPipeline(false);
+    setSubmitError(null);
+    initialSnapshotRef.current = JSON.stringify([initUser, initLoad, initHours, initDue, false]);
+  }, [isOpen, task, initialAssigneeId]);
+
+  const isDirty = useMemo(() => {
+    if (!isOpen || !task || !initialSnapshotRef.current) return false;
+    return JSON.stringify([selectedUserId, cognitiveLoad, estimatedHours, dueDate, keepInPipeline]) !== initialSnapshotRef.current;
+  }, [isOpen, task, selectedUserId, cognitiveLoad, estimatedHours, dueDate, keepInPipeline]);
+
+  const { showDiscardConfirm, requestClose, confirmDiscard, resetDiscardConfirm } = useDiscardGuard(
+    isDirty,
+    isSubmitting,
+    onClose
+  );
 
   const selectedUserObj = useMemo(() => {
     if (!selectedUserId) return null;
@@ -142,10 +162,10 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
       <div
         className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
         onClick={e => {
-          if (e.target === e.currentTarget && !isSubmitting) onClose();
+          if (e.target === e.currentTarget && !isSubmitting) requestClose();
         }}
       >
-        <DialogPanel aria-label="Assign task" onClose={onClose} busy={isSubmitting}
+        <DialogPanel aria-label="Assign task" onClose={requestClose} busy={isSubmitting}
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 6 }}
@@ -166,7 +186,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
             <button
               aria-label="Close dialog"
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="icon-button shrink-0"
             >
               <X className="h-4 w-4" />
@@ -175,6 +195,23 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
 
           <form onSubmit={handleSubmit}>
             <div className="p-5 space-y-4">
+              {showDiscardConfirm && (
+                <div role="alertdialog" aria-label="Discard unsaved assignment" className="callout callout-warning space-y-2">
+                  <p className="text-xs font-semibold">Discard unsaved assignment?</p>
+                  <p className="text-[11px] opacity-90">
+                    You have unsubmitted assignment or estimate changes that will be lost if you close now.
+                  </p>
+                  <div className="flex gap-2 pt-1">
+                    <button type="button" onClick={resetDiscardConfirm} className="button-secondary">
+                      Keep Editing
+                    </button>
+                    <button type="button" onClick={confirmDiscard} className="button-danger-outline">
+                      Discard
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {submitError && (
                 <div role="alert" className="callout callout-danger flex items-start gap-2">
                   <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
@@ -202,9 +239,9 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                     </span>
                   )}
                 </div>
-                <h4 className="text-sm font-semibold text-[var(--text-primary)] break-words">
+                <h3 className="text-sm font-semibold text-[var(--text-primary)] break-words">
                   {task.title}
-                </h4>
+                </h3>
                 {(task.client || task.project) && (
                   <p className="text-xs text-[var(--text-secondary)]">
                     {[task.client, task.project].filter(Boolean).join(' · ')}
@@ -256,14 +293,42 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                 )}
 
                 {selectedUserObj && (() => {
-                  const selectedLoad = quickWorkloadScore(tasksByUser.get(selectedUserObj.id) || []);
+                  const currentTasks = tasksByUser.get(selectedUserObj.id) || [];
+                  const selectedLoad = quickWorkloadScore(currentTasks);
+                  const willSchedule = !keepInPipeline;
+                  const projectedTask: Task = {
+                    ...task,
+                    userId: selectedUserObj.id,
+                    assigneeIds: [selectedUserObj.id],
+                    status: willSchedule ? 'todo' : 'pipeline',
+                    dueDate: willSchedule ? (dueDate.trim() || undefined) : task.dueDate,
+                    cognitiveLoad,
+                  };
+                  const projectedTasks = currentTasks.some(t => t.id === task.id)
+                    ? currentTasks.map(t => (t.id === task.id ? projectedTask : t))
+                    : [...currentTasks, projectedTask];
+                  const projectedLoad = quickWorkloadScore(projectedTasks);
                   const selectedDailyHours = getUserDailyAssignedHours(selectedUserObj, tasks);
+                  const willOverload = projectedLoad >= 12;
                   return (
-                    <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--text-secondary)] bg-[var(--surface-muted)] px-3 py-1.5 rounded-[7px] border border-[var(--border)] tabular-nums">
+                    <div
+                      className={`mt-2 flex flex-wrap items-center justify-between gap-2 text-xs px-3 py-1.5 rounded-[7px] border tabular-nums ${
+                        willOverload
+                          ? 'border-[var(--danger-border)] bg-[var(--danger-soft)] text-[var(--text-primary)]'
+                          : 'border-[var(--border)] bg-[var(--surface-muted)] text-[var(--text-secondary)]'
+                      }`}
+                    >
                       <span>Selected: <strong className="text-[var(--text-primary)]">{selectedUserObj.name}</strong></span>
-                      <div className="flex items-center gap-2.5">
-                        <span className={selectedLoad >= 12 ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
-                          Load: <strong>{selectedLoad} / 12 pts</strong>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className={willOverload ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
+                          Load:{' '}
+                          <strong>
+                            {projectedLoad !== selectedLoad
+                              ? `${selectedLoad} → ${projectedLoad}`
+                              : selectedLoad}{' '}
+                            / 12 pts
+                          </strong>
+                          {willOverload && ' · Will overload'}
                         </span>
                         <span className="text-[var(--text-muted)]">·</span>
                         <span>Assigned: <strong className="text-[#1d4ed8] dark:text-blue-400">{formatHours(selectedDailyHours)}/day</strong></span>
@@ -281,45 +346,56 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                 required
               />
 
-              {/* Deadline & Placement */}
-              {selectedUserId && (
-                <div className="space-y-2.5">
-                  <div>
-                    <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
-                      <label className="field-label !mb-0 flex items-center gap-1.5" htmlFor="taskassignmentmodal-deadline">
-                        <Calendar className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
-                        <span>
-                          Deadline {!keepInPipeline && <span className="text-red-600 dark:text-red-400">*</span>}
-                        </span>
-                      </label>
-                      <DateQuickPresets
-                        value={dueDate}
-                        onSelectDate={setDueDate}
-                        includeToday
-                        allowClear={keepInPipeline}
-                      />
-                    </div>
-                    <input
-                      id="taskassignmentmodal-deadline"
-                      type="date"
-                      required={!keepInPipeline}
-                      value={dueDate}
-                      onChange={e => setDueDate(e.target.value)}
-                      className="field-control tabular-nums cursor-pointer"
-                    />
+              {/* Deadline & Placement (kept visible to avoid mid-form layout jump) */}
+              <div className="space-y-2.5">
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                    <label className="field-label !mb-0 flex items-center gap-1.5" htmlFor="taskassignmentmodal-deadline">
+                      <Calendar className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
+                      <span>
+                        Deadline {selectedUserId && !keepInPipeline && <span className="text-red-600 dark:text-red-400">*</span>}
+                      </span>
+                    </label>
+                    {!selectedUserId && (
+                      <span className="text-[11px] text-[var(--text-muted)]">
+                        Pick a teammate above to schedule
+                      </span>
+                    )}
                   </div>
-
-                  <label className="flex items-center gap-2 rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-xs text-[var(--text-primary)] cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={keepInPipeline}
-                      onChange={e => setKeepInPipeline(e.target.checked)}
-                      className="rounded border-[var(--border)] h-3.5 w-3.5"
-                    />
-                    <span>Keep in Team Pipeline as assigned (don&rsquo;t move to To Do yet)</span>
-                  </label>
+                  <input
+                    id="taskassignmentmodal-deadline"
+                    type="date"
+                    disabled={!selectedUserId || isSubmitting}
+                    required={Boolean(selectedUserId && !keepInPipeline)}
+                    value={dueDate}
+                    onChange={e => setDueDate(e.target.value)}
+                    className="field-control tabular-nums cursor-pointer"
+                  />
+                  <DateQuickPresets
+                    value={dueDate}
+                    onSelectDate={setDueDate}
+                    disabled={!selectedUserId || isSubmitting}
+                    includeToday
+                    allowClear={keepInPipeline}
+                    className="mt-1.5"
+                  />
                 </div>
-              )}
+
+                <label
+                  className={`flex items-center gap-2 rounded-[7px] border border-[var(--border)] bg-[var(--surface-muted)] px-3 py-2 text-xs select-none ${
+                    !selectedUserId ? 'opacity-60 cursor-not-allowed text-[var(--text-secondary)]' : 'text-[var(--text-primary)] cursor-pointer'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    disabled={!selectedUserId || isSubmitting}
+                    checked={keepInPipeline}
+                    onChange={e => setKeepInPipeline(e.target.checked)}
+                    className="rounded border-[var(--border)] h-3.5 w-3.5"
+                  />
+                  <span>Keep in Team Pipeline as assigned (don&rsquo;t move to To Do yet)</span>
+                </label>
+              </div>
 
               {/* Time Estimate Specification */}
               <div>
@@ -370,7 +446,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
             <div className="dialog-footer">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={requestClose}
                 className="button-secondary"
               >
                 Cancel

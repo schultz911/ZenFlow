@@ -1,7 +1,8 @@
-import React, { useState, useMemo, useCallback, useRef, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, Task, TaskStatus, DragTaskInfo, CognitiveLoad } from '../types';
+import { handleRovingMenuKeyDown, useAnchoredPopover } from '../hooks/useAnchoredPopover';
 import {
   calculateUserWorkload,
   compareTasksByDeadline,
@@ -217,9 +218,19 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   const [showArchived, setShowArchived] = useState(false);
   const [showEmptyOngoing, setShowEmptyOngoing] = useState(false);
   const [memberMenuOpen, setMemberMenuOpen] = useState(false);
-  const [memberMenuPos, setMemberMenuPos] = useState<{ top: number; left: number } | null>(null);
   const memberMenuBtnRef = useRef<HTMLButtonElement>(null);
   const memberMenuPopRef = useRef<HTMLDivElement>(null);
+  const closeMemberMenu = useCallback(() => setMemberMenuOpen(false), []);
+  const { position: memberMenuPos } = useAnchoredPopover({
+    isOpen: memberMenuOpen,
+    triggerRef: memberMenuBtnRef,
+    popoverRef: memberMenuPopRef,
+    onClose: closeMemberMenu,
+    align: 'right',
+    gap: 6,
+    fallbackWidth: 208,
+    fallbackHeight: 96,
+  });
   const [dragOverColumn, setDragOverColumn] = useState<TaskStatus | null>(null);
   const [dragOverHeader, setDragOverHeader] = useState(false);
   const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
@@ -328,76 +339,25 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
     }
   }, [quickAddTitle, quickAddDueDate, isSubmittingQuickAdd, onQuickAddTask, user.id, quickAddLoad]);
 
-  const updateMemberMenuPos = useCallback(() => {
-    const btn = memberMenuBtnRef.current;
-    if (!btn) return;
-    const rect = btn.getBoundingClientRect();
-    const menuW = memberMenuPopRef.current?.offsetWidth || 208;
-    const menuH = memberMenuPopRef.current?.offsetHeight || 180;
-    const left = Math.max(10, Math.min(rect.right - menuW, window.innerWidth - menuW - 10));
-    const openAbove = rect.bottom + menuH + 10 > window.innerHeight && rect.top >= menuH + 10;
-    const rawTop = openAbove ? rect.top - menuH - 6 : rect.bottom + 6;
-    const top = Math.max(10, Math.min(rawTop, window.innerHeight - menuH - 10));
-    setMemberMenuPos({ top, left });
-  }, []);
-
-  useLayoutEffect(() => {
-    if (memberMenuOpen) {
-      updateMemberMenuPos();
-    }
-  }, [memberMenuOpen, updateMemberMenuPos]);
-
   useEffect(() => {
     if (!memberMenuOpen) return;
-    updateMemberMenuPos();
     const focusTimer = window.setTimeout(() => {
-      const firstItem = memberMenuPopRef.current?.querySelector<HTMLElement>('[role="menuitem"]');
+      const firstItem = memberMenuPopRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])');
       firstItem?.focus();
     }, 0);
-    const onOutside = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (
-        memberMenuBtnRef.current && !memberMenuBtnRef.current.contains(target) &&
-        memberMenuPopRef.current && !memberMenuPopRef.current.contains(target)
-      ) {
-        setMemberMenuOpen(false);
-      }
-    };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setMemberMenuOpen(false);
-        memberMenuBtnRef.current?.focus();
-        return;
-      }
       if (e.key === 'Tab') {
         setMemberMenuOpen(false);
         return;
       }
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Home' || e.key === 'End') {
-        const items = Array.from(memberMenuPopRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') || []);
-        if (items.length === 0) return;
-        e.preventDefault();
-        const currentIndex = items.indexOf(document.activeElement as HTMLElement);
-        let nextIndex = 0;
-        if (e.key === 'ArrowDown') nextIndex = currentIndex < 0 ? 0 : (currentIndex + 1) % items.length;
-        else if (e.key === 'ArrowUp') nextIndex = currentIndex <= 0 ? items.length - 1 : currentIndex - 1;
-        else if (e.key === 'End') nextIndex = items.length - 1;
-        items[nextIndex]?.focus();
-      }
+      handleRovingMenuKeyDown(e, memberMenuPopRef.current);
     };
-    document.addEventListener('mousedown', onOutside);
     window.addEventListener('keydown', onKey);
-    window.addEventListener('resize', updateMemberMenuPos);
-    window.addEventListener('scroll', updateMemberMenuPos, true);
     return () => {
       window.clearTimeout(focusTimer);
-      document.removeEventListener('mousedown', onOutside);
       window.removeEventListener('keydown', onKey);
-      window.removeEventListener('resize', updateMemberMenuPos);
-      window.removeEventListener('scroll', updateMemberMenuPos, true);
     };
-  }, [memberMenuOpen, updateMemberMenuPos]);
+  }, [memberMenuOpen]);
 
   const handleTaskDragStart = useCallback(
     (draggedTask: Task) => {
@@ -780,14 +740,14 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
         {/* User Identity */}
         <div className="flex items-center gap-3 min-w-0">
           {(onMoveUserUp || onMoveUserDown) && !isCurrentUser && (
-            <div className="flex flex-col border border-[var(--border)] rounded-[6px] bg-[var(--surface)] overflow-hidden shrink-0">
+            <div className="hidden sm:flex flex-col border border-[var(--border)] rounded-[6px] bg-[var(--surface)] overflow-hidden shrink-0">
               <button
                 type="button"
                 disabled={!canMoveUp}
                 onClick={() => onMoveUserUp?.(user.id)}
                 title="Move workspace up"
                 aria-label={`Move ${user.name} up`}
-                className="min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center px-1 py-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                className="flex items-center justify-center px-1 py-0.5 text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
                 <ArrowUp className="h-2.5 w-2.5" />
               </button>
@@ -797,7 +757,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 onClick={() => onMoveUserDown?.(user.id)}
                 title="Move workspace down"
                 aria-label={`Move ${user.name} down`}
-                className="min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 flex items-center justify-center px-1 py-0.5 border-t border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                className="flex items-center justify-center px-1 py-0.5 border-t border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] disabled:opacity-25 disabled:cursor-not-allowed transition-colors cursor-pointer"
               >
                 <ArrowDown className="h-2.5 w-2.5" />
               </button>
@@ -893,14 +853,9 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                 {userEfficiency.efficiencyPercent !== null ? `${Math.round(userEfficiency.efficiencyPercent)}%` : '—'}
               </span>
               {userEfficiency.efficiencyPercent !== null && (
-                <>
-                  <span className="text-[11px] text-[var(--text-secondary)] whitespace-nowrap">
-                    {formatHoursRatio(userEfficiency.estimatedHours, userEfficiency.billableHours)}
-                  </span>
-                  <span className="hidden sm:inline text-[11px] text-[var(--text-muted)] whitespace-nowrap">
-                    {Math.round(userEfficiency.efficiencyPercent) >= 100 ? 'est / bill · under est' : 'est / bill · over est'}
-                  </span>
-                </>
+                <span className="text-[11px] text-[var(--text-secondary)] whitespace-nowrap">
+                  {formatHoursRatio(userEfficiency.estimatedHours, userEfficiency.billableHours)}
+                </span>
               )}
             </div>
           </div>
@@ -957,15 +912,49 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
             </button>
           </div>
 
-          {memberMenuOpen && memberMenuPos && createPortal(
+          {memberMenuOpen && createPortal(
             <div
               id={`member-actions-menu-${user.id}`}
               ref={memberMenuPopRef}
               role="menu"
               aria-label={`${user.name} actions`}
-              style={{ top: `${memberMenuPos.top}px`, left: `${memberMenuPos.left}px` }}
+              style={
+                memberMenuPos
+                  ? { top: `${memberMenuPos.top}px`, left: `${memberMenuPos.left}px` }
+                  : { top: 0, left: 0, visibility: 'hidden' }
+              }
               className="menu-surface fixed z-50 w-52 rounded-[9px] border border-[var(--border)] p-1 text-[var(--text-primary)]"
             >
+              {(onMoveUserUp || onMoveUserDown) && !isCurrentUser && (
+                <>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={!canMoveUp}
+                    onClick={() => {
+                      setMemberMenuOpen(false);
+                      onMoveUserUp?.(user.id);
+                    }}
+                    className="menu-item sm:hidden mobile-tap-control disabled:opacity-40 cursor-pointer"
+                  >
+                    <ArrowUp className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
+                    <span>Move Workspace Up</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    disabled={!canMoveDown}
+                    onClick={() => {
+                      setMemberMenuOpen(false);
+                      onMoveUserDown?.(user.id);
+                    }}
+                    className="menu-item sm:hidden mobile-tap-control disabled:opacity-40 cursor-pointer"
+                  >
+                    <ArrowDown className="h-3.5 w-3.5 text-[var(--text-secondary)]" />
+                    <span>Move Workspace Down</span>
+                  </button>
+                </>
+              )}
               {canEdit && tasksByColumn.retainer.length === 0 && !isCollapsed && (
                 <button
                   type="button"

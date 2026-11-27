@@ -6,6 +6,7 @@ import { CognitiveLoad, Task, TaskStatus, User } from '../types';
 import { formatDateOnly, formatTaskStatus, getLocalOffsetDateKey, getUserTag } from '../utils/workload';
 import { DateQuickPresets } from './ui/DateQuickPresets';
 import { CognitiveLoadSelector } from './ui/CognitiveLoadSelector';
+import { PrioritySelector } from './ui/PrioritySelector';
 import { useDiscardGuard } from '../hooks/useDiscardGuard';
 import {
   X,
@@ -213,12 +214,16 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
   useEffect(() => {
     if (availableUsers.length > 0) {
       if (!availableUsers.some(u => u.id === selectedUserId)) {
-        setSelectedUserId(availableUsers[0].id);
+        const preferred =
+          task?.status !== 'retainer'
+            ? availableUsers.find(u => u.id !== sourceUser?.id) || availableUsers[0]
+            : availableUsers[0];
+        setSelectedUserId(preferred.id);
       }
     } else {
       setSelectedUserId('');
     }
-  }, [availableUsers, selectedUserId]);
+  }, [availableUsers, selectedUserId, task?.status, sourceUser?.id]);
 
   const selectedTargetUser = useMemo(() => {
     return users.find(u => u.id === selectedUserId) || null;
@@ -359,9 +364,9 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                       <span className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--text-secondary)]">
                         Parent Task
                       </span>
-                      <h4 className="text-xs font-semibold text-[var(--text-primary)] mt-0.5 truncate">
+                      <h3 className="text-xs font-semibold text-[var(--text-primary)] mt-0.5 truncate">
                         {task.title}
-                      </h4>
+                      </h3>
                     </div>
                     {task.status === 'retainer' || !task.cognitiveLoad ? (
                       <span className="inline-flex items-center gap-1 rounded-[5px] bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 shrink-0 mt-0.5">
@@ -583,39 +588,12 @@ export const DuplicateTaskModal: React.FC<DuplicateTaskModalProps> = ({
                       </div>
                     </div>
 
-                    <div>
-                      <span id="duplicatetaskmodal-priority-label" className="field-label">Priority</span>
-                      <div role="group" aria-labelledby="duplicatetaskmodal-priority-label" className="grid grid-cols-3 gap-1.5">
-                        {(['low', 'medium', 'high'] as const).map(p => {
-                          const isSelected = targetPriority === p;
-                          return (
-                            <button
-                              key={p}
-                              type="button"
-                              aria-pressed={isSelected}
-                              disabled={isSubmitting || feedback?.type === 'success'}
-                              onClick={() => setTargetPriority(p)}
-                              className={`flex items-center justify-center gap-1.5 py-1.5 rounded-[7px] border text-xs font-semibold capitalize transition-colors cursor-pointer disabled:opacity-50 ${
-                                isSelected
-                                  ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
-                                  : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]'
-                              }`}
-                            >
-                              <span
-                                className={`h-1.5 w-1.5 rounded-full ${
-                                  p === 'high'
-                                    ? 'bg-red-600 dark:bg-red-400'
-                                    : p === 'medium'
-                                    ? 'bg-amber-600 dark:bg-amber-400'
-                                    : 'bg-emerald-600 dark:bg-emerald-400'
-                                }`}
-                              />
-                              <span>{p}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    <PrioritySelector
+                      value={targetPriority}
+                      onChange={setTargetPriority}
+                      labelId="duplicatetaskmodal-priority-label"
+                      disabled={isSubmitting || feedback?.type === 'success'}
+                    />
                   </div>
 
                   {/* Step 6: Subtask Cognitive Load */}

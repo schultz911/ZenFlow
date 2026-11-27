@@ -201,34 +201,78 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
           setIsCollapsed(prev => !prev);
         }}
         title={isCollapsed ? `Click bar to expand ${pipelineHeading}` : `Click bar to collapse ${pipelineHeading}`}
-        className={`ledger-band flex flex-wrap items-center justify-between gap-2.5 px-4 py-2.5 sm:px-5 cursor-pointer select-none ${isCollapsed ? 'border-b-0' : ''}`}
+        className={`ledger-band flex items-center justify-between gap-2 px-3.5 py-2.5 sm:px-5 cursor-pointer select-none ${isCollapsed ? 'border-b-0' : ''}`}
       >
-        <div className="flex items-center gap-2.5 min-w-0">
+        <div className="flex items-center gap-2 sm:gap-2.5 min-w-0 flex-wrap">
           <DisciplineIcon aria-hidden="true" className="h-4 w-4 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
-          <h2 className="text-[13px] font-bold tracking-tight text-[var(--text-primary)]">
+          <h2 className="text-[13px] font-bold tracking-tight text-[var(--text-primary)] whitespace-nowrap">
             {pipelineHeading}
           </h2>
-          <span className="text-xs font-medium text-[var(--text-secondary)] tabular-nums">
+          <span className="text-xs font-medium text-[var(--text-secondary)] tabular-nums whitespace-nowrap">
             {totalCount} total
           </span>
           {unassignedCount > 0 && (
             <>
               <span aria-hidden="true" className="text-[var(--text-muted)] text-xs">·</span>
-              <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 tabular-nums">
+              <span className="text-xs font-semibold text-amber-700 dark:text-amber-400 tabular-nums whitespace-nowrap">
                 {unassignedCount} unassigned
               </span>
             </>
           )}
         </div>
 
-        {/* Create Brief & Collapse Toggle (Filter tabs live inside body so collapsed bar stays single-row on mobile) */}
-        <div className="flex items-center gap-2 flex-wrap">
+        {/* Create Brief, Inline md+ Filter Tabs & Collapse Toggle */}
+        <div className="flex items-center gap-2 shrink-0">
+          {!isCollapsed && (
+            <div className="hidden md:flex items-center rounded-[7px] bg-[var(--surface-subtle)] p-0.5 border border-[var(--border)] text-[11px] font-semibold">
+              <button
+                type="button"
+                aria-pressed={filterMode === 'all'}
+                title="Show all deliverables in pipeline"
+                onClick={() => setFilterMode('all')}
+                className={`px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
+                  filterMode === 'all'
+                    ? 'bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border)]'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
+                }`}
+              >
+                All ({totalCount})
+              </button>
+              <button
+                type="button"
+                aria-pressed={filterMode === 'unassigned'}
+                title="Filter to unassigned deliverables"
+                onClick={() => setFilterMode('unassigned')}
+                className={`px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
+                  filterMode === 'unassigned'
+                    ? 'bg-[var(--surface)] text-amber-700 dark:text-amber-400 border border-[var(--border)]'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
+                }`}
+              >
+                Unassigned ({unassignedCount})
+              </button>
+              <button
+                type="button"
+                aria-pressed={filterMode === 'assigned'}
+                title="Filter to assigned deliverables waiting in pipeline"
+                onClick={() => setFilterMode('assigned')}
+                className={`px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
+                  filterMode === 'assigned'
+                    ? 'bg-[var(--surface)] text-[#1d4ed8] dark:text-blue-400 border border-[var(--border)]'
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
+                }`}
+              >
+                Assigned ({assignedCount})
+              </button>
+            </div>
+          )}
+
           {canCreatePipelineTask ? (
             <button
               type="button"
               onClick={onOpenCreateModal}
               title="Create a new multi-discipline Content or Design pipeline brief (Shortcut: n)"
-              className="button-primary mobile-tap-control"
+              className="button-primary mobile-tap-control whitespace-nowrap"
             >
               <Plus className="h-3.5 w-3.5" />
               <span>New Brief</span>
@@ -236,7 +280,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
           ) : (
             <div
               title="Task creation is restricted to Accounts team members and authorized leadership"
-              className="flex items-center gap-1.5 rounded-[7px] border border-[var(--border)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--text-secondary)] bg-[var(--surface)]"
+              className="flex items-center gap-1.5 rounded-[7px] border border-[var(--border)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--text-secondary)] bg-[var(--surface)] whitespace-nowrap"
             >
               <Shield className="h-3 w-3" />
               <span>View-Only</span>
@@ -250,7 +294,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
             onClick={() => setIsCollapsed(prev => !prev)}
             title={isCollapsed ? 'Expand pipeline' : 'Collapse pipeline'}
             aria-label={isCollapsed ? 'Expand pipeline' : 'Collapse pipeline'}
-            className="icon-button border border-[var(--border)] bg-[var(--surface)]"
+            className="icon-button border border-[var(--border)] bg-[var(--surface)] shrink-0"
           >
             {isCollapsed ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronUp className="h-3.5 w-3.5" />}
           </button>
@@ -260,7 +304,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
       {/* Horizontal Scrollable Swimlane-Style Cards Strip */}
       {!isCollapsed && (
         <div id="team-pipeline-body" className="bg-[var(--surface)]">
-          <div className="px-3 sm:px-5 pt-2.5 flex items-center justify-between gap-2 flex-wrap">
+          <div className="md:hidden px-3 sm:px-5 pt-2.5 flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center rounded-[7px] bg-[var(--surface-subtle)] p-0.5 border border-[var(--border)] text-[11px] font-semibold">
               <button
                 type="button"

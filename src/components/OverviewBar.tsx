@@ -248,7 +248,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
             <p className="metric-detail" title="Estimated vs. billable hours on completed work">
               {teamEfficiency.efficiencyPercent !== null ? (
                 <>
-                  <span className="text-[11px] font-normal text-[var(--text-muted)] mr-1">
+                  <span className="text-xs font-normal text-[var(--text-muted)] mr-1">
                     {Math.round(teamEfficiency.efficiencyPercent) >= 100 ? 'est / bill · under est' : 'est / bill · over est'}
                   </span>
                   <span>{formatHoursRatio(teamEfficiency.estimatedHours, teamEfficiency.billableHours)}</span>

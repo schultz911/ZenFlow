@@ -1,7 +1,8 @@
 import { DialogPanel } from './ui/DialogPanel';
 import { CognitiveLoadSelector } from './ui/CognitiveLoadSelector';
+import { PrioritySelector } from './ui/PrioritySelector';
 import { ContentSpecFields, DesignSpecFields } from './forms/DisciplineSpecFields';
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useLayoutEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth, useWorkspace } from '../context/DashboardContext';
 import { Task, CognitiveLoad, Role, TaskStatus, TaskDisciplineMetadata } from '../types';
@@ -107,6 +108,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
+  const [showCoAssignPicker, setShowCoAssignPicker] = useState(false);
   const [activeTab, setActiveTab] = useState<'details' | 'specs' | 'activity'>('details');
 
   // Resolved discipline for this task
@@ -199,7 +201,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
       vals.brandAssetsReferences,
     ]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!isOpen) return;
     if (taskToEdit) {
       const ids = getTaskAssigneeIds(taskToEdit);
@@ -291,6 +293,7 @@ export const TaskModal: React.FC<TaskModalProps> = ({
     }
     setShowConfirmDelete(false);
     setShowDiscardConfirm(false);
+    setShowCoAssignPicker(false);
     setSubmitError(null);
     setActiveTab('details');
   }, [isOpen, taskToEdit, defaultUserId, defaultStatus]);
@@ -883,7 +886,6 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                     placeholder="e.g. Redesign navigation menu for mobile screens"
                     className="field-control"
                     required
-                    autoFocus
                   />
                 </div>
 
@@ -926,32 +928,44 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                       <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
                     </div>
                     {canEdit && assigneeIds.length > 0 && eligibleUsers.some(u => !assigneeIds.includes(u.id)) && (
-                      <div className="mt-1.5 flex items-center gap-1.5">
-                        <Users className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
-                        <div className="relative flex-1 min-w-0">
-                          <select
-                            aria-label="Share task with additional member"
-                            value=""
-                            onChange={e => {
-                              const extraId = e.target.value;
-                              if (extraId && !assigneeIds.includes(extraId)) {
-                                setAssigneeIds(prev => [...prev, extraId]);
-                              }
-                            }}
-                            className="field-control sm:!py-1 sm:!text-[11px] pr-7 cursor-pointer"
-                          >
-                            <option value="">+ Co-assign teammate...</option>
-                            {eligibleUsers
-                              .filter(u => !assigneeIds.includes(u.id))
-                              .map(u => (
-                                <option key={u.id} value={u.id}>
-                                  {u.name} ({getUserTag(u).label})
-                                </option>
-                              ))}
-                          </select>
-                          <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-[var(--text-muted)]" />
+                      showCoAssignPicker ? (
+                        <div className="mt-1.5 flex items-center gap-1.5">
+                          <Users className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
+                          <div className="relative flex-1 min-w-0">
+                            <select
+                              aria-label="Share task with additional member"
+                              value=""
+                              onChange={e => {
+                                const extraId = e.target.value;
+                                if (extraId && !assigneeIds.includes(extraId)) {
+                                  setAssigneeIds(prev => [...prev, extraId]);
+                                }
+                              }}
+                              className="field-control sm:!py-1 sm:!text-[11px] pr-7 cursor-pointer"
+                            >
+                              <option value="">+ Co-assign teammate...</option>
+                              {eligibleUsers
+                                .filter(u => !assigneeIds.includes(u.id))
+                                .map(u => (
+                                  <option key={u.id} value={u.id}>
+                                    {u.name} ({getUserTag(u).label})
+                                  </option>
+                                ))}
+                            </select>
+                            <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-[var(--text-muted)]" />
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setShowCoAssignPicker(true)}
+                          className="mt-1.5 inline-flex items-center gap-1 text-[11px] font-medium text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer"
+                          style={{ minHeight: 'auto' }}
+                        >
+                          <Users className="h-3 w-3 text-emerald-700 dark:text-emerald-400 shrink-0" />
+                          <span>+ Co-assign teammate</span>
+                        </button>
+                      )
                     )}
                     {assigneeIds.length > 1 && (
                       <div className="mt-1.5 flex flex-wrap items-center gap-1">
@@ -1093,40 +1107,11 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                 </div>
 
                 {/* Priority */}
-                <div>
-                  <span id="taskmodal-priority-label" className="field-label">
-                    Priority
-                  </span>
-                  <div role="group" aria-labelledby="taskmodal-priority-label" className="grid grid-cols-3 gap-1.5">
-                    {(['low', 'medium', 'high'] as const).map(p => {
-                      const isSelected = priority === p;
-                      return (
-                        <button
-                          key={p}
-                          type="button"
-                          aria-pressed={isSelected}
-                          onClick={() => setPriority(p)}
-                          className={`flex items-center justify-center gap-1.5 py-1.5 rounded-[7px] border text-xs font-semibold capitalize transition-colors cursor-pointer ${
-                            isSelected
-                              ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
-                              : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]'
-                          }`}
-                        >
-                          <span
-                            className={`h-1.5 w-1.5 rounded-full ${
-                              p === 'high'
-                                ? 'bg-red-600 dark:bg-red-400'
-                                : p === 'medium'
-                                ? 'bg-amber-600 dark:bg-amber-400'
-                                : 'bg-emerald-600 dark:bg-emerald-400'
-                            }`}
-                          />
-                          <span>{p}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                <PrioritySelector
+                  value={priority}
+                  onChange={setPriority}
+                  labelId="taskmodal-priority-label"
+                />
                 </div>
 
                 {/* Cognitive Load */}
@@ -1138,21 +1123,12 @@ export const TaskModal: React.FC<TaskModalProps> = ({
 
                 {/* Deadline */}
                 <div>
-                  <div className="flex items-center justify-between gap-2 mb-1.5">
-                    <label className="field-label !mb-0 flex items-center gap-1.5" htmlFor="task-due-date-input">
-                      <Calendar className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
-                      <span>
-                        Deadline {status !== 'pipeline' && <span className="text-red-600 dark:text-red-400">*</span>}
-                      </span>
-                    </label>
-
-                    {/* Quick Select Buttons */}
-                    <DateQuickPresets
-                      value={dueDate}
-                      onSelectDate={setDueDate}
-                      allowClear
-                    />
-                  </div>
+                  <label className="field-label flex items-center gap-1.5" htmlFor="task-due-date-input">
+                    <Calendar className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
+                    <span>
+                      Deadline {status !== 'pipeline' && <span className="text-red-600 dark:text-red-400">*</span>}
+                    </span>
+                  </label>
 
                   <input
                     id="task-due-date-input"
@@ -1165,6 +1141,13 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                         ? '!border-amber-600/60 dark:!border-amber-400/50'
                         : ''
                     }`}
+                  />
+
+                  <DateQuickPresets
+                    value={dueDate}
+                    onSelectDate={setDueDate}
+                    allowClear
+                    className="mt-1.5"
                   />
                   {status !== 'pipeline' && !dueDate && (
                     <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-400">

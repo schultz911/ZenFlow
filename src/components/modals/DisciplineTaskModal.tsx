@@ -6,6 +6,7 @@ import { useAuth, useBoardUi, useClickUp, useWorkspace } from '../../context/Das
 import { RoleFilter, TaskDisciplineMetadata } from '../../types';
 import { isValidHttpUrl } from '../../utils/taskMetadata';
 import { DateQuickPresets } from '../ui/DateQuickPresets';
+import { PrioritySelector } from '../ui/PrioritySelector';
 import { useDiscardGuard } from '../../hooks/useDiscardGuard';
 import {
   X,
@@ -619,7 +620,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       list="discipline-client-options"
                       value={client}
                       onChange={e => setClient(e.target.value)}
-                      placeholder="Auto-filled from Space/Folder or custom"
+                      placeholder={selectedSpace ? 'Auto-filled from Space or custom' : 'e.g. Acme Corp'}
                       className="field-control"
                       id="disciplinetaskmodal-field-3"
                     />
@@ -639,7 +640,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                       list="discipline-project-options"
                       value={project}
                       onChange={e => setProject(e.target.value)}
-                      placeholder="Auto-filled from List or custom"
+                      placeholder={selectedList ? 'Auto-filled from List or custom' : 'e.g. Q4 Product Launch'}
                       className="field-control"
                       id="disciplinetaskmodal-field-4"
                     />
@@ -653,48 +654,16 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
 
                 {/* Priority & Deadline */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <div>
-                    <span id="disciplinetaskmodal-priority-label" className="field-label">
-                      Priority
-                    </span>
-                    <div role="group" aria-labelledby="disciplinetaskmodal-priority-label" className="flex items-center gap-1.5">
-                      {(['low', 'medium', 'high'] as const).map(p => (
-                        <button
-                          key={p}
-                          type="button"
-                          onClick={() => setPriority(p)}
-                          className={`mobile-tap-control flex-1 inline-flex items-center justify-center gap-1.5 rounded-[7px] py-1.5 text-xs font-semibold capitalize border transition-colors cursor-pointer ${
-                            priority === p
-                              ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
-                              : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]'
-                          }`}
-                        >
-                          <span
-                            className={`h-1.5 w-1.5 rounded-full ${
-                              p === 'high'
-                                ? 'bg-red-600 dark:bg-red-400'
-                                : p === 'medium'
-                                ? 'bg-amber-600 dark:bg-amber-400'
-                                : 'bg-emerald-600 dark:bg-emerald-400'
-                            }`}
-                          />
-                          <span>{p}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  <PrioritySelector
+                    value={priority}
+                    onChange={setPriority}
+                    labelId="disciplinetaskmodal-priority-label"
+                  />
 
                   <div>
-                    <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
-                      <label className="field-label !mb-0" htmlFor="disciplinetaskmodal-field-5">
-                        Target Deadline
-                      </label>
-                      <DateQuickPresets
-                        value={dueDate}
-                        onSelectDate={setDueDate}
-                        allowClear
-                      />
-                    </div>
+                    <label className="field-label" htmlFor="disciplinetaskmodal-field-5">
+                      Target Deadline
+                    </label>
                     <div className="flex items-center gap-1.5">
                       <input
                         type="date"
@@ -715,6 +684,12 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                         </button>
                       )}
                     </div>
+                    <DateQuickPresets
+                      value={dueDate}
+                      onSelectDate={setDueDate}
+                      allowClear
+                      className="mt-1.5"
+                    />
                   </div>
                 </div>
               </div>

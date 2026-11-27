@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { User, Task, TaskStatus, RoleFilter } from '../types';
 import {
   DAILY_UTILIZATION_TARGET_HOURS,
@@ -9,6 +10,7 @@ import {
   meetsDailyUtilizationTarget,
 } from '../utils/workload';
 import { getAnalyticsClock } from '../domain/analyticsDate';
+import { handleRovingMenuKeyDown, useAnchoredPopover } from '../hooks/useAnchoredPopover';
 import {
   UsersRound,
   ChevronDown,
@@ -46,9 +48,26 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
   const [pickerUserId, setPickerUserId] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const pickerTriggerRef = useRef<HTMLButtonElement>(null);
+  const pickerMenuRef = useRef<HTMLDivElement>(null);
+
+  const closePicker = useCallback(() => setPickerUserId(null), []);
+  const { position: pickerPos } = useAnchoredPopover({
+    isOpen: Boolean(pickerUserId && isExpanded),
+    triggerRef: pickerTriggerRef,
+    popoverRef: pickerMenuRef,
+    onClose: closePicker,
+    align: 'right',
+    gap: 6,
+    fallbackWidth: 240,
+    fallbackHeight: 140,
+  });
 
   useEffect(() => {
-    if (!isExpanded) return;
+    if (!isExpanded) {
+      setPickerUserId(null);
+      return;
+    }
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !event.defaultPrevented && containerRef.current?.contains(event.target as Node)) {
         event.preventDefault();
@@ -59,6 +78,15 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [isExpanded, onExpandedChange]);
+
+  useEffect(() => {
+    if (!pickerUserId || !isExpanded) return;
+    const focusTimer = window.setTimeout(() => {
+      const firstItem = pickerMenuRef.current?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])');
+      firstItem?.focus({ preventScroll: true });
+    }, 0);
+    return () => window.clearTimeout(focusTimer);
+  }, [pickerUserId, isExpanded]);
 
   const { freeUsers, userStats, unassignedByTeam, unassignedTotal } = useMemo(() => {
     const inReviewCounts = new Map<string, number>();
@@ -258,7 +286,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                             </span>
                           ))}
                         </span>
-                        <span>{tagInfo.label} · {assignedHoursLabel} assigned</span>
+                        <span className="whitespace-nowrap">{tagInfo.label} · {assignedHoursLabel} assigned</span>
                         {stats && stats.inReview > 0 ? (
                           <span className="whitespace-nowrap">· {stats.inReview} in review</span>
                         ) : stats && stats.pipeline > 0 ? (
@@ -268,31 +296,43 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                     </span>
                   </button>
 
-                  <div className="relative flex items-center gap-1 shrink-0">
+                  <div className="flex items-center justify-end sm:justify-start gap-1.5 shrink-0 pl-9 sm:pl-0">
                     {onAssignBrief && matchingBriefs.length > 0 && (
                       <>
                         <button
+                          ref={pickerUserId === user.id ? pickerTriggerRef : undefined}
                           type="button"
-                          onClick={() => {
+                          onClick={e => {
                             if (matchingBriefs.length === 1) {
                               setPickerUserId(null);
                               onExpandedChange(false);
                               onAssignBrief(matchingBriefs[0], user.id);
                             } else {
+                              pickerTriggerRef.current = e.currentTarget;
                               setPickerUserId(prev => (prev === user.id ? null : user.id));
                             }
                           }}
                           aria-label={`Assign brief for ${user.name}`}
+                          aria-haspopup={matchingBriefs.length > 1 ? 'menu' : undefined}
                           aria-expanded={matchingBriefs.length > 1 ? pickerUserId === user.id : undefined}
                           className="free-pool-row-action mobile-tap-control sm:min-h-0 flex shrink-0 items-center gap-1 rounded-[6px] bg-[var(--accent-soft)] px-2 text-[11px] font-semibold text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25 cursor-pointer"
                         >
                           <span>Assign brief{matchingBriefs.length > 1 ? ` (${matchingBriefs.length})` : ''}</span>
                         </button>
-                        {pickerUserId === user.id && matchingBriefs.length > 1 && (
+                        {pickerUserId === user.id && matchingBriefs.length > 1 && createPortal(
                           <div
+                            ref={pickerMenuRef}
                             role="menu"
                             aria-label={`Select brief to assign to ${user.name}`}
-                            className="menu-surface absolute right-0 top-full mt-1 z-40 w-60 rounded-[8px] border border-[var(--border)] p-1"
+                            style={
+                              pickerPos
+                                ? { top: `${pickerPos.top}px`, left: `${pickerPos.left}px` }
+                                : { top: 0, left: 0, visibility: 'hidden' }
+                            }
+                            onKeyDown={e => {
+                              handleRovingMenuKeyDown(e.nativeEvent, e.currentTarget);
+                            }}
+                            className="menu-surface fixed z-50 w-60 rounded-[8px] border border-[var(--border)] p-1 text-[var(--text-primary)]"
                           >
                             {matchingBriefs.map(brief => (
                               <button
@@ -312,7 +352,8 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                                 ) : null}
                               </button>
                             ))}
-                          </div>
+                          </div>,
+                          document.body
                         )}
                       </>
                     )}
@@ -324,7 +365,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
                         onAddTask(user.id, 'todo');
                       }}
                       aria-label={`Add task for ${user.name}`}
-                      className="free-pool-row-action flex shrink-0 items-center gap-1 rounded-[6px] border border-[var(--border)] px-2 text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)]"
+                      className="free-pool-row-action mobile-tap-control sm:min-h-0 flex shrink-0 items-center gap-1 rounded-[6px] border border-[var(--border)] px-2 text-[11px] font-semibold text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)]"
                     >
                       <Plus aria-hidden="true" className="size-3" />
                       Task

@@ -1,7 +1,8 @@
-import React, { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Task, TaskStatus, Role } from '../types';
+import { useAnchoredPopover } from '../hooks/useAnchoredPopover';
 import { getDuePillInfo, formatDateOnly, formatCompletedDate, getCognitiveLoadLabel, getTaskBillableMs, formatBillableHours, formatBillableDetailed, getLastDayOfMonth, getLocalOffsetDateKey, getTaskAssigneeCount } from '../utils/workload';
 import { isValidHttpUrl } from '../utils/taskMetadata';
 import {
@@ -69,12 +70,23 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
 
   const [isDragging, setIsDragging] = useState(false);
   const [showSnoozeFlyout, setShowSnoozeFlyout] = useState(false);
-  const [flyoutPosition, setFlyoutPosition] = useState<{ top: number; left: number } | null>(null);
   const [customDateDraft, setCustomDateDraft] = useState(task.dueDate || '');
   const snoozeRef = useRef<HTMLDivElement>(null);
   const snoozeTriggerRef = useRef<HTMLButtonElement>(null);
   const flyoutMenuRef = useRef<HTMLDivElement>(null);
   const titleClickTimerRef = useRef<number | null>(null);
+  const closeSnoozeFlyout = useCallback(() => setShowSnoozeFlyout(false), []);
+  const { position: flyoutPosition } = useAnchoredPopover({
+    isOpen: showSnoozeFlyout && task.status !== 'done' && task.status !== 'archived',
+    triggerRef: snoozeTriggerRef,
+    popoverRef: flyoutMenuRef,
+    onClose: closeSnoozeFlyout,
+    align: 'left',
+    gap: 4,
+    fallbackWidth: 224,
+    fallbackHeight: 240,
+    dismissOnOutOfView: true,
+  });
 
   useEffect(() => {
     return () => {
@@ -163,33 +175,9 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
     setIsEditingTitle(false);
   }, [task.title]);
 
-  const updateFlyoutPosition = useCallback(() => {
-    if (!snoozeRef.current) return;
-    const rect = snoozeRef.current.getBoundingClientRect();
-    if (rect.bottom < 0 || rect.top > window.innerHeight) {
-      setShowSnoozeFlyout(false);
-      return;
-    }
-    const measuredHeight = flyoutMenuRef.current?.offsetHeight;
-    const popupHeight = measuredHeight && measuredHeight > 50 ? measuredHeight : 226;
-    const popupWidth = flyoutMenuRef.current?.offsetWidth || 208;
-    const openAbove = rect.top >= popupHeight + 10;
-    const top = openAbove ? rect.top - popupHeight - 4 : rect.bottom + 4;
-    const left = Math.max(10, Math.min(rect.left, window.innerWidth - popupWidth - 10));
-    setFlyoutPosition({ top, left });
-  }, []);
-
-  // Synchronously adjust flyout positioning to exact rendered height before paint
-  useLayoutEffect(() => {
-    if (showSnoozeFlyout) {
-      updateFlyoutPosition();
-    }
-  }, [showSnoozeFlyout, updateFlyoutPosition]);
-
-  // Dismiss snooze flyout on click outside; trap Tab and restore trigger focus on Escape
+  // Focus first control and trap Tab inside Quick Reschedule popover
   useEffect(() => {
     if (!showSnoozeFlyout) return;
-    updateFlyoutPosition();
     const focusFrame = requestAnimationFrame(() => {
       const firstControl = flyoutMenuRef.current?.querySelector<HTMLElement>(
         'button:not([disabled]), input:not([disabled])'
@@ -197,38 +185,8 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       firstControl?.focus({ preventScroll: true });
     });
 
-    const handleOutside = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (
-        snoozeRef.current && !snoozeRef.current.contains(target) &&
-        flyoutMenuRef.current && !flyoutMenuRef.current.contains(target)
-      ) {
-        setShowSnoozeFlyout(false);
-      }
-    };
-
-    const handleScroll = (e: Event) => {
-      // Do not close or interrupt if scroll originates inside the flyout or datepicker
-      if (e.target && flyoutMenuRef.current && flyoutMenuRef.current.contains(e.target as Node)) {
-        return;
-      }
-      const targetEl = e.target as HTMLElement;
-      if (targetEl && (targetEl.tagName === 'INPUT' || targetEl.getAttribute?.('type') === 'date')) {
-        return;
-      }
-      updateFlyoutPosition();
-    };
-
-    const handleResize = () => {
-      updateFlyoutPosition();
-    };
-
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setShowSnoozeFlyout(false);
-        snoozeTriggerRef.current?.focus({ preventScroll: true });
-      } else if (e.key === 'Tab' && flyoutMenuRef.current) {
+      if (e.key === 'Tab' && flyoutMenuRef.current) {
         const items = Array.from(
           flyoutMenuRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled])')
         );
@@ -244,19 +202,13 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       }
     };
 
-    document.addEventListener('mousedown', handleOutside);
     document.addEventListener('keydown', handleKeyDown, true);
-    window.addEventListener('scroll', handleScroll, true);
-    window.addEventListener('resize', handleResize);
 
     return () => {
       cancelAnimationFrame(focusFrame);
-      document.removeEventListener('mousedown', handleOutside);
       document.removeEventListener('keydown', handleKeyDown, true);
-      window.removeEventListener('scroll', handleScroll, true);
-      window.removeEventListener('resize', handleResize);
     };
-  }, [showSnoozeFlyout, updateFlyoutPosition]);
+  }, [showSnoozeFlyout]);
 
   const isDoneOrArchived = task.status === 'done' || task.status === 'archived';
   const pillInfo = getDuePillInfo(task.dueDate);
@@ -339,7 +291,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
     >
       {/* Top row: Drag grip, explicit load + priority, shared ratio, and right-aligned tabular hours + centered actions */}
       <div className="flex items-center justify-between gap-1.5 mb-1.5">
-        <div className="flex items-center gap-1.5 min-w-0 flex-wrap text-[11px]">
+        <div className="flex items-center gap-1.5 min-w-0 flex-nowrap whitespace-nowrap text-[11px]">
           {canEdit && (
             <div
               title="Drag to move, reorder, or assign to another team member"
@@ -352,7 +304,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           {/* Explicit Cognitive Load Indicator */}
           <span
             title={`Cognitive Load: ${cognitiveLabel}`}
-            className="inline-flex items-center gap-1 font-semibold text-[var(--text-secondary)] capitalize"
+            className="inline-flex items-center gap-1 font-semibold text-[var(--text-secondary)] capitalize whitespace-nowrap"
           >
             <span
               aria-hidden="true"
@@ -372,7 +324,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   : 'text-[var(--text-secondary)]'
               }
             >
-              {task.cognitiveLoad} load
+              {assigneeCount > 1 ? task.cognitiveLoad : `${task.cognitiveLoad} load`}
             </span>
           </span>
         </div>
@@ -523,13 +475,17 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                   ? `Your billable share: ${formatBillableDetailed(sharedBillableMs)} (${formatBillableDetailed(billableMs)} total across ${assigneeCount} assignees) · Click to correct hours`
                   : `Billable Duration: ${formatBillableDetailed(sharedBillableMs)} · Click to correct hours`
               }
-              className={`mobile-tap-control sm:min-h-0 inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums select-none transition-colors cursor-pointer shrink-0 group/timer ${task.status === 'in_progress'
-                ? 'bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25'
-                : 'text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)]'
-                }`}
+              className="mobile-tap-square sm:!min-w-0 sm:min-h-0 -my-2.5 sm:my-0 inline-flex items-center justify-center shrink-0 cursor-pointer group/timer"
             >
-              <Timer className={`h-2.5 w-2.5 ${task.status === 'in_progress' ? 'text-[#1d4ed8] dark:text-blue-400' : 'text-[var(--text-muted)] group-hover/timer:text-[#1d4ed8]'}`} />
-              <span>{formatBillableHours(sharedBillableMs)}</span>
+              <span
+                className={`inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[11px] font-semibold tabular-nums select-none transition-colors ${task.status === 'in_progress'
+                  ? 'bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 group-hover/timer:bg-blue-100 dark:group-hover/timer:bg-blue-500/25'
+                  : 'text-[var(--text-secondary)] group-hover/timer:bg-[var(--surface-subtle)] group-hover/timer:text-[var(--text-primary)]'
+                  }`}
+              >
+                <Timer className={`h-2.5 w-2.5 ${task.status === 'in_progress' ? 'text-[#1d4ed8] dark:text-blue-400' : 'text-[var(--text-muted)] group-hover/timer:text-[#1d4ed8]'}`} />
+                <span>{formatBillableHours(sharedBillableMs)}</span>
+              </span>
             </button>
           ) : (
             <button
@@ -540,10 +496,12 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               }}
               aria-label={`Log billable hours for ${task.title}`}
               title="Click to log billable hours"
-              className="mobile-tap-control sm:min-h-0 inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[11px] font-medium tabular-nums bg-[var(--surface-subtle)] border border-transparent hover:border-[var(--border)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors cursor-pointer shrink-0"
+              className="mobile-tap-square sm:!min-w-0 sm:min-h-0 -my-2.5 sm:my-0 inline-flex items-center justify-center shrink-0 cursor-pointer group/timer"
             >
-              <Timer className="h-2.5 w-2.5" />
-              <span>0h</span>
+              <span className="inline-flex items-center gap-1 rounded-[5px] px-1.5 py-0.5 text-[11px] font-medium tabular-nums bg-[var(--surface-subtle)] border border-transparent group-hover/timer:border-[var(--border)] text-[var(--text-secondary)] group-hover/timer:text-[var(--text-primary)] transition-colors">
+                <Timer className="h-2.5 w-2.5" />
+                <span>0h</span>
+              </span>
             </button>
           )}
         </div>
@@ -720,13 +678,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
               aria-expanded={showSnoozeFlyout}
               onClick={e => {
                 e.stopPropagation();
-                setShowSnoozeFlyout(prev => {
-                  const next = !prev;
-                  if (next) {
-                    updateFlyoutPosition();
-                  }
-                  return next;
-                });
+                setShowSnoozeFlyout(prev => !prev);
               }}
               title={`${pillInfo.label} — Click to adjust deadline`}
               className={`mobile-tap-control sm:min-h-0 inline-flex items-center gap-1 text-[11px] leading-none tabular-nums transition-colors cursor-pointer ${
@@ -743,12 +695,16 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
           )}
 
           {/* Quick Reschedule Snooze Flyout Rendered via React Portal at high z-index (active columns only) */}
-          {!isDoneOrArchived && showSnoozeFlyout && flyoutPosition && createPortal(
+          {!isDoneOrArchived && showSnoozeFlyout && createPortal(
             <div
               ref={flyoutMenuRef}
               role="dialog"
               aria-label="Quick reschedule deadline"
-              style={{ top: `${flyoutPosition.top}px`, left: `${flyoutPosition.left}px` }}
+              style={
+                flyoutPosition
+                  ? { top: `${flyoutPosition.top}px`, left: `${flyoutPosition.left}px` }
+                  : { top: 0, left: 0, visibility: 'hidden' }
+              }
               onClick={e => e.stopPropagation()}
               className="menu-surface fixed z-[9999] w-56 rounded-[9px] border border-[var(--border)] p-1.5 text-[var(--text-primary)]"
             >
@@ -757,6 +713,14 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
                 <Clock className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
               </div>
               <div className="mt-1 space-y-0.5">
+                <button
+                  type="button"
+                  onClick={() => handleSnooze(0)}
+                  className="mobile-tap-control sm:min-h-[28px] flex w-full items-center justify-between rounded-[6px] px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] hover:bg-[var(--surface-subtle)] cursor-pointer transition-colors"
+                >
+                  <span>Today</span>
+                  <span className="text-[11px] tabular-nums text-[var(--text-muted)]">+0d</span>
+                </button>
                 <button
                   type="button"
                   onClick={() => handleSnooze(1)}
