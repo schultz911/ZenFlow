@@ -204,7 +204,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
     const totalUtilization = totalEmployees ? Math.round((totalUtilizedCount / totalEmployees) * 100) : 0;
     const options = { nowMs: capturedMs, memberIds: scopedMemberIds };
     const efficiency = calculateTasksEfficiency(scopedTasks, options);
-    const topAccountsList = rankTaskHours(scopedTasks, clientName, options).filter(account => account.billableHours > 0);
+    const topAccountsList = rankTaskHours(scopedTasks.filter(task => Boolean(task.client?.trim())), clientName, options).filter(account => account.billableHours > 0);
 
     return {
       totalEmployees,
@@ -748,7 +748,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
             <section className="ledger-frame" aria-label="Key metrics">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-[var(--border-subtle)]">
                 {/* Total Employees */}
-                <div className="metric-card flex flex-col justify-between">
+                <div className="metric-card flex flex-col">
                   <div className="flex items-center justify-between gap-2">
                     <span className="metric-label">Total Employees</span>
                     <Users className="h-3.5 w-3.5 text-[var(--text-muted)] shrink-0" />
@@ -762,13 +762,13 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                 </div>
 
                 {/* Total Utilization */}
-                <div className="metric-card flex flex-col justify-between sm:border-b lg:border-b-0 border-[var(--border-subtle)]">
+                <div className="metric-card flex flex-col sm:border-b lg:border-b-0 border-[var(--border-subtle)]">
                   <div className="flex items-center justify-between gap-2">
                     <span className="metric-label">Total Utilization</span>
                     <Activity className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-400 shrink-0" />
                   </div>
                   <div className="mt-2">
-                    <div className="flex items-baseline gap-2">
+                    <div className="flex items-baseline gap-2 min-h-[44px]">
                       <span className="metric-value text-emerald-700 dark:text-emerald-400">
                         {topMetrics.totalUtilization}
                         <span className="text-sm font-semibold tracking-normal">%</span>
@@ -783,13 +783,13 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                 </div>
 
                 {/* Total Efficiency */}
-                <div className="metric-card flex flex-col justify-between sm:border-t lg:border-t-0 border-[var(--border-subtle)]">
+                <div className="metric-card flex flex-col sm:border-t lg:border-t-0 border-[var(--border-subtle)]">
                   <div className="flex items-center justify-between gap-2">
                     <span className="metric-label">Total Efficiency</span>
                     <Zap className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
                   </div>
                   <div className="mt-2">
-                    <div className="flex items-baseline gap-2 flex-wrap">
+                    <div className="flex items-baseline gap-2 flex-wrap min-h-[44px]">
                       <span className={`metric-value ${getEfficiencyToneClass(efficiencyPercent)}`}>
                         {efficiencyPercent === null ? '—' : (
                           <>
@@ -798,11 +798,6 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                           </>
                         )}
                       </span>
-                      {efficiencyPercent !== null && (
-                        <span className="text-xs tabular-nums text-[var(--text-secondary)]">
-                          {formatHoursRatio(estimatedHours, billableHours)}
-                        </span>
-                      )}
                     </div>
                     {efficiencyPercent !== null && (
                       <MetricBar label="Workspace efficiency" value={efficiencyPercent}
@@ -812,29 +807,29 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                     <p className="metric-detail">
                       {efficiencyPercent === null
                         ? 'No measured work'
-                        : <>Est. ÷ billable · completed work<br />{estimatedHours === billableHours ? 'On estimate' : `${formatHours(Math.abs(estimatedHours - billableHours))} ${estimatedHours > billableHours ? 'under' : 'over'} estimate`}</>}
+                        : <>{formatHours(estimatedHours)} est. / {formatHours(billableHours)} billable · {estimatedHours === billableHours ? 'On estimate' : `${formatHours(Math.abs(estimatedHours - billableHours))} ${estimatedHours > billableHours ? 'under' : 'over'} estimate`}</>}
                     </p>
                   </div>
                 </div>
 
                 {/* Top Accounts Graphic Bar */}
-                <div className="metric-card flex flex-col justify-between sm:border-t lg:border-t-0 border-[var(--border-subtle)]">
-                  <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="metric-card flex flex-col sm:border-t lg:border-t-0 border-[var(--border-subtle)]">
+                  <div className="flex items-center justify-between gap-2">
                     <span className="metric-label">Top Accounts</span>
                     <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-medium text-[var(--text-muted)]">Bill / Est · bar shows billed hours</span>
+                      <span className="text-xs font-medium text-[var(--text-muted)]">Billed hours</span>
                       <Briefcase className="h-3.5 w-3.5 text-[var(--text-muted)] shrink-0" />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    {topMetrics.topAccountsList.slice(0, 3).map(acct => (
+                  <div className="space-y-2 mt-2">
+                    {topMetrics.topAccountsList.slice(0, 3).map((acct, index) => (
                       <div key={acct.key} className="text-xs">
-                        <div className="flex justify-between items-center gap-1.5 text-[11px] mb-1">
+                        <div className={`flex justify-between items-end gap-1.5 text-[11px] mb-2 ${index === 0 ? 'min-h-[44px]' : ''}`}>
                           <span className="font-semibold text-[var(--text-primary)] truncate max-w-[110px]">
                             {acct.key}
                           </span>
                           <span className="text-[11px] tabular-nums text-[var(--text-secondary)] shrink-0">
-                            {formatHours(acct.billableHours)} bill / {formatHours(acct.estimatedHours)} est
+                            {formatHours(acct.billableHours)} billed
                           </span>
                         </div>
                         <div className="metric-track !mt-0">
@@ -923,7 +918,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                                   onJumpToMember(item.user);
                                 }}
                                 title={`Jump to ${item.user.name}'s swimlane`}
-                                className="text-left text-xs font-semibold text-[#1d4ed8] dark:text-blue-400 hover:underline truncate block max-w-full cursor-pointer"
+                                className="text-left text-xs font-semibold text-[#1d4ed8] dark:text-blue-400 hover:underline truncate block max-w-full cursor-pointer !min-h-0 !py-0 leading-tight"
                               >
                                 {item.user.name}
                               </button>
@@ -1033,7 +1028,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                                   onJumpToMember(item.user);
                                 }}
                                 title={`Jump to ${item.user.name}'s swimlane`}
-                                className="text-left text-xs font-semibold text-[#1d4ed8] dark:text-blue-400 hover:underline truncate block max-w-full cursor-pointer"
+                                className="text-left text-xs font-semibold text-[#1d4ed8] dark:text-blue-400 hover:underline truncate block max-w-full cursor-pointer !min-h-0 !py-0 leading-tight"
                               >
                                 {item.user.name}
                               </button>

@@ -179,6 +179,14 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
       clickupUsername: clickupUsername || undefined,
     };
 
+    if (!canAssignAdmin) {
+      delete updates.isAdministrator;
+      delete updates.isBusinessLead;
+      delete updates.isCreativeDirector;
+      delete updates.isClusterLead;
+      delete updates.designation;
+    }
+
     if (isSuperadmin && !isTargetSuperadmin) {
       const cleanEmail = email.trim().toLowerCase();
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -201,6 +209,16 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
       updates.clusterLeadId = undefined;
     } else {
       updates.clusterLeadId = selectedClusterLeadId || undefined;
+    }
+
+    if (!role && !isBusinessLead && !isCD && (user.role || user.isBusinessLead || user.isCreativeDirector)) {
+      setError('Choose a team for this member.');
+      return;
+    }
+
+    if (isTeamLead && role !== 'content' && role !== 'design') {
+      setError('Choose Content or Design for a Team Lead.');
+      return;
     }
 
     setIsSubmitting(true);

@@ -83,6 +83,18 @@ export const MemberRoleFields: React.FC<MemberRoleFieldsProps> = ({
 }) => {
   const availableCreativeDirectors = creativeDirectors.filter(cd => cd.id !== excludeUserId);
   const availableClusterLeads = clusterLeads.filter(cl => cl.id !== excludeUserId);
+  const selectSpecialRole = (selected: 'business' | 'creative' | 'cluster' | 'team', checked: boolean) => {
+    onChangeBusinessLead(checked && selected === 'business');
+    onChangeCreativeDirector(checked && selected === 'creative');
+    onChangeClusterLead(checked && selected === 'cluster');
+    onChangeTeamLead(checked && selected === 'team');
+    if (!checked) return;
+    onChangeAdministrator(selected === 'business' || selected === 'creative');
+    if (selected === 'business' || selected === 'creative') onChangeRole(undefined);
+    else if (selected === 'cluster') onChangeRole('account_manager');
+    else if (role !== 'content' && role !== 'design') onChangeRole(undefined);
+  };
+
 
   return (
     <>
@@ -123,7 +135,7 @@ export const MemberRoleFields: React.FC<MemberRoleFieldsProps> = ({
           <input
             type="checkbox"
             id={`toggle-${idPrefix}-admin-privilege`}
-            disabled={!canAssignAdmin || isTargetSuperadmin}
+            disabled={!canAssignAdmin || isTargetSuperadmin || isBusinessLead || isCreativeDirector || isClusterLead || isTeamLead}
             checked={isTargetSuperadmin ? true : isAdministrator}
             onChange={e => onChangeAdministrator(e.target.checked)}
             className="sr-only peer"
@@ -137,23 +149,24 @@ export const MemberRoleFields: React.FC<MemberRoleFieldsProps> = ({
         <div className="flex items-center justify-between mb-1.5">
           <label
             className="field-label !mb-0"
-            title="Select the member's functional team or None / Leadership"
+            title="Select the member's functional team"
           >
             Team
           </label>
           <span className="text-[11px] text-[var(--text-muted)]">
-            {role ? 'Assigned discipline' : 'None / Leadership'}
+            {role ? 'Assigned discipline' : 'No team selected'}
           </span>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           {ROLE_OPTIONS.map(opt => (
             <button
               key={opt.id}
               type="button"
               aria-pressed={role === opt.id}
+              disabled={isBusinessLead || isCreativeDirector || (isClusterLead && opt.id !== 'account_manager') || (isTeamLead && opt.id === 'account_manager') || isTargetSuperadmin}
               onClick={() => onChangeRole(opt.id)}
               title={opt.tooltip}
-              className={`flex items-start gap-2 rounded-[7px] border p-2.5 text-left transition-colors cursor-pointer ${
+              className={`flex items-center gap-2 rounded-[7px] border p-2.5 text-left transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
                 role === opt.id
                   ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
                   : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]'
@@ -166,25 +179,6 @@ export const MemberRoleFields: React.FC<MemberRoleFieldsProps> = ({
               </div>
             </button>
           ))}
-          <button
-            type="button"
-            aria-pressed={!role}
-            onClick={() => onChangeRole(undefined)}
-            title="Leadership / Admin without a delivery discipline team"
-            className={`flex items-start gap-2 rounded-[7px] border p-2.5 text-left transition-colors cursor-pointer ${
-              !role
-                ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
-                : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]'
-            }`}
-          >
-            <div className="rounded-[5px] p-1 bg-[var(--surface-subtle)] border border-[var(--border-subtle)] shrink-0">
-              <Crown className="h-4 w-4 text-[var(--text-secondary)]" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-[var(--text-primary)] truncate">None</p>
-              <p className="text-[11px] text-[var(--text-secondary)] truncate">Leadership</p>
-            </div>
-          </button>
         </div>
       </div>
 
@@ -195,10 +189,10 @@ export const MemberRoleFields: React.FC<MemberRoleFieldsProps> = ({
         </label>
         <div className="grid grid-cols-2 gap-2">
           {[
-            { label: 'Business Lead', checked: isBusinessLead, onChange: onChangeBusinessLead },
-            { label: 'Creative Director', checked: isCreativeDirector, onChange: onChangeCreativeDirector },
-            { label: 'Cluster Lead', checked: isClusterLead, onChange: onChangeClusterLead },
-            { label: 'Team Lead', checked: isTeamLead, onChange: onChangeTeamLead },
+            { label: 'Business Lead', key: 'business' as const, checked: isBusinessLead },
+            { label: 'Creative Director', key: 'creative' as const, checked: isCreativeDirector },
+            { label: 'Cluster Lead', key: 'cluster' as const, checked: isClusterLead },
+            { label: 'Team Lead', key: 'team' as const, checked: isTeamLead },
           ].map(item => (
             <label
               key={item.label}
@@ -211,7 +205,8 @@ export const MemberRoleFields: React.FC<MemberRoleFieldsProps> = ({
               <input
                 type="checkbox"
                 checked={item.checked}
-                onChange={e => item.onChange(e.target.checked)}
+                disabled={isTargetSuperadmin || (!canAssignAdmin && (item.key === 'business' || item.key === 'creative' || item.key === 'cluster'))}
+                onChange={e => selectSpecialRole(item.key, e.target.checked)}
                 className="rounded border-[var(--border)] h-3.5 w-3.5"
               />
               <span className="text-xs font-medium text-[var(--text-primary)]">{item.label}</span>
@@ -240,7 +235,7 @@ export const MemberRoleFields: React.FC<MemberRoleFieldsProps> = ({
               <option value="">— No Delivery Lead / Independent —</option>
               {availableCreativeDirectors.map(cd => (
                 <option key={cd.id} value={cd.id}>
-                  {cd.name} ({cd.role === 'design' ? 'Design' : cd.role === 'account_manager' ? 'Accounts' : 'Content'})
+                  {cd.name}{cd.role && ` (${cd.role === 'design' ? 'Design' : cd.role === 'account_manager' ? 'Accounts' : cd.role === 'content' ? 'Content' : 'Administrator'})`}
                 </option>
               ))}
             </select>
@@ -271,7 +266,7 @@ export const MemberRoleFields: React.FC<MemberRoleFieldsProps> = ({
               <option value="">— No Cluster Lead Assigned —</option>
               {availableClusterLeads.map(cl => (
                 <option key={cl.id} value={cl.id}>
-                  {cl.name} ({cl.role === 'design' ? 'Design' : cl.role === 'account_manager' ? 'Accounts' : 'Content'})
+                  {cl.name}{cl.role && ` (${cl.role === 'design' ? 'Design' : cl.role === 'account_manager' ? 'Accounts' : cl.role === 'content' ? 'Content' : 'Administrator'})`}
                 </option>
               ))}
             </select>

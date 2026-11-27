@@ -190,9 +190,8 @@ try {
     await page.keyboard.press('Escape');
 
     const overview = page.getByRole('region', { name: 'Team overview' });
-    await overview.getByText('(10h / 6h)', { exact: true }).waitFor();
+    await overview.getByText(/10h est\. \/ 6h billable · 4h under estimate/).waitFor();
     await overview.getByText(/2 of 3 assigned 3h\+ today/).waitFor();
-    await overview.getByText(/Est\. ÷ billable · completed work/).waitFor();
     const ava = page.locator('#swimlane-u-content');
     await ava.getByText('(5h / 3h)', { exact: true }).waitFor();
     await page.locator('#task-search-input').fill('Homepage Narrative Rewrite');
@@ -203,12 +202,12 @@ try {
     await page.getByRole('button', { name: 'View Analytics' }).click();
     const analytics = page.getByRole('dialog', { name: 'Workspace analytics' });
     await analytics.getByText(/Assigned 3h\+ on 2026-11-26/).waitFor();
-    await analytics.getByText(/Est\. ÷ billable · completed work/).waitFor();
+    await analytics.getByText(/10h est\. \/ 6h billable · 4h under estimate/).waitFor();
     const efficiency = analytics.getByRole('meter', { name: 'Workspace efficiency' });
     assert.match(await efficiency.getAttribute('aria-valuetext') ?? '', /^167 percent/);
     await analytics.getByLabel('Analytics scope').selectOption('user');
     await analytics.getByLabel('Analytics member').selectOption('u-content');
-    await analytics.getByText('(5h / 3h)', { exact: true }).waitFor();
+    await analytics.getByText(/5h est\. \/ 3h billable · 2h under estimate/).waitFor();
     await analytics.getByLabel('Analytics scope').selectOption('all');
     assert.ok((await analytics.getByText('Est / Bill', { exact: true }).count()) >= 2, 'AnalyticsModal should label Sections 3 & 4 columns as Est / Bill');
     assert.equal(await analytics.getByText('Billable / Est', { exact: true }).count(), 0, 'AnalyticsModal should not mix Billable / Est wording');
@@ -327,7 +326,7 @@ try {
     // OverviewBar polish: Sort overloaded action cue, All Clusters dropdown label, standardized Eff cue
     await overview.getByRole('button', { name: /Sort overloaded first/i }).waitFor();
     await page.getByRole('button', { name: /All Clusters/i }).waitFor();
-    await overview.getByText(/Est\. ÷ billable · completed work/i).waitFor();
+    await overview.getByText(/10h est\. \/ 6h billable/i).waitFor();
 
     // DisciplineTaskModal focus + discard guard + neutral placeholders + aria-pressed/0-selection guard (P2-5, P2-7)
     await page.getByRole('button', { name: /New Brief/i }).first().click();
@@ -602,6 +601,64 @@ try {
     await page.getByRole('dialog', { name: 'Attach content document link' }).waitFor();
     await page.keyboard.press('Escape');
     await queue.getByRole('button', { name: 'Show fewer tasks' }).click();
+    await context.close();
+  }
+
+  // Member role selection, compact card context and account ranking.
+  {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+    const page = await context.newPage();
+    attachErrorListeners(page, 'member-role-rules');
+    await page.clock.setFixedTime(new Date('2026-11-26T10:00:00.000Z'));
+    await page.goto(PREVIEW_URL, { waitUntil: 'networkidle' });
+    const brief = page.locator('#team-pipeline-body .task-card').first();
+    await brief.getByText('Article', { exact: true }).waitFor();
+    assert.equal(await brief.getByText('Content · Article', { exact: true }).count(), 0);
+    const weights = await brief.evaluate(el => {
+      const client = [...el.querySelectorAll('span')].find(node => node.textContent === 'Zen');
+      const project = [...el.querySelectorAll('span')].find(node => node.textContent === 'Brand Refresh');
+      return [client, project].map(node => node && Number(getComputedStyle(node).fontWeight));
+    });
+    assert.ok(weights[0]! < weights[1]!, `Project should be bolder than client: ${weights}`);
+    assert.equal(await page.getByRole('button', { name: /unassigned cluster only/i }).count(), 0);
+    await page.locator('#user-profile-menu-button').click();
+    await page.getByRole('menuitem', { name: 'Add Team Member' }).click();
+    const member = page.getByRole('dialog', { name: 'Add team member' });
+    const admin = member.locator('#toggle-addmember-admin-privilege');
+    assert.equal(await member.getByRole('button', { name: /^None/ }).count(), 0);
+    await member.getByLabel('Business Lead').check();
+    assert.equal(await admin.isChecked(), true);
+    assert.equal(await member.getByRole('button', { name: /Content/ }).getAttribute('aria-pressed'), 'false');
+    await member.getByLabel('Creative Director').check();
+    assert.equal(await member.getByLabel('Business Lead').isChecked(), false);
+    assert.equal(await admin.isChecked(), true);
+    await member.getByLabel('Cluster Lead').check();
+    assert.equal(await admin.isChecked(), false);
+    assert.equal(await member.getByRole('button', { name: /Accounts/ }).getAttribute('aria-pressed'), 'true');
+    await member.getByLabel('Team Lead').check();
+    assert.equal(await member.getByRole('button', { name: /Accounts/ }).isDisabled(), true);
+    await member.getByRole('button', { name: /Design/ }).click();
+    assert.equal(await member.getByRole('button', { name: /Design/ }).getAttribute('aria-pressed'), 'true');
+    await page.keyboard.press('Escape');
+    await member.waitFor({ state: 'detached' });
+    await page.locator('#member-actions-btn-u-content').click();
+    await page.locator('#member-actions-menu-u-content').getByRole('menuitem', { name: 'Edit Member Profile' }).click();
+    const editMember = page.getByRole('dialog', { name: 'Edit team member' });
+    await editMember.getByRole('checkbox', { name: 'Creative Director', exact: true }).check();
+    assert.equal(await editMember.locator('#toggle-edituser-admin-privilege').isChecked(), true);
+    assert.equal(await editMember.getByRole('button', { name: /Content/ }).getAttribute('aria-pressed'), 'false');
+    await editMember.getByRole('checkbox', { name: 'Cluster Lead', exact: true }).check();
+    assert.equal(await editMember.locator('#toggle-edituser-admin-privilege').isChecked(), false);
+    assert.equal(await editMember.getByRole('button', { name: /Accounts/ }).getAttribute('aria-pressed'), 'true');
+    await page.keyboard.press('Escape');
+    await editMember.waitFor({ state: 'detached' });
+    await page.getByRole('button', { name: 'View Analytics' }).click();
+    const analytics = page.getByRole('dialog', { name: 'Workspace analytics' });
+    const metrics = analytics.getByRole('region', { name: 'Key metrics' });
+    const accounts = metrics.locator('.metric-card').last();
+    assert.match(await accounts.innerText(), /NovaPay[\s\S]*11h billed[\s\S]*VeloAI[\s\S]*8.5h billed[\s\S]*Apex Cloud[\s\S]*5.5h billed/);
+    const meterPositions = await metrics.locator('.metric-track').evaluateAll(els => els.slice(0, 3).map(el => el.getBoundingClientRect().y));
+    assert.ok(Math.max(...meterPositions) - Math.min(...meterPositions) < 2, `Headline meters should align: ${meterPositions}`);
     await context.close();
   }
 

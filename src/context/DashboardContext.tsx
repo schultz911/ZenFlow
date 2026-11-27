@@ -774,7 +774,7 @@ export const DashboardProvider: React.FC<{ children: ReactNode }> = ({ children 
     const res = await fetch(`/api/users/${userId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
+      body: JSON.stringify(Object.prototype.hasOwnProperty.call(updates, 'role') && updates.role === undefined ? { ...updates, role: null } : updates),
     });
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}));

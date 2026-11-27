@@ -57,10 +57,7 @@ export function foldLegacyDisciplineMetadata(task?: Task | null): TaskDiscipline
   };
 }
 
-/** Short discipline and content/asset type for task-card context. */
-export function getTaskTypeLabel(task: Task, fallbackRole?: string): string {
-  const team = task.team || fallbackRole;
-  const discipline = team === 'content' ? 'Content' : team === 'design' ? 'Design' : '';
-  const type = task.disciplineMetadata?.contentType || task.disciplineMetadata?.assetType;
-  return [discipline, type && type.toLowerCase() !== discipline.toLowerCase() ? type : ''].filter(Boolean).join(' · ');
+/** Content or asset type shown on a task card. */
+export function getTaskTypeLabel(task: Task): string {
+  return task.disciplineMetadata?.contentType || task.disciplineMetadata?.assetType || '';
 }

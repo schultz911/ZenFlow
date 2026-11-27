@@ -75,6 +75,16 @@ export const AddMemberModal: React.FC<AddMemberModalProps> = ({ isOpen, onClose,
       return;
     }
 
+    if (!role && !isBusinessLead && !isCreativeDirector) {
+      setError('Choose a team for this member.');
+      return;
+    }
+
+    if (isTeamLead && role !== 'content' && role !== 'design') {
+      setError('Choose Content or Design for a Team Lead.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const designationLabel = isBusinessLead

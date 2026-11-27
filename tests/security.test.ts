@@ -80,6 +80,46 @@ test('member provisioning, profile updates and root protection retain the role m
   assert.equal(createdDesignUser.isBrandDesigner, true);
   assert.equal(createdDesignUser.clusterLeadId, 'cd');
 }));
+test('special role combinations are enforced on create and update without escalating callers', async () => withServer(async server => {
+  const create = (suffix: string, fields: object) => server.request('/users', 'root', 'POST', {
+    name: suffix, email: `${suffix}@example.invalid`, ...fields,
+  });
+  assert.equal((await create('invalid-cd', { role: 'content', isCreativeDirector: true, isAdministrator: true })).status, 400);
+  assert.equal((await create('invalid-admin', { isCreativeDirector: true })).status, 400);
+  assert.equal((await create('invalid-cluster', { role: 'design', isClusterLead: true })).status, 400);
+  assert.equal((await create('invalid-team', { role: 'account_manager', isTeamLead: true })).status, 400);
+  assert.equal((await create('invalid-multiple', { isCreativeDirector: true, isBusinessLead: true, isAdministrator: true })).status, 400);
+  const created = await create('lead', { isCreativeDirector: true, isAdministrator: true });
+  assert.equal(created.status, 201);
+  const lead = await created.json();
+  assert.equal(lead.role, undefined);
+  assert.equal(lead.isAdministrator, true);
+  assert.equal((await server.request(`/users/${lead.id}`, 'cd', 'PUT', { role: 'account_manager', isClusterLead: true })).status, 403);
+  const cluster = await server.request(`/users/${lead.id}`, 'root', 'PUT', {
+    role: 'account_manager', isAdministrator: false, isCreativeDirector: false, isClusterLead: true,
+  });
+  assert.equal(cluster.status, 200);
+  const clusterUser = await cluster.json();
+  assert.equal(clusterUser.role, 'account_manager');
+  assert.equal(Boolean(clusterUser.isAdministrator), false);
+  assert.equal(clusterUser.isClusterLead, true);
+  assert.equal((await server.request(`/users/${lead.id}`, 'root', 'PUT', { role: 'design' })).status, 400);
+  const team = await server.request(`/users/${lead.id}`, 'root', 'PUT', {
+    role: 'design', isClusterLead: false, isTeamLead: true, isAdministrator: false, isAccountManager: false,
+  });
+  assert.equal(team.status, 200);
+  const teamUser = await team.json();
+  assert.equal(teamUser.role, 'design');
+  assert.equal(Boolean(teamUser.isAccountManager), false);
+  const business = await server.request(`/users/${lead.id}`, 'root', 'PUT', {
+    role: null, isTeamLead: false, isBusinessLead: true, isAdministrator: true,
+  });
+  assert.equal(business.status, 200);
+  const businessUser = await business.json();
+  assert.equal(businessUser.role, undefined);
+  assert.equal(businessUser.isAdministrator, true);
+  assert.equal((await server.request('/users/cd', 'root', 'PUT', { name: 'Legacy CD' })).status, 200);
+}));
 test('HTTP user payloads and mutation events use an allowlist to prevent private credential leakage', async () => withServer(async server => {
   server.store.users[2].privateInternalToken = 'SYNTHETIC_PRIVATE_KEY';
   server.store.users[2].clickupApiKey = 'pk_secret_token_do_not_leak';

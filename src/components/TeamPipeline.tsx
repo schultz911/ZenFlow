@@ -31,8 +31,6 @@ interface TeamPipelineProps {
   tasks: Task[];
   users: User[];
   globalSearch?: string;
-  unassignedClusterOnly?: boolean;
-  onToggleUnassignedCluster?: () => void;
   onOpenCreateModal: () => void;
   onOpenAssignmentModal: (task: Task) => void;
   onEditTask: (task: Task) => void;
@@ -51,8 +49,6 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
   tasks,
   users,
   globalSearch = '',
-  unassignedClusterOnly = false,
-  onToggleUnassignedCluster,
   onOpenCreateModal,
   onOpenAssignmentModal,
   onEditTask,
@@ -168,7 +164,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
   };
 
   const displayedTasks = useMemo(() => {
-    let result = unassignedClusterOnly ? pipelineTasks.filter(t => !t.owningClusterId) : pipelineTasks;
+    let result = pipelineTasks;
 
     if (filterMode === 'unassigned') {
       result = result.filter(t => getTaskAssigneeIds(t).length === 0);
@@ -178,7 +174,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
 
 
     return result;
-  }, [pipelineTasks, filterMode, globalSearch, userMap, unassignedClusterOnly]);
+  }, [pipelineTasks, filterMode, globalSearch, userMap]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -394,17 +390,16 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
               </button>
             </div>
           </div>
-          {onToggleUnassignedCluster && <div className="px-3 sm:px-5 pt-2"><button type="button" className="button-secondary text-xs" aria-pressed={unassignedClusterOnly} onClick={onToggleUnassignedCluster}>{unassignedClusterOnly ? 'Showing unassigned clusters' : 'Unassigned cluster only'}</button></div>}
           {displayedTasks.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 px-4 text-center">
               <Inbox className="h-4 w-4 text-[var(--text-muted)] mb-1.5" />
               <p className="text-xs font-semibold text-[var(--text-primary)]">
-                {globalSearch.trim() || filterMode !== 'all' || unassignedClusterOnly
+                {globalSearch.trim() || filterMode !== 'all'
                   ? 'No matching tasks in pipeline'
                   : `${pipelineHeading} is currently empty`}
               </p>
               <p className="text-xs text-[var(--text-secondary)] max-w-sm mt-0.5">
-                {globalSearch.trim() || filterMode !== 'all' || unassignedClusterOnly
+                {globalSearch.trim() || filterMode !== 'all'
                   ? 'Try clearing the workspace search or changing the filter mode.'
                   : canCreatePipelineTask
                   ? 'Create deliverables using New Brief to generate Content or Design pipeline tasks.'
@@ -434,7 +429,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                   task.parentTaskTitle &&
                   !task.title.toLowerCase().startsWith(task.parentTaskTitle.trim().toLowerCase())
                 );
-                const typeLabel = getTaskTypeLabel(task, taskDiscipline);
+                const typeLabel = getTaskTypeLabel(task);
                 const billedMs = getTaskBillableMs(task);
                 const priorityLabel = task.priority
                   ? `${task.priority.charAt(0).toUpperCase() + task.priority.slice(1)} priority`
@@ -540,22 +535,12 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                         </div>
                       </div>
 
-                      {showParentBreadcrumb && (
-                        <div
-                          className="mb-1 flex items-center gap-1 text-[11px] text-[#1d4ed8] dark:text-blue-400 font-medium truncate"
-                          title={`Parent deliverable: ${task.parentTaskTitle}`}
-                        >
-                          <CornerDownRight className="h-2.5 w-2.5 shrink-0" />
-                          <span className="truncate">{task.parentTaskTitle}</span>
-                        </div>
-                      )}
-
                       {typeLabel && <p className="mb-0.5 text-[11px] text-[var(--text-secondary)] break-words">{typeLabel}</p>}
                       {(task.client || task.project) && (
                         <p className="mb-0.5 text-[11px] text-[var(--text-secondary)] truncate">
-                          {task.client && <span className="font-semibold text-[var(--text-primary)]">{task.client}</span>}
+                          {task.client && <span>{task.client}</span>}
                           {task.client && task.project && ' · '}
-                          {task.project}
+                          {task.project && <span className="font-semibold text-[var(--text-primary)]">{task.project}</span>}
                         </p>
                       )}
 
@@ -570,6 +555,16 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                           {task.title}
                         </button>
                       </h3>
+
+                      {showParentBreadcrumb && (
+                        <div
+                          className="mt-0.5 flex items-center gap-1 text-[11px] text-[#1d4ed8] dark:text-blue-400 font-medium truncate"
+                          title={`Parent deliverable: ${task.parentTaskTitle}`}
+                        >
+                          <CornerDownRight className="h-2.5 w-2.5 shrink-0" />
+                          <span className="truncate">{task.parentTaskTitle}</span>
+                        </div>
+                      )}
 
                       {/* Optional External Brief Link (matches Swimlane TaskCard link row) */}
                       {task.brandGuidelines && isValidHttpUrl(task.brandGuidelines) && (

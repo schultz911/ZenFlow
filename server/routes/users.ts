@@ -16,6 +16,15 @@ import {
 import { encryptSecret } from '../crypto';
 import { AVATAR_COLORS, sanitizeString, type RouteDeps } from './validation';
 
+function memberRoleError(member: Pick<User, 'role' | 'isAdministrator' | 'isBusinessLead' | 'isCreativeDirector' | 'isClusterLead' | 'isTeamLead'>): string | null {
+  const { role, isAdministrator, isBusinessLead, isCreativeDirector, isClusterLead, isTeamLead } = member;
+  if ([isBusinessLead, isCreativeDirector, isClusterLead, isTeamLead].filter(Boolean).length > 1) return 'Choose only one special role.';
+  if ((isBusinessLead || isCreativeDirector) && (role || !isAdministrator)) return 'Business Leads and Creative Directors require administrator access and no team.';
+  if (isClusterLead && (role !== 'account_manager' || isAdministrator)) return 'Cluster Leads require the Accounts team and cannot be administrators.';
+  if (isTeamLead && ((role !== 'content' && role !== 'design') || isAdministrator)) return 'Team Leads require the Content or Design team and cannot be administrators.';
+  return null;
+}
+
 function remapTaskAssignees(task: Task, sourceRefs: string[], targetUserId: string): string[] {
   const lowered = new Set(sourceRefs.filter(Boolean).map(r => r.toLowerCase()));
   const assignees = getTaskAssigneeIds(task);
@@ -72,7 +81,10 @@ export function registerUserRoutes(app: Express, deps: RouteDeps) {
     const isCDFlag = Boolean(body.isCreativeDirector);
     const isClusterFlag = Boolean(body.isClusterLead);
     const isTeamLeadFlag = Boolean(body.isTeamLead);
-    const isAcctFlag = Boolean(body.isAccountManager || validRole === 'account_manager');
+    const isAcctFlag = validRole === 'account_manager';
+    if (!validRole && !isBusinessFlag && !isCDFlag) return res.status(400).json({ error: 'Choose a team for this member.' });
+    const roleError = memberRoleError({ role: validRole, isAdministrator: isAdminFlag, isBusinessLead: isBusinessFlag, isCreativeDirector: isCDFlag, isClusterLead: isClusterFlag, isTeamLead: isTeamLeadFlag });
+    if (roleError) return res.status(400).json({ error: roleError });
 
     const derivedDesignation = deriveMemberDesignation({
       role: validRole,
@@ -100,8 +112,8 @@ export function registerUserRoutes(app: Express, deps: RouteDeps) {
       isContentSpecialist: Boolean(body.isContentSpecialist) || undefined,
       isBrandDesigner: Boolean(body.isBrandDesigner) || undefined,
       designation: derivedDesignation || (body.designation ? sanitizeString(body.designation) : undefined),
-      creativeDirectorId: isBusinessFlag ? undefined : body.creativeDirectorId ? sanitizeString(body.creativeDirectorId) : undefined,
-      clusterLeadId: isBusinessFlag ? undefined : body.clusterLeadId ? sanitizeString(body.clusterLeadId) : undefined,
+      creativeDirectorId: isBusinessFlag || isCDFlag ? undefined : body.creativeDirectorId ? sanitizeString(body.creativeDirectorId) : undefined,
+      clusterLeadId: isBusinessFlag || isClusterFlag ? undefined : body.clusterLeadId ? sanitizeString(body.clusterLeadId) : undefined,
       clickupUserId: body.clickupUserId ? sanitizeString(body.clickupUserId) : undefined,
       clickupUsername: body.clickupUsername ? sanitizeString(body.clickupUsername) : undefined,
       createdAt: new Date().toISOString(),
@@ -215,6 +227,14 @@ export function registerUserRoutes(app: Express, deps: RouteDeps) {
         );
 
         if (existingTargetUser) {
+          const changingRoles = (body.role !== undefined && (body.role || undefined) !== current.role) ||
+            (['isAdministrator', 'isBusinessLead', 'isCreativeDirector', 'isClusterLead', 'isTeamLead'] as const)
+              .some(key => body[key] !== undefined && Boolean(body[key]) !== Boolean(current[key]));
+          if (changingRoles) return res.status(400).json({ error: 'Finish the account merge before changing roles.' });
+          if (body.role !== undefined && VALID_ROLES.includes(body.role) && body.role !== existingTargetUser.role) {
+            const roleError = memberRoleError({ ...existingTargetUser, role: body.role });
+            if (roleError) return res.status(400).json({ error: roleError });
+          }
           const oldUserId = current.id;
           const oldEmail = current.email;
           const nowIso = new Date().toISOString();
@@ -289,6 +309,20 @@ export function registerUserRoutes(app: Express, deps: RouteDeps) {
     const nextIsCluster = body.isClusterLead !== undefined ? Boolean(body.isClusterLead) : current.isClusterLead;
     const nextIsTeamLead = body.isTeamLead !== undefined ? Boolean(body.isTeamLead) : current.isTeamLead;
 
+    const roleFieldsChanged = nextRole !== current.role ||
+      Boolean(nextIsAdministrator) !== Boolean(current.isAdministrator) ||
+      Boolean(nextIsBusinessLead) !== Boolean(current.isBusinessLead) ||
+      Boolean(nextIsCD) !== Boolean(current.isCreativeDirector) ||
+      Boolean(nextIsCluster) !== Boolean(current.isClusterLead) ||
+      Boolean(nextIsTeamLead) !== Boolean(current.isTeamLead);
+    if (roleFieldsChanged && !isSuperadminUser(current)) {
+      if (!nextRole && !nextIsBusinessLead && !nextIsCD && (current.role || current.isBusinessLead || current.isCreativeDirector)) {
+        return res.status(400).json({ error: 'Choose a team for this member.' });
+      }
+      const roleError = memberRoleError({ role: nextRole, isAdministrator: nextIsAdministrator, isBusinessLead: nextIsBusinessLead, isCreativeDirector: nextIsCD, isClusterLead: nextIsCluster, isTeamLead: nextIsTeamLead });
+      if (roleError) return res.status(400).json({ error: roleError });
+    }
+
     const updated: User = {
       ...current,
       email: nextEmail,
@@ -300,7 +334,7 @@ export function registerUserRoutes(app: Express, deps: RouteDeps) {
       isClusterLead: nextIsCluster || undefined,
       isTeamLead: nextIsTeamLead || undefined,
       isAccountManager:
-        (body.isAccountManager !== undefined ? Boolean(body.isAccountManager) : current.isAccountManager) ||
+        (body.isAccountManager !== undefined ? Boolean(body.isAccountManager) : body.role !== undefined ? false : current.isAccountManager) ||
         nextRole === 'account_manager' ||
         undefined,
       isContentLead: body.isContentLead !== undefined ? Boolean(body.isContentLead) || undefined : current.isContentLead,
@@ -309,14 +343,14 @@ export function registerUserRoutes(app: Express, deps: RouteDeps) {
         body.isContentSpecialist !== undefined ? Boolean(body.isContentSpecialist) || undefined : current.isContentSpecialist,
       isBrandDesigner:
         body.isBrandDesigner !== undefined ? Boolean(body.isBrandDesigner) || undefined : current.isBrandDesigner,
-      creativeDirectorId: nextIsBusinessLead
+      creativeDirectorId: nextIsBusinessLead || (nextIsCD && roleFieldsChanged)
         ? undefined
         : body.creativeDirectorId !== undefined
         ? body.creativeDirectorId
           ? sanitizeString(body.creativeDirectorId)
           : undefined
         : current.creativeDirectorId,
-      clusterLeadId: nextIsBusinessLead
+      clusterLeadId: nextIsBusinessLead || (nextIsCluster && roleFieldsChanged)
         ? undefined
         : body.clusterLeadId !== undefined
         ? body.clusterLeadId

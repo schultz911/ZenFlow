@@ -138,7 +138,6 @@ function DashboardContent() {
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
-  const [unassignedClusterOnly, setUnassignedClusterOnly] = useState(false);
 
   // User workspace ordering with persistent localStorage storage
   const [customUserOrder, setCustomUserOrder] = useState<string[]>(() => {
@@ -896,8 +895,6 @@ function DashboardContent() {
             tasks={searchQuery.trim() ? scopedSearchTasks : tasks}
             users={users}
             globalSearch={searchQuery}
-            unassignedClusterOnly={unassignedClusterOnly && activeBoardId === 'all'}
-            onToggleUnassignedCluster={isAdministrator && activeBoardId === 'all' ? () => setUnassignedClusterOnly(value => !value) : undefined}
             onOpenCreateModal={() => setDisciplineModalOpen(true)}
             onOpenAssignmentModal={t => setSelectedTaskForAssignment(t)}
             onEditTask={handleEditTask}

@@ -514,20 +514,9 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         </div>
       </div>
 
-      {/* Subtask Hierarchy Indicator */}
-      {task.isSubtask && (
-        <div
-          className="order-3 mb-1 flex items-center gap-1 text-[11px] text-[#1d4ed8] dark:text-blue-400 font-medium truncate"
-          title={`Subtask of: ${task.parentTaskTitle || 'Parent Task'}`}
-        >
-          <CornerDownRight className="h-2.5 w-2.5 shrink-0" />
-          <span className="truncate">{task.parentTaskTitle || 'Parent Task'}</span>
-        </div>
-      )}
-
-      {getTaskTypeLabel(task, userRole) && (
+      {getTaskTypeLabel(task) && (
         <div className="order-2 text-[11px] text-[var(--text-secondary)] break-words">
-          {getTaskTypeLabel(task, userRole)}
+          {getTaskTypeLabel(task)}
         </div>
       )}
 
@@ -535,7 +524,7 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       {(task.client || task.project) && (
         <div className="order-3 mb-0.5 flex items-center gap-1 text-[11px] text-[var(--text-secondary)] truncate">
           {task.client && (
-            <span className="font-semibold text-[var(--text-primary)] truncate">
+            <span className="truncate">
               {task.client}
             </span>
           )}
@@ -545,13 +534,24 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
             </span>
           )}
           {task.project && (
-            <span className="truncate">
+            <span className="font-semibold text-[var(--text-primary)] truncate">
               {task.project}
             </span>
           )}
         </div>
       )}
 
+
+      {/* Subtask Hierarchy Indicator */}
+      {task.isSubtask && (
+        <div
+          className="order-5 mt-0.5 flex items-center gap-1 text-[11px] text-[#1d4ed8] dark:text-blue-400 font-medium truncate"
+          title={`Subtask of: ${task.parentTaskTitle || 'Parent Task'}`}
+        >
+          <CornerDownRight className="h-2.5 w-2.5 shrink-0" />
+          <span className="truncate">{task.parentTaskTitle || 'Parent Task'}</span>
+        </div>
+      )}
 
       {/* Optional Context snippet */}
       {task.description && (

@@ -7,7 +7,7 @@ import {
   quickWorkloadScore,
   calculateTeamUtilization,
   calculateTasksEfficiency,
-  formatHoursRatio,
+  formatHours,
   DAILY_UTILIZATION_TARGET_HOURS,
   getTaskAssigneeIds,
   groupTasksByAssignee,
@@ -305,8 +305,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
             <p className="metric-detail">
               {teamEfficiency.efficiencyPercent !== null ? (
                 <>
-                  Est. ÷ billable · completed work<br />
-                  <span>{formatHoursRatio(teamEfficiency.estimatedHours, teamEfficiency.billableHours)}</span><span> · {teamEfficiency.estimatedHours === teamEfficiency.billableHours ? 'On estimate' : `${Math.abs(teamEfficiency.estimatedHours - teamEfficiency.billableHours).toFixed(1)}h ${teamEfficiency.estimatedHours > teamEfficiency.billableHours ? 'under' : 'over'} estimate`}</span>
+                  {formatHours(teamEfficiency.estimatedHours)} est. / {formatHours(teamEfficiency.billableHours)} billable · {teamEfficiency.estimatedHours === teamEfficiency.billableHours ? 'On estimate' : `${formatHours(Math.abs(teamEfficiency.estimatedHours - teamEfficiency.billableHours))} ${teamEfficiency.estimatedHours > teamEfficiency.billableHours ? 'under' : 'over'} estimate`}
                 </>
               ) : (
                 'No measured work'
@@ -515,7 +514,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                   className="menu-item cursor-pointer"
                 >
                   <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                  <span>Export Excel (.xls) Report</span>
+                  <span>Export Excel Report</span>
                 </button>
                 <button
                   type="button"
@@ -539,7 +538,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                   className="menu-item cursor-pointer"
                 >
                   <ShieldCheck className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                  <span>Download SOC2 Audit (.ndjson)</span>
+                  <span>Download SOC2 Audit</span>
                 </button>)}
               </div>
             )}
@@ -596,7 +595,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                   className="menu-item cursor-pointer"
                 >
                   <FileSpreadsheet className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-                  <span>Export Excel (.xls) Report</span>
+                  <span>Export Excel Report</span>
                 </button>
                 <button
                   type="button"
@@ -621,7 +620,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                   className="menu-item cursor-pointer"
                 >
                   <ShieldCheck className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
-                  <span>Download SOC2 Audit (.ndjson)</span>
+                  <span>Download SOC2 Audit</span>
                 </button>)}
               </div>
             )}
