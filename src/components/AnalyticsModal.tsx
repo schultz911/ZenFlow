@@ -63,16 +63,13 @@ function EfficiencyScale({ value }: { value: number }) {
 
   return (
     <>
-      <MetricBar label="Workspace efficiency" value={displayedValue} max={max} reference={baseline}
+      <MetricBar label="Workspace efficiency" value={displayedValue} max={max}
         tone={value >= baseline ? 'green' : value >= 50 ? 'blue' : 'red'}
         detail={detail} describedBy={descriptionId} />
       <span id={descriptionId} hidden>{detail}</span>
-      <div aria-hidden="true" className="mt-1.5 flex flex-wrap items-center justify-between gap-x-2 text-xs tabular-nums text-[var(--text-secondary)]">
+      <div aria-hidden="true" className="relative mt-1.5 flex justify-between text-xs tabular-nums text-[var(--text-secondary)]">
         <span>0%</span>
-        <span className="inline-flex items-center gap-1">
-          <span className="h-2.5 w-0.5 rounded-full bg-[var(--text-primary)]" />
-          {baseline}%
-        </span>
+        <span className="absolute -translate-x-1/2" style={{ left: `max(2.5rem, ${baseline / max * 100}%)` }}>{baseline}%</span>
         <span>{max}%</span>
       </div>
     </>
