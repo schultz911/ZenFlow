@@ -234,10 +234,10 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
               type="button"
               onClick={() => setMobileMetricsExpanded(prev => !prev)}
               aria-expanded={mobileMetricsExpanded}
-              className="sm:hidden mobile-tap-control inline-flex items-center gap-1 rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-semibold text-[var(--text-secondary)] tabular-nums cursor-pointer shrink-0"
+              className="sm:hidden mobile-tap-control inline-flex items-center gap-1 rounded-[6px] border border-[var(--border)] bg-[var(--surface)] px-2.5 py-1 text-xs font-semibold text-[var(--text-secondary)] tabular-nums cursor-pointer min-w-0 text-left"
             >
               <span>
-                {teamUtilization.utilizationPercent}% utilization · {avgWorkload} points
+                {teamUtilization.utilizationPercent}% assigned {DAILY_UTILIZATION_TARGET_HOURS}h+ today · {avgWorkload} avg load points
               </span>
               <ChevronDown className={`h-3.5 w-3.5 transition-transform ${mobileMetricsExpanded ? 'rotate-180' : ''}`} />
             </button>

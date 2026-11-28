@@ -750,8 +750,11 @@ function DashboardContent() {
               <div className="mt-1.5 flex flex-wrap gap-1.5">
                 {urgentTasks.map(task => {
                   const overdue = (getDaysRemaining(task.dueDate) ?? 0) < 0;
+                  const assigneeNames = getTaskAssigneeIds(task)
+                    .map(id => users.find(user => user.id === id)?.name)
+                    .filter(Boolean).join(', ');
                   return <button key={task.id} type="button" className={`button-secondary max-w-full min-w-0 whitespace-normal break-words text-left text-xs ${overdue ? '!border-[var(--danger-border)] !bg-[var(--danger-soft)] !text-red-700 dark:!text-red-300' : ''}`} onClick={() => handleEditTask(task)}>
-                    {task.title} · {overdue ? 'Overdue' : 'Due today'}
+                    <span>{task.title} · {assigneeNames || 'Unassigned'} · {overdue ? 'Overdue' : 'Due today'}</span>
                   </button>;
                 })}
                 {priorityMembers.map(({ user, score }) => <button key={user.id} type="button" onClick={() => setWorkloadModalUser(user)} className="button-secondary max-w-full min-w-0 whitespace-normal break-words text-left text-xs">
@@ -890,6 +893,11 @@ function DashboardContent() {
           {searchQuery.trim() && activeBoardId !== 'all' && matchingPipelineCount === 0 && (
             <p className="text-xs mb-2">No briefs match in this cluster. <button type="button" className="underline" onClick={() => setActiveBoardId('all')}>Search all clusters</button></p>
           )}
+          {roleFilteredUsers.length > 0 && (
+            <div id="pipeline-shortcut" tabIndex={-1} className="mb-2 flex scroll-mt-28 justify-end sm:hidden">
+              <a href="#member-lanes" className="button-secondary text-xs">Members</a>
+            </div>
+          )}
           <TeamPipeline
             roleFilter={activeRoleTab}
             tasks={searchQuery.trim() ? scopedSearchTasks : tasks}
@@ -952,6 +960,9 @@ function DashboardContent() {
           ) : roleFilteredUsers.length > 0 ? (
             <div className="space-y-4">
               <h2 className="sr-only">Team Swimlanes</h2>
+              <div id="member-lanes" tabIndex={-1} className="flex scroll-mt-28 justify-start sm:hidden">
+                <a href="#pipeline-shortcut" className="button-secondary text-xs">Back to Pipeline</a>
+              </div>
               {roleFilteredUsers.map((user, index) => {
                 const isCurrent = currentUser?.id === user.id;
                 const hasPinnedTop = roleFilteredUsers[0]?.id === currentUser?.id;

@@ -242,3 +242,7 @@ Full: .impeccable/design-full.md (read a section when you need its detail)
 - **Error recovery.** Preserve the current Undo duration. For actionable errors, state the next step near the failure and use a cause only when it is known.
 
 - **Journey verification.** Check Pipeline scrolling, per-member stages and Free Pool assignment with a larger fixture. Check card readability with long names and at 200% zoom. Let long client and project names wrap on Pipeline cards so neither disappears. Exercise keyboard and screen-reader access through search, metric help, Pipeline and assignment, plus the Accounts creation and status handoff. Check affected phone states in both themes.
+
+- **Quick Add drafts.** Ask before discarding an edited title, deadline or load when the user taps outside, cancels, presses Escape or switches stages. Default to Keep editing and return focus to the draft.
+- **Phone lead navigation.** Keep overdue work first and include assignee names in deadline exceptions, with Unassigned as the fallback. Provide Members near Pipeline and Back to Pipeline above the member lanes. Label the assigned-hours threshold and average load in the collapsed overview.
+- **Pipeline filters.** Match desktop filter button height and alignment to New Brief. Keep amber for the unassigned count. Check zoom and keyboard focus before changing compact type.

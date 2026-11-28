@@ -300,13 +300,13 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
         {/* Create Brief, Inline md+ Filter Tabs & Collapse Toggle */}
         <div className="flex items-center gap-2 shrink-0">
           {!isCollapsed && (
-            <div className="hidden md:flex items-center rounded-[7px] bg-[var(--surface-subtle)] p-0.5 border border-[var(--border)] text-[11px] font-semibold">
+            <div className="hidden md:flex items-center rounded-[7px] bg-[var(--surface-subtle)] ring-1 ring-inset ring-[var(--border)] text-[11px] font-semibold">
               <button
                 type="button"
                 aria-pressed={filterMode === 'all'}
                 title="Show all deliverables in pipeline"
                 onClick={() => setFilterMode('all')}
-                className={`min-h-0 px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
+                className={`min-h-[var(--control-height)] px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
                   filterMode === 'all'
                     ? 'bg-[var(--surface)] text-[var(--text-primary)] border border-[var(--border)]'
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
@@ -319,7 +319,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                 aria-pressed={filterMode === 'unassigned'}
                 title="Filter to unassigned deliverables"
                 onClick={() => setFilterMode('unassigned')}
-                className={`min-h-0 px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
+                className={`min-h-[var(--control-height)] px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
                   filterMode === 'unassigned'
                     ? 'bg-[var(--surface)] text-amber-700 dark:text-amber-400 border border-[var(--border)]'
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'
@@ -332,7 +332,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                 aria-pressed={filterMode === 'assigned'}
                 title="Filter to assigned deliverables waiting in pipeline"
                 onClick={() => setFilterMode('assigned')}
-                className={`min-h-0 px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
+                className={`min-h-[var(--control-height)] px-2.5 py-1 rounded-[5px] transition-colors cursor-pointer tabular-nums ${
                   filterMode === 'assigned'
                     ? 'bg-[var(--surface)] text-[#1d4ed8] dark:text-blue-400 border border-[var(--border)]'
                     : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-transparent'

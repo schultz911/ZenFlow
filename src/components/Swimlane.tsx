@@ -13,6 +13,7 @@ import {
   getLocalOffsetDateKey,
   isTaskAssignedToUser,
 } from '../utils/workload';
+import { DialogPanel } from './ui/DialogPanel';
 import { DateQuickPresets } from './ui/DateQuickPresets';
 import { TaskCard } from './TaskCard';
 import { RetainerSwimlane } from './RetainerSwimlane';
@@ -293,36 +294,51 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   const [isSubmittingQuickAdd, setIsSubmittingQuickAdd] = useState(false);
   const quickAddCardRef = useRef<HTMLDivElement>(null);
 
-  // Click outside to dismiss quick add in swimlane column
+  const initialQuickAddDueDate = useRef('');
+  const [afterDiscard, setAfterDiscard] = useState<(() => void) | null>(null);
+  const quickAddDirty = Boolean(quickAddTitle.trim()) || quickAddLoad !== 'medium' ||
+    quickAddDueDate !== initialQuickAddDueDate.current;
+
+  const resetQuickAdd = useCallback((status: TaskStatus | null) => {
+    const defaultDate = getLocalOffsetDateKey(1);
+    initialQuickAddDueDate.current = defaultDate;
+    setQuickAddStatus(status);
+    setQuickAddTitle('');
+    setQuickAddLoad('medium');
+    setQuickAddDueDate(defaultDate);
+  }, []);
+
+  const requestQuickAddChange = useCallback((next: () => void) => {
+    if (isSubmittingQuickAdd) return;
+    if (quickAddStatus && quickAddDirty) setAfterDiscard(() => next);
+    else next();
+  }, [isSubmittingQuickAdd, quickAddStatus, quickAddDirty]);
+
+  const keepEditingQuickAdd = () => {
+    setAfterDiscard(null);
+    requestAnimationFrame(() => quickAddCardRef.current?.querySelector('input')?.focus({ preventScroll: true }));
+  };
+
   useEffect(() => {
-    if (!quickAddStatus) return;
+    if (!quickAddStatus || afterDiscard || isSubmittingQuickAdd) return;
+    const handleOutside = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || !quickAddCardRef.current ||
+          quickAddCardRef.current.contains(target)) return;
 
-    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
-      const target = e.target as Node | null;
-      if (!target) return;
+      const ownLane = target.closest('[data-quick-add-workspace]') ===
+        quickAddCardRef.current.closest('[data-quick-add-workspace]');
+      if (ownLane && target.closest('[data-quick-add-transition]')) return;
 
-      // If clicking inside the quick add card itself, keep it open
-      if (quickAddCardRef.current && quickAddCardRef.current.contains(target)) {
-        return;
+      if (quickAddDirty) {
+        event.preventDefault();
+        event.stopPropagation();
       }
-
-      // If clicking the column header toggle button for this active column, let the button's onClick handle it
-      const el = target instanceof Element ? target : target.parentElement;
-      if (el?.closest(`[data-quick-add-toggle="${quickAddStatus}"]`)) {
-        return;
-      }
-
-      setQuickAddStatus(null);
-      setQuickAddTitle('');
+      requestQuickAddChange(() => resetQuickAdd(null));
     };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
-    };
-  }, [quickAddStatus]);
+    document.addEventListener('click', handleOutside, true);
+    return () => document.removeEventListener('click', handleOutside, true);
+  }, [quickAddStatus, afterDiscard, isSubmittingQuickAdd, quickAddDirty, requestQuickAddChange, resetQuickAdd]);
 
   const handleCommitQuickAdd = useCallback(async (status: TaskStatus) => {
     const trimmed = quickAddTitle.trim();
@@ -333,8 +349,11 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
       if (onQuickAddTask) {
         await onQuickAddTask(user.id, trimmed, status, quickAddLoad, resolvedDueDate);
       }
+      const defaultDate = getLocalOffsetDateKey(1);
+      initialQuickAddDueDate.current = defaultDate;
       setQuickAddTitle('');
-      setQuickAddDueDate(getLocalOffsetDateKey(1));
+      setQuickAddLoad('medium');
+      setQuickAddDueDate(defaultDate);
     } finally {
       setIsSubmittingQuickAdd(false);
     }
@@ -710,6 +729,7 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
   return (
     <motion.div
       id={`swimlane-${user.id}`}
+      data-quick-add-workspace
       tabIndex={-1}
       aria-label={`${user.name} workspace`}
       layout="position"
@@ -1107,7 +1127,14 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
             <div className="sm:hidden flex overflow-x-auto border-b border-[var(--border-subtle)] px-2" role="group" aria-label={`${user.name} task stages`}>
               {COLUMNS.map(column => (
                 <button key={column.status} type="button" aria-pressed={mobileStage === column.status}
-                  onClick={() => setMobileStage(column.status)}
+                  data-quick-add-transition
+                  onClick={() => {
+                    if (mobileStage === column.status) return;
+                    requestQuickAddChange(() => {
+                      resetQuickAdd(null);
+                      setMobileStage(column.status);
+                    });
+                  }}
                   className={`mobile-tap-control shrink-0 px-2 text-xs font-semibold ${mobileStage === column.status ? 'text-[#1d4ed8] dark:text-blue-300 border-b-2 border-[var(--accent)]' : 'text-[var(--text-secondary)]'}`}>
                   {column.title} <span className="tabular-nums">{tasksByColumn[column.status]?.length || 0}</span>
                 </button>
@@ -1160,17 +1187,8 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                         {canEdit && (
                           <button
                             type="button"
-                            data-quick-add-toggle={col.status}
-                            onClick={() => {
-                              if (quickAddStatus === col.status) {
-                                setQuickAddStatus(null);
-                              } else {
-                                setQuickAddStatus(col.status);
-                                setQuickAddTitle('');
-                                setQuickAddLoad('medium');
-                                setQuickAddDueDate(getLocalOffsetDateKey(1));
-                              }
-                            }}
+                            data-quick-add-transition
+                            onClick={() => requestQuickAddChange(() => resetQuickAdd(quickAddStatus === col.status ? null : col.status))}
                             title={`Inline quick add to ${col.title}`}
                             aria-label={`Quick add to ${col.title}`}
                             className={`mobile-tap-square sm:min-w-0 sm:min-h-0 flex items-center justify-center rounded-[5px] p-1 transition-colors cursor-pointer shrink-0 ${
@@ -1204,6 +1222,12 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                         {quickAddStatus === col.status && canEdit && (
                           <motion.div
                             ref={quickAddCardRef}
+                            onKeyDown={event => {
+                              if (event.key !== 'Escape') return;
+                              event.preventDefault();
+                              event.stopPropagation();
+                              requestQuickAddChange(() => resetQuickAdd(null));
+                            }}
                             initial={{ opacity: 0, y: -4 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -4 }}
@@ -1218,10 +1242,9 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                 if (e.key === 'Enter') {
                                   e.preventDefault();
                                   handleCommitQuickAdd(col.status);
-                                } else if (e.key === 'Escape') {
-                                  setQuickAddStatus(null);
                                 }
                               }}
+                              aria-label="Quick-add task title"
                               placeholder="Task title... (Enter to save, Esc to cancel)"
                               className="w-full rounded-[5px] border border-[var(--border)] bg-[var(--surface-muted)] px-2.5 py-1.5 text-xs text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent)] focus:outline-none"
                             />
@@ -1270,13 +1293,20 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                 ))}
                               </div>
 
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    setQuickAddStatus(null);
+                                  onClick={() => requestQuickAddChange(() => resetQuickAdd(null))}
+                                  className="text-xs text-[var(--text-secondary)] hover:underline"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => requestQuickAddChange(() => {
+                                    resetQuickAdd(null);
                                     onAddTask(user.id, col.status);
-                                  }}
+                                  })}
                                   title="Open full form with details & due date"
                                   className="text-[11px] font-medium text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer"
                                   style={{ minHeight: 'auto' }}
@@ -1306,12 +1336,8 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 exit={{ opacity: 0 }}
-                                onClick={() => {
-                                  setQuickAddStatus(col.status);
-                                  setQuickAddTitle('');
-                                  setQuickAddLoad('medium');
-                                  setQuickAddDueDate(getLocalOffsetDateKey(1));
-                                }}
+                                data-quick-add-transition
+                                onClick={() => requestQuickAddChange(() => resetQuickAdd(col.status))}
                                 aria-label={`Add task to ${col.title} for ${user.name}`}
                                 className={`flex w-full h-12 cursor-pointer flex-col items-center justify-center rounded-[7px] px-3 py-2 text-center transition-colors ${
                                   isDropActive
@@ -1557,6 +1583,26 @@ const SwimlaneComponent: React.FC<SwimlaneProps> = ({
             onMoveTask(cTask.id, user.id, 'done', targetIndex, undefined, { contentDocLink });
           }}
         />
+
+        {afterDiscard && createPortal(
+          <div className="dialog-backdrop fixed inset-0 z-50 flex items-center justify-center p-4">
+            <DialogPanel aria-label="Discard quick-add draft?" onClose={keepEditingQuickAdd}
+              className="w-full max-w-sm">
+              <div className="p-5">
+                <h2 className="text-base font-semibold">Discard quick-add draft?</h2>
+                <p className="mt-2 text-sm text-[var(--text-secondary)]">Your changes will be lost.</p>
+              </div>
+              <div className="dialog-footer">
+                <button type="button" data-autofocus className="button-secondary" onClick={keepEditingQuickAdd}>Keep editing</button>
+                <button type="button" className="button-danger-outline" onClick={() => {
+                  setAfterDiscard(null);
+                  afterDiscard();
+                }}>Discard draft</button>
+              </div>
+            </DialogPanel>
+          </div>,
+          document.body,
+        )}
 
         {/* In-Progress WIP Limit Modal (Max 2 Tasks) */}
         <WipLimitModal
