@@ -36,6 +36,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const isFreshOnboarding = new URLSearchParams(window.location.search).get('onboarding') === 'fresh';
   const params = new URLSearchParams(window.location.search);
   const largerFixture = params.get('fixture') === 'large';
+  const [rejectNextAssignment, setRejectNextAssignment] = useState(params.get('assignment') === 'fail-once');
   const [users, setUsers] = useState<User[]>(() => largerFixture ? [
     ...fixtureUsers,
     ...Array.from({ length: 12 }, (_, i): User => ({
@@ -249,6 +250,10 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       return created;
     },
     updateTask: async (id: string, updates: any) => {
+      if (rejectNextAssignment && updates.status === 'todo' && updates.assigneeIds?.length) {
+        setRejectNextAssignment(false);
+        throw Object.assign(new Error('Preview assignment rejected'), { status: 400 });
+      }
       let result: Task = fixtureTasks[0];
       setTasks(prev => {
         const next = applyOptimisticTaskUpdate(prev, id, updates);

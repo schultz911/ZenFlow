@@ -473,9 +473,10 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                   </button>
                 </div>
                 <p className="tabular-nums">
-                  Assigned today: <strong>{formatHours(projected.selectedDailyHours)} → {formatHours(projected.projectedDailyHours)}</strong>
+                  Assigned today: <strong>{formatHours(projected.selectedDailyHours)}{dueDate && ` → ${formatHours(projected.projectedDailyHours)}`}</strong>
+                  {!dueDate && ' · Projected: set a deadline'}
                   {' · '}Load: <strong>{projected.selectedLoad} → {projected.projectedLoad} / 12 pts</strong>
-                  {projected.projectedDailyHours > 8 && ' · Over 8h/day'}
+                  {dueDate && projected.projectedDailyHours > 8 && ' · Over 8h/day'}
                 </p>
                 {willOverload && (
                   <label className="flex items-start gap-2 font-medium text-red-700 dark:text-red-300">

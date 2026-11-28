@@ -1,4 +1,4 @@
-import { MetricHelp, efficiencyHelp } from './MetricHelp';
+import { MetricHelp, efficiencyHelp, utilizationHelp } from './MetricHelp';
 import { MetricBar } from './ui/MetricBar';
 import { DialogPanel } from './ui/DialogPanel';
 import React, { useState, useMemo, useEffect } from 'react';
@@ -33,7 +33,6 @@ import {
   Calendar,
   Lock,
   Users,
-  Activity,
   Building2,
   FolderGit2,
   CheckCircle2,
@@ -765,7 +764,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                 <div className="metric-card flex flex-col sm:border-b lg:border-b-0 border-[var(--border-subtle)]">
                   <div className="flex items-center justify-between gap-2">
                     <span className="metric-label">Total Utilization</span>
-                    <Activity className={`h-3.5 w-3.5 shrink-0 ${topMetrics.totalUtilization === 0 ? 'text-[var(--text-secondary)]' : 'text-emerald-700 dark:text-emerald-400'}`} />
+                    <MetricHelp label="About total utilization" detail={utilizationHelp} />
                   </div>
                   <div className="mt-2">
                     <div className="flex items-baseline gap-2 min-h-[44px]">

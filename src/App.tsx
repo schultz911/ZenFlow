@@ -920,6 +920,7 @@ function DashboardContent() {
             tasks={searchQuery.trim() ? scopedSearchTasks : tasks}
             users={users}
             globalSearch={searchQuery}
+            hasMemberLanes={roleFilteredUsers.length > 0}
             assignmentNotice={assignmentNotice?.fromPipeline ? assignmentNotice : null}
             onClearSearch={() => setSearchQuery('')}
             onOpenCreateModal={() => setDisciplineModalOpen(true)}
@@ -979,7 +980,7 @@ function DashboardContent() {
               )}
             </div>
           ) : roleFilteredUsers.length > 0 ? (
-            <div className="space-y-4">
+            <div id="member-lanes" tabIndex={-1} className="space-y-4 scroll-mt-28">
               <div className="hidden items-center justify-between gap-3 sm:flex">
                 <h2 className="text-sm font-semibold text-[var(--text-primary)]">Member lanes</h2>
                 <label className="inline-flex min-h-[var(--control-height)] cursor-pointer items-center gap-2 text-xs text-[var(--text-secondary)]">
@@ -990,7 +991,7 @@ function DashboardContent() {
               {membersWithWork && !roleFilteredUsers.some(user => memberHasVisibleWork(user.id)) && (
                 <p className="hidden py-3 text-xs text-[var(--text-secondary)] sm:block">No members have work in the current view.</p>
               )}
-              <div id="member-lanes" tabIndex={-1} className="flex scroll-mt-28 justify-start sm:hidden">
+              <div className="flex justify-start sm:hidden">
                 <a href="#pipeline-shortcut" className="button-secondary text-xs">Back to Pipeline</a>
               </div>
               {roleFilteredUsers.map((user, index) => {

@@ -741,6 +741,59 @@ try {
     await context.close();
   }
 
+  // Laptop assignment recovery and repeated keyboard handoffs.
+  {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, reducedMotion: 'reduce' });
+    const page = await context.newPage();
+    page.on('pageerror', err => pageErrors.push(`[laptop-assignment] ${err.message}`));
+    page.on('console', msg => {
+      if (msg.type() === 'error' && !msg.text().startsWith('Error: Preview assignment rejected')) {
+        consoleErrors.push(`[laptop-assignment] ${msg.text()}`);
+      }
+    });
+    await page.goto(`${PREVIEW_URL}?fixture=large&assignment=fail-once`, { waitUntil: 'networkidle' });
+    const members = page.getByRole('link', { name: 'Members', exact: true });
+    await members.press('Enter');
+    assert.equal(await page.locator('#member-lanes').evaluate(el => el === document.activeElement), true);
+
+    const filters = page.getByRole('group', { name: 'Filter Pipeline briefs' });
+    const unassigned = filters.getByRole('button', { name: /^Unassigned/ });
+    await unassigned.press('Space');
+    assert.match(await filters.ariaSnapshot(), /button "Unassigned .*" \[pressed\]/);
+    assert.equal(await filters.getByRole('checkbox').count(), 0);
+    const cards = page.getByRole('region', { name: 'Pipeline cards' });
+    const assignment = page.getByRole('dialog', { name: 'Assign task' });
+    for (let index = 0; index < 3; index++) {
+      const card = cards.locator('[data-pipeline-task]').first();
+      const taskId = await card.getAttribute('data-pipeline-task');
+      const nextTaskId = await cards.locator('[data-pipeline-task]').nth(1).getAttribute('data-pipeline-task');
+      await card.getByRole('button', { name: /^Assign / }).press('Enter');
+      const candidate = assignment.locator('input[name="assignment-member"]').filter({ visible: true });
+      const eligible = candidate.and(assignment.locator('input:not([value=""])'));
+      await eligible.first().check();
+      await assignment.getByText('Projected: set a deadline', { exact: false }).waitFor();
+      await assignment.getByRole('button', { name: 'Tomorrow', exact: true }).click();
+      await assignment.getByText('Projected: set a deadline', { exact: false }).waitFor({ state: 'hidden' });
+      const deadline = assignment.locator('#taskassignmentmodal-deadline');
+      const selectedDeadline = await deadline.inputValue();
+      const overload = assignment.getByRole('checkbox', { name: /projected workload/ });
+      if (await overload.isVisible()) await overload.check();
+      const save = assignment.getByRole('button', { name: 'Assign & Move to To Do' });
+      await save.press('Enter');
+      if (index === 0) {
+        await assignment.getByRole('alert').getByText(/Could not save the assignment/).waitFor();
+        assert.equal(await deadline.inputValue(), selectedDeadline);
+        assert.equal(await eligible.first().isChecked(), true);
+        await save.press('Enter');
+      }
+      await assignment.waitFor({ state: 'hidden' });
+      await cards.locator(`[data-pipeline-task="${taskId}"]`).waitFor({ state: 'detached' });
+      await cards.locator(`[data-pipeline-task="${nextTaskId}"] [data-pipeline-title]:focus`).waitFor();
+      assert.equal(await unassigned.getAttribute('aria-pressed'), 'true');
+    }
+    await context.close();
+  }
+
   // Member role selection, compact card context and account ranking.
   {
     const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });

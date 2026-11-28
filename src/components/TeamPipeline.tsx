@@ -30,6 +30,7 @@ interface TeamPipelineProps {
   tasks: Task[];
   users: User[];
   globalSearch?: string;
+  hasMemberLanes: boolean;
   assignmentNotice: { taskId: string } | null;
   onClearSearch: () => void;
   onOpenCreateModal: () => void;
@@ -50,6 +51,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
   tasks,
   users,
   globalSearch = '',
+  hasMemberLanes,
   assignmentNotice,
   onClearSearch,
   onOpenCreateModal,
@@ -353,7 +355,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
         {/* Create Brief, Inline md+ Filter Tabs & Collapse Toggle */}
         <div className="flex items-center gap-2 shrink-0">
           {!isCollapsed && (
-            <div className="hidden md:flex items-center rounded-[7px] bg-[var(--surface-subtle)] ring-1 ring-inset ring-[var(--border)] text-[11px] font-semibold">
+            <div role="group" aria-label="Filter Pipeline briefs" className="hidden md:flex items-center rounded-[7px] bg-[var(--surface-subtle)] ring-1 ring-inset ring-[var(--border)] text-[11px] font-semibold">
               <button
                 type="button"
                 aria-pressed={filterMode === 'all'}
@@ -394,6 +396,10 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                 Assigned ({assignedCount})
               </button>
             </div>
+          )}
+
+          {hasMemberLanes && (
+            <a href="#member-lanes" className="button-secondary hidden whitespace-nowrap sm:inline-flex">Members</a>
           )}
 
           {canCreatePipelineTask ? (

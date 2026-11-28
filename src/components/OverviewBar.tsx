@@ -1,4 +1,4 @@
-import { MetricHelp, efficiencyHelp, loadHelp } from './MetricHelp';
+import { MetricHelp, efficiencyHelp, loadHelp, utilizationHelp } from './MetricHelp';
 import React, { useMemo, useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useAuth, useBoardUi, useWorkspace } from '../context/DashboardContext';
 import { handleRovingMenuKeyDown } from '../hooks/useAnchoredPopover';
@@ -281,7 +281,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
 
         <div className={`${mobileMetricsExpanded ? 'grid' : 'hidden sm:grid'} ledger-kpi-grid`}>
           <div className="metric-card col-span-3 sm:col-span-1 border-b lg:border-b-0 border-r border-[var(--border-subtle)]">
-            <p className="metric-label whitespace-nowrap">Utilization</p>
+            <div className="flex items-center gap-2"><p className="metric-label whitespace-nowrap">Utilization</p><MetricHelp label="About utilization" detail={utilizationHelp} /></div>
             <p className={`metric-value mt-1 ${teamUtilization.utilizationPercent === 0 ? 'text-[var(--text-primary)]' : 'text-emerald-700 dark:text-emerald-400'}`}>
               {teamUtilization.utilizationPercent}
               <span className="text-sm font-semibold tracking-normal">%</span>
