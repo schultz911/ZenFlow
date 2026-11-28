@@ -6,6 +6,7 @@ import { useAnchoredPopover } from '../hooks/useAnchoredPopover';
 export const efficiencyHelp = 'Estimated hours divided by billable hours for completed work with both values. 100% means on estimate. For example, 10h estimated ÷ 6h billable rounds to 167%, or 4h under estimate.';
 export const utilizationHelp = 'Assigned hours are estimates spread across scheduled workdays and split among assignees. Undated assignments with an estimate count on the current report day once started. Overdue work can still add load points after its scheduled hours end.';
 export const loadHelp = 'Load points reflect active work, weighted by cognitive load, task status and deadline pressure. Shared work is split among assignees. Load can be high even when few estimated hours are scheduled today.';
+export const assignmentLoadHelp = 'Load can be high even when 0h is scheduled today. For example, an overdue High task in progress with one assignee can add 3 points (2× load × 1.5 overdue weight) after its scheduled hours end. The 1×, 1.5× and 2× choices are cognitive load weights. Status, deadlines and shared ownership affect the points.';
 
 export function MetricHelp({ label, detail }: { label: string; detail: string }) {
   const id = useId();

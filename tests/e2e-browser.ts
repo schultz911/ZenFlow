@@ -766,12 +766,31 @@ try {
     assert.equal(await overview.getByRole('button', { name: 'Compact overview' }).count(), 0);
     assert.equal(await overview.locator('.metric-card:visible').count(), 5);
     assert.equal(await overview.locator('.metric-value').first().evaluate(el => getComputedStyle(el).fontSize), '24px');
-    const members = page.getByRole('link', { name: 'Members', exact: true });
+    const jumpBar = page.getByRole('navigation', { name: 'Workspace sections' });
+    const members = jumpBar.getByRole('link', { name: 'Members', exact: true });
+    assert.equal(await page.getByRole('link', { name: 'Back to Pipeline' }).count(), 0);
+    const boardViewport = await page.locator('.workspace-scroll').boundingBox();
+    const jumpBarBox = await jumpBar.boundingBox();
+    assert.ok(boardViewport && jumpBarBox && boardViewport.y + boardViewport.height <= jumpBarBox.y);
     await members.press('Enter');
     assert.equal(await page.locator('#member-lanes').evaluate(el => el === document.activeElement), true);
+    assert.equal(await members.getAttribute('aria-current'), 'location');
 
-    await page.getByRole('link', { name: 'Back to Pipeline' }).press('Enter');
-    assert.equal(await members.evaluate(el => el === document.activeElement), true);
+    const pipelineJump = jumpBar.getByRole('link', { name: 'Pipeline', exact: true });
+    await pipelineJump.press('Enter');
+    assert.equal(await page.locator('#workspace-pipeline').evaluate(el => el === document.activeElement), true);
+    assert.equal(await pipelineJump.getAttribute('aria-current'), 'location');
+
+    const overviewJump = jumpBar.getByRole('link', { name: 'Overview', exact: true });
+    await overviewJump.press('Enter');
+    assert.equal(await overview.evaluate(el => el === document.activeElement), true);
+    assert.equal(await overviewJump.getAttribute('aria-current'), 'location');
+
+    const disciplines = page.getByRole('navigation', { name: 'Team disciplines' });
+    await disciplines.getByRole('button', { name: /^Content/ }).press('Space');
+    assert.match(await disciplines.ariaSnapshot(), /button "Content .*" \[pressed\]/);
+    assert.equal(await disciplines.getByRole('checkbox').count(), 0);
+    await disciplines.getByRole('button', { name: /^All/ }).press('Space');
 
     const filters = page.getByRole('group', { name: 'Filter Pipeline briefs' });
     const unassigned = filters.getByRole('button', { name: /^Unassigned/ });
@@ -780,17 +799,38 @@ try {
     assert.equal(await filters.getByRole('checkbox').count(), 0);
     const cards = page.getByRole('region', { name: 'Pipeline cards' });
     const assignment = page.getByRole('dialog', { name: 'Assign task' });
+    let firstVisibleIndex = 0;
     for (let index = 0; index < 3; index++) {
-      const card = cards.locator('[data-pipeline-task]').first();
+      if (index === 1) {
+        await page.getByRole('button', { name: 'Next Pipeline cards' }).press('Enter');
+        await page.waitForFunction(() => document.querySelector('[aria-label="Pipeline cards"]')!.scrollLeft > 0);
+        firstVisibleIndex = await cards.evaluate(row => {
+          const left = row.getBoundingClientRect().left;
+          return Array.from(row.children).findIndex(card => card.getBoundingClientRect().left >= left - 1);
+        });
+        assert.ok(firstVisibleIndex > 0);
+      }
+      const card = cards.locator('[data-pipeline-task]').nth(firstVisibleIndex);
       const taskId = await card.getAttribute('data-pipeline-task');
-      const nextTaskId = await cards.locator('[data-pipeline-task]').nth(1).getAttribute('data-pipeline-task');
-      await card.getByRole('button', { name: /^Assign / }).press('Enter');
+      const nextTaskId = await cards.locator('[data-pipeline-task]').nth(firstVisibleIndex + 1).getAttribute('data-pipeline-task');
+      const trigger = card.getByRole('button', { name: /^Assign / });
+      await trigger.focus();
+      const originScrollLeft = await cards.evaluate(row => row.scrollLeft);
+      await trigger.press('Enter');
       if (index === 0) {
         const help = assignment.getByRole('button', { name: 'About assignment load points' });
         await help.press('Enter');
         assert.match(await help.ariaSnapshot(), /expanded/);
         await assignment.getByRole('status').getByText(/Load can be high/).waitFor();
+        await assignment.getByRole('status').getByText(/can add 3 points/).waitFor();
         await help.press('Enter');
+        const candidateList = assignment.getByRole('region', { name: 'Eligible candidates' });
+        const range = assignment.locator('#assignment-candidate-range');
+        assert.match((await range.textContent()) ?? '', /^1–[2-7] of 8$/);
+        await candidateList.evaluate(element => { element.scrollTop = element.scrollHeight; });
+        await assignment.getByText(/^[2-7]–8 of 8$/).waitFor();
+        await candidateList.locator('input[value="u-content"]').check();
+        await assignment.getByText(/5 active tasks/).waitFor();
       }
       const candidate = assignment.locator('input[name="assignment-member"]').filter({ visible: true });
       const eligible = candidate.and(assignment.locator('input:not([value=""])'));
@@ -814,6 +854,7 @@ try {
       await cards.locator(`[data-pipeline-task="${taskId}"]`).waitFor({ state: 'detached' });
       await cards.locator(`[data-pipeline-task="${nextTaskId}"] [data-pipeline-title]:focus`).waitFor();
       assert.equal(await unassigned.getAttribute('aria-pressed'), 'true');
+      assert.ok(Math.abs((await cards.evaluate(row => row.scrollLeft)) - originScrollLeft) <= 2);
     }
     await context.close();
   }

@@ -31,6 +31,11 @@ import { DialogPanel } from './components/ui/DialogPanel';
 import { AnimatePresence } from 'motion/react';
 
 const EMPTY_TASKS: Task[] = [];
+const WORKSPACE_SECTIONS = [
+  { id: 'workspace-overview', label: 'Overview' },
+  { id: 'workspace-pipeline', label: 'Pipeline' },
+  { id: 'member-lanes', label: 'Members' },
+] as const;
 
 function DashboardContent() {
   const {
@@ -89,6 +94,36 @@ function DashboardContent() {
   const [assignmentPresetUserId, setAssignmentPresetUserId] = useState<string | undefined>(undefined);
   const assignmentFromPipeline = useRef(false);
   const [membersWithWork, setMembersWithWork] = useState(false);
+  const workspaceScrollRef = useRef<HTMLDivElement>(null);
+  const sectionJump = useRef<{ id: string; scrollTop: number } | null>(null);
+  const [currentSection, setCurrentSection] = useState<string>(WORKSPACE_SECTIONS[0].id);
+
+  useEffect(() => {
+    const workspace = workspaceScrollRef.current;
+    const main = document.getElementById('main-workspace');
+    if (!currentUser || !workspace || !main) return;
+    const header = workspace.querySelector('header');
+    const updateSection = () => {
+      const jump = sectionJump.current;
+      if (jump && jump.scrollTop === workspace.scrollTop && document.getElementById(jump.id)) return;
+      sectionJump.current = null;
+      const readingLine = (header?.getBoundingClientRect().bottom ?? 0) + 24;
+      const section = WORKSPACE_SECTIONS.reduce<string>((active, { id }) => {
+        const target = document.getElementById(id);
+        return target && target.getBoundingClientRect().top <= readingLine ? id : active;
+      }, WORKSPACE_SECTIONS[0].id);
+      setCurrentSection(section);
+    };
+    const observer = new ResizeObserver(updateSection);
+    observer.observe(workspace);
+    observer.observe(main);
+    workspace.addEventListener('scroll', updateSection, { passive: true });
+    updateSection();
+    return () => {
+      observer.disconnect();
+      workspace.removeEventListener('scroll', updateSection);
+    };
+  }, [currentUser]);
   const [createdBrief, setCreatedBrief] = useState<string | null>(null);
   const [assignmentNotice, setAssignmentNotice] = useState<{ taskId: string; member: string; destination: string; fromPipeline: boolean } | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
@@ -717,13 +752,36 @@ function DashboardContent() {
 
   return (
     <>
-      <div className={`min-h-screen bg-[var(--canvas)] text-[var(--text-primary)] font-sans antialiased transition-colors relative ${!currentUser ? 'overflow-hidden pointer-events-none select-none filter blur-[2px]' : ''}`}>
+      <div className={`min-h-screen bg-[var(--canvas)] text-[var(--text-primary)] font-sans antialiased transition-colors relative ${currentUser ? 'workspace-shell' : 'overflow-hidden pointer-events-none select-none filter blur-[2px]'}`}>
         <a
           href="#main-workspace"
           className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-3 focus:py-1.5 focus:rounded-[6px] focus:bg-[var(--accent)] focus:text-white focus:text-xs focus:font-medium focus:shadow-lg"
         >
           Skip to workspace
         </a>
+        {currentUser && (
+          <nav className="workspace-jump-bar" aria-label="Workspace sections">
+            {WORKSPACE_SECTIONS.filter(({ id }) => id !== 'member-lanes' || roleFilteredUsers.length > 0).map(({ id, label }) => (
+              <a key={id} href={`#${id}`} aria-current={currentSection === id ? 'location' : undefined}
+                onClick={event => {
+                  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                  const target = document.getElementById(id);
+                  const workspace = workspaceScrollRef.current;
+                  if (!target || !workspace) return;
+                  event.preventDefault();
+                  const headerBottom = workspace.querySelector('header')?.getBoundingClientRect().bottom ?? 0;
+                  workspace.scrollTop += target.getBoundingClientRect().top - headerBottom - 12;
+                  sectionJump.current = { id, scrollTop: workspace.scrollTop };
+                  target.focus({ preventScroll: true });
+                  setCurrentSection(id);
+                }}
+              >
+                {label}
+              </a>
+            ))}
+          </nav>
+        )}
+        <div ref={workspaceScrollRef} className="workspace-scroll">
         {/* Sticky Header */}
         <Header
           onOpenLoginModal={handleOpenLogin}
@@ -920,7 +978,6 @@ function DashboardContent() {
             tasks={searchQuery.trim() ? scopedSearchTasks : tasks}
             users={users}
             globalSearch={searchQuery}
-            hasMemberLanes={roleFilteredUsers.length > 0}
             assignmentNotice={assignmentNotice?.fromPipeline ? assignmentNotice : null}
             onClearSearch={() => setSearchQuery('')}
             onOpenCreateModal={() => setDisciplineModalOpen(true)}
@@ -980,7 +1037,7 @@ function DashboardContent() {
               )}
             </div>
           ) : roleFilteredUsers.length > 0 ? (
-            <div id="member-lanes" tabIndex={-1} className="space-y-4 scroll-mt-28">
+            <section id="member-lanes" aria-label="Member lanes" tabIndex={-1} className="space-y-4 scroll-mt-28">
               <div className="hidden items-center justify-between gap-3 sm:flex">
                 <h2 className="text-sm font-semibold text-[var(--text-primary)]">Member lanes</h2>
                 <div className="flex items-center gap-3">
@@ -988,7 +1045,6 @@ function DashboardContent() {
                     <input type="checkbox" checked={membersWithWork} onChange={event => setMembersWithWork(event.target.checked)} />
                     Members with work
                   </label>
-                  <a href="#pipeline-members-link" className="button-secondary text-xs">Back to Pipeline</a>
                 </div>
               </div>
               {membersWithWork && !roleFilteredUsers.some(user => memberHasVisibleWork(user.id)) && (
@@ -1034,9 +1090,10 @@ function DashboardContent() {
                   </div>
                 );
               })}
-            </div>
+            </section>
           ) : null}
         </main>
+        </div>
 
 
 

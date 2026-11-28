@@ -1,4 +1,5 @@
 import { MetricHelp, efficiencyHelp, utilizationHelp } from './MetricHelp';
+import { EfficiencyDetail } from './ui/EfficiencyDetail';
 import { MetricBar } from './ui/MetricBar';
 import { DialogPanel } from './ui/DialogPanel';
 import React, { useState, useMemo, useEffect } from 'react';
@@ -806,7 +807,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                     <p className="metric-detail">
                       {efficiencyPercent === null
                         ? 'No measured work'
-                        : <>{formatHours(estimatedHours)} est. / {formatHours(billableHours)} billable · <span className="inline-block">{estimatedHours === billableHours ? 'On estimate' : `${formatHours(Math.abs(estimatedHours - billableHours))} ${estimatedHours > billableHours ? 'under estimate' : 'over est.'}`}</span></>}
+                        : <EfficiencyDetail estimatedHours={estimatedHours} billableHours={billableHours} />}
                     </p>
                   </div>
                 </div>

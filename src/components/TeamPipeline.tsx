@@ -30,7 +30,6 @@ interface TeamPipelineProps {
   tasks: Task[];
   users: User[];
   globalSearch?: string;
-  hasMemberLanes: boolean;
   assignmentNotice: { taskId: string } | null;
   onClearSearch: () => void;
   onOpenCreateModal: () => void;
@@ -51,7 +50,6 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
   tasks,
   users,
   globalSearch = '',
-  hasMemberLanes,
   assignmentNotice,
   onClearSearch,
   onOpenCreateModal,
@@ -315,6 +313,8 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
 
   return (
     <section
+      id="workspace-pipeline"
+      tabIndex={-1}
       aria-label={pipelineHeading}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -398,9 +398,6 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
             </div>
           )}
 
-          {hasMemberLanes && (
-            <a id="pipeline-members-link" href="#member-lanes" className="button-secondary hidden scroll-mt-28 whitespace-nowrap sm:inline-flex">Members</a>
-          )}
 
           {canCreatePipelineTask ? (
             <button

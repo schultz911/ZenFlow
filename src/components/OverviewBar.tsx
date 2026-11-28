@@ -1,4 +1,5 @@
 import { MetricHelp, efficiencyHelp, loadHelp, utilizationHelp } from './MetricHelp';
+import { EfficiencyDetail } from './ui/EfficiencyDetail';
 import React, { useMemo, useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useAuth, useBoardUi, useWorkspace } from '../context/DashboardContext';
 import { handleRovingMenuKeyDown } from '../hooks/useAnchoredPopover';
@@ -8,7 +9,6 @@ import {
   quickWorkloadScore,
   calculateTeamUtilization,
   calculateTasksEfficiency,
-  formatHours,
   DAILY_UTILIZATION_TARGET_HOURS,
   getTaskAssigneeIds,
   groupTasksByAssignee,
@@ -219,7 +219,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
   return (
     <div className="mb-3 space-y-2.5">
       {/* Pure Typographic Single-Frame Ruled Swiss KPI Ledger */}
-      <section className="ledger-frame" aria-label="Team overview">
+      <section id="workspace-overview" tabIndex={-1} className="ledger-frame" aria-label="Team overview">
         <div className="ledger-band flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between px-4 py-1.5 sm:px-5">
           <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
             <div className="flex items-baseline gap-2.5 min-w-0">
@@ -305,9 +305,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
             </p>
             <p className="metric-detail">
               {teamEfficiency.efficiencyPercent !== null ? (
-                <>
-                  {formatHours(teamEfficiency.estimatedHours)} est. / {formatHours(teamEfficiency.billableHours)} billable · <span className="inline-block">{teamEfficiency.estimatedHours === teamEfficiency.billableHours ? 'On estimate' : `${formatHours(Math.abs(teamEfficiency.estimatedHours - teamEfficiency.billableHours))} ${teamEfficiency.estimatedHours > teamEfficiency.billableHours ? 'under estimate' : 'over est.'}`}</span>
-                </>
+                <EfficiencyDetail estimatedHours={teamEfficiency.estimatedHours} billableHours={teamEfficiency.billableHours} />
               ) : (
                 'No measured work'
               )}

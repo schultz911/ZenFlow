@@ -528,6 +528,59 @@
   }
 }
 
+.workspace-jump-bar {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  html:has(.workspace-shell) {
+    overflow: hidden;
+    scrollbar-gutter: auto;
+  }
+
+  .workspace-shell {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    height: 100dvh;
+    min-height: 0;
+  }
+
+  .workspace-scroll {
+    grid-row: 1;
+    grid-column: 1;
+    overflow: auto;
+    scrollbar-gutter: stable;
+  }
+
+  .workspace-jump-bar {
+    grid-row: 2;
+    grid-column: 1;
+    display: flex;
+    justify-content: flex-end;
+    gap: 4px;
+    padding: 4px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+  }
+
+  .workspace-jump-bar a {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding-inline: 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  .workspace-jump-bar a:hover,
+  .workspace-jump-bar a[aria-current] {
+    background: var(--accent-soft);
+    color: var(--text-primary);
+  }
+}
+
 .animate-marquee {
   display: flex;
   width: max-content;

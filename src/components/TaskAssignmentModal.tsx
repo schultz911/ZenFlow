@@ -1,8 +1,8 @@
-import { MetricHelp, loadHelp } from './MetricHelp';
+import { MetricHelp, assignmentLoadHelp } from './MetricHelp';
 import { DialogPanel } from './ui/DialogPanel';
 import { CognitiveLoadSelector } from './ui/CognitiveLoadSelector';
 import { DateQuickPresets } from './ui/DateQuickPresets';
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { useAuth, useWorkspace } from '../context/DashboardContext';
 import { getAnalyticsClock } from '../domain/analyticsDate';
@@ -15,6 +15,7 @@ import {
   formatHours,
   formatLocalDateKey,
   groupTasksByAssignee,
+  calculateUserWorkload,
   quickWorkloadScore,
   getUserTag,
 } from '../utils/workload';
@@ -122,11 +123,41 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
       load: quickWorkloadScore(tasksByUser.get(user.id) ?? []),
     })).sort((a, b) => a.hours - b.hours || a.load - b.load || a.user.name.localeCompare(b.user.name));
   }, [isOpen, eligibleUsers, tasks, tasksByUser, today]);
-
+  const candidateScrollRef = useRef<HTMLDivElement>(null);
+  const [visibleCandidateRange, setVisibleCandidateRange] = useState('');
+  const updateCandidateRange = useCallback(() => {
+    const viewport = candidateScrollRef.current;
+    if (!viewport) return;
+    const top = viewport.scrollTop;
+    const bottom = top + viewport.clientHeight;
+    const fullyVisible: number[] = [];
+    const partlyVisible: number[] = [];
+    Array.from(viewport.children).forEach((row, index) => {
+      if (!(row instanceof HTMLElement)) return;
+      const start = row.offsetTop;
+      const end = start + row.offsetHeight;
+      if (start >= top - 1 && end <= bottom + 1) fullyVisible.push(index + 1);
+      if (start < bottom && end > top) partlyVisible.push(index + 1);
+    });
+    const visible = fullyVisible.length ? fullyVisible : partlyVisible;
+    const first = visible[0];
+    const last = visible.at(-1);
+    setVisibleCandidateRange(first === undefined ? '' : first === last ? String(first) : `${first}–${last}`);
+  }, []);
+  useEffect(() => {
+    const viewport = candidateScrollRef.current;
+    if (!viewport) return;
+    const observer = new ResizeObserver(updateCandidateRange);
+    observer.observe(viewport);
+    Array.from(viewport.children).forEach(row => observer.observe(row));
+    updateCandidateRange();
+    return () => observer.disconnect();
+  }, [memberChoices, updateCandidateRange]);
 
   const projected = useMemo(() => {
     if (!task || !selectedUserObj) return null;
     const currentTasks = tasksByUser.get(selectedUserObj.id) || [];
+    const currentWorkload = calculateUserWorkload(currentTasks);
     const hours = estimatedHours.trim() ? Number(estimatedHours) : undefined;
     const projectedTask: Task = { ...task, userId: selectedUserObj.id, assigneeIds: [selectedUserObj.id],
       status: keepInPipeline ? 'pipeline' : 'todo', dueDate: dueDate || undefined,
@@ -136,7 +167,8 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
       ? currentTasks.map(item => item.id === task.id ? projectedTask : item)
       : [...currentTasks, projectedTask];
     return {
-      selectedLoad: quickWorkloadScore(currentTasks), projectedLoad: quickWorkloadScore(projectedTasks),
+      selectedLoad: currentWorkload.totalScore, projectedLoad: quickWorkloadScore(projectedTasks),
+      activeTaskCount: currentWorkload.items.filter(item => item.calculatedScore > 0).length,
       selectedDailyHours: getUserDailyAssignedHours(selectedUserObj, currentTasks),
       projectedDailyHours: getUserDailyAssignedHours(selectedUserObj, projectedTasks),
     };
@@ -204,7 +236,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
       } else if (status === 403) {
         setSubmitError('You don’t have permission to save this assignment. Ask a lead or administrator with access to the brief.');
       } else {
-        setSubmitError('Could not save the assignment. Check the brief in Pipeline before trying again.');
+        setSubmitError('Could not save the assignment. Your changes are still here. Try saving again.');
       }
     } finally {
       setIsSubmitting(false);
@@ -235,7 +267,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
               <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-400">
                 <UserCheck className="h-4 w-4" />
               </div>
-              <h2 className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
+              <h2 tabIndex={-1} data-autofocus className="text-sm font-bold tracking-tight text-[var(--text-primary)]">
                 Assign Task &amp; Workload Estimate
               </h2>
             </div>
@@ -309,11 +341,13 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                   ) : (
                     <>
                       <div className="grid grid-cols-[minmax(0,1fr)_5.5rem_3.5rem] gap-2 px-2 pb-1 text-xs text-[var(--text-secondary)]">
-                        <span>{memberChoices.length} eligible</span>
+                        <span id="assignment-candidate-range" className="tabular-nums">{visibleCandidateRange ? `${visibleCandidateRange} of ${memberChoices.length}` : `${memberChoices.length} eligible`}</span>
                         <span className="text-right">Assigned today</span>
-                        <span className="flex items-center justify-end gap-1.5">Load <MetricHelp label="About assignment load points" detail={loadHelp} /></span>
+                        <span className="flex items-center justify-end gap-1.5">Load <MetricHelp label="About assignment load points" detail={assignmentLoadHelp} /></span>
                       </div>
-                      <div className="border-y border-[var(--border-subtle)] divide-y divide-[var(--border-subtle)]">
+                      <div ref={candidateScrollRef} onScroll={updateCandidateRange} role="region"
+                        aria-label="Eligible candidates" aria-describedby="assignment-candidate-range" tabIndex={0}
+                        className="relative max-h-[min(50dvh,27rem)] overflow-y-auto divide-y border-y divide-[var(--border-subtle)] border-[var(--border-subtle)]">
                         {memberChoices.map(({ user, hours, load }) => {
                           const lead = user.isCreativeDirector ? null : user.creativeDirectorId
                             ? creativeDirectors.find(director => director.id === user.creativeDirectorId)?.name || 'Team'
@@ -325,9 +359,8 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                               <span className="min-w-0 flex items-center gap-2">
                                 <input type="radio" name="assignment-member" value={user.id}
                                   checked={selectedUserId === user.id} onChange={() => setSelectedUserId(user.id)}
-                                  data-autofocus={selectedUserId === user.id ? '' : undefined}
                                   aria-labelledby={`${nameId} ${capacityId}`} className="shrink-0" />
-                                <span id={nameId} className="min-w-0 break-words text-sm font-medium">
+                                <span id={nameId} className="min-w-0 wrap-anywhere text-sm font-medium">
                                   {user.name}
                                   <span className="block text-xs font-normal text-[var(--text-secondary)]">
                                     {[getUserTag(user).label, lead].filter(Boolean).join(' · ')}
@@ -343,7 +376,6 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                       </div>
                       <label className="flex items-center gap-2 min-h-11 px-2 text-sm cursor-pointer">
                         <input type="radio" name="assignment-member" value="" checked={!selectedUserId}
-                          data-autofocus={!selectedUserId ? '' : undefined}
                           onChange={() => {
                             setSelectedUserId('');
                             if (!task.dueDate) setDueDate('');
@@ -467,7 +499,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                 <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
                   <h3 id="assignment-review-heading" className="text-xs font-semibold text-[var(--text-primary)]">Review</h3>
                   <p className="wrap-anywhere text-[var(--text-primary)]">Selected member <strong>{selectedUserObj.name}</strong> · {keepInPipeline ? 'Team Pipeline' : 'To Do'}</p>
-                  <button type="button" className="min-h-0 rounded text-[var(--accent)] underline underline-offset-2"
+                  <button type="button" className="min-h-0 rounded text-[var(--accent)] underline underline-offset-2 dark:text-blue-400"
                     onClick={() => document.getElementById('taskassignmentmodal-deadline')?.focus()}>
                     {dueDate ? `Edit deadline · ${formatDateOnly(dueDate)}` : keepInPipeline ? 'Set optional deadline' : 'Set required deadline'}
                   </button>
@@ -476,6 +508,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                   Assigned today: <strong>{formatHours(projected.selectedDailyHours)}{dueDate && ` → ${formatHours(projected.projectedDailyHours)}`}</strong>
                   {!dueDate && ' · Projected: set a deadline'}
                   {' · '}Load: <strong>{projected.selectedLoad} → {projected.projectedLoad} / 12 pts</strong>
+                  {' · '}{projected.activeTaskCount} {projected.activeTaskCount === 1 ? 'active task' : 'active tasks'}
                   {dueDate && projected.projectedDailyHours > 8 && ' · Over 8h/day'}
                 </p>
                 {willOverload && (
