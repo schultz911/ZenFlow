@@ -353,7 +353,7 @@ function DashboardContent() {
       const member = users.find(user => user.id === id);
       return member && (member.id === activeBoardId || member.creativeDirectorId === activeBoardId);
     });
-  }), [tasks, users, activeRoleTab, activeBoardId]);
+  }).sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? '')), [tasks, users, activeRoleTab, activeBoardId]);
   const myActiveTasks = useMemo(() => currentUser ? (allTasksByUserId.get(currentUser.id) || [])
     .filter(task => task.status === 'in_progress' || task.status === 'todo')
     .sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999')) : [], [currentUser, allTasksByUserId]);
@@ -745,19 +745,20 @@ function DashboardContent() {
         >
 
           {!searchQuery.trim() && canAssignTask && (
-            <section aria-label="Workload exceptions" className="ledger-frame mb-3 px-4 py-3 sm:hidden">
+            <section aria-label="Workload exceptions" className="ledger-frame mb-2.5 px-3 py-2 sm:hidden">
               <h2 className="text-xs font-bold text-[var(--text-primary)]">Workload exceptions</h2>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {priorityMembers.map(({ user, score }) => <button key={user.id} type="button" onClick={() => setWorkloadModalUser(user)} className="button-secondary text-xs">
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {urgentTasks.map(task => {
+                  const overdue = (getDaysRemaining(task.dueDate) ?? 0) < 0;
+                  return <button key={task.id} type="button" className={`button-secondary max-w-full min-w-0 whitespace-normal break-words text-left text-xs ${overdue ? '!border-[var(--danger-border)] !bg-[var(--danger-soft)] !text-red-700 dark:!text-red-300' : ''}`} onClick={() => handleEditTask(task)}>
+                    {task.title} · {overdue ? 'Overdue' : 'Due today'}
+                  </button>;
+                })}
+                {priorityMembers.map(({ user, score }) => <button key={user.id} type="button" onClick={() => setWorkloadModalUser(user)} className="button-secondary max-w-full min-w-0 whitespace-normal break-words text-left text-xs">
                   {user.name} · {score} / 12 points · View workload
                 </button>)}
+                {priorityMembers.length === 0 && urgentTasks.length === 0 && <p className="text-xs text-[var(--text-secondary)]">No workload or deadline exceptions need attention.</p>}
               </div>
-              {urgentTasks.map(task => <button key={task.id} type="button" className="button-secondary text-xs mt-2 mr-2" onClick={() => handleEditTask(task)}>{task.title} · {getDaysRemaining(task.dueDate)! < 0 ? 'Overdue' : 'Due today'}</button>)}
-              {priorityMembers.length === 0 && urgentTasks.length === 0 && <p className="mt-2 text-xs text-[var(--text-secondary)]">No workload or deadline exceptions need attention.</p>}
-              <button type="button" className="button-secondary text-xs mt-2" onClick={() => {
-                setFreePoolOpen(true);
-                document.getElementById('free-pool-trigger')?.focus();
-              }}>View Free Pool</button>
             </section>
           )}
           {!searchQuery.trim() && canCreatePipelineTask && !canAssignTask && (

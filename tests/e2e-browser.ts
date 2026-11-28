@@ -573,7 +573,7 @@ try {
     attachErrorListeners(page, 'search-and-assignment');
     await page.clock.setFixedTime(new Date('2026-11-26T10:00:00.000Z'));
     await page.goto(PREVIEW_URL, { waitUntil: 'networkidle' });
-    await page.getByRole('button', { name: 'View Free Pool', exact: true }).waitFor();
+    await page.getByRole('button', { name: /^Free Pool.*under/ }).waitFor();
     const nextCards = page.getByRole('button', { name: 'Next cards' });
     await nextCards.click();
     await nextCards.waitFor({ state: 'hidden' });
@@ -599,6 +599,9 @@ try {
     await page.waitForTimeout(200);
     await page.getByRole('button', { name: 'Assign', exact: true }).first().click();
     const assignment = page.getByRole('dialog', { name: 'Assign task' });
+    await assignment.getByText(/Select a member to choose a destination/).waitFor();
+    assert.equal(await assignment.getByRole('radio', { name: 'Move to To Do' }).isDisabled(), true);
+    await assignment.getByRole('button', { name: 'Save estimates in Pipeline' }).waitFor();
     await assignment.locator('input[name="assignment-member"][value="u-content"]').check();
     assert.equal(await assignment.locator('#taskassignmentmodal-deadline').inputValue(), '');
     await assignment.getByRole('button', { name: 'Tomorrow', exact: true }).click();
@@ -609,6 +612,62 @@ try {
     await page.locator('#assignment-result').getByText(/Assignment saved/).waitFor();
     await page.locator('#assignment-result').getByRole('button', { name: 'View task' }).click();
     await page.getByRole('dialog', { name: 'Task details' }).waitFor();
+    await context.close();
+  }
+
+  // Larger phone fixture and the Accounts-to-Pipeline handoff.
+  {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+    const page = await context.newPage();
+    attachErrorListeners(page, 'larger-fixture-and-accounts');
+    await page.clock.setFixedTime(new Date('2026-11-29T10:00:00.000Z'));
+    for (const theme of ['light', 'dark']) {
+      await page.goto(`${PREVIEW_URL}?fixture=large&theme=${theme}`, { waitUntil: 'networkidle' });
+      const freePool = page.getByRole('button', { name: /^Free Pool.*under/ });
+      assert.equal(await freePool.count(), 1);
+      const exceptions = page.getByRole('region', { name: 'Workload exceptions' });
+      assert.match(await exceptions.getByRole('button').first().innerText(), /Overdue/);
+      const next = page.getByRole('button', { name: 'Next cards' });
+      const cards = page.getByRole('region', { name: 'Pipeline cards' });
+      await next.focus();
+      for (let i = 0; i < 12; i++) {
+        const position = await cards.evaluate(row => ({
+          left: row.scrollLeft,
+          remaining: row.scrollWidth - row.clientWidth - row.scrollLeft,
+        }));
+        if (position.remaining <= 2) break;
+        await page.keyboard.press('Enter');
+        await page.waitForFunction(previous => {
+          const row = document.querySelector('[aria-label="Pipeline cards"]');
+          return row && row.scrollLeft > previous;
+        }, position.left, { timeout: 3000 });
+      }
+      await next.waitFor({ state: 'hidden' });
+      assert.ok(await cards.evaluate(row => row.scrollWidth - row.clientWidth - row.scrollLeft <= 2));
+      await page.getByRole('group', { name: 'Ava Writer task stages' }).getByRole('button', { name: /To Do/ }).press('Enter');
+      await page.locator('#swimlane-u-content').getByText('Product Architecture Blog Series').waitFor();
+      await freePool.press('Enter');
+      const pool = page.getByRole('complementary', { name: 'Free Pool' });
+      await pool.getByRole('button', { name: 'Assign brief for Mia Designer' }).press('Enter');
+      await page.getByRole('menuitem', { name: /Q4 Brand Narrative/ }).press('Enter');
+      const dialog = page.getByRole('dialog', { name: 'Assign task' });
+      await dialog.getByRole('radio', { name: /Mia Designer.*assigned today.*load points/ }).waitFor();
+      assert.equal(await dialog.getByRole('radio', { name: /Mia Designer/ }).isChecked(), true);
+      await page.keyboard.press('Escape');
+      await dialog.waitFor({ state: 'hidden' });
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${PREVIEW_URL}?role=accounts`, { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: 'New Brief', exact: true }).click();
+    const brief = page.getByRole('dialog', { name: 'Create pipeline requirement' });
+    await brief.getByLabel('Owning cluster').selectOption('cd-1');
+    await brief.locator('#disciplinetaskmodal-field-1').fill('Accounts handoff regression');
+    await brief.getByRole('button', { name: 'Create Pipeline Task' }).click();
+    await brief.waitFor({ state: 'hidden' });
+    await page.getByRole('region', { name: 'Pipeline cards' }).getByText(/Accounts handoff regression/).click();
+    const details = page.getByRole('dialog', { name: 'Task details' });
+    await details.getByText('Unassigned in Pipeline', { exact: true }).waitFor();
+    await details.getByText(/administrator can assign this brief/).waitFor();
     await context.close();
   }
 

@@ -282,7 +282,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
         <div className={`${mobileMetricsExpanded ? 'grid' : 'hidden sm:grid'} ledger-kpi-grid`}>
           <div className="metric-card col-span-3 sm:col-span-1 border-b lg:border-b-0 border-r border-[var(--border-subtle)]">
             <p className="metric-label whitespace-nowrap">Utilization</p>
-            <p className="metric-value mt-1 text-emerald-700 dark:text-emerald-400">
+            <p className={`metric-value mt-1 ${teamUtilization.utilizationPercent === 0 ? 'text-[var(--text-primary)]' : 'text-emerald-700 dark:text-emerald-400'}`}>
               {teamUtilization.utilizationPercent}
               <span className="text-sm font-semibold tracking-normal">%</span>
             </p>

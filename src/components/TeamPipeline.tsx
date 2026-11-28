@@ -575,7 +575,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                       </div>
 
                       {(task.client || task.project) && (
-                        <p className="text-[11px] text-[var(--text-secondary)] truncate">
+                        <p className="break-words text-[11px] text-[var(--text-secondary)]">
                           {task.client && <span>{task.client}</span>}
                           {task.client && task.project && ' · '}
                           {task.project && <span className="font-semibold text-[var(--text-primary)]">{task.project}</span>}

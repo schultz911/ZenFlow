@@ -352,8 +352,9 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                 )}
               </fieldset>
 
-              <fieldset disabled={!selectedUserId || isSubmitting}>
+              <fieldset disabled={!selectedUserId || isSubmitting} aria-describedby={!selectedUserId ? 'assignment-destination-help' : undefined}>
                 <legend className="field-label">Destination</legend>
+                {!selectedUserId && <p id="assignment-destination-help" className="mb-1 text-xs text-[var(--text-secondary)]">Select a member to choose a destination. Estimates can be saved in Pipeline without assigning the brief.</p>}
                 <div className="grid sm:grid-cols-2 sm:gap-2">
                   <label className="flex items-center gap-2 text-xs min-h-11 sm:min-h-8">
                     <input type="radio" name="assignment-destination" checked={!keepInPipeline} onChange={() => setKeepInPipeline(false)} />
@@ -535,7 +536,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                     ? keepInPipeline
                       ? 'Assign in Pipeline'
                       : 'Assign & Move to To Do'
-                    : 'Save Estimates'}
+                    : 'Save estimates in Pipeline'}
               </button>
             </div>
           </form>

@@ -34,8 +34,28 @@ const PreviewContext = createContext<any>(null);
 
 export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isFreshOnboarding = new URLSearchParams(window.location.search).get('onboarding') === 'fresh';
-  const [users, setUsers] = useState<User[]>(fixtureUsers);
-  const [tasks, setTasks] = useState<Task[]>(fixtureTasks);
+  const params = new URLSearchParams(window.location.search);
+  const largerFixture = params.get('fixture') === 'large';
+  const [users, setUsers] = useState<User[]>(() => largerFixture ? [
+    ...fixtureUsers,
+    ...Array.from({ length: 12 }, (_, i): User => ({
+      ...fixtureUsers[i % 2 + 1],
+      id: `u-fixture-${i}`,
+      name: `Campaign Team Member ${i} With a Long Display Name`,
+      email: `fixture-${i}@example.com`,
+    })),
+  ] : fixtureUsers);
+  const [tasks, setTasks] = useState<Task[]>(() => largerFixture ? [
+    ...fixtureTasks,
+    ...Array.from({ length: 10 }, (_, i): Task => ({
+      ...fixtureTasks[i % 2],
+      id: `t-fixture-${i}`,
+      order: i + 2,
+      title: `Campaign Brief ${i} With a Long Descriptive Title for the Pipeline Card`,
+      client: 'International Campaign Client With a Long Name',
+      project: 'A Long Project Name for a Multi-Discipline Campaign',
+    })),
+  ] : fixtureTasks);
   const [activeRoleTab, setActiveRoleTab] = useState<'all' | 'content' | 'design'>('all');
   const [activeBoardId, setActiveBoardId] = useState<string>('all');
   const [darkMode, setDarkMode] = useState<boolean>(() => {
@@ -56,8 +76,10 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [clickupWebhookStatus, setClickupWebhookStatus] = useState<ClickupWebhookStatus | null>(
     isFreshOnboarding ? null : { listening: true, registered: true, webhookId: 'wh-1', totalEventsCount: 0, endpointUrl: '/api/clickup/webhook' }
   );
-  const specialistPreview = new URLSearchParams(window.location.search).get('role') === 'specialist';
-  const currentUser = users[specialistPreview ? 1 : 0];
+  const specialistPreview = params.get('role') === 'specialist';
+  const accountsPreview = params.get('role') === 'accounts';
+  const leadPreview = !specialistPreview && !accountsPreview;
+  const currentUser = users[accountsPreview ? 3 : specialistPreview ? 1 : 0];
   const yes = () => true;
   const noopAsync = useCallback(async () => ({}), []);
 
@@ -144,19 +166,19 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     updateUserProfile,
     remapUserTasks: async () => ({ success: true, remappedCount: 0 }),
     deleteUser: noopAsync,
-    isSuperadmin: !specialistPreview,
-    isAdministrator: !specialistPreview,
-    isBusinessLead: !specialistPreview,
-    isCreativeDirector: !specialistPreview,
+    isSuperadmin: leadPreview,
+    isAdministrator: leadPreview,
+    isBusinessLead: leadPreview,
+    isCreativeDirector: leadPreview,
     isClusterLead: false,
-    isTeamLead: !specialistPreview,
+    isTeamLead: leadPreview,
     isAccountManager: !specialistPreview,
-    canManageMembers: !specialistPreview,
+    canManageMembers: leadPreview,
     canCreatePipelineTask: !specialistPreview,
-    canAssignTask: !specialistPreview,
+    canAssignTask: leadPreview,
     canManageUser: yes,
-    canEditUserTasks: yes,
-    canSwitchBoards: !specialistPreview,
+    canEditUserTasks: () => !accountsPreview,
+    canSwitchBoards: leadPreview,
     isZensciencesUser: true,
     isClickupConnected,
     clickupMembers,
