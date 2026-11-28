@@ -1,3 +1,4 @@
+import { MetricHelp, efficiencyHelp } from './MetricHelp';
 import { MetricBar } from './ui/MetricBar';
 import { DialogPanel } from './ui/DialogPanel';
 import React, { useState, useMemo, useEffect } from 'react';
@@ -38,7 +39,6 @@ import {
   CheckCircle2,
   Briefcase,
   ChevronDown,
-  Zap,
 } from 'lucide-react';
 
 interface AnalyticsModalProps {
@@ -786,7 +786,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                 <div className="metric-card flex flex-col sm:border-t lg:border-t-0 border-[var(--border-subtle)]">
                   <div className="flex items-center justify-between gap-2">
                     <span className="metric-label">Total Efficiency</span>
-                    <Zap className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400 shrink-0" />
+                    <MetricHelp label="About total efficiency" detail={efficiencyHelp} />
                   </div>
                   <div className="mt-2">
                     <div className="flex items-baseline gap-2 flex-wrap min-h-[44px]">

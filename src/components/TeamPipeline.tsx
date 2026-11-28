@@ -21,6 +21,7 @@ import {
   Link2,
   ExternalLink,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   Flag,
   MoreHorizontal,
@@ -31,6 +32,7 @@ interface TeamPipelineProps {
   tasks: Task[];
   users: User[];
   globalSearch?: string;
+  onClearSearch: () => void;
   onOpenCreateModal: () => void;
   onOpenAssignmentModal: (task: Task) => void;
   onEditTask: (task: Task) => void;
@@ -49,6 +51,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
   tasks,
   users,
   globalSearch = '',
+  onClearSearch,
   onOpenCreateModal,
   onOpenAssignmentModal,
   onEditTask,
@@ -63,6 +66,17 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
   const { updateTask } = useWorkspace();
 
   const [filterMode, setFilterMode] = useState<'all' | 'unassigned' | 'assigned'>('all');
+  const scrollRowRef = useRef<HTMLDivElement>(null);
+  const nextCardsRef = useRef<HTMLButtonElement>(null);
+  const [hasMoreCards, setHasMoreCards] = useState(false);
+  const updateScrollCue = useCallback(() => {
+    const row = scrollRowRef.current;
+    const hasMore = Boolean(row && row.scrollWidth - row.clientWidth - row.scrollLeft > 2);
+    if (!hasMore && document.activeElement === nextCardsRef.current) {
+      row?.focus({ preventScroll: true });
+    }
+    setHasMoreCards(hasMore);
+  }, []);
   const [isDragOver, setIsDragOver] = useState(false);
   const [mobileMenuTask, setMobileMenuTask] = useState<Task | null>(null);
   const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null);
@@ -78,7 +92,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
     align: 'right',
     gap: 4,
     fallbackWidth: 168,
-    fallbackHeight: 96,
+    fallbackHeight: 128,
     dismissOnOutOfView: true,
   });
 
@@ -154,7 +168,6 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
   useEffect(() => {
     if (globalSearch.trim()) {
       setIsCollapsed(false);
-      setFilterMode('all');
     }
   }, [globalSearch]);
 
@@ -171,10 +184,30 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
     } else if (filterMode === 'assigned') {
       result = result.filter(t => getTaskAssigneeIds(t).length > 0);
     }
-
-
     return result;
-  }, [pipelineTasks, filterMode, globalSearch, userMap]);
+  }, [pipelineTasks, filterMode]);
+
+  useEffect(() => {
+    const row = scrollRowRef.current;
+    updateScrollCue();
+    if (!row) return;
+    const observer = new ResizeObserver(updateScrollCue);
+    observer.observe(row);
+    Array.from(row.children).forEach(card => observer.observe(card));
+    return () => observer.disconnect();
+  }, [displayedTasks, isCollapsed, updateScrollCue]);
+
+  const scrollToNextCards = () => {
+    const row = scrollRowRef.current;
+    if (!row) return;
+    const { left, right } = row.getBoundingClientRect();
+    const nextCard = Array.from(row.children).find(card => card.getBoundingClientRect().right > right + 2);
+    const padding = parseFloat(getComputedStyle(row).scrollPaddingLeft) || 0;
+    row.scrollBy({
+      left: nextCard ? Math.max(1, nextCard.getBoundingClientRect().left - left - padding) : row.clientWidth,
+      behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
+    });
+  };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -405,6 +438,12 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                   ? 'Create deliverables using New Brief to generate Content or Design pipeline tasks.'
                   : 'Unscheduled deliverables created by Accounts will appear here.'}
               </p>
+              {(globalSearch.trim() || filterMode !== 'all') && (
+                <div className="mt-2 flex flex-wrap justify-center gap-2">
+                  {globalSearch.trim() && <button type="button" onClick={onClearSearch} className="button-secondary mobile-tap-control">Clear search</button>}
+                  {filterMode !== 'all' && <button type="button" onClick={() => setFilterMode('all')} className="button-secondary mobile-tap-control">Clear Pipeline filter</button>}
+                </div>
+              )}
               {canCreatePipelineTask && !globalSearch.trim() && filterMode === 'all' && (
                 <button
                   type="button"
@@ -417,7 +456,8 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
               )}
             </div>
           ) : (
-            <div className="flex items-stretch gap-2.5 overflow-x-auto p-3 snap-x snap-mandatory scroll-pl-3">
+            <>
+            <div ref={scrollRowRef} onScroll={updateScrollCue} tabIndex={-1} role="region" aria-label="Pipeline cards" className="flex items-stretch gap-2.5 overflow-x-auto p-3 snap-x snap-mandatory scroll-pl-3">
               {displayedTasks.map(task => {
                 const taskDiscipline = task.team === 'design' ? 'design' : 'content';
                 const assigneeIds = getTaskAssigneeIds(task);
@@ -524,7 +564,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                                   mobileMenuTriggerRef.current = e.currentTarget;
                                   setMobileMenuTask(prev => (prev?.id === task.id ? null : task));
                                 }}
-                                className="mobile-tap-square sm:!min-w-0 sm:!min-h-0 -my-2 inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
+                                className="mobile-tap-square sm:!min-w-6 sm:!min-h-6 -my-2 inline-flex items-center justify-center rounded p-1 text-[var(--text-secondary)] hover:bg-[var(--surface-subtle)] hover:text-[var(--text-primary)] transition-colors cursor-pointer"
                               >
                                 <MoreHorizontal className="h-4 w-4" />
                               </button>
@@ -548,7 +588,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                           type="button"
                           onClick={() => onEditTask(task)}
                           title="Click to inspect brief details"
-                          className="mobile-tap-control sm:min-h-0 w-full text-left cursor-pointer rounded px-1 -mx-1 py-0 flex items-start text-[var(--text-primary)] hover:text-[#1d4ed8] dark:hover:text-blue-400 hover:bg-[var(--surface-subtle)] transition-colors"
+                          className="mobile-tap-control sm:min-h-6 w-full text-left cursor-pointer rounded px-1 -mx-1 py-0 flex items-start text-[var(--text-primary)] hover:text-[#1d4ed8] dark:hover:text-blue-400 hover:bg-[var(--surface-subtle)] transition-colors"
                         >
                           <span className="line-clamp-2">{task.title}</span>
                         </button>
@@ -573,7 +613,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                             rel="noopener noreferrer"
                             onClick={e => e.stopPropagation()}
                             title={`Open Brand Guidelines: ${task.brandGuidelines}`}
-                            className="mobile-tap-control sm:min-h-0 inline-flex items-center gap-0.5 font-medium text-[#1d4ed8] dark:text-blue-400 hover:underline"
+                            className="mobile-tap-control sm:min-h-6 inline-flex items-center gap-0.5 font-medium text-[#1d4ed8] dark:text-blue-400 hover:underline"
                           >
                             <Link2 className="h-2.5 w-2.5 shrink-0" />
                             <span>Brand Guidelines</span>
@@ -631,7 +671,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                           type="button"
                           onClick={() => canAssignTask && onOpenAssignmentModal(task)}
                           title={canAssignTask ? 'Click to reassign, adjust estimate, or move to To Do' : `Assigned to ${assignee.name}`}
-                          className={`mobile-tap-control sm:min-h-0 flex items-center gap-1 text-[11px] font-semibold transition-colors ${
+                          className={`mobile-tap-control sm:min-h-6 flex items-center gap-1 text-[11px] font-semibold transition-colors ${
                             canAssignTask
                               ? 'text-[#1d4ed8] dark:text-blue-400 hover:underline cursor-pointer'
                               : 'text-[var(--text-primary)] cursor-default'
@@ -647,7 +687,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                           type="button"
                           onClick={() => onOpenAssignmentModal(task)}
                           title="Assign member and move straight into To Do"
-                          className="mobile-tap-control sm:min-h-0 inline-flex items-center gap-1 rounded-[5px] px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25"
+                          className="mobile-tap-control sm:min-h-6 inline-flex items-center gap-1 rounded-[5px] px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25"
                         >
                           <UserX className="h-3 w-3" />
                           <span>Assign</span>
@@ -666,6 +706,14 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                 );
               })}
             </div>
+            {hasMoreCards && (
+              <div className="flex justify-end px-3 pb-2 sm:hidden">
+                <button ref={nextCardsRef} type="button" onClick={scrollToNextCards} className="button-secondary mobile-tap-control">
+                  Next cards <ChevronRight aria-hidden="true" className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+            </>
           )}
         </div>
       )}
@@ -683,6 +731,15 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
           onClick={e => e.stopPropagation()}
           className="menu-surface fixed z-50 w-44 rounded-[9px] border border-[var(--border)] p-1 text-[var(--text-primary)]"
         >
+          {canAssignTask && getTaskAssigneeIds(mobileMenuTask).length > 0 && (
+            <button type="button" role="menuitem" className="menu-item cursor-pointer" onClick={() => {
+              setMobileMenuTask(null);
+              onOpenAssignmentModal(mobileMenuTask);
+            }}>
+              <UserX aria-hidden="true" className="h-3.5 w-3.5" />
+              <span>Reassign</span>
+            </button>
+          )}
           <button
             type="button"
             role="menuitem"

@@ -1,3 +1,4 @@
+import { MetricHelp, efficiencyHelp, loadHelp } from './MetricHelp';
 import React, { useMemo, useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useAuth, useBoardUi, useWorkspace } from '../context/DashboardContext';
 import { handleRovingMenuKeyDown } from '../hooks/useAnchoredPopover';
@@ -220,7 +221,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
       {/* Pure Typographic Single-Frame Ruled Swiss KPI Ledger */}
       <section className="ledger-frame" aria-label="Team overview">
         <div className="ledger-band flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between px-4 py-1.5 sm:px-5">
-          <div className="flex items-center justify-between gap-2 min-w-0">
+          <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
             <div className="flex items-baseline gap-2.5 min-w-0">
               <h1 className="text-lg font-bold tracking-tight text-[var(--text-primary)] whitespace-nowrap">
                 {activeRoleTab === 'all' ? 'All Teams' : activeRoleTab === 'content' ? 'Content' : 'Design'}
@@ -258,8 +259,8 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
                     ? 'Overloaded members sorted first — click to restore default board order'
                     : 'Click to jump to overloaded members and sort by pressure'
                 }
-                className={`ledger-alert-badge mobile-tap-control sm:min-h-0 cursor-pointer transition hover:brightness-95 ${
-                  sortByPressure ? 'ring-2 ring-red-500/35 ring-offset-1 ring-offset-[var(--surface-muted)]' : ''
+                className={`inline-flex min-h-6 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 text-xs font-semibold text-[var(--text-secondary)] cursor-pointer hover:bg-[var(--surface-muted)] ${
+                  sortByPressure ? 'ring-2 ring-blue-500/35 ring-offset-1 ring-offset-[var(--surface-muted)]' : ''
                 }`}
               >
                 <AlertTriangle aria-hidden="true" className="h-3 w-3 shrink-0" />
@@ -291,7 +292,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
           </div>
 
           <div className="metric-card col-span-3 sm:col-span-1 border-b lg:border-b-0 sm:border-r border-[var(--border-subtle)]">
-            <p className="metric-label whitespace-nowrap">Efficiency</p>
+            <div className="flex items-center gap-2"><p className="metric-label whitespace-nowrap">Efficiency</p><MetricHelp label="About efficiency" detail={efficiencyHelp} /></div>
             <p className={`metric-value mt-1 ${getEfficiencyToneClass(teamEfficiency.efficiencyPercent)}`}>
               {teamEfficiency.efficiencyPercent !== null ? (
                 <>
@@ -314,7 +315,7 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
           </div>
 
           <div className="metric-card col-span-2 sm:col-span-1 sm:border-b lg:border-b-0 border-r border-[var(--border-subtle)]">
-            <p className="metric-label whitespace-nowrap">Avg load</p>
+            <div className="flex items-center gap-2"><p className="metric-label whitespace-nowrap">Avg load</p><MetricHelp label="About load points" detail={loadHelp} /></div>
             <p
               className={`metric-value mt-1 ${
                 avgWorkload >= 12

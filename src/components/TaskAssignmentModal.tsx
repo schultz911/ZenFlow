@@ -1,3 +1,4 @@
+import { MetricHelp, loadHelp } from './MetricHelp';
 import { DialogPanel } from './ui/DialogPanel';
 import { CognitiveLoadSelector } from './ui/CognitiveLoadSelector';
 import { DateQuickPresets } from './ui/DateQuickPresets';
@@ -150,21 +151,21 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
     if (!task || isSubmitting) return;
 
     if (!canAssignTask) {
-      setSubmitError('Only Creative Directors and authorized leadership can assign tasks.');
+      setSubmitError('Ask a Creative Director, Business Lead, Cluster Lead or administrator to assign this task.');
       return;
     }
 
     if (selectedUserId) {
       const targetUser = users.find(u => u.id === selectedUserId);
       if (targetUser && targetUser.role && targetUser.role !== taskDiscipline) {
-        setSubmitError(`Cannot assign task to a member of a different discipline (${targetUser.role} != ${taskDiscipline}).`);
+        setSubmitError(`Choose an eligible member from the ${taskDiscipline} team.`);
         return;
       }
     }
 
     const willMoveToTodo = Boolean(selectedUserId && !keepInPipeline);
     if (willMoveToTodo && !dueDate.trim()) {
-      setSubmitError('A deadline is required to schedule this task into the member’s To Do lane.');
+      setSubmitError('Set a deadline in Schedule, or choose to keep the task in Team Pipeline.');
       return;
     }
 
@@ -194,9 +195,16 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
       });
       onAssigned(task.id, selectedUserObj?.name || 'Unassigned', willMoveToTodo ? 'To Do' : 'Team Pipeline');
       onClose();
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      setSubmitError(err?.message || 'Failed to update task assignment');
+      const status = err instanceof Error && 'status' in err ? err.status : undefined;
+      if (status === 401) {
+        setSubmitError('Your session expired. Sign in again, then reopen the brief in Pipeline.');
+      } else if (status === 403) {
+        setSubmitError('You don’t have permission to save this assignment. Ask a lead or administrator with access to the brief.');
+      } else {
+        setSubmitError('Could not save the assignment. Check the brief in Pipeline before trying again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -301,7 +309,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                     <div className="grid grid-cols-[minmax(0,1fr)_5.5rem_3.5rem] gap-2 px-2 pb-1 text-xs text-[var(--text-secondary)]">
                       <span>{memberChoices.length} eligible</span>
                       <span className="text-right">Assigned today</span>
-                      <span className="text-right">Load</span>
+                      <span className="flex items-center justify-end gap-1.5">Load <MetricHelp label="About assignment load points" detail={loadHelp} /></span>
                     </div>
                     <div className="max-h-36 overflow-y-auto border-y border-[var(--border-subtle)] divide-y divide-[var(--border-subtle)]">
                       {memberChoices.map(({ user, hours, load }) => {
@@ -456,13 +464,13 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                     const dailyOverbooked = projectedDailyHours > 8;
                     return (
                       <div
-                        className={`mt-2 flex flex-wrap items-center justify-between gap-2 text-xs px-3 py-1.5 rounded-[7px] border tabular-nums ${
+                        className={`mt-2 grid gap-2 text-xs px-3 py-2.5 rounded-[7px] border tabular-nums ${
                           willOverload
                             ? 'border-[var(--danger-border)] bg-[var(--danger-soft)] text-[var(--text-primary)]'
                             : 'border-[var(--border)] bg-[var(--surface-muted)] text-[var(--text-secondary)]'
                         }`}
                       >
-                        <span>Selected: <strong className="text-[var(--text-primary)]">{selectedUserObj.name}</strong></span>
+                        <p className="text-sm text-[var(--text-primary)]">Selected member <strong className="ml-1 break-words">{selectedUserObj.name}</strong></p>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className={dailyOverbooked ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
                             Assigned today:{' '}

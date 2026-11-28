@@ -826,6 +826,10 @@ export const TaskModal: React.FC<TaskModalProps> = ({
                   </div>
                 )}
 
+                {activeTab === 'details' && taskToEdit?.status === 'pipeline' && !canAssignTask && currentUser?.role === 'account_manager' && (
+                  <p className="text-xs text-[var(--text-secondary)]">A Creative Director, Business Lead, Cluster Lead or administrator can assign this brief.</p>
+                )}
+
                 {activeTab === 'details' && !canEdit && (
                   <div className="rounded-[9px] border border-[var(--border)] bg-[var(--surface-muted)] overflow-hidden divide-y divide-[var(--border-subtle)] text-xs">
                     <div className="px-4 py-3 bg-[var(--surface)]">

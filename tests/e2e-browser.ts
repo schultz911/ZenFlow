@@ -188,10 +188,22 @@ try {
     await page.click('#connection-status-button');
     await page.waitForSelector('text=Database & Compliance');
     await page.keyboard.press('Escape');
+    await page.getByText('Database & Compliance', { exact: true }).waitFor({ state: 'hidden' });
 
     const overview = page.getByRole('region', { name: 'Team overview' });
     await overview.getByText(/10h est\. \/ 6h billable · 4h under estimate/).waitFor();
     await overview.getByText(/2 of 3 assigned 3h\+ today/).waitFor();
+    const efficiencyHelp = overview.getByRole('button', { name: 'About efficiency' });
+    await efficiencyHelp.press('Enter');
+    await overview.getByRole('button', { name: 'About efficiency', expanded: true }).waitFor();
+    const detailId = await efficiencyHelp.getAttribute('aria-controls');
+    assert.ok(detailId);
+    const efficiencyDetail = page.locator(`[id="${detailId}"]`);
+    await efficiencyDetail.waitFor({ state: 'visible' });
+    assert.match(await efficiencyDetail.innerText(), /100% means on estimate/);
+    await page.keyboard.press('Escape');
+    assert.equal(await efficiencyHelp.getAttribute('aria-expanded'), 'false');
+    assert.equal(await efficiencyHelp.evaluate(button => document.activeElement === button), true);
     const ava = page.locator('#swimlane-u-content');
     await ava.getByText('(5h / 3h)', { exact: true }).waitFor();
     await page.locator('#task-search-input').fill('Homepage Narrative Rewrite');
@@ -561,6 +573,20 @@ try {
     attachErrorListeners(page, 'search-and-assignment');
     await page.clock.setFixedTime(new Date('2026-11-26T10:00:00.000Z'));
     await page.goto(PREVIEW_URL, { waitUntil: 'networkidle' });
+    await page.getByRole('button', { name: 'View Free Pool', exact: true }).waitFor();
+    const nextCards = page.getByRole('button', { name: 'Next cards' });
+    await nextCards.click();
+    await nextCards.waitFor({ state: 'hidden' });
+    assert.ok(await page.getByRole('region', { name: 'Pipeline cards' }).evaluate(row => row.scrollLeft > 0));
+
+    const search = page.locator('#task-search-input');
+    await search.fill('no brief matches this text');
+    await page.getByRole('button', { name: /^Assigned \(/ }).filter({ visible: true }).click();
+    await page.getByRole('button', { name: 'Clear Pipeline filter' }).click();
+    assert.equal(await search.inputValue(), 'no brief matches this text');
+    await page.getByRole('button', { name: /^Assigned \(/ }).filter({ visible: true }).click();
+    await page.getByRole('button', { name: 'Clear search', exact: true }).click();
+    await page.getByRole('button', { name: 'Clear Pipeline filter' }).click();
     await page.locator('#task-search-input').fill('Q4 Brand Narrative');
     await page.getByText(/2 pipeline briefs · 0 assigned tasks/).waitFor();
     assert.equal(await page.getByText('Q4 Brand Narrative (Content)', { exact: true }).first().isVisible(), true);

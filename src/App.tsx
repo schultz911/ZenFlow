@@ -757,7 +757,7 @@ function DashboardContent() {
               <button type="button" className="button-secondary text-xs mt-2" onClick={() => {
                 setFreePoolOpen(true);
                 document.getElementById('free-pool-trigger')?.focus();
-              }}>View available capacity</button>
+              }}>View Free Pool</button>
             </section>
           )}
           {!searchQuery.trim() && canCreatePipelineTask && !canAssignTask && (
@@ -894,6 +894,7 @@ function DashboardContent() {
             tasks={searchQuery.trim() ? scopedSearchTasks : tasks}
             users={users}
             globalSearch={searchQuery}
+            onClearSearch={() => setSearchQuery('')}
             onOpenCreateModal={() => setDisciplineModalOpen(true)}
             onOpenAssignmentModal={t => setSelectedTaskForAssignment(t)}
             onEditTask={handleEditTask}
@@ -1133,7 +1134,7 @@ function DashboardContent() {
                 const action = undoToast;
                 setUndoToast(null);
                 await action.undo().catch(err => {
-                  setWorkspaceNotice(err instanceof Error ? err.message : 'Could not undo the last action. Please retry.');
+                  setWorkspaceNotice(err instanceof Error ? err.message : 'Could not undo the last action. Check the task’s current state before trying again.');
                 });
               }}
               className="inline-flex items-center gap-1 rounded-[5px] bg-[var(--accent-soft)] px-2 py-1 text-[11px] font-semibold text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25 shrink-0 cursor-pointer"
