@@ -179,7 +179,7 @@ export const FreePoolContainer: React.FC<FreePoolContainerProps> = ({
       <aside id="free-pool-popover" aria-label="Free Pool" hidden={!isExpanded}>
         <div className="free-pool-filters">
           <div className="flex flex-wrap items-center gap-2 text-xs text-[var(--text-secondary)]">
-            <span>Assigned hours today across boards</span>
+            <span>Free Pool shows members with under {targetHoursLabel} assigned today across boards. Utilization counts members at or above that cutoff.</span>
             {(() => {
               const filteredBriefCount =
                 roleFilter === 'content'

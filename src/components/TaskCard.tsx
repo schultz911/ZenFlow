@@ -514,27 +514,13 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
         </div>
       </div>
 
-      {/* Client & Project Single Line */}
       {(task.client || task.project) && (
-        <div className="order-3 flex items-center gap-1 text-[11px] text-[var(--text-secondary)] truncate">
-          {task.client && (
-            <span className="truncate">
-              {task.client}
-            </span>
-          )}
-          {task.client && task.project && (
-            <span className={task.status === 'done' ? 'text-[var(--text-secondary)]' : 'text-[var(--text-muted)]'}>
-              ·
-            </span>
-          )}
-          {task.project && (
-            <span className="font-semibold text-[var(--text-primary)] truncate">
-              {task.project}
-            </span>
-          )}
-        </div>
+        <p className="order-3 truncate text-[11px] text-[var(--text-secondary)] sm:whitespace-normal sm:wrap-anywhere sm:text-xs">
+          {task.client && <span>{task.client}</span>}
+          {task.client && task.project && ' · '}
+          {task.project && <span className="font-semibold text-[var(--text-primary)]">{task.project}</span>}
+        </p>
       )}
-
 
       {/* Subtask Hierarchy Indicator */}
       {task.isSubtask && (

@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Info } from 'lucide-react';
 import { useAnchoredPopover } from '../hooks/useAnchoredPopover';
 
-export const efficiencyHelp = 'Estimated hours divided by billable hours for completed work with both values. 100% means on estimate.';
+export const efficiencyHelp = 'Estimated hours divided by billable hours for completed work with both values. 100% means on estimate. For example, 10h estimated ÷ 6h billable rounds to 167%, or 4h under estimate.';
 export const loadHelp = 'Load points reflect active work, weighted by cognitive load, task status and deadline pressure. Shared work is split among assignees.';
 
 export function MetricHelp({ label, detail }: { label: string; detail: string }) {

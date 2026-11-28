@@ -364,7 +364,7 @@ try {
 
     // TaskAssignmentModal P0-1 footer visibility on 700px laptop + P1-3 blank No-deadline + P2-5 CD label
     await page.setViewportSize({ width: 1440, height: 700 });
-    await page.locator('#team-pipeline-body .task-card').first().getByRole('button', { name: /^Assign$/i }).click();
+    await page.locator('#team-pipeline-body .task-card').first().getByRole('button', { name: /^Assign /i }).click();
     const assignDialog2 = page.getByRole('dialog', { name: 'Assign task' });
     await assignDialog2.waitFor({ state: 'visible' });
     assert.equal(await assignDialog2.locator('#taskassignmentmodal-deadline').inputValue(), '', 'Unassigned No-deadline brief should not prefill Tomorrow');
@@ -597,7 +597,9 @@ try {
     await page.locator('#task-search-input').fill('');
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForTimeout(200);
-    await page.getByRole('button', { name: 'Assign', exact: true }).first().click();
+    const pipelineCards = page.getByRole('region', { name: 'Pipeline cards' });
+    const firstBrief = pipelineCards.locator('[data-pipeline-task]').first();
+    await firstBrief.getByRole('button', { name: /^Assign / }).click();
     const assignment = page.getByRole('dialog', { name: 'Assign task' });
     await assignment.getByText(/Select a member to choose a destination/).waitFor();
     assert.equal(await assignment.getByRole('radio', { name: 'Move to To Do' }).isDisabled(), true);
@@ -610,6 +612,7 @@ try {
     await assignment.getByRole('checkbox', { name: /projected workload/ }).check();
     await assignment.getByRole('button', { name: 'Assign & Move to To Do' }).click();
     await page.locator('#assignment-result').getByText(/Assignment saved/).waitFor();
+    await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === 'Collapse pipeline');
     await page.locator('#assignment-result').getByRole('button', { name: 'View task' }).click();
     await page.getByRole('dialog', { name: 'Task details' }).waitFor();
     await context.close();
@@ -680,6 +683,29 @@ try {
       await dialog.waitFor({ state: 'hidden' });
     }
     await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${PREVIEW_URL}?fixture=large`, { waitUntil: 'networkidle' });
+    const next = page.getByRole('button', { name: 'Next Pipeline cards' });
+    const previous = page.getByRole('button', { name: 'Previous Pipeline cards' });
+    const cards = page.getByRole('region', { name: 'Pipeline cards' });
+    await page.getByText(/^1–\d+ of 12$/).waitFor();
+    await next.press('Enter');
+    await page.waitForFunction(() => document.querySelector('[aria-label="Pipeline cards"]')!.scrollLeft > 0);
+    await page.getByText(/^5–\d+ of 12$/).waitFor();
+    assert.equal(await previous.getAttribute('aria-disabled'), 'false');
+    await previous.press('Enter');
+    await page.waitForFunction(() => document.querySelector('[aria-label="Pipeline cards"]')!.scrollLeft === 0);
+    const workFilter = page.getByRole('checkbox', { name: 'Members with work' });
+    const member = page.locator('#swimlane-u-fixture-11');
+    await member.waitFor();
+    await workFilter.check();
+    await member.waitFor({ state: 'hidden' });
+    await workFilter.uncheck();
+    await member.waitFor();
+    const metadata = cards.getByText('International Campaign Client With a Long Name', { exact: true }).first().locator('..');
+    assert.equal(await metadata.evaluate(element => getComputedStyle(element).fontSize), '12px');
+    await page.setViewportSize({ width: 683, height: 384 });
+    assert.equal(await metadata.evaluate(element => element.scrollWidth <= element.clientWidth), true);
+    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(`${PREVIEW_URL}?role=accounts`, { waitUntil: 'networkidle' });
     await page.getByRole('button', { name: 'New Brief', exact: true }).click();
     const brief = page.getByRole('dialog', { name: 'Create pipeline requirement' });
@@ -687,6 +713,7 @@ try {
     await brief.locator('#disciplinetaskmodal-field-1').fill('Accounts handoff regression');
     await brief.getByRole('button', { name: 'Create Pipeline Task' }).click();
     await brief.waitFor({ state: 'hidden' });
+    await page.getByRole('status').getByText(/Accounts handoff regression.*added to Pipeline for assignment/).waitFor();
     await page.getByRole('region', { name: 'Pipeline cards' }).getByText(/Accounts handoff regression/).click();
     const details = page.getByRole('dialog', { name: 'Task details' });
     await details.getByText('Unassigned in Pipeline', { exact: true }).waitFor();

@@ -87,7 +87,10 @@ function DashboardContent() {
   const [disciplineModalOpen, setDisciplineModalOpen] = useState(false);
   const [selectedTaskForAssignment, setSelectedTaskForAssignment] = useState<Task | null>(null);
   const [assignmentPresetUserId, setAssignmentPresetUserId] = useState<string | undefined>(undefined);
-  const [assignmentNotice, setAssignmentNotice] = useState<{ taskId: string; member: string; destination: string } | null>(null);
+  const assignmentFromPipeline = useRef(false);
+  const [membersWithWork, setMembersWithWork] = useState(false);
+  const [createdBrief, setCreatedBrief] = useState<string | null>(null);
+  const [assignmentNotice, setAssignmentNotice] = useState<{ taskId: string; member: string; destination: string; fromPipeline: boolean } | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [showAllMyTasks, setShowAllMyTasks] = useState(false);
   const [queuePrompt, setQueuePrompt] = useState<{ task: Task; kind: 'link' | 'deadline' | 'wip'; status: TaskStatus } | null>(null);
@@ -340,6 +343,10 @@ function DashboardContent() {
     prevTasksByUserIdRef.current = stablePartitioned;
     return stablePartitioned;
   }, [allTasksByUserId, filteredTasks, tasks]);
+
+  const memberHasVisibleWork = (userId: string) => tasksByUserId.get(userId)?.some(
+    task => task.status !== 'pipeline' && task.status !== 'archived'
+  ) ?? false;
 
   const priorityMembers = useMemo(() => roleFilteredUsers.map(user => ({
     user, score: quickWorkloadScore(allTasksByUserId.get(user.id) || []),
@@ -898,14 +905,28 @@ function DashboardContent() {
               <a href="#member-lanes" className="button-secondary text-xs">Members</a>
             </div>
           )}
+          <div role="status" aria-live="polite">
+            {createdBrief && (
+              <div className="callout mb-2 flex items-center justify-between gap-2">
+                <p className="wrap-anywhere">“{createdBrief}” added to Pipeline for assignment.</p>
+                <button type="button" aria-label="Dismiss brief confirmation" onClick={() => setCreatedBrief(null)} className="icon-button shrink-0">
+                  <X aria-hidden="true" className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
           <TeamPipeline
             roleFilter={activeRoleTab}
             tasks={searchQuery.trim() ? scopedSearchTasks : tasks}
             users={users}
             globalSearch={searchQuery}
+            assignmentNotice={assignmentNotice?.fromPipeline ? assignmentNotice : null}
             onClearSearch={() => setSearchQuery('')}
             onOpenCreateModal={() => setDisciplineModalOpen(true)}
-            onOpenAssignmentModal={t => setSelectedTaskForAssignment(t)}
+            onOpenAssignmentModal={task => {
+              assignmentFromPipeline.current = true;
+              setSelectedTaskForAssignment(task);
+            }}
             onEditTask={handleEditTask}
             onDeleteTask={handleRequestDeleteTask}
             onDragTaskStart={handleDragTaskStart}
@@ -959,7 +980,16 @@ function DashboardContent() {
             </div>
           ) : roleFilteredUsers.length > 0 ? (
             <div className="space-y-4">
-              <h2 className="sr-only">Team Swimlanes</h2>
+              <div className="hidden items-center justify-between gap-3 sm:flex">
+                <h2 className="text-sm font-semibold text-[var(--text-primary)]">Member lanes</h2>
+                <label className="inline-flex min-h-[var(--control-height)] cursor-pointer items-center gap-2 text-xs text-[var(--text-secondary)]">
+                  <input type="checkbox" checked={membersWithWork} onChange={event => setMembersWithWork(event.target.checked)} />
+                  Members with work
+                </label>
+              </div>
+              {membersWithWork && !roleFilteredUsers.some(user => memberHasVisibleWork(user.id)) && (
+                <p className="hidden py-3 text-xs text-[var(--text-secondary)] sm:block">No members have work in the current view.</p>
+              )}
               <div id="member-lanes" tabIndex={-1} className="flex scroll-mt-28 justify-start sm:hidden">
                 <a href="#pipeline-shortcut" className="button-secondary text-xs">Back to Pipeline</a>
               </div>
@@ -970,33 +1000,34 @@ function DashboardContent() {
                 const canMoveDown = !isCurrent && index < roleFilteredUsers.length - 1;
 
                 return (
-                  <Swimlane
-                    key={user.id}
-                    user={user}
-                    tasks={tasksByUserId.get(user.id) || EMPTY_TASKS}
-                    metricTasks={allTasksByUserId.get(user.id) || EMPTY_TASKS}
-                    activeDragInfo={activeDragInfo}
-                    onDragTaskStart={handleDragTaskStart}
-                    onDragTaskEnd={handleDragTaskEnd}
-                    onAddTask={handleOpenAddTask}
-                    onQuickAddTask={handleQuickAddTask}
-                    onEditTask={handleEditTask}
-                    onRescheduleTask={handleRescheduleTask}
-                    onAdjustBillableHours={handleOpenAdjustBillableHours}
-                    onUpdateTaskTitle={handleUpdateTaskTitle}
-                    onDeleteTask={handleRequestDeleteTask}
-                    onEditUser={setEditingUser}
-                    onDeleteUser={handleOpenDeleteUser}
-                    onMoveTask={handleMoveTaskWithUndo}
-                    onDuplicateTask={handleOpenDuplicateTask}
-                    onDisciplineMismatch={handleDisciplineMismatch}
-                    onOpenWorkloadModal={handleOpenWorkloadModal}
-                    isCurrentUser={isCurrent}
-                    onMoveUserUp={handleMoveUserUp}
-                    onMoveUserDown={handleMoveUserDown}
-                    canMoveUp={canMoveUp}
-                    canMoveDown={canMoveDown}
-                  />
+                  <div key={user.id} className={membersWithWork && !memberHasVisibleWork(user.id) ? 'sm:hidden' : undefined}>
+                    <Swimlane
+                      user={user}
+                      tasks={tasksByUserId.get(user.id) || EMPTY_TASKS}
+                      metricTasks={allTasksByUserId.get(user.id) || EMPTY_TASKS}
+                      activeDragInfo={activeDragInfo}
+                      onDragTaskStart={handleDragTaskStart}
+                      onDragTaskEnd={handleDragTaskEnd}
+                      onAddTask={handleOpenAddTask}
+                      onQuickAddTask={handleQuickAddTask}
+                      onEditTask={handleEditTask}
+                      onRescheduleTask={handleRescheduleTask}
+                      onAdjustBillableHours={handleOpenAdjustBillableHours}
+                      onUpdateTaskTitle={handleUpdateTaskTitle}
+                      onDeleteTask={handleRequestDeleteTask}
+                      onEditUser={setEditingUser}
+                      onDeleteUser={handleOpenDeleteUser}
+                      onMoveTask={handleMoveTaskWithUndo}
+                      onDuplicateTask={handleOpenDuplicateTask}
+                      onDisciplineMismatch={handleDisciplineMismatch}
+                      onOpenWorkloadModal={handleOpenWorkloadModal}
+                      isCurrentUser={isCurrent}
+                      onMoveUserUp={handleMoveUserUp}
+                      onMoveUserDown={handleMoveUserDown}
+                      canMoveUp={canMoveUp}
+                      canMoveDown={canMoveDown}
+                    />
+                  </div>
                 );
               })}
             </div>
@@ -1102,6 +1133,7 @@ function DashboardContent() {
           isOpen={disciplineModalOpen}
           onClose={() => setDisciplineModalOpen(false)}
           initialDiscipline={activeRoleTab}
+          onCreated={setCreatedBrief}
         />
 
         <ContentLinkPromptModal isOpen={queuePrompt?.kind === 'link'} task={queuePrompt?.task || null} onClose={() => setQueuePrompt(null)} hasSiblingDesignTask={Boolean(queuePrompt?.task.parentTaskId && tasks.some(t => t.id !== queuePrompt.task.id && t.parentTaskId === queuePrompt.task.parentTaskId && t.team === 'design'))} onConfirm={link => { if (queuePrompt) void moveQueueTask(queuePrompt.task, queuePrompt.status, undefined, link); }} />
@@ -1112,10 +1144,11 @@ function DashboardContent() {
           task={selectedTaskForAssignment}
           initialAssigneeId={assignmentPresetUserId}
           onAssigned={(taskId, member, destination) => {
-            setAssignmentNotice({ taskId, member, destination });
-            window.setTimeout(() => document.getElementById('assignment-result')?.focus(), 150);
+            setAssignmentNotice({ taskId, member, destination, fromPipeline: assignmentFromPipeline.current });
+            if (!assignmentFromPipeline.current) window.setTimeout(() => document.getElementById('assignment-result')?.focus(), 150);
           }}
           onClose={() => {
+            assignmentFromPipeline.current = false;
             setSelectedTaskForAssignment(null);
             setAssignmentPresetUserId(undefined);
           }}

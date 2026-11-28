@@ -21,6 +21,7 @@ import {
   Link2,
   ExternalLink,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   ChevronUp,
   Flag,
@@ -32,6 +33,7 @@ interface TeamPipelineProps {
   tasks: Task[];
   users: User[];
   globalSearch?: string;
+  assignmentNotice: { taskId: string } | null;
   onClearSearch: () => void;
   onOpenCreateModal: () => void;
   onOpenAssignmentModal: (task: Task) => void;
@@ -51,6 +53,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
   tasks,
   users,
   globalSearch = '',
+  assignmentNotice,
   onClearSearch,
   onOpenCreateModal,
   onOpenAssignmentModal,
@@ -67,6 +70,9 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
 
   const [filterMode, setFilterMode] = useState<'all' | 'unassigned' | 'assigned'>('all');
   const scrollRowRef = useRef<HTMLDivElement>(null);
+  const collapseButtonRef = useRef<HTMLButtonElement>(null);
+  const assignmentOrigin = useRef<{ taskId: string; neighbors: string[]; scrollLeft: number; trigger: Element | null } | null>(null);
+  const [page, setPage] = useState({ first: 0, last: 0, hasPrevious: false });
   const nextCardsRef = useRef<HTMLButtonElement>(null);
   const [hasMoreCards, setHasMoreCards] = useState(false);
   const updateScrollCue = useCallback(() => {
@@ -76,6 +82,18 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
       row?.focus({ preventScroll: true });
     }
     setHasMoreCards(hasMore);
+    if (!row) return;
+    const { left, right } = row.getBoundingClientRect();
+    const visible = Array.from(row.children).flatMap((card, index) => {
+      const bounds = card.getBoundingClientRect();
+      return bounds.left >= left - 2 && bounds.right <= right + 2 ? [index + 1] : [];
+    });
+    const first = visible[0] ?? 0;
+    const last = visible.at(-1) ?? 0;
+    const hasPrevious = row.scrollLeft > 2;
+    setPage(previous => previous.first === first && previous.last === last && previous.hasPrevious === hasPrevious
+      ? previous
+      : { first, last, hasPrevious });
   }, []);
   const [isDragOver, setIsDragOver] = useState(false);
   const [mobileMenuTask, setMobileMenuTask] = useState<Task | null>(null);
@@ -197,14 +215,52 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
     return () => observer.disconnect();
   }, [displayedTasks, isCollapsed, updateScrollCue]);
 
-  const scrollToNextCards = () => {
+  const openAssignment = (task: Task, trigger = document.activeElement) => {
+    const index = displayedTasks.findIndex(item => item.id === task.id);
+    assignmentOrigin.current = {
+      taskId: task.id,
+      neighbors: [...displayedTasks.slice(index + 1), ...displayedTasks.slice(0, index).reverse()].map(item => item.id),
+      scrollLeft: scrollRowRef.current?.scrollLeft ?? 0,
+      trigger,
+    };
+    onOpenAssignmentModal(task);
+  };
+
+  useEffect(() => {
+    const origin = assignmentOrigin.current;
+    assignmentOrigin.current = null;
+    if (!assignmentNotice || origin?.taskId !== assignmentNotice.taskId) return;
+    const frame = requestAnimationFrame(() => {
+      const row = scrollRowRef.current;
+      const cards = Array.from(row?.querySelectorAll<HTMLElement>('[data-pipeline-task]') ?? []);
+      const original = cards.find(card => card.dataset.pipelineTask === origin.taskId);
+      const fallback = origin.neighbors.map(id => cards.find(card => card.dataset.pipelineTask === id)).find(Boolean);
+      if (row) row.scrollLeft = origin.scrollLeft;
+      const trigger = origin.trigger;
+      if (trigger instanceof HTMLElement && original?.contains(trigger) && trigger.getClientRects().length) {
+        trigger.focus({ preventScroll: true });
+      } else {
+        const title = (original ?? fallback)?.querySelector<HTMLElement>('[data-pipeline-title]');
+        if (title) title.focus({ preventScroll: Boolean(original) });
+        else collapseButtonRef.current?.focus();
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [assignmentNotice]);
+
+  const scrollCards = (direction: -1 | 1) => {
     const row = scrollRowRef.current;
     if (!row) return;
     const { left, right } = row.getBoundingClientRect();
-    const nextCard = Array.from(row.children).find(card => card.getBoundingClientRect().right > right + 2);
+    const cards = Array.from(row.children);
+    const firstVisible = cards.findIndex(card => card.getBoundingClientRect().left >= left - 2);
+    const pageSize = Math.max(1, page.last - page.first + 1);
+    const target = direction === 1
+      ? cards.find(card => card.getBoundingClientRect().right > right + 2)
+      : cards[Math.max(0, firstVisible - pageSize)];
     const padding = parseFloat(getComputedStyle(row).scrollPaddingLeft) || 0;
     row.scrollBy({
-      left: nextCard ? Math.max(1, nextCard.getBoundingClientRect().left - left - padding) : row.clientWidth,
+      left: target ? target.getBoundingClientRect().left - left - padding : direction * row.clientWidth,
       behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
     });
   };
@@ -365,6 +421,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
 
           <button
             type="button"
+            ref={collapseButtonRef}
             aria-expanded={!isCollapsed}
             aria-controls="team-pipeline-body"
             onClick={handleToggleCollapse}
@@ -476,6 +533,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
 
                 return (
                   <motion.div
+                    data-pipeline-task={task.id}
                     key={task.id}
                     layout="position"
                     initial={false}
@@ -575,7 +633,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                       </div>
 
                       {(task.client || task.project) && (
-                        <p className="break-words text-[11px] text-[var(--text-secondary)]">
+                        <p className="wrap-anywhere text-pretty text-[11px] sm:text-xs text-[var(--text-secondary)]">
                           {task.client && <span>{task.client}</span>}
                           {task.client && task.project && ' · '}
                           {task.project && <span className="font-semibold text-[var(--text-primary)]">{task.project}</span>}
@@ -586,6 +644,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                       <h3 className="text-[13px] font-semibold leading-snug">
                         <button
                           type="button"
+                          data-pipeline-title
                           onClick={() => onEditTask(task)}
                           title="Click to inspect brief details"
                           className="mobile-tap-control sm:min-h-6 w-full text-left cursor-pointer rounded px-1 -mx-1 py-0 flex items-start text-[var(--text-primary)] hover:text-[#1d4ed8] dark:hover:text-blue-400 hover:bg-[var(--surface-subtle)] transition-colors"
@@ -669,7 +728,9 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                       {assignee ? (
                         <button
                           type="button"
-                          onClick={() => canAssignTask && onOpenAssignmentModal(task)}
+                          disabled={!canAssignTask}
+                          aria-label={canAssignTask ? `Reassign ${task.title}, currently assigned to ${assignee.name}` : undefined}
+                          onClick={() => openAssignment(task)}
                           title={canAssignTask ? 'Click to reassign, adjust estimate, or move to To Do' : `Assigned to ${assignee.name}`}
                           className={`mobile-tap-control sm:min-h-6 flex items-center gap-1 text-[11px] font-semibold transition-colors ${
                             canAssignTask
@@ -685,7 +746,8 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                       ) : canAssignTask ? (
                         <button
                           type="button"
-                          onClick={() => onOpenAssignmentModal(task)}
+                          onClick={() => openAssignment(task)}
+                          aria-label={`Assign ${task.title}`}
                           title="Assign member and move straight into To Do"
                           className="mobile-tap-control sm:min-h-6 inline-flex items-center gap-1 rounded-[5px] px-2 py-1 text-[11px] font-semibold transition-colors cursor-pointer bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-500/25"
                         >
@@ -706,9 +768,24 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                 );
               })}
             </div>
+            {(hasMoreCards || page.hasPrevious) && (
+              <div className="hidden items-center justify-end gap-2 px-3 pb-2 sm:flex">
+                <span className="text-xs tabular-nums text-[var(--text-secondary)]" aria-live="polite">
+                  {page.first > 0 ? `${page.first}–${page.last} of ${displayedTasks.length}` : `${displayedTasks.length} briefs`}
+                </span>
+                <button type="button" className="icon-button aria-disabled:opacity-40" aria-label="Previous Pipeline cards" aria-disabled={!page.hasPrevious}
+                  onClick={() => { if (page.hasPrevious) scrollCards(-1); }}>
+                  <ChevronLeft aria-hidden="true" className="h-4 w-4" />
+                </button>
+                <button type="button" className="icon-button aria-disabled:opacity-40" aria-label="Next Pipeline cards" aria-disabled={!hasMoreCards}
+                  onClick={() => { if (hasMoreCards) scrollCards(1); }}>
+                  <ChevronRight aria-hidden="true" className="h-4 w-4" />
+                </button>
+              </div>
+            )}
             {hasMoreCards && (
               <div className="flex justify-end px-3 pb-2 sm:hidden">
-                <button ref={nextCardsRef} type="button" onClick={scrollToNextCards} className="button-secondary mobile-tap-control">
+                <button ref={nextCardsRef} type="button" onClick={() => scrollCards(1)} className="button-secondary mobile-tap-control">
                   Next cards <ChevronRight aria-hidden="true" className="h-4 w-4" />
                 </button>
               </div>
@@ -734,7 +811,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
           {canAssignTask && getTaskAssigneeIds(mobileMenuTask).length > 0 && (
             <button type="button" role="menuitem" className="menu-item cursor-pointer" onClick={() => {
               setMobileMenuTask(null);
-              onOpenAssignmentModal(mobileMenuTask);
+              openAssignment(mobileMenuTask, mobileMenuTriggerRef.current);
             }}>
               <UserX aria-hidden="true" className="h-3.5 w-3.5" />
               <span>Reassign</span>

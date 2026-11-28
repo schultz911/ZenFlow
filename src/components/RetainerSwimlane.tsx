@@ -246,7 +246,7 @@ const RetainerSwimlaneComponent: React.FC<RetainerSwimlaneProps> = ({
                   </div>
                 </div>
                 <div>
-                {metaLine && <p className="text-[11px] text-[var(--text-secondary)] truncate" title={metaLine}>
+                {metaLine && <p className="truncate text-[11px] text-[var(--text-secondary)] sm:whitespace-normal sm:wrap-anywhere sm:text-xs" title={metaLine}>
                   {task.client}{task.client && task.project && ' · '}{task.project && <span className="font-semibold text-[var(--text-primary)]">{task.project}</span>}
                 </p>}
                 <h5 className="text-[13px] font-semibold leading-snug">

@@ -11,6 +11,7 @@ import { Task, CognitiveLoad, Role } from '../types';
 import {
   getUserDailyAssignedHours,
   getAssignedHoursByMemberAndDate,
+  formatDateOnly,
   formatHours,
   formatLocalDateKey,
   groupTasksByAssignee,
@@ -290,9 +291,9 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                 <h3 className="text-sm font-semibold text-[var(--text-primary)] break-words">
                   {task.title}
                 </h3>
-                {(task.client || task.project) && (
-                  <p className="text-xs text-[var(--text-secondary)]">
-                    {[task.client, task.project].filter(Boolean).join(' · ')}
+                {(task.client || task.project || task.dueDate) && (
+                  <p className="wrap-anywhere text-xs text-[var(--text-secondary)]">
+                    {[task.client, task.project, task.dueDate && `Due ${formatDateOnly(task.dueDate)}`].filter(Boolean).join(' · ')}
                   </p>
                 )}
               </div>

@@ -25,12 +25,14 @@ import {
 interface DisciplineTaskModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onCreated: (title: string) => void;
   initialDiscipline?: RoleFilter;
 }
 
 export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
   isOpen,
   onClose,
+  onCreated,
   initialDiscipline = 'all',
 }) => {
   const { canCreatePipelineTask } = useAuth();
@@ -434,6 +436,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
         clickupTaskTypeFieldId: selectedTaskTypeOption ? (clickupTaskTypeFieldId || undefined) : undefined,
       });
 
+      onCreated(title.trim());
       onClose();
     } catch (err: any) {
       console.error(err);
