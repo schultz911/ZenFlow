@@ -220,7 +220,7 @@ try {
     assert.equal(await efficiency.getAttribute('aria-valuenow'), '167');
     assert.equal(await efficiency.getAttribute('aria-valuemax'), '200');
     assert.match(await efficiency.getAttribute('aria-describedby') ?? '', /\S/);
-    await analytics.getByText('200% max', { exact: true }).waitFor();
+    await analytics.getByText('200%', { exact: true }).waitFor();
     await analytics.getByLabel('Analytics scope').selectOption('user');
     await analytics.getByLabel('Analytics member').selectOption('u-content');
     await analytics.getByText(/5h est\. \/ 3h billable · 2h under estimate/).waitFor();

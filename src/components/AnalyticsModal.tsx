@@ -71,9 +71,9 @@ function EfficiencyScale({ value }: { value: number }) {
         <span>0%</span>
         <span className="inline-flex items-center gap-1">
           <span className="h-2.5 w-0.5 rounded-full bg-[var(--text-primary)]" />
-          100% on estimate
+          {baseline}%
         </span>
-        <span>{max}% max</span>
+        <span>{max}%</span>
       </div>
     </>
   );
