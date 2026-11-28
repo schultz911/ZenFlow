@@ -63,7 +63,7 @@ function EfficiencyScale({ value }: { value: number }) {
 
   return (
     <>
-      <MetricBar label="Workspace efficiency" value={displayedValue} max={max}
+      <MetricBar label="Workspace efficiency" value={displayedValue} max={max} reference={baseline}
         tone={value >= baseline ? 'green' : value >= 50 ? 'blue' : 'red'}
         detail={detail} describedBy={descriptionId} />
       <span id={descriptionId} hidden>{detail}</span>
