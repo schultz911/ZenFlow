@@ -23,6 +23,8 @@ export const CognitiveLoadSelector: React.FC<CognitiveLoadSelectorProps> = ({
   required = false,
   label = 'Cognitive Load',
 }) => {
+  const groupName = React.useId();
+
   return (
     <div>
       <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -36,26 +38,31 @@ export const CognitiveLoadSelector: React.FC<CognitiveLoadSelectorProps> = ({
           Low 1 · Medium 1.5 · High 2 points
         </span>
       </div>
-      <div className="grid grid-cols-3 gap-2" role="group" aria-label={label}>
+      <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label={label} aria-required={required || undefined}>
         {LEVELS.map(level => {
           const isSelected = value === level;
           const weight = COGNITIVE_LOAD_WEIGHTS[level];
           const roleLabel = getCognitiveLoadLabel(level, role);
 
           return (
-            <button
+            <label
               key={level}
-              type="button"
-              disabled={disabled}
-              aria-pressed={isSelected}
               title={`${level} cognitive load (${weight}x weight) — ${roleLabel}`}
-              onClick={() => onChange(level)}
-              className={`mobile-tap-control flex flex-col items-center justify-center p-2 rounded-[7px] border text-center transition-colors cursor-pointer disabled:opacity-50 ${
+              className={`mobile-tap-control flex flex-col items-center justify-center p-2 rounded-[7px] border text-center transition-colors cursor-pointer has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--focus)] ${
                 isSelected
                   ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[var(--text-primary)]'
                   : 'border-[var(--border)] bg-[var(--surface)] text-[var(--text-secondary)] hover:bg-[var(--surface-muted)] hover:text-[var(--text-primary)]'
               }`}
             >
+              <input
+                className="sr-only"
+                type="radio"
+                name={groupName}
+                value={level}
+                disabled={disabled}
+                checked={isSelected}
+                onChange={() => onChange(level)}
+              />
               <span className="inline-flex items-center gap-1.5 text-xs capitalize font-semibold">
                 <span
                   aria-hidden="true"
@@ -75,7 +82,7 @@ export const CognitiveLoadSelector: React.FC<CognitiveLoadSelectorProps> = ({
               <span className="text-[11px] text-[var(--text-secondary)] truncate max-w-full mt-0.5">
                 {roleLabel}
               </span>
-            </button>
+            </label>
           );
         })}
       </div>

@@ -430,6 +430,20 @@
     border-color: #3a4254;
   }
   .task-card:focus-within { border-color: var(--focus); }
+  .pipeline-card-row {
+    --pipeline-card-width: 290px;
+    --pipeline-card-gap: 0.625rem;
+    gap: var(--pipeline-card-gap);
+  }
+  .pipeline-card { width: var(--pipeline-card-width); }
+  @media (width >= 40rem) {
+    .pipeline-card-row {
+      --pipeline-card-width: 300px;
+      --pipeline-card-step: calc(var(--pipeline-card-width) + var(--pipeline-card-gap));
+      /* Fit an integer number of cards and gaps in the scrollport. */
+      width: calc(round(down, 100% - 1.5rem + var(--pipeline-card-gap), var(--pipeline-card-step)) - var(--pipeline-card-gap));
+    }
+  }
   .card-actions button { min-width: 28px; min-height: 28px; }
   .free-pool-filters { overflow-x: auto; }
   .free-pool-filters button { flex-shrink: 0; white-space: nowrap; }

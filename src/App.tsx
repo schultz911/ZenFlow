@@ -24,6 +24,7 @@ import { ContentLinkPromptModal } from './components/ContentLinkPromptModal';
 import { DeadlineDemandModal } from './components/DeadlineDemandModal';
 import { WipLimitModal } from './components/WipLimitModal';
 import { OnboardingChecklist } from './components/OnboardingChecklist';
+import { HelpModal } from './components/HelpModal';
 import { User, Task, TaskStatus } from './types';
 import { getTaskAssigneeIds, groupTasksByAssignee, formatTaskStatus, formatDateOnly, quickWorkloadScore, getDaysRemaining } from './utils/workload';
 import { UserPlus, FileText, Palette, Search, Trash2, AlertTriangle, X, Loader2, RotateCcw, Keyboard } from 'lucide-react';
@@ -127,6 +128,7 @@ function DashboardContent() {
   const [createdBrief, setCreatedBrief] = useState<string | null>(null);
   const [assignmentNotice, setAssignmentNotice] = useState<{ taskId: string; member: string; destination: string; fromPipeline: boolean } | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [showAllMyTasks, setShowAllMyTasks] = useState(false);
   const [queuePrompt, setQueuePrompt] = useState<{ task: Task; kind: 'link' | 'deadline' | 'wip'; status: TaskStatus } | null>(null);
   const [queueBusy, setQueueBusy] = useState(false);
@@ -789,6 +791,7 @@ function DashboardContent() {
           onOpenFirestoreModal={handleOpenFirestore}
           onOpenSetupModal={() => setSetupChecklistOpen(true)}
           onOpenShortcutsModal={() => setShortcutsOpen(true)}
+          onOpenHelpModal={() => setHelpOpen(true)}
         />
 
         {/* Pinned Marquee Ribbon (renders its own sticky frosted container only when urgent tasks exist) */}
@@ -1260,6 +1263,8 @@ function DashboardContent() {
             </button>
           </div>
         )}
+
+        <HelpModal isOpen={helpOpen} onClose={() => setHelpOpen(false)} />
 
         {/* Keyboard Shortcuts Reference Modal */}
         <AnimatePresence>

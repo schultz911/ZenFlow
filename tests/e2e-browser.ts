@@ -217,6 +217,10 @@ try {
     await analytics.getByText(/10h est\. \/ 6h billable · 4h under estimate/).waitFor();
     const efficiency = analytics.getByRole('meter', { name: 'Workspace efficiency' });
     assert.match(await efficiency.getAttribute('aria-valuetext') ?? '', /^167 percent/);
+    assert.equal(await efficiency.getAttribute('aria-valuenow'), '167');
+    assert.equal(await efficiency.getAttribute('aria-valuemax'), '200');
+    assert.match(await efficiency.getAttribute('aria-describedby') ?? '', /\S/);
+    await analytics.getByText('200% max', { exact: true }).waitFor();
     await analytics.getByLabel('Analytics scope').selectOption('user');
     await analytics.getByLabel('Analytics member').selectOption('u-content');
     await analytics.getByText(/5h est\. \/ 3h billable · 2h under estimate/).waitFor();
@@ -604,6 +608,16 @@ try {
     await firstBrief.getByRole('button', { name: /^Assign / }).click();
     const assignment = page.getByRole('dialog', { name: 'Assign task' });
     await assignment.getByText(/Select a member to choose a destination/).waitFor();
+    const loadChoices = assignment.getByRole('radiogroup', { name: 'Cognitive Load' });
+    const originalLoad = loadChoices.locator('input:checked');
+    const loadValue = await originalLoad.inputValue();
+    await originalLoad.press('ArrowRight');
+    assert.notEqual(await originalLoad.inputValue(), loadValue);
+    await originalLoad.press('ArrowLeft');
+    assert.equal(await originalLoad.inputValue(), loadValue);
+    const loadHelp = assignment.getByRole('button', { name: 'About assignment load points' });
+    await loadHelp.press('Enter');
+    await page.locator(`[id="${await loadHelp.getAttribute('aria-controls')}"]`).getByText(/0h is scheduled today.*3 points/).waitFor();
     assert.equal(await assignment.getByRole('radio', { name: 'Move to To Do' }).isDisabled(), true);
     await assignment.getByRole('button', { name: 'Save estimates in Pipeline' }).waitFor();
     await assignment.locator('input[name="assignment-member"][value="u-content"]').check();
@@ -696,6 +710,21 @@ try {
     assert.equal(await previous.getAttribute('aria-disabled'), 'false');
     await previous.press('Enter');
     await page.waitForFunction(() => document.querySelector('[aria-label="Pipeline cards"]')!.scrollLeft === 0);
+    await page.setViewportSize({ width: 1280, height: 720 });
+    const intersectsPage = () => cards.evaluate(row => {
+      const viewport = row.getBoundingClientRect();
+      return Array.from(row.children).flatMap((card, index) => {
+        const bounds = card.getBoundingClientRect();
+        return bounds.left < viewport.right - 1 && bounds.right > viewport.left + 1 ? [index + 1] : [];
+      });
+    });
+    await page.getByText('1–3 of 12', { exact: true }).waitFor();
+    assert.deepEqual(await intersectsPage(), [1, 2, 3]);
+    await next.press('Enter');
+    await page.getByText('4–6 of 12', { exact: true }).waitFor();
+    assert.deepEqual(await intersectsPage(), [4, 5, 6]);
+    await previous.press('Enter');
+    await page.getByText('1–3 of 12', { exact: true }).waitFor();
     const workFilter = page.getByRole('checkbox', { name: 'Members with work' });
     const member = page.locator('#swimlane-u-fixture-11');
     await member.waitFor();

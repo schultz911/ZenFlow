@@ -2,7 +2,7 @@ import { MetricHelp, efficiencyHelp, utilizationHelp } from './MetricHelp';
 import { EfficiencyDetail } from './ui/EfficiencyDetail';
 import { MetricBar } from './ui/MetricBar';
 import { DialogPanel } from './ui/DialogPanel';
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useId } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { useWorkspace } from '../context/DashboardContext';
 import { User, Task, AnalyticsScope, AnalyticsTimeframe, AnalyticsSnapshot } from '../types';
@@ -53,6 +53,31 @@ const clientName = (task: Task) => task.client?.trim() || 'Internal / Unassigned
 const projectName = (task: Task) => task.project?.trim() || 'General / Unnamed';
 const formatEstBill = (estimatedHours: number, billableHours: number) =>
   `${formatHours(estimatedHours)} est / ${formatHours(billableHours)} bill`;
+
+function EfficiencyScale({ value }: { value: number }) {
+  const baseline = 100;
+  const max = Math.max(200, Math.ceil(value / baseline) * baseline);
+  const displayedValue = Math.round(value);
+  const descriptionId = useId();
+  const detail = `${displayedValue} percent. 100 percent is on estimate. Scale maximum ${max} percent.`;
+
+  return (
+    <>
+      <MetricBar label="Workspace efficiency" value={displayedValue} max={max} reference={baseline}
+        tone={value >= baseline ? 'green' : value >= 50 ? 'blue' : 'red'}
+        detail={detail} describedBy={descriptionId} />
+      <span id={descriptionId} hidden>{detail}</span>
+      <div aria-hidden="true" className="mt-1.5 flex flex-wrap items-center justify-between gap-x-2 text-xs tabular-nums text-[var(--text-secondary)]">
+        <span>0%</span>
+        <span className="inline-flex items-center gap-1">
+          <span className="h-2.5 w-0.5 rounded-full bg-[var(--text-primary)]" />
+          100% on estimate
+        </span>
+        <span>{max}% max</span>
+      </div>
+    </>
+  );
+}
 
 export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose, onJumpToMember }) => {
   const workspace = useWorkspace();
@@ -800,9 +825,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                       </span>
                     </div>
                     {efficiencyPercent !== null && (
-                      <MetricBar label="Workspace efficiency" value={efficiencyPercent}
-                        tone={efficiencyPercent >= 100 ? 'green' : efficiencyPercent >= 50 ? 'blue' : 'red'}
-                        detail={`${Math.round(efficiencyPercent)} percent, with 100 percent on estimate`} />
+                      <EfficiencyScale value={efficiencyPercent} />
                     )}
                     <p className="metric-detail">
                       {efficiencyPercent === null

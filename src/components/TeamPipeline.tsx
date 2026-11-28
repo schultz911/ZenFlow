@@ -234,11 +234,16 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
       const fallback = origin.neighbors.map(id => cards.find(card => card.dataset.pipelineTask === id)).find(Boolean);
       if (row) row.scrollLeft = origin.scrollLeft;
       const trigger = origin.trigger;
+      const focusCard = original ?? fallback;
+      const cardBounds = focusCard?.getBoundingClientRect();
+      const rowBounds = row?.getBoundingClientRect();
+      const cardIsInView = Boolean(cardBounds && rowBounds &&
+        cardBounds.left >= rowBounds.left - 2 && cardBounds.right <= rowBounds.right + 2);
       if (trigger instanceof HTMLElement && original?.contains(trigger) && trigger.getClientRects().length) {
-        trigger.focus({ preventScroll: true });
+        trigger.focus({ preventScroll: cardIsInView });
       } else {
-        const title = (original ?? fallback)?.querySelector<HTMLElement>('[data-pipeline-title]');
-        if (title) title.focus({ preventScroll: Boolean(original) });
+        const title = focusCard?.querySelector<HTMLElement>('[data-pipeline-title]');
+        if (title) title.focus({ preventScroll: cardIsInView });
         else collapseButtonRef.current?.focus();
       }
     });
@@ -514,7 +519,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
             </div>
           ) : (
             <>
-            <div ref={scrollRowRef} onScroll={updateScrollCue} tabIndex={-1} role="region" aria-label="Pipeline cards" className="flex items-stretch gap-2.5 overflow-x-auto p-3 snap-x snap-mandatory scroll-pl-3">
+            <div ref={scrollRowRef} onScroll={updateScrollCue} tabIndex={-1} role="region" aria-label="Pipeline cards" className="pipeline-card-row flex items-stretch overflow-x-auto p-3 snap-x snap-mandatory scroll-pl-3 sm:mx-3 sm:px-0 sm:scroll-pl-0">
               {displayedTasks.map(task => {
                 const taskDiscipline = task.team === 'design' ? 'design' : 'content';
                 const assigneeIds = getTaskAssigneeIds(task);
@@ -556,7 +561,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                       onDragTaskStart?.(task);
                     } : undefined}
                     onDragEndCapture={canManagePipeline ? () => onDragTaskEnd?.() : undefined}
-                    className={`task-card group relative shrink-0 w-[290px] sm:w-[300px] snap-start flex flex-col justify-between p-2.5 select-none ${
+                    className={`task-card pipeline-card group relative shrink-0 snap-start flex flex-col justify-between p-2.5 select-none ${
                       canManagePipeline ? 'sm:cursor-grab sm:active:cursor-grabbing' : ''
                     }`}
                   >

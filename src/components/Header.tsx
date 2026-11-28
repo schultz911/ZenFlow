@@ -13,6 +13,7 @@ import {
   Database,
   ListChecks,
   Keyboard,
+  CircleHelp,
 } from 'lucide-react';
 import { getUserTag } from '../utils/workload';
 
@@ -22,6 +23,7 @@ interface HeaderProps {
   onOpenFirestoreModal: () => void;
   onOpenSetupModal?: () => void;
   onOpenShortcutsModal?: () => void;
+  onOpenHelpModal: () => void;
 }
 
 const HeaderComponent: React.FC<HeaderProps> = ({
@@ -30,6 +32,7 @@ const HeaderComponent: React.FC<HeaderProps> = ({
   onOpenFirestoreModal,
   onOpenSetupModal,
   onOpenShortcutsModal,
+  onOpenHelpModal,
 }) => {
   const {
     currentUser,
@@ -450,6 +453,20 @@ const HeaderComponent: React.FC<HeaderProps> = ({
                         <kbd className="ledger-badge font-mono !py-0">?</kbd>
                       </button>
                     )}
+
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setUserDropdownOpen(false);
+                        document.getElementById('user-profile-menu-button')?.focus();
+                        onOpenHelpModal();
+                      }}
+                      className="menu-item cursor-pointer"
+                    >
+                      <CircleHelp aria-hidden="true" className="h-3.5 w-3.5 text-[#1d4ed8] dark:text-blue-400" />
+                      <span>Help</span>
+                    </button>
 
                     <div role="separator" className="my-1 border-t border-[var(--border-subtle)]" />
 
