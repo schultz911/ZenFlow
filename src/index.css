@@ -99,7 +99,7 @@
   input, select, textarea { min-width: 0; accent-color: var(--accent); caret-color: var(--accent); }
   input[type='checkbox'], input[type='radio'] { min-height: auto; }
   textarea { resize: vertical; }
-  :where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  :where(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
     outline: 2px solid var(--focus) !important;
     outline-offset: 2px;
   }

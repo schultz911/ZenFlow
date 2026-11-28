@@ -344,7 +344,7 @@ try {
     await page.getByRole('button', { name: /New Brief/i }).first().click();
     const newBriefDialog = page.getByRole('dialog', { name: 'Create pipeline requirement' });
     await newBriefDialog.waitFor({ state: 'visible' });
-    assert.equal(await newBriefDialog.locator('#disciplinetaskmodal-field-1').evaluate(el => el === document.activeElement), true, 'New Brief should focus title input, not close button');
+    assert.equal(await newBriefDialog.locator('#brief-owning-cluster').evaluate(el => el === document.activeElement), true, 'New Brief should focus the required cluster first');
     assert.equal(await newBriefDialog.locator('#disciplinetaskmodal-field-3').getAttribute('placeholder'), 'e.g. Acme Corp');
     const contentToggle = newBriefDialog.getByRole('button', { name: /^Content$/i });
     const designToggle = newBriefDialog.getByRole('button', { name: /^Design$/i });
@@ -355,8 +355,10 @@ try {
     await contentToggle.click();
     assert.equal(await newBriefDialog.locator('button[type="submit"]').isDisabled(), true, 'A cluster is required');
     await newBriefDialog.getByLabel('Owning cluster').selectOption('cd-1');
-    assert.equal(await newBriefDialog.locator('button[type="submit"]').isDisabled(), false);
+    await newBriefDialog.getByText('Enter a deliverable title to create this brief.').waitFor();
+    assert.equal(await newBriefDialog.locator('button[type="submit"]').isDisabled(), true);
     await newBriefDialog.locator('#disciplinetaskmodal-field-1').fill('Draft Unsaved Campaign');
+    assert.equal(await newBriefDialog.locator('button[type="submit"]').isDisabled(), false);
     await page.locator('.dialog-backdrop').first().click({ position: { x: 10, y: 10 } });
     await newBriefDialog.getByRole('alertdialog', { name: /Discard unsaved/i }).waitFor({ state: 'visible' });
     await newBriefDialog.getByRole('button', { name: /Discard/i }).click();

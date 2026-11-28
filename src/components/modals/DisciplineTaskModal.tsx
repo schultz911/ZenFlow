@@ -38,6 +38,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
   const { canCreatePipelineTask } = useAuth();
   const { activeRoleTab, activeBoardId } = useBoardUi();
   const { tasks, creativeDirectors, createPipelineBundle } = useWorkspace();
+  const defaultOwningCluster = creativeDirectors.some(user => user.id === activeBoardId) ? activeBoardId : '';
   const {
     isClickupConnected,
     clickupSpaces,
@@ -164,7 +165,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
     setNewListName('');
     setClickupActionError(null);
 
-    setOwningClusterId(creativeDirectors.some(user => user.id === activeBoardId) ? activeBoardId : '');
+    setOwningClusterId(defaultOwningCluster);
     setTitle('');
     setDescription('');
     setBrandGuidelines('');
@@ -621,7 +622,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
               <div className="space-y-4">
                 <div>
                   <label className="field-label" htmlFor="brief-owning-cluster">Owning cluster <span className="text-red-600">*</span></label>
-                  <select id="brief-owning-cluster" className="field-control" required value={owningClusterId} onChange={event => setOwningClusterId(event.target.value)}>
+                  <select id="brief-owning-cluster" data-autofocus={!defaultOwningCluster ? '' : undefined} className="field-control" required value={owningClusterId} onChange={event => setOwningClusterId(event.target.value)}>
                     <option value="">{creativeDirectors.length ? 'Select a cluster' : 'No cluster available'}</option>
                     {creativeDirectors.map(user => <option key={user.id} value={user.id}>{user.name}’s Team</option>)}
                   </select>
@@ -632,8 +633,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                     Deliverable Title <span className="text-red-600 dark:text-red-400">*</span>
                   </label>
                   <input
-                    autoFocus
-                    data-autofocus
+                    data-autofocus={defaultOwningCluster ? '' : undefined}
                     type="text"
                     required
                     value={title}
@@ -1041,7 +1041,15 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
             {/* Footer Buttons */}
             <div className="dialog-footer !justify-between flex-wrap">
               <span className="text-xs text-[var(--text-secondary)]">
-                {selectedDisciplines.length === 2
+                {!canCreatePipelineTask
+                  ? 'Your role cannot create Pipeline briefs.'
+                  : creativeDirectors.length === 0
+                  ? 'An administrator must create a cluster first.'
+                  : !owningClusterId
+                  ? 'Select an owning cluster to create this brief.'
+                  : !title.trim()
+                  ? 'Enter a deliverable title to create this brief.'
+                  : selectedDisciplines.length === 2
                   ? 'Creates brief with Content & Design deliverables in Pipeline.'
                   : selectedDisciplines.length === 1
                   ? `Creates ${selectedDisciplines[0]} brief deliverable in Pipeline.`
@@ -1057,7 +1065,7 @@ export const DisciplineTaskModal: React.FC<DisciplineTaskModalProps> = ({
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting || !canCreatePipelineTask || selectedDisciplines.length === 0 || !owningClusterId}
+                  disabled={isSubmitting || !canCreatePipelineTask || selectedDisciplines.length === 0 || !owningClusterId || !title.trim()}
                   className="button-primary"
                 >
                   {isSubmitting

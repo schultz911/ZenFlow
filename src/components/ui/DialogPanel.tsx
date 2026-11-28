@@ -97,7 +97,7 @@ export function DialogPanel({ children, className = '', onClose, busy = false, .
     }
     panels.push(panel);
     const focusable = () => Array.from(panel.querySelectorAll<HTMLElement>(
-      'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      'button:not([disabled]), details > summary:first-of-type, [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
     )).filter(element => element.getClientRects().length > 0 && !element.closest('[inert]'));
     if (!panel.contains(document.activeElement)) {
       const items = focusable();

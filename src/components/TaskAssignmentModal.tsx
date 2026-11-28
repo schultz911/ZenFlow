@@ -227,7 +227,7 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
           exit={{ opacity: 0, y: 6 }}
           transition={{ duration: 0.16, ease: [0.2, 0.7, 0.2, 1] }}
           onClick={e => e.stopPropagation()}
-          className="relative w-full max-w-lg my-auto flex flex-col overflow-hidden"
+          className="relative w-full max-w-5xl my-auto flex flex-col overflow-hidden"
         >
           {/* Header */}
           <div className="dialog-header">
@@ -298,217 +298,193 @@ export const TaskAssignmentModal: React.FC<TaskAssignmentModalProps> = ({
                 )}
               </div>
 
-              <fieldset className="min-w-0" disabled={isSubmitting}>
-                <legend className="field-label">Member</legend>
-                {memberChoices.length === 0 ? (
-                  <div className="callout callout-warning flex items-center gap-2">
-                    <ShieldAlert className="h-4 w-4 shrink-0" />
-                    <span>No eligible members in this discipline. You can save estimates in the pipeline.</span>
-                  </div>
-                ) : (
-                  <>
-                    <div className="grid grid-cols-[minmax(0,1fr)_5.5rem_3.5rem] gap-2 px-2 pb-1 text-xs text-[var(--text-secondary)]">
-                      <span>{memberChoices.length} eligible</span>
-                      <span className="text-right">Assigned today</span>
-                      <span className="flex items-center justify-end gap-1.5">Load <MetricHelp label="About assignment load points" detail={loadHelp} /></span>
+              <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+                <fieldset className="min-w-0" disabled={isSubmitting}>
+                  <legend className="field-label">Member</legend>
+                  {memberChoices.length === 0 ? (
+                    <div className="callout callout-warning flex items-center gap-2">
+                      <ShieldAlert className="h-4 w-4 shrink-0" />
+                      <span>No eligible members in this discipline. You can save estimates in the pipeline.</span>
                     </div>
-                    <div className="max-h-36 overflow-y-auto border-y border-[var(--border-subtle)] divide-y divide-[var(--border-subtle)]">
-                      {memberChoices.map(({ user, hours, load }) => {
-                        const lead = user.isCreativeDirector ? null : user.creativeDirectorId
-                          ? creativeDirectors.find(director => director.id === user.creativeDirectorId)?.name || 'Team'
-                          : 'Independent';
-                        const nameId = `assignment-member-${user.id}-name`;
-                        const capacityId = `assignment-member-${user.id}-capacity`;
-                        return (
-                          <label key={user.id} className="grid grid-cols-[minmax(0,1fr)_5.5rem_3.5rem] items-center gap-2 min-h-11 px-2 py-1 cursor-pointer has-checked:bg-[var(--accent-soft)] hover:bg-[var(--surface-subtle)]">
-                            <span className="min-w-0 flex items-center gap-2">
-                              <input type="radio" name="assignment-member" value={user.id}
-                                checked={selectedUserId === user.id} onChange={() => setSelectedUserId(user.id)}
-                                data-autofocus={selectedUserId === user.id ? '' : undefined}
-                                aria-labelledby={`${nameId} ${capacityId}`} className="shrink-0" />
-                              <span id={nameId} className="min-w-0 break-words text-sm font-medium">
-                                {user.name}
-                                <span className="block text-xs font-normal text-[var(--text-secondary)]">
-                                  {[getUserTag(user).label, lead].filter(Boolean).join(' · ')}
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-[minmax(0,1fr)_5.5rem_3.5rem] gap-2 px-2 pb-1 text-xs text-[var(--text-secondary)]">
+                        <span>{memberChoices.length} eligible</span>
+                        <span className="text-right">Assigned today</span>
+                        <span className="flex items-center justify-end gap-1.5">Load <MetricHelp label="About assignment load points" detail={loadHelp} /></span>
+                      </div>
+                      <div className="border-y border-[var(--border-subtle)] divide-y divide-[var(--border-subtle)]">
+                        {memberChoices.map(({ user, hours, load }) => {
+                          const lead = user.isCreativeDirector ? null : user.creativeDirectorId
+                            ? creativeDirectors.find(director => director.id === user.creativeDirectorId)?.name || 'Team'
+                            : 'Independent';
+                          const nameId = `assignment-member-${user.id}-name`;
+                          const capacityId = `assignment-member-${user.id}-capacity`;
+                          return (
+                            <label key={user.id} className="grid grid-cols-[minmax(0,1fr)_5.5rem_3.5rem] items-center gap-2 min-h-11 px-2 py-1 cursor-pointer has-checked:bg-[var(--accent-soft)] hover:bg-[var(--surface-subtle)]">
+                              <span className="min-w-0 flex items-center gap-2">
+                                <input type="radio" name="assignment-member" value={user.id}
+                                  checked={selectedUserId === user.id} onChange={() => setSelectedUserId(user.id)}
+                                  data-autofocus={selectedUserId === user.id ? '' : undefined}
+                                  aria-labelledby={`${nameId} ${capacityId}`} className="shrink-0" />
+                                <span id={nameId} className="min-w-0 break-words text-sm font-medium">
+                                  {user.name}
+                                  <span className="block text-xs font-normal text-[var(--text-secondary)]">
+                                    {[getUserTag(user).label, lead].filter(Boolean).join(' · ')}
+                                  </span>
                                 </span>
                               </span>
+                              <span className="text-right text-sm font-semibold tabular-nums" aria-hidden="true">{formatHours(hours)}</span>
+                              <span className="text-right text-xs tabular-nums text-[var(--text-secondary)]" aria-hidden="true">{load} pts</span>
+                              <span id={capacityId} className="sr-only">{formatHours(hours)} assigned today, {load} load points.</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <label className="flex items-center gap-2 min-h-11 px-2 text-sm cursor-pointer">
+                        <input type="radio" name="assignment-member" value="" checked={!selectedUserId}
+                          data-autofocus={!selectedUserId ? '' : undefined}
+                          onChange={() => {
+                            setSelectedUserId('');
+                            if (!task.dueDate) setDueDate('');
+                          }} />
+                        Leave unassigned in pipeline
+                      </label>
+                    </>
+                  )}
+                </fieldset>
+
+                <div className="min-w-0 space-y-3.5">
+                  <fieldset disabled={!selectedUserId || isSubmitting} aria-describedby={!selectedUserId ? 'assignment-destination-help' : undefined}>
+                    <legend className="field-label">Destination</legend>
+                    {!selectedUserId && <p id="assignment-destination-help" className="mb-1 text-xs text-[var(--text-secondary)]">Select a member to choose a destination. Estimates can be saved in Pipeline without assigning the brief.</p>}
+                    <div className="grid sm:grid-cols-2 sm:gap-2">
+                      <label className="flex items-center gap-2 text-xs min-h-11 sm:min-h-8">
+                        <input type="radio" name="assignment-destination" checked={!keepInPipeline} onChange={() => setKeepInPipeline(false)} />
+                        Move to To Do
+                      </label>
+                      <label className="flex items-center gap-2 text-xs min-h-11 sm:min-h-8">
+                        <input type="radio" name="assignment-destination" checked={keepInPipeline} onChange={() => setKeepInPipeline(true)} />
+                        Keep assigned in Team Pipeline
+                      </label>
+                    </div>
+                  </fieldset>
+                  <fieldset className="min-w-0 space-y-2.5 border-t border-[var(--border-subtle)] pt-2" disabled={isSubmitting}>
+                    <legend className="field-label pr-2">Schedule</legend>
+                    <CognitiveLoadSelector
+                      value={cognitiveLoad}
+                      onChange={setCognitiveLoad}
+                      role={(selectedUserObj?.role || taskDiscipline) as Role}
+                      required
+                    />
+
+                    {/* Deadline & Time Estimate side-by-side to keep modal compact on 700px laptops */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 items-start">
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <label className="field-label !mb-0 flex items-center gap-1.5" htmlFor="taskassignmentmodal-deadline">
+                            <Calendar className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
+                            <span>
+                              Deadline {selectedUserId && !keepInPipeline && <span className="text-red-600 dark:text-red-400">*</span>}
                             </span>
-                            <span className="text-right text-sm font-semibold tabular-nums" aria-hidden="true">{formatHours(hours)}</span>
-                            <span className="text-right text-xs tabular-nums text-[var(--text-secondary)]" aria-hidden="true">{load} pts</span>
-                            <span id={capacityId} className="sr-only">{formatHours(hours)} assigned today, {load} load points.</span>
                           </label>
-                        );
-                      })}
-                    </div>
-                    <label className="flex items-center gap-2 min-h-11 px-2 text-sm cursor-pointer">
-                      <input type="radio" name="assignment-member" value="" checked={!selectedUserId}
-                        data-autofocus={!selectedUserId ? '' : undefined}
-                        onChange={() => {
-                          setSelectedUserId('');
-                          if (!task.dueDate) setDueDate('');
-                        }} />
-                      Leave unassigned in pipeline
-                    </label>
-                  </>
-                )}
-              </fieldset>
+                          {!selectedUserId && (
+                            <span className="text-[11px] text-[var(--text-muted)] truncate">
+                              Pick member first
+                            </span>
+                          )}
+                        </div>
+                        <input
+                          id="taskassignmentmodal-deadline"
+                          type="date"
+                          disabled={!selectedUserId || isSubmitting}
+                          required={Boolean(selectedUserId && !keepInPipeline)}
+                          value={dueDate}
+                          onChange={e => setDueDate(e.target.value)}
+                          className="field-control tabular-nums cursor-pointer"
+                        />
+                        <DateQuickPresets
+                          value={dueDate}
+                          onSelectDate={setDueDate}
+                          disabled={!selectedUserId || isSubmitting}
+                          includeToday
+                          allowClear={keepInPipeline}
+                          compact
+                          className="mt-1.5"
+                        />
+                      </div>
 
-              <fieldset disabled={!selectedUserId || isSubmitting} aria-describedby={!selectedUserId ? 'assignment-destination-help' : undefined}>
-                <legend className="field-label">Destination</legend>
-                {!selectedUserId && <p id="assignment-destination-help" className="mb-1 text-xs text-[var(--text-secondary)]">Select a member to choose a destination. Estimates can be saved in Pipeline without assigning the brief.</p>}
-                <div className="grid sm:grid-cols-2 sm:gap-2">
-                  <label className="flex items-center gap-2 text-xs min-h-11 sm:min-h-8">
-                    <input type="radio" name="assignment-destination" checked={!keepInPipeline} onChange={() => setKeepInPipeline(false)} />
-                    Move to To Do
-                  </label>
-                  <label className="flex items-center gap-2 text-xs min-h-11 sm:min-h-8">
-                    <input type="radio" name="assignment-destination" checked={keepInPipeline} onChange={() => setKeepInPipeline(true)} />
-                    Keep assigned in Team Pipeline
-                  </label>
-                </div>
-              </fieldset>
-              <fieldset className="min-w-0 space-y-2.5 border-t border-[var(--border-subtle)] pt-2" disabled={isSubmitting}>
-                <legend className="field-label pr-2">Schedule</legend>
-                <CognitiveLoadSelector
-                  value={cognitiveLoad}
-                  onChange={setCognitiveLoad}
-                  role={(selectedUserObj?.role || taskDiscipline) as Role}
-                  required
-                />
-
-                {/* Deadline & Time Estimate side-by-side to keep modal compact on 700px laptops */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 items-start">
-                  <div>
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <label className="field-label !mb-0 flex items-center gap-1.5" htmlFor="taskassignmentmodal-deadline">
-                        <Calendar className="h-3 w-3 text-[#1d4ed8] dark:text-blue-400" />
-                        <span>
-                          Deadline {selectedUserId && !keepInPipeline && <span className="text-red-600 dark:text-red-400">*</span>}
-                        </span>
-                      </label>
-                      {!selectedUserId && (
-                        <span className="text-[11px] text-[var(--text-muted)] truncate">
-                          Pick member first
-                        </span>
-                      )}
-                    </div>
-                    <input
-                      id="taskassignmentmodal-deadline"
-                      type="date"
-                      disabled={!selectedUserId || isSubmitting}
-                      required={Boolean(selectedUserId && !keepInPipeline)}
-                      value={dueDate}
-                      onChange={e => setDueDate(e.target.value)}
-                      className="field-control tabular-nums cursor-pointer"
-                    />
-                    <DateQuickPresets
-                      value={dueDate}
-                      onSelectDate={setDueDate}
-                      disabled={!selectedUserId || isSubmitting}
-                      includeToday
-                      allowClear={keepInPipeline}
-                      compact
-                      className="mt-1.5"
-                    />
-                  </div>
-
-                  {/* Time Estimate Specification */}
-                  <div>
-                    <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <label className="field-label !mb-0 whitespace-nowrap" htmlFor="taskassignmentmodal-field-2">
-                        Time Estimate
-                      </label>
-                      <span className="text-[11px] text-[var(--text-secondary)] whitespace-nowrap">
-                        Split across days
-                      </span>
-                    </div>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        step="0.5"
-                        min="0"
-                        value={estimatedHours}
-                        onChange={e => setEstimatedHours(e.target.value)}
-                        placeholder="e.g. 4, 8, 16.5"
-                        className="field-control pl-8 pr-12 tabular-nums"
-                        id="taskassignmentmodal-field-2"
-                      />
-                      <Clock className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
-                      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[var(--text-muted)]">
-                        hours
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 mt-1.5">
-                      {[2, 4, 8, 16].map(h => (
-                        <button
-                          key={h}
-                          type="button"
-                          onClick={() => setEstimatedHours(String(h))}
-                          className={`mobile-tap-control sm:min-h-[28px] flex-1 py-1 rounded-[5px] border text-[11px] font-semibold tabular-nums transition-colors cursor-pointer ${
-                            estimatedHours === String(h)
-                              ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300'
-                              : 'border-[var(--border)] bg-[var(--surface-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-                          }`}
-                        >
-                          {h}h
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </fieldset>
-              {selectedUserObj && projected && (
-                <section aria-labelledby="assignment-review-heading" className="space-y-2 border-t border-[var(--border-subtle)] pt-2">
-                  <h3 id="assignment-review-heading" className="field-label">Review</h3>
-                  {(() => {
-                    const { selectedLoad, projectedLoad, selectedDailyHours, projectedDailyHours } = projected;
-                    const dailyHoursChanged = Math.abs(projectedDailyHours - selectedDailyHours) >= 0.05;
-                    const dailyOverbooked = projectedDailyHours > 8;
-                    return (
-                      <div
-                        className={`mt-2 grid gap-2 text-xs px-3 py-2.5 rounded-[7px] border tabular-nums ${
-                          willOverload
-                            ? 'border-[var(--danger-border)] bg-[var(--danger-soft)] text-[var(--text-primary)]'
-                            : 'border-[var(--border)] bg-[var(--surface-muted)] text-[var(--text-secondary)]'
-                        }`}
-                      >
-                        <p className="text-sm text-[var(--text-primary)]">Selected member <strong className="ml-1 break-words">{selectedUserObj.name}</strong></p>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={dailyOverbooked ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
-                            Assigned today:{' '}
-                            <strong className={dailyOverbooked ? 'text-red-600 dark:text-red-400' : 'text-[#1d4ed8] dark:text-blue-400'}>
-                              {dailyHoursChanged
-                                ? `${formatHours(selectedDailyHours)} → ${formatHours(projectedDailyHours)}`
-                                : formatHours(selectedDailyHours)}
-                              </strong>
-                            {dailyOverbooked && ' · Over 8h/day'}
-                          </span>
-                          <span aria-hidden="true" className="hidden sm:inline text-[var(--text-muted)]">·</span>
-                          <span className={projectedLoad >= 12 ? 'font-semibold text-red-600 dark:text-red-400' : ''}>
-                            Load:{' '}
-                            <strong>
-                              {projectedLoad !== selectedLoad
-                                ? `${selectedLoad} → ${projectedLoad}`
-                                : selectedLoad}{' '}
-                              / 12 pts
-                            </strong>
-                            {projectedLoad >= 12 && ' · Will overload'}
+                      {/* Time Estimate Specification */}
+                      <div>
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <label className="field-label !mb-0 whitespace-nowrap" htmlFor="taskassignmentmodal-field-2">
+                            Time Estimate
+                          </label>
+                          <span className="text-[11px] text-[var(--text-secondary)] whitespace-nowrap">
+                            Split across days
                           </span>
                         </div>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            value={estimatedHours}
+                            onChange={e => setEstimatedHours(e.target.value)}
+                            placeholder="e.g. 4, 8, 16.5"
+                            className="field-control pl-8 pr-12 tabular-nums"
+                            id="taskassignmentmodal-field-2"
+                          />
+                          <Clock className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[var(--text-muted)]" />
+                          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-medium text-[var(--text-muted)]">
+                            hours
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-1.5">
+                          {[2, 4, 8, 16].map(h => (
+                            <button
+                              key={h}
+                              type="button"
+                              onClick={() => setEstimatedHours(String(h))}
+                              className={`mobile-tap-control sm:min-h-[28px] flex-1 py-1 rounded-[5px] border text-[11px] font-semibold tabular-nums transition-colors cursor-pointer ${
+                                estimatedHours === String(h)
+                                  ? 'border-[var(--accent)] bg-[var(--accent-soft)] text-[#1d4ed8] dark:text-blue-300'
+                                  : 'border-[var(--border)] bg-[var(--surface-subtle)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                              }`}
+                            >
+                              {h}h
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    );
-                  })()}
-                  {willOverload && (
-                    <label className="callout callout-warning flex items-start gap-2 text-xs">
-                      <input type="checkbox" checked={confirmOverload} onChange={event => setConfirmOverload(event.target.checked)} />
-                      <span>I understand the projected workload and want to assign this task.</span>
-                    </label>
-                  )}
-                  <p className="text-xs text-[var(--text-secondary)]">Destination: {selectedUserObj.name} · {keepInPipeline ? 'Team Pipeline' : 'To Do'}{dueDate ? ` · ${dueDate}` : ''}</p>
-                </section>
-              )}
-
+                    </div>
+                  </fieldset>
+                </div>
+              </div>
             </div>
+            {selectedUserObj && projected && (
+              <section aria-labelledby="assignment-review-heading" className="shrink-0 space-y-1.5 border-t border-[var(--border-subtle)] px-4 py-2 text-xs text-[var(--text-secondary)]">
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <h3 id="assignment-review-heading" className="text-xs font-semibold text-[var(--text-primary)]">Review</h3>
+                  <p className="wrap-anywhere text-[var(--text-primary)]">Selected member <strong>{selectedUserObj.name}</strong> · {keepInPipeline ? 'Team Pipeline' : 'To Do'}</p>
+                  <button type="button" className="min-h-0 rounded text-[var(--accent)] underline underline-offset-2"
+                    onClick={() => document.getElementById('taskassignmentmodal-deadline')?.focus()}>
+                    {dueDate ? `Edit deadline · ${formatDateOnly(dueDate)}` : keepInPipeline ? 'Set optional deadline' : 'Set required deadline'}
+                  </button>
+                </div>
+                <p className="tabular-nums">
+                  Assigned today: <strong>{formatHours(projected.selectedDailyHours)} → {formatHours(projected.projectedDailyHours)}</strong>
+                  {' · '}Load: <strong>{projected.selectedLoad} → {projected.projectedLoad} / 12 pts</strong>
+                  {projected.projectedDailyHours > 8 && ' · Over 8h/day'}
+                </p>
+                {willOverload && (
+                  <label className="flex items-start gap-2 font-medium text-red-700 dark:text-red-300">
+                    <input type="checkbox" checked={confirmOverload} onChange={event => setConfirmOverload(event.target.checked)} />
+                    <span>I understand the projected workload and want to assign this task.</span>
+                  </label>
+                )}
+              </section>
+            )}
 
             {submitError && (
               <div role="alert" className="callout callout-danger mx-4 my-2 shrink-0 flex items-start gap-2">

@@ -534,23 +534,9 @@ export const TaskCard: React.FC<TaskCardProps> = React.memo(({
       )}
 
       {/* Quiet External Links Row (replaces competing colored pill badges) */}
-      {((task.brandGuidelines && isValidHttpUrl(task.brandGuidelines)) ||
-        (task.contentDocLink && isValidHttpUrl(task.contentDocLink)) ||
+      {((task.contentDocLink && isValidHttpUrl(task.contentDocLink)) ||
         (task.clickupUrl && isValidHttpUrl(task.clickupUrl))) && (
         <div className="order-5 mt-1.5 flex items-center gap-2.5 flex-wrap text-[11px]" onClick={e => e.stopPropagation()}>
-          {task.brandGuidelines && isValidHttpUrl(task.brandGuidelines) && (
-            <a
-              href={task.brandGuidelines}
-              target="_blank"
-              rel="noopener noreferrer"
-              title={`Brand Guidelines: ${task.brandGuidelines}`}
-              className="inline-flex items-center gap-1 font-medium text-[#1d4ed8] dark:text-blue-400 hover:underline"
-            >
-              <Link2 className="h-2.5 w-2.5 shrink-0" />
-              <span>Brand</span>
-              <ExternalLink className="h-2.5 w-2.5 shrink-0" />
-            </a>
-          )}
           {task.contentDocLink && isValidHttpUrl(task.contentDocLink) && (
             <a
               href={task.contentDocLink}

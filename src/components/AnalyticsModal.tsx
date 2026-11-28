@@ -807,7 +807,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                     <p className="metric-detail">
                       {efficiencyPercent === null
                         ? 'No measured work'
-                        : <>{formatHours(estimatedHours)} est. / {formatHours(billableHours)} billable · {estimatedHours === billableHours ? 'On estimate' : `${formatHours(Math.abs(estimatedHours - billableHours))} ${estimatedHours > billableHours ? 'under estimate' : 'over est.'}`}</>}
+                        : <>{formatHours(estimatedHours)} est. / {formatHours(billableHours)} billable · <span className="inline-block">{estimatedHours === billableHours ? 'On estimate' : `${formatHours(Math.abs(estimatedHours - billableHours))} ${estimatedHours > billableHours ? 'under estimate' : 'over est.'}`}</span></>}
                     </p>
                   </div>
                 </div>
@@ -849,8 +849,8 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
             </section>
 
             {/* SECTION 1: UTILIZATION (< 3h/day assigned with dates) */}
-            <section className="ledger-frame">
-              <div className="ledger-band flex items-center justify-between gap-2 px-4 py-2.5">
+            <details className="ledger-frame group">
+              <summary className="ledger-band flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-2.5 [&::-webkit-details-marker]:hidden">
                 <div className="flex items-center gap-2">
                   <span
                     className={`h-2 w-2 rounded-full shrink-0 ${
@@ -863,10 +863,11 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                     Underutilized Employees (&lt; 3h/day)
                   </h3>
                 </div>
-                <span className="text-[11px] font-semibold tabular-nums text-[var(--text-secondary)]">
+                <span className="flex shrink-0 items-center gap-2 text-[11px] font-semibold tabular-nums text-[var(--text-secondary)]">
                   {underutilizedEmployees.length} member{underutilizedEmployees.length === 1 ? '' : 's'} flagged
+                  <ChevronDown aria-hidden="true" className="h-3.5 w-3.5 group-open:rotate-180" />
                 </span>
-              </div>
+              </summary>
 
               {underutilizedEmployees.length === 0 ? (
                 <div className="py-6 px-4 text-center text-xs text-[var(--text-secondary)] flex items-center justify-center gap-2">
@@ -918,12 +919,12 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                                   onJumpToMember(item.user);
                                 }}
                                 title={`Jump to ${item.user.name}'s swimlane`}
-                                className="text-left text-xs font-semibold text-[#1d4ed8] dark:text-blue-400 hover:underline truncate block max-w-full cursor-pointer !min-h-0 !py-0 leading-tight"
+                                className="text-left text-xs font-semibold text-[#1d4ed8] dark:text-blue-400 hover:underline wrap-anywhere whitespace-normal block max-w-full cursor-pointer !min-h-0 !py-0 leading-tight"
                               >
                                 {item.user.name}
                               </button>
                             ) : (
-                              <p className="text-xs font-semibold text-[var(--text-primary)] truncate">
+                              <p className="text-xs font-semibold text-[var(--text-primary)] wrap-anywhere">
                                 {item.user.name}
                               </p>
                             )}
@@ -956,11 +957,11 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                   ))}
                 </div>
               )}
-            </section>
+            </details>
 
             {/* SECTION 2: EFFICIENCY (< 50% with dates) */}
-            <section className="ledger-frame">
-              <div className="ledger-band flex items-center justify-between gap-2 px-4 py-2.5">
+            <details className="ledger-frame group">
+              <summary className="ledger-band flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-2.5 [&::-webkit-details-marker]:hidden">
                 <div className="flex items-center gap-2">
                   <span
                     className={`h-2 w-2 rounded-full shrink-0 ${
@@ -973,10 +974,11 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                     Low Efficiency Threshold (&lt; 50%)
                   </h3>
                 </div>
-                <span className="text-[11px] font-semibold tabular-nums text-[var(--text-secondary)]">
+                <span className="flex shrink-0 items-center gap-2 text-[11px] font-semibold tabular-nums text-[var(--text-secondary)]">
                   {lowEfficiencyEmployees.length} member{lowEfficiencyEmployees.length === 1 ? '' : 's'} flagged
+                  <ChevronDown aria-hidden="true" className="h-3.5 w-3.5 group-open:rotate-180" />
                 </span>
-              </div>
+              </summary>
 
               {lowEfficiencyEmployees.length === 0 ? (
                 <div className="py-6 px-4 text-center text-xs text-[var(--text-secondary)] flex items-center justify-center gap-2">
@@ -1028,12 +1030,12 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                                   onJumpToMember(item.user);
                                 }}
                                 title={`Jump to ${item.user.name}'s swimlane`}
-                                className="text-left text-xs font-semibold text-[#1d4ed8] dark:text-blue-400 hover:underline truncate block max-w-full cursor-pointer !min-h-0 !py-0 leading-tight"
+                                className="text-left text-xs font-semibold text-[#1d4ed8] dark:text-blue-400 hover:underline wrap-anywhere whitespace-normal block max-w-full cursor-pointer !min-h-0 !py-0 leading-tight"
                               >
                                 {item.user.name}
                               </button>
                             ) : (
-                              <p className="text-xs font-semibold text-[var(--text-primary)] truncate">
+                              <p className="text-xs font-semibold text-[var(--text-primary)] wrap-anywhere">
                                 {item.user.name}
                               </p>
                             )}
@@ -1071,7 +1073,7 @@ export const AnalyticsModal: React.FC<AnalyticsModalProps> = ({ isOpen, onClose,
                   ))}
                 </div>
               )}
-            </section>
+            </details>
 
             {/* SECTIONS 3 & 4: CONTEXTUAL KEY ACCOUNTS & KEY DELIVERY UNITS */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">

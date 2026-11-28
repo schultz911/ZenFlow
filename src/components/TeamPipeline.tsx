@@ -4,7 +4,6 @@ import { motion } from 'motion/react';
 import { useAuth, useWorkspace } from '../context/DashboardContext';
 import { Task, User, RoleFilter } from '../types';
 import { formatDateOnly, getCognitiveLoadLabel, getDaysRemaining, getTaskAssigneeIds, getTaskBillableMs, formatBillableHours } from '../utils/workload';
-import { isValidHttpUrl } from '../utils/taskMetadata';
 import { handleRovingMenuKeyDown, useAnchoredPopover } from '../hooks/useAnchoredPopover';
 import {
   Inbox,
@@ -18,8 +17,6 @@ import {
   FileText,
   Palette,
   CornerDownRight,
-  Link2,
-  ExternalLink,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -641,7 +638,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                       )}
 
                       {/* Title opens modal immediately (0ms delay) */}
-                      <h3 className="text-[13px] font-semibold leading-snug">
+                      <h3 className="mt-1 text-[13px] font-semibold leading-snug">
                         <button
                           type="button"
                           data-pipeline-title
@@ -663,23 +660,6 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
                         </div>
                       )}
 
-                      {/* Optional External Brief Link (matches Swimlane TaskCard link row) */}
-                      {task.brandGuidelines && isValidHttpUrl(task.brandGuidelines) && (
-                        <div className="mt-1.5 flex items-center gap-2.5 text-[11px]">
-                          <a
-                            href={task.brandGuidelines}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={e => e.stopPropagation()}
-                            title={`Open Brand Guidelines: ${task.brandGuidelines}`}
-                            className="mobile-tap-control sm:min-h-6 inline-flex items-center gap-0.5 font-medium text-[#1d4ed8] dark:text-blue-400 hover:underline"
-                          >
-                            <Link2 className="h-2.5 w-2.5 shrink-0" />
-                            <span>Brand Guidelines</span>
-                            <ExternalLink className="h-2.5 w-2.5 shrink-0" />
-                          </a>
-                        </div>
-                      )}
                     </div>
 
                     {/* Card Footer: Deadline, Priority Flag & Assign CTA */}
