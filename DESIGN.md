@@ -233,7 +233,6 @@ Full: .impeccable/design-full.md (read a section when you need its detail)
 
 - **Primary workspace.** Optimize the dashboard for laptop use. Evaluate its hierarchy, density, controls and workflows at laptop viewport sizes.
 - **Laptop board navigation.** Include a Members link in the Pipeline toolbar when member lanes are present. The link moves keyboard focus to the lane section. Back to Pipeline returns focus to the Members link.
-- **Compact laptop overview.** Start expanded and remember the Compact overview preference in the current browser. Keep all five metrics in one row in compact mode, with the overdue ribbon, Free Pool and board controls available.
 - **Assignment forecast.** Show current assigned hours and “Projected: set a deadline” until the lead selects a deadline. Then show the current and projected hours together. Keep load visible as its own measure.
 - **Metric help.** Use the existing info controls to explain that scheduled estimates determine assigned hours and that active work can still add load points after its deadline. Explain how undated assignments count. Keep the worked Efficiency example. Make the info controls easy to spot and give them visible keyboard focus. Preserve headline metric copy.
 - **Laptop workflow verification.** Check card metadata contrast, long names and 200% zoom. Verify keyboard focus and selected states, consecutive assignments and return to Pipeline, the Accounts brief handoff, and draft preservation and retry after rejected assignment and brief saves. Check load help in the assignment dialog.

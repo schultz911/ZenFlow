@@ -760,17 +760,12 @@ try {
         consoleErrors.push(`[laptop-assignment] ${msg.text()}`);
       }
     });
+    await page.addInitScript(() => localStorage.setItem('zenflow:compact-overview', 'true'));
     await page.goto(`${PREVIEW_URL}?fixture=large&assignment=fail-once`, { waitUntil: 'networkidle' });
-    const compact = page.getByRole('button', { name: 'Compact overview' });
-    const metrics = page.locator('#team-overview-metrics');
-    assert.equal(await compact.getAttribute('aria-pressed'), 'false');
-    const expandedHeight = await metrics.evaluate(element => element.clientHeight);
-    await compact.press('Space');
-    assert.equal(await compact.getAttribute('aria-pressed'), 'true');
-    await page.waitForFunction(height => document.getElementById('team-overview-metrics')!.clientHeight < height, expandedHeight);
-    assert.equal(await metrics.locator('.metric-card:visible').count(), 5);
-    await page.reload({ waitUntil: 'networkidle' });
-    assert.equal(await compact.getAttribute('aria-pressed'), 'true');
+    const overview = page.getByRole('region', { name: 'Team overview' });
+    assert.equal(await overview.getByRole('button', { name: 'Compact overview' }).count(), 0);
+    assert.equal(await overview.locator('.metric-card:visible').count(), 5);
+    assert.equal(await overview.locator('.metric-value').first().evaluate(el => getComputedStyle(el).fontSize), '24px');
     const members = page.getByRole('link', { name: 'Members', exact: true });
     await members.press('Enter');
     assert.equal(await page.locator('#member-lanes').evaluate(el => el === document.activeElement), true);

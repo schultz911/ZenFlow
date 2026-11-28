@@ -67,10 +67,6 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
   const boardDropdownRef = useRef<HTMLDivElement>(null);
   const boardMenuPopRef = useRef<HTMLDivElement>(null);
   const pendingMenuFocusRef = useRef<{ menu: 'board' | 'mobile' | 'export'; target: 'first' | 'last' } | null>(null);
-  const [compactOverview, setCompactOverview] = useState(() => localStorage.getItem('zenflow:compact-overview') === 'true');
-  useEffect(() => {
-    localStorage.setItem('zenflow:compact-overview', String(compactOverview));
-  }, [compactOverview]);
   const [mobileMetricsExpanded, setMobileMetricsExpanded] = useState(false);
   const isSearchPending = localSearch !== searchQuery;
 
@@ -247,54 +243,43 @@ export const OverviewBar: React.FC<OverviewBarProps> = ({
             </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {overloadedMembersCount > 0 && (
-              <div className="hidden sm:flex items-center gap-2 flex-wrap">
-                <button
-                  type="button"
-                  aria-pressed={sortByPressure}
-                  aria-label={
-                    sortByPressure
-                      ? `${overloadedMembersCount} ${overloadedMembersCount === 1 ? 'member' : 'members'} at least 12 points — Sorted`
-                      : `${overloadedMembersCount} ${overloadedMembersCount === 1 ? 'member' : 'members'} at least 12 points — Sort overloaded first`
-                  }
-                  onClick={onToggleSortByPressure}
-                  title={
-                    sortByPressure
-                      ? 'Overloaded members sorted first — click to restore default board order'
-                      : 'Click to jump to overloaded members and sort by pressure'
-                  }
-                  className={`inline-flex min-h-6 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 text-xs font-semibold text-[var(--text-secondary)] cursor-pointer hover:bg-[var(--surface-muted)] ${
-                    sortByPressure ? 'ring-2 ring-blue-500/35 ring-offset-1 ring-offset-[var(--surface-muted)]' : ''
-                  }`}
-                >
-                  <AlertTriangle aria-hidden="true" className="h-3 w-3 shrink-0" />
-                  <span className="hidden sm:inline">
-                    {overloadedMembersCount} {overloadedMembersCount === 1 ? 'member at' : 'members at'} 12 points or more
-                  </span>
-                  <span className="sm:hidden">
-                    {overloadedMembersCount} at least 12 points
-                  </span>
-                  <span aria-hidden="true" className="opacity-75">·</span>
-                  <ArrowUpDown aria-hidden="true" className="h-3 w-3 shrink-0" />
-                  <span className="hidden sm:inline">{sortByPressure ? 'Sorted' : 'Sort overloaded first'}</span>
-                  <span className="sm:hidden">{sortByPressure ? 'Sorted' : 'Sort'}</span>
-                </button>
-              </div>
-            )}
-            <button
-              type="button"
-              aria-pressed={compactOverview}
-              aria-controls="team-overview-metrics"
-              onClick={() => setCompactOverview(value => !value)}
-              className="hidden lg:inline-flex min-h-6 items-center rounded-[6px] border border-[var(--border)] px-2 text-xs font-semibold text-[var(--text-primary)] hover:bg-[var(--surface)] aria-pressed:bg-[var(--accent-soft)] cursor-pointer"
-            >
-              Compact overview
-            </button>
-          </div>
+          {overloadedMembersCount > 0 && (
+            <div className="hidden sm:flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                aria-pressed={sortByPressure}
+                aria-label={
+                  sortByPressure
+                    ? `${overloadedMembersCount} ${overloadedMembersCount === 1 ? 'member' : 'members'} at least 12 points — Sorted`
+                    : `${overloadedMembersCount} ${overloadedMembersCount === 1 ? 'member' : 'members'} at least 12 points — Sort overloaded first`
+                }
+                onClick={onToggleSortByPressure}
+                title={
+                  sortByPressure
+                    ? 'Overloaded members sorted first — click to restore default board order'
+                    : 'Click to jump to overloaded members and sort by pressure'
+                }
+                className={`inline-flex min-h-6 items-center gap-1.5 rounded-full border border-[var(--border)] bg-[var(--surface)] px-2 text-xs font-semibold text-[var(--text-secondary)] cursor-pointer hover:bg-[var(--surface-muted)] ${
+                  sortByPressure ? 'ring-2 ring-blue-500/35 ring-offset-1 ring-offset-[var(--surface-muted)]' : ''
+                }`}
+              >
+                <AlertTriangle aria-hidden="true" className="h-3 w-3 shrink-0" />
+                <span className="hidden sm:inline">
+                  {overloadedMembersCount} {overloadedMembersCount === 1 ? 'member at' : 'members at'} 12 points or more
+                </span>
+                <span className="sm:hidden">
+                  {overloadedMembersCount} at least 12 points
+                </span>
+                <span aria-hidden="true" className="opacity-75">·</span>
+                <ArrowUpDown aria-hidden="true" className="h-3 w-3 shrink-0" />
+                <span className="hidden sm:inline">{sortByPressure ? 'Sorted' : 'Sort overloaded first'}</span>
+                <span className="sm:hidden">{sortByPressure ? 'Sorted' : 'Sort'}</span>
+              </button>
+            </div>
+          )}
         </div>
 
-        <div id="team-overview-metrics" className={`${mobileMetricsExpanded ? 'grid' : 'hidden sm:grid'} ledger-kpi-grid ${compactOverview ? 'ledger-kpi-compact' : ''}`}>
+        <div className={`${mobileMetricsExpanded ? 'grid' : 'hidden sm:grid'} ledger-kpi-grid`}>
           <div className="metric-card col-span-3 sm:col-span-1 border-b lg:border-b-0 border-r border-[var(--border-subtle)]">
             <div className="flex items-center gap-2"><p className="metric-label whitespace-nowrap">Utilization</p><MetricHelp label="About utilization" detail={utilizationHelp} /></div>
             <p className={`metric-value mt-1 ${teamUtilization.utilizationPercent === 0 ? 'text-[var(--text-primary)]' : 'text-emerald-700 dark:text-emerald-400'}`}>
