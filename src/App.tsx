@@ -983,10 +983,13 @@ function DashboardContent() {
             <div id="member-lanes" tabIndex={-1} className="space-y-4 scroll-mt-28">
               <div className="hidden items-center justify-between gap-3 sm:flex">
                 <h2 className="text-sm font-semibold text-[var(--text-primary)]">Member lanes</h2>
-                <label className="inline-flex min-h-[var(--control-height)] cursor-pointer items-center gap-2 text-xs text-[var(--text-secondary)]">
-                  <input type="checkbox" checked={membersWithWork} onChange={event => setMembersWithWork(event.target.checked)} />
-                  Members with work
-                </label>
+                <div className="flex items-center gap-3">
+                  <label className="inline-flex min-h-[var(--control-height)] cursor-pointer items-center gap-2 text-xs text-[var(--text-secondary)]">
+                    <input type="checkbox" checked={membersWithWork} onChange={event => setMembersWithWork(event.target.checked)} />
+                    Members with work
+                  </label>
+                  <a href="#pipeline-members-link" className="button-secondary text-xs">Back to Pipeline</a>
+                </div>
               </div>
               {membersWithWork && !roleFilteredUsers.some(user => memberHasVisibleWork(user.id)) && (
                 <p className="hidden py-3 text-xs text-[var(--text-secondary)] sm:block">No members have work in the current view.</p>

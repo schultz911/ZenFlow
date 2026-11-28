@@ -376,6 +376,9 @@
   }
   @media (min-width: 1024px) {
     .ledger-kpi-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .ledger-kpi-compact .metric-card { padding: 5px 10px; }
+    .ledger-kpi-compact .metric-value { font-size: 16px; margin-top: 0; }
+    .ledger-kpi-compact .metric-detail { margin-top: 2px; }
   }
   .metric-card {
     min-width: 0;

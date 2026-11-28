@@ -342,7 +342,7 @@ try {
 
     // DisciplineTaskModal focus + discard guard + neutral placeholders + aria-pressed/0-selection guard (P2-5, P2-7)
     await page.getByRole('button', { name: /New Brief/i }).first().click();
-    const newBriefDialog = page.getByRole('dialog', { name: 'Create pipeline requirement' });
+    const newBriefDialog = page.getByRole('dialog', { name: 'New Brief' });
     await newBriefDialog.waitFor({ state: 'visible' });
     assert.equal(await newBriefDialog.locator('#brief-owning-cluster').evaluate(el => el === document.activeElement), true, 'New Brief should focus the required cluster first');
     assert.equal(await newBriefDialog.locator('#disciplinetaskmodal-field-3').getAttribute('placeholder'), 'e.g. Acme Corp');
@@ -354,7 +354,7 @@ try {
     assert.equal(await newBriefDialog.locator('button[type="submit"]').isDisabled(), true, '0 selected disciplines must disable submit');
     await contentToggle.click();
     assert.equal(await newBriefDialog.locator('button[type="submit"]').isDisabled(), true, 'A cluster is required');
-    await newBriefDialog.getByLabel('Owning cluster').selectOption('cd-1');
+    await newBriefDialog.getByLabel(/^Cluster/).selectOption('cd-1');
     await newBriefDialog.getByText('Enter a deliverable title to create this brief.').waitFor();
     assert.equal(await newBriefDialog.locator('button[type="submit"]').isDisabled(), true);
     await newBriefDialog.locator('#disciplinetaskmodal-field-1').fill('Draft Unsaved Campaign');
@@ -708,12 +708,21 @@ try {
     await page.setViewportSize({ width: 683, height: 384 });
     assert.equal(await metadata.evaluate(element => element.scrollWidth <= element.clientWidth), true);
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(`${PREVIEW_URL}?role=accounts`, { waitUntil: 'networkidle' });
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto(`${PREVIEW_URL}?role=accounts&brief=fail-once`, { waitUntil: 'networkidle' });
     await page.getByRole('button', { name: 'New Brief', exact: true }).click();
-    const brief = page.getByRole('dialog', { name: 'Create pipeline requirement' });
-    await brief.getByLabel('Owning cluster').selectOption('cd-1');
+    const brief = page.getByRole('dialog', { name: 'New Brief' });
+    const cue = brief.getByText('More fields below', { exact: true });
+    await cue.waitFor();
+    await brief.locator('form > div').first().evaluate(element => { element.scrollTop = element.scrollHeight; });
+    await cue.waitFor({ state: 'hidden' });
+    await brief.getByLabel(/^Cluster/).selectOption('cd-1');
     await brief.locator('#disciplinetaskmodal-field-1').fill('Accounts handoff regression');
-    await brief.getByRole('button', { name: 'Create Pipeline Task' }).click();
+    await brief.getByRole('button', { name: 'Create Brief' }).click();
+    await brief.getByRole('alert').getByText(/Your details are still here/).waitFor();
+    assert.equal(await brief.locator('#disciplinetaskmodal-field-1').inputValue(), 'Accounts handoff regression');
+    assert.equal(await brief.locator('#brief-owning-cluster').inputValue(), 'cd-1');
+    await brief.getByRole('button', { name: 'Create Brief' }).press('Enter');
     await brief.waitFor({ state: 'hidden' });
     await page.getByRole('status').getByText(/Accounts handoff regression.*added to Pipeline for assignment/).waitFor();
     await page.getByRole('region', { name: 'Pipeline cards' }).getByText(/Accounts handoff regression/).click();
@@ -752,9 +761,22 @@ try {
       }
     });
     await page.goto(`${PREVIEW_URL}?fixture=large&assignment=fail-once`, { waitUntil: 'networkidle' });
+    const compact = page.getByRole('button', { name: 'Compact overview' });
+    const metrics = page.locator('#team-overview-metrics');
+    assert.equal(await compact.getAttribute('aria-pressed'), 'false');
+    const expandedHeight = await metrics.evaluate(element => element.clientHeight);
+    await compact.press('Space');
+    assert.equal(await compact.getAttribute('aria-pressed'), 'true');
+    await page.waitForFunction(height => document.getElementById('team-overview-metrics')!.clientHeight < height, expandedHeight);
+    assert.equal(await metrics.locator('.metric-card:visible').count(), 5);
+    await page.reload({ waitUntil: 'networkidle' });
+    assert.equal(await compact.getAttribute('aria-pressed'), 'true');
     const members = page.getByRole('link', { name: 'Members', exact: true });
     await members.press('Enter');
     assert.equal(await page.locator('#member-lanes').evaluate(el => el === document.activeElement), true);
+
+    await page.getByRole('link', { name: 'Back to Pipeline' }).press('Enter');
+    assert.equal(await members.evaluate(el => el === document.activeElement), true);
 
     const filters = page.getByRole('group', { name: 'Filter Pipeline briefs' });
     const unassigned = filters.getByRole('button', { name: /^Unassigned/ });
@@ -768,6 +790,13 @@ try {
       const taskId = await card.getAttribute('data-pipeline-task');
       const nextTaskId = await cards.locator('[data-pipeline-task]').nth(1).getAttribute('data-pipeline-task');
       await card.getByRole('button', { name: /^Assign / }).press('Enter');
+      if (index === 0) {
+        const help = assignment.getByRole('button', { name: 'About assignment load points' });
+        await help.press('Enter');
+        assert.match(await help.ariaSnapshot(), /expanded/);
+        await assignment.getByRole('status').getByText(/Load can be high/).waitFor();
+        await help.press('Enter');
+      }
       const candidate = assignment.locator('input[name="assignment-member"]').filter({ visible: true });
       const eligible = candidate.and(assignment.locator('input:not([value=""])'));
       await eligible.first().check();

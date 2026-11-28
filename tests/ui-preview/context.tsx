@@ -36,6 +36,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const isFreshOnboarding = new URLSearchParams(window.location.search).get('onboarding') === 'fresh';
   const params = new URLSearchParams(window.location.search);
   const largerFixture = params.get('fixture') === 'large';
+  const [rejectNextBrief, setRejectNextBrief] = useState(params.get('brief') === 'fail-once');
   const [rejectNextAssignment, setRejectNextAssignment] = useState(params.get('assignment') === 'fail-once');
   const [users, setUsers] = useState<User[]>(() => largerFixture ? [
     ...fixtureUsers,
@@ -210,6 +211,10 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     },
     downloadAuditLogs: () => {},
     createPipelineBundle: async (data: any) => {
+      if (rejectNextBrief) {
+        setRejectNextBrief(false);
+        throw new Error('The server is temporarily unavailable.');
+      }
       const pid = `parent-${Date.now()}`;
       const created: Task[] = data.disciplines.map((disc: 'content' | 'design', i: number) => ({
         id: `t-${Date.now()}-${disc}-${i}`,

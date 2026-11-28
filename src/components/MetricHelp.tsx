@@ -26,9 +26,9 @@ export function MetricHelp({ label, detail }: { label: string; detail: string })
         aria-describedby={open ? id : undefined}
         onClick={() => setOpen(value => !value)}
         onBlur={close}
-        className="relative inline-grid h-3.5 min-h-0 w-3.5 place-items-center rounded text-[var(--text-secondary)] before:absolute before:-inset-1.5 before:content-['']"
+        className="relative inline-grid h-3.5 min-h-0 w-3.5 place-items-center rounded text-[var(--text-primary)] hover:bg-[var(--accent-soft)] focus-visible:bg-[var(--accent-soft)] aria-expanded:bg-[var(--accent-soft)] cursor-pointer before:absolute before:-inset-1.5 before:content-['']"
       >
-        <Info aria-hidden="true" className="h-3.5 w-3.5" />
+        <Info aria-hidden="true" className="h-3.5 w-3.5" strokeWidth={2.5} />
       </button>
       <span role="status" className="sr-only">{open ? detail : null}</span>
       {createPortal(<div

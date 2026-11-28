@@ -399,7 +399,7 @@ export const TeamPipeline: React.FC<TeamPipelineProps> = ({
           )}
 
           {hasMemberLanes && (
-            <a href="#member-lanes" className="button-secondary hidden whitespace-nowrap sm:inline-flex">Members</a>
+            <a id="pipeline-members-link" href="#member-lanes" className="button-secondary hidden scroll-mt-28 whitespace-nowrap sm:inline-flex">Members</a>
           )}
 
           {canCreatePipelineTask ? (
